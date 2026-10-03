@@ -12,18 +12,37 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Color
+import android.view.GestureDetector
+import android.view.MotionEvent
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Keyboard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.input.pointer.PointerEventType
 
 import metavrx.layout.compose.SpatialScene
 import metavrx.layout.window.compose.SpatialWindow
+import metavrx.layout.window.compose.layout.WindowModifier
+import metavrx.layout.window.compose.layout.size
 import android.content.Intent
 import androidx.compose.ui.platform.LocalContext
 import com.multidesk.explorer.tunnel.CloudflaredService
 import com.multidesk.explorer.data.ConnectionProfile
 import com.multidesk.explorer.data.ConnectionType
 import com.multidesk.explorer.data.ProfileManager
-import com.multidesk.explorer.ui.ConnectionIconScreen
 import com.multidesk.explorer.ui.LauncherScreen
 import java.util.UUID
 
@@ -35,66 +54,34 @@ class MainActivity : ComponentActivity() {
         
         setContent {
             var profiles by remember { mutableStateOf(profileManager.getProfiles()) }
-            var activeProfiles by remember { mutableStateOf(setOf<String>()) }
-            var activeInstances by remember { mutableStateOf(mapOf<String, Long>()) }
 
             val refreshProfiles = { profiles = profileManager.getProfiles() }
 
-            SpatialScene {
-                SpatialWindow(key = "launcher_window") {
-                    MaterialTheme {
-                        Surface(
-                            modifier = Modifier.fillMaxSize(),
-                            color = MaterialTheme.colorScheme.background
-                        ) {
-                            LauncherScreen(
-                                profiles = profiles,
-                                onAddProfile = {
-                                    profileManager.addProfile(it)
-                                    refreshProfiles()
-                                },
-                                onDeleteProfile = {
-                                    profileManager.deleteProfile(it)
-                                    refreshProfiles()
-                                }
-                            )
-                        }
-                    }
-                }
-
-                for (profile in profiles) {
-                    SpatialWindow(key = "conn_${profile.id}") {
-                        MaterialTheme {
-                            if (activeProfiles.contains(profile.id)) {
-                                if (profile.type == ConnectionType.RDP) {
-                                    RdpSessionScreen(
-                                        session = profile,
-                                        onInstanceCreated = { instance ->
-                                            activeInstances = activeInstances + (profile.id to instance)
-                                        },
-                                        onClose = {
-                                            activeProfiles = activeProfiles - profile.id
-                                            activeInstances = activeInstances - profile.id
-                                        }
-                                    )
-                                } else {
-                                    SshSessionScreen(
-                                        session = profile,
-                                        onClose = {
-                                            activeProfiles = activeProfiles - profile.id
-                                        }
-                                    )
-                                }
-                            } else {
-                                ConnectionIconScreen(
-                                    profile = profile,
-                                    onConnect = {
-                                        activeProfiles = activeProfiles + profile.id
-                                    }
-                                )
+            MaterialTheme(colorScheme = darkColorScheme()) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    LauncherScreen(
+                        profiles = profiles,
+                        onAddProfile = {
+                            profileManager.addProfile(it)
+                            refreshProfiles()
+                        },
+                        onDeleteProfile = {
+                            profileManager.deleteProfile(it)
+                            refreshProfiles()
+                        },
+                        onConnectProfile = { profileId ->
+                            val intent = Intent(this@MainActivity, SessionActivity::class.java).apply {
+                                data = android.net.Uri.parse("multidesk://session/${profileId}")
+                                putExtra("profileId", profileId)
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
                             }
-                        }
-                    }
+                            startActivity(intent)
+                        },
+                        profileManager = profileManager
+                    )
                 }
             }
         }
@@ -114,7 +101,9 @@ fun SshSessionScreen(session: ConnectionProfile, onClose: () -> Unit) {
                         terminalView.onScreenUpdated()
                     }
                     override fun onTitleChanged(changedSession: com.termux.terminal.TerminalSession) {}
-                    override fun onSessionFinished(finishedSession: com.termux.terminal.TerminalSession) {}
+                    override fun onSessionFinished(finishedSession: com.termux.terminal.TerminalSession) {
+                        onClose()
+                    }
                     override fun onCopyTextToClipboard(session: com.termux.terminal.TerminalSession, text: String) {}
                     override fun onPasteTextFromClipboard(session: com.termux.terminal.TerminalSession?) {}
                     override fun onBell(session: com.termux.terminal.TerminalSession) {}
@@ -165,13 +154,6 @@ fun SshSessionScreen(session: ConnectionProfile, onClose: () -> Unit) {
                 terminalView
             }
         )
-        
-        IconButton(
-            onClick = onClose,
-            modifier = Modifier.padding(16.dp).align(androidx.compose.ui.Alignment.TopEnd)
-        ) {
-            Text("X", color = androidx.compose.ui.graphics.Color.Red, style = MaterialTheme.typography.titleLarge)
-        }
     }
 }
 
@@ -180,28 +162,100 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
     val rdpBridge = remember { FreeRDPBridge() }
     var rdpInstance by remember { mutableStateOf(0L) }
     val context = LocalContext.current
+    
+    var zoom by remember { mutableStateOf(1f) }
+    var currentWidth by remember { mutableStateOf(1920) }
+    var currentHeight by remember { mutableStateOf(1080) }
+    var offsetX by remember { mutableStateOf(0f) }
+    var offsetY by remember { mutableStateOf(0f) } // Flush with top
+    var showZoomSlider by remember { mutableStateOf(false) }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    var isOverlayVisible by remember { mutableStateOf(true) }
+    
+    LaunchedEffect(isOverlayVisible, offsetX, offsetY, showZoomSlider) {
+        if (isOverlayVisible && !showZoomSlider) {
+            delay(3000)
+            isOverlayVisible = false
+        }
+    }
+    
+    val animatedAlpha by animateFloatAsState(
+        targetValue = if (isOverlayVisible) 1f else 0f,
+        animationSpec = tween(durationMillis = 500)
+    )
+
+    LaunchedEffect(zoom) {
+        if (rdpInstance != 0L) {
+            rdpBridge.updateDisplay(rdpInstance, currentWidth, currentHeight, zoom)
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        if (event.type == PointerEventType.Move || event.type == PointerEventType.Press) {
+                            val pos = event.changes.first().position
+                            val overlayCenter = Offset(offsetX + 150f, offsetY + 50f)
+                            if ((pos - overlayCenter).getDistance() < 300f) {
+                                isOverlayVisible = true
+                            }
+                        }
+                    }
+                }
+            }
+    ) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { viewContext ->
                 SurfaceView(viewContext).apply {
-                    setOnTouchListener { _, event ->
-                        val x = event.x.toInt()
-                        val y = event.y.toInt()
-                        var flags = FreeRDPBridge.PTR_FLAGS_MOVE
+                    setZOrderMediaOverlay(true)
+                    pivotX = 0f
+                    pivotY = 0f
+                    
+                    val gestureDetector = GestureDetector(viewContext, object : GestureDetector.SimpleOnGestureListener() {
+                        override fun onLongPress(e: MotionEvent) {
+                            if (rdpInstance != 0L) {
+                                val rdpX = e.x.toInt()
+                                val rdpY = e.y.toInt()
+                                rdpBridge.sendMouseEvent(rdpInstance, rdpX, rdpY, FreeRDPBridge.PTR_FLAGS_MOVE or FreeRDPBridge.PTR_FLAGS_BUTTON2 or FreeRDPBridge.PTR_FLAGS_DOWN)
+                                rdpBridge.sendMouseEvent(rdpInstance, rdpX, rdpY, FreeRDPBridge.PTR_FLAGS_MOVE or FreeRDPBridge.PTR_FLAGS_BUTTON2)
+                            }
+                        }
+                    })
+
+                    setOnTouchListener { view, event ->
+                        gestureDetector.onTouchEvent(event)
+                        
+                        val rdpX = event.x.toInt()
+                        val rdpY = event.y.toInt()
+                        
+                        var isRightClick = false
+                        if (event.buttonState and MotionEvent.BUTTON_SECONDARY != 0) {
+                            isRightClick = true
+                        }
+                        
+                        var flags = 0
+                        val btnFlag = if (isRightClick) FreeRDPBridge.PTR_FLAGS_BUTTON2 else FreeRDPBridge.PTR_FLAGS_BUTTON1
                         
                         when (event.actionMasked) {
-                            android.view.MotionEvent.ACTION_DOWN, android.view.MotionEvent.ACTION_POINTER_DOWN -> {
-                                flags = flags or FreeRDPBridge.PTR_FLAGS_BUTTON1 or FreeRDPBridge.PTR_FLAGS_DOWN
+                            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
+                                flags = FreeRDPBridge.PTR_FLAGS_MOVE or btnFlag or FreeRDPBridge.PTR_FLAGS_DOWN
                             }
-                            android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_POINTER_UP -> {
-                                flags = flags or FreeRDPBridge.PTR_FLAGS_BUTTON1
+                            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
+                                flags = FreeRDPBridge.PTR_FLAGS_MOVE or btnFlag
                             }
+                            MotionEvent.ACTION_MOVE -> {
+                                flags = FreeRDPBridge.PTR_FLAGS_MOVE
+                            }
+                            else -> return@setOnTouchListener true
                         }
                         
                         if (rdpInstance != 0L) {
-                            rdpBridge.sendMouseEvent(rdpInstance, x, y, flags)
+                            rdpBridge.sendMouseEvent(rdpInstance, rdpX, rdpY, flags)
                         }
                         true
                     }
@@ -209,37 +263,39 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                     holder.addCallback(object : SurfaceHolder.Callback {
                         override fun surfaceCreated(h: SurfaceHolder) {
                             Log.i("RdpSession", "Surface created for ${session.id}")
-                            if (false) {
-                                rdpBridge.addSurface(0L, h.surface)
-                            } else {
-                                Thread {
-                                    var targetHost = session.host
-                                    var targetPort = session.port
-                                    
-                                    if (session.useCloudflare) {
-                                        val localPort = 33890 + (Math.random() * 1000).toInt()
-                                        val intent = Intent(context, CloudflaredService::class.java).apply {
-                                            action = CloudflaredService.ACTION_START
-                                            putExtra(CloudflaredService.EXTRA_HOSTNAME, session.host)
-                                            putExtra(CloudflaredService.EXTRA_LOCAL_PORT, localPort)
-                                        }
-                                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                                            context.startForegroundService(intent)
-                                        } else {
-                                            context.startService(intent)
-                                        }
-                                        targetHost = "127.0.0.1"
-                                        targetPort = localPort
-                                        Thread.sleep(2000) // Give cloudflared time to start
+                            Thread {
+                                var targetHost = session.host
+                                var targetPort = session.port
+                                
+                                if (session.useCloudflare) {
+                                    val localPort = 33890 + (Math.random() * 1000).toInt()
+                                    val intent = Intent(context, CloudflaredService::class.java).apply {
+                                        action = CloudflaredService.ACTION_START
+                                        putExtra(CloudflaredService.EXTRA_HOSTNAME, session.host)
+                                        putExtra(CloudflaredService.EXTRA_LOCAL_PORT, localPort)
                                     }
-                                    
-                                    val newInst = rdpBridge.connect(targetHost, targetPort, session.user, session.pass, session.remoteApp, session.enableCamera, session.cameraId, h.surface)
-                                    rdpInstance = newInst
-                                    onInstanceCreated(newInst)
-                                }.start()
+                                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                                        context.startForegroundService(intent)
+                                    } else {
+                                        context.startService(intent)
+                                    }
+                                    targetHost = "127.0.0.1"
+                                    targetPort = localPort
+                                    Thread.sleep(2000) // Give cloudflared time to start
+                                }
+                                
+                                val newInst = rdpBridge.connect(targetHost, targetPort, session.user, session.pass, session.remoteApp, session.enableCamera, session.cameraId, h.surface)
+                                rdpInstance = newInst
+                                onInstanceCreated(newInst)
+                            }.start()
+                        }
+                        override fun surfaceChanged(h: SurfaceHolder, format: Int, width: Int, height: Int) {
+                            currentWidth = width
+                            currentHeight = height
+                            if (rdpInstance != 0L) {
+                                rdpBridge.updateDisplay(rdpInstance, width, height, zoom)
                             }
                         }
-                        override fun surfaceChanged(h: SurfaceHolder, format: Int, width: Int, height: Int) {}
                         override fun surfaceDestroyed(h: SurfaceHolder) {
                             Log.i("RdpSession", "Surface destroyed for ${session.id}")
                             if (session.useCloudflare) {
@@ -248,10 +304,7 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                                 }
                                 context.startService(intent)
                             }
-                            
-                            if (false) {
-                                rdpBridge.removeSurface(0L, h.surface)
-                            } else if (rdpInstance != 0L) {
+                            if (rdpInstance != 0L) {
                                 rdpBridge.disconnect(rdpInstance)
                                 rdpInstance = 0L
                             }
@@ -261,12 +314,43 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
             }
         )
         
-        // Add a simple close button overlay for now
-        IconButton(
-            onClick = onClose,
-            modifier = Modifier.padding(16.dp).align(androidx.compose.ui.Alignment.TopEnd)
+        Surface(
+            modifier = Modifier
+                .align(androidx.compose.ui.Alignment.TopCenter)
+                .offset { IntOffset(offsetX.roundToInt(), offsetY.roundToInt()) }
+                .alpha(animatedAlpha)
+                .pointerInput(Unit) {
+                    detectDragGestures { change, dragAmount ->
+                        change.consume()
+                        offsetX += dragAmount.x
+                        offsetY += dragAmount.y
+                    }
+                },
+            shape = RoundedCornerShape(24.dp),
+            color = Color.Black.copy(alpha = 0.7f)
         ) {
-            Text("X", color = androidx.compose.ui.graphics.Color.Red, style = MaterialTheme.typography.titleLarge)
+            Column(modifier = Modifier.padding(8.dp), horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+                Row {
+                    IconButton(onClick = { showZoomSlider = !showZoomSlider }) {
+                        Icon(Icons.Default.Search, "Zoom", tint = Color.White)
+                    }
+                    IconButton(onClick = { /* Implement menu later */ }) {
+                        Icon(Icons.Default.Menu, "Menu", tint = Color.White)
+                    }
+                    IconButton(onClick = { /* Implement keyboard toggle later */ }) {
+                        Icon(Icons.Default.Keyboard, "Keyboard", tint = Color.White)
+                    }
+                }
+                
+                if (showZoomSlider) {
+                    Slider(
+                        value = zoom,
+                        onValueChange = { zoom = it },
+                        valueRange = 0.5f..3f,
+                        modifier = Modifier.width(150.dp)
+                    )
+                }
+            }
         }
     }
 }

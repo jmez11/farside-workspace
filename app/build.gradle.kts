@@ -52,6 +52,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-extended")
     
     // Meta VR Layout SDK
     implementation(platform("com.meta.metavrx:metavrx-bom:1.2026.0.0"))

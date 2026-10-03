@@ -19,5 +19,7 @@ These are the standing rules and constraints for the MultiDesk Explorer reposito
 
 ## General Practices
 - **Autonomy**: Always proceed with the next step in the project automatically. Do not ask for permission to continue unless there is significant risk or ambiguity requiring user input. Do not ask for phase prioritization if the user requests a feature out of order; implement it and continue.
+- **Multiple Requests**: If the user requests multiple distinct features or tasks in a single prompt, implement ALL of them before stopping. Do NOT ask the user which one they would like to do first or ask for prioritization. Pick a logical order yourself and execute them.
+- **Device Logs**: If looking at logs from the device (e.g. via `adb logcat`) ever helps to debug an issue, always go get them automatically. However, do not retrieve them if they would not be helpful.
 - Never trust old working notes blindly. Verify claims against actual code.
 - Keep `AGENTS.md`, `ARCHITECTURE.md`, and `PROGRESS.md` concise and up to date. Do not let them accumulate endless rolling notes; rewrite sections as needed.

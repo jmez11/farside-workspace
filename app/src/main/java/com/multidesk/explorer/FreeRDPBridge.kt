@@ -8,6 +8,7 @@ class FreeRDPBridge {
     external fun sendMouseEvent(instance: Long, x: Int, y: Int, flags: Int)
     external fun addSurface(instance: Long, surface: Surface)
     external fun removeSurface(instance: Long, surface: Surface)
+    external fun updateDisplay(instance: Long, width: Int, height: Int, zoom: Float)
 
     companion object {
         init {

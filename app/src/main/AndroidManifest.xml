@@ -15,11 +15,24 @@
         android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
         <activity
             android:name=".MainActivity"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:screenOrientation="landscape"
             android:exported="true">
+            <meta-data android:name="com.oculus.vr.default_display_metrics" android:value="1280x800" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".SessionActivity"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:documentLaunchMode="intoExisting"
+            android:screenOrientation="landscape"
+            android:taskAffinity=""
+            android:exported="false">
+            <meta-data android:name="com.oculus.vr.default_display_metrics" android:value="1280x800" />
         </activity>
 
         <service
