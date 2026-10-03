@@ -13,12 +13,14 @@
 - Spatial Windowing: Sessions launch as independent, repositionable Android Document Activities inside Horizon OS.
 - RDP Rendering: Stream displays correctly via FreeRDP/JNI onto the `SurfaceView` overlay.
 - Profile Management: Connections can be added, saved, and edited, with fields mapped properly to FreeRDP connection flags.
-- Taskbar integration: Sessions correctly show connection name via `setTaskDescription`.
 
-## Pending Fixes & Unverified Logic
-- RDP Touch/Click Inputs: Needs further refinement (clicks still unverified in latest build).
-- RDP Dynamic Display/Zoom: Scaling UI via `SendMonitorLayout` unverified.
+## Reported Issues (To be fixed)
+- Taskbar Integration: Sessions still display the generic app name instead of the connection name via `setTaskDescription`.
+- RDP Touch/Click Inputs: Clicks still unresponsive/unverified; needs further refinement.
+- RDP Dynamic Display/Zoom: Scaling UI via `SendMonitorLayout` unresponsive/unverified.
 - Floating Overlay: Auto-fade logic and repositioning behavior not functioning perfectly.
+
+## Unverified / Stubbed Logic
 - Local PC Discovery: Implementation stubbed but requires DNS-SD/SMB scanning logic.
 - Tunneling: Cloudflared integration stubbed but not yet running background foreground services effectively.
 - Keyboard Input: UI placeholder exists but JNI key dispatch is not yet implemented.
