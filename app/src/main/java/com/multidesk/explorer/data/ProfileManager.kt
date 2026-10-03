@@ -1,0 +1,50 @@
+package com.multidesk.explorer.data
+
+import android.content.Context
+import org.json.JSONArray
+import org.json.JSONObject
+
+class ProfileManager(private val context: Context) {
+    private val prefs = context.getSharedPreferences("multidesk_profiles", Context.MODE_PRIVATE)
+    
+    fun getProfiles(): List<ConnectionProfile> {
+        val profilesStr = prefs.getString("profiles", "[]")
+        val profiles = mutableListOf<ConnectionProfile>()
+        try {
+            val jsonArray = JSONArray(profilesStr)
+            for (i in 0 until jsonArray.length()) {
+                profiles.add(ConnectionProfile.fromJson(jsonArray.getJSONObject(i)))
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return profiles
+    }
+    
+    fun saveProfiles(profiles: List<ConnectionProfile>) {
+        val jsonArray = JSONArray()
+        profiles.forEach { jsonArray.put(it.toJson()) }
+        prefs.edit().putString("profiles", jsonArray.toString()).apply()
+    }
+    
+    fun addProfile(profile: ConnectionProfile) {
+        val profiles = getProfiles().toMutableList()
+        profiles.add(profile)
+        saveProfiles(profiles)
+    }
+    
+    fun updateProfile(profile: ConnectionProfile) {
+        val profiles = getProfiles().toMutableList()
+        val index = profiles.indexOfFirst { it.id == profile.id }
+        if (index >= 0) {
+            profiles[index] = profile
+            saveProfiles(profiles)
+        }
+    }
+    
+    fun deleteProfile(id: String) {
+        val profiles = getProfiles().toMutableList()
+        profiles.removeAll { it.id == id }
+        saveProfiles(profiles)
+    }
+}

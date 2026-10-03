@@ -1,0 +1,6 @@
+[submodule "app/src/main/cpp/freerdp"]
+	path = app/src/main/cpp/freerdp
+	url = https://github.com/FreeRDP/FreeRDP.git
+[submodule "termux-app"]
+	path = termux-app
+	url = https://github.com/termux/termux-app.git

@@ -1,0 +1,26 @@
+package com.multidesk.explorer
+
+import android.view.Surface
+
+class FreeRDPBridge {
+    external fun connect(hostname: String, port: Int, username: String, password: String, remoteApp: String?, enableCamera: Boolean, cameraId: String?, surface: Surface): Long
+    external fun disconnect(instance: Long)
+    external fun sendMouseEvent(instance: Long, x: Int, y: Int, flags: Int)
+    external fun addSurface(instance: Long, surface: Surface)
+    external fun removeSurface(instance: Long, surface: Surface)
+
+    companion object {
+        init {
+            System.loadLibrary("freerdp-jni")
+        }
+        
+        // Mouse flags based on PTR_FLAGS
+        const val PTR_FLAGS_WHEEL = 0x0200
+        const val PTR_FLAGS_WHEEL_NEGATIVE = 0x0100
+        const val PTR_FLAGS_MOVE = 0x0800
+        const val PTR_FLAGS_DOWN = 0x8000
+        const val PTR_FLAGS_BUTTON1 = 0x1000 // Left
+        const val PTR_FLAGS_BUTTON2 = 0x2000 // Right
+        const val PTR_FLAGS_BUTTON3 = 0x4000 // Middle
+    }
+}

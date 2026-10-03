@@ -1,0 +1,5 @@
+set(CJSON_FOUND TRUE)
+set(cJSON_FOUND TRUE)
+set(CJSON_INCLUDE_DIR "${cjson_SOURCE_DIR}")
+set(CJSON_LIBRARIES cjson)
+set(CJSON_LIBRARY cjson)

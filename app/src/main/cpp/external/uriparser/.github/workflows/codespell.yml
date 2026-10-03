@@ -1,0 +1,28 @@
+# Copyright (C) 2025 Sebastian Pipping <sebastian@pipping.org>
+# Licensed under the MIT license
+
+name: Enforce codespell-clean spelling
+
+on:
+  pull_request:
+  push:
+  schedule:
+    - cron: '0 4 * * 5'  # Every Friday at 4am
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Enforce codespell-clean spelling
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+    - uses: codespell-project/actions-codespell@8f01853be192eb0f849a5c7d721450e7a467c579  # v2.2
+      with:
+        # "inout" is from "<b>INOUT</b>" markers
+        # "puls" is for last name "Puls" in files THANKS and ChangeLog
+        # "worstcase" is from variable name "worstCase" in file src/UriQuery.c
+        ignore_words_list: inout,puls,worstcase
+        skip: ./doc/rfc1866.htm,./doc/rfc3513.htm,./doc/rfc3986.htm

@@ -1,0 +1,5 @@
+set(OPENSSL_FOUND TRUE)
+set(OPENSSL_INCLUDE_DIR "${openssl_SOURCE_DIR}/include;${openssl_BINARY_DIR}/include" CACHE PATH "Mock" FORCE)
+set(OPENSSL_SSL_LIBRARY ssl)
+set(OPENSSL_CRYPTO_LIBRARY crypto)
+set(OPENSSL_LIBRARIES ssl crypto)
