@@ -17,6 +17,7 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 #include <vector>
+#include <unordered_map>
 #include <mutex>
 #include <algorithm>
 #include <thread>
@@ -65,7 +66,12 @@ struct RdpContext {
     std::vector<ANativeWindow*> windows;
     std::mutex windowMutex;
     DispClientContext* disp;
-    std::chrono::steady_clock::time_point last_render_time;
+    std::mutex displayMutex;
+    bool displayReady;
+    std::atomic<uint64_t> pendingDisplay;
+    std::atomic<int> desktopWidth, desktopHeight;
+    std::atomic<bool> network_running;
+    std::thread network_thread;
     std::atomic<bool> render_running;
     std::thread render_thread;
     std::atomic<bool> dirty;
@@ -120,12 +126,12 @@ static BOOL client_pre_connect(freerdp* instance) {
     freerdp_settings_set_bool(settings, FreeRDP_FastPathOutput, TRUE);
     freerdp_settings_set_bool(settings, FreeRDP_RemoteFxCodec, TRUE);
     freerdp_settings_set_bool(settings, FreeRDP_SupportGraphicsPipeline, TRUE);
-    freerdp_settings_set_bool(settings, FreeRDP_GfxProgressive, TRUE);
-    // No H.264 decoder is compiled in yet (FFmpeg/OpenH264/MediaCodec all off). Advertising
-    // AVC would make the server send frames we cannot decode, so keep it off for now.
-    freerdp_settings_set_bool(settings, FreeRDP_GfxH264, FALSE);
-    freerdp_settings_set_bool(settings, FreeRDP_GfxAVC444, FALSE);
-    freerdp_settings_set_bool(settings, FreeRDP_GfxAVC444v2, FALSE);
+    freerdp_settings_set_bool(settings, FreeRDP_GfxProgressive, FALSE);
+    freerdp_settings_set_bool(settings, FreeRDP_GfxThinClient, TRUE);
+    freerdp_settings_set_bool(settings, FreeRDP_GfxSmallCache, TRUE);
+    freerdp_settings_set_bool(settings, FreeRDP_GfxH264, TRUE);
+    freerdp_settings_set_bool(settings, FreeRDP_GfxAVC444, TRUE);
+    freerdp_settings_set_bool(settings, FreeRDP_GfxAVC444v2, TRUE);
     freerdp_settings_set_bool(settings, FreeRDP_SupportDynamicChannels, TRUE);
     
     freerdp_register_addin_provider((FREERDP_LOAD_CHANNEL_ADDIN_ENTRY_FN)my_addin_provider, 0);
@@ -138,7 +144,13 @@ static BOOL client_pre_connect(freerdp* instance) {
 
 static BOOL client_end_paint(rdpContext* context) {
     auto* ctx = (RdpContext*)context;
-    ctx->dirty = true;
+    auto* gdi = context->gdi;
+    if (gdi && gdi->primary && gdi->primary->hdc && gdi->primary->hdc->hwnd) {
+        auto* hwnd = gdi->primary->hdc->hwnd;
+        if (hwnd->ninvalid > 0 || !hwnd->invalid->null) ctx->dirty = true;
+        hwnd->invalid->null = TRUE;
+        hwnd->ninvalid = 0;
+    }
     return TRUE;
 }
 
@@ -147,12 +159,12 @@ static BOOL client_desktop_resize(rdpContext* context) {
     int desktopWidth = freerdp_settings_get_uint32(context->settings, FreeRDP_DesktopWidth);
     int desktopHeight = freerdp_settings_get_uint32(context->settings, FreeRDP_DesktopHeight);
     
-    std::lock_guard<std::mutex> lock(ctx->windowMutex);
-    for (auto* window : ctx->windows) {
-        if (window) {
-            ANativeWindow_setBuffersGeometry(window, desktopWidth, desktopHeight, WINDOW_FORMAT_RGBA_8888);
-        }
-    }
+    if (!context->gdi || !gdi_resize(context->gdi, desktopWidth, desktopHeight))
+        return FALSE;
+    ctx->desktopWidth = desktopWidth;
+    ctx->desktopHeight = desktopHeight;
+    ctx->dirty = true;
+    LOGI("RDP_SURFACE: desktop resized to %dx%d", desktopWidth, desktopHeight);
     return TRUE;
 }
 
@@ -177,45 +189,116 @@ static BOOL client_post_connect(freerdp* instance) {
     
     auto* ctx = (RdpContext*)instance->context;
     ctx->render_running = true;
+    ctx->desktopWidth = instance->context->gdi->width;
+    ctx->desktopHeight = instance->context->gdi->height;
     ctx->render_thread = std::thread([ctx, instance]() {
+        std::vector<uint8_t> pixels;
+        std::unordered_map<ANativeWindow*, std::pair<int, int>> bufferSizes;
+        auto nextFrame = std::chrono::steady_clock::now();
+        auto statsStart = nextFrame;
+        unsigned frames = 0;
+        double totalMs = 0, maxMs = 0;
         while (ctx->render_running) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(16));
-            
+            // Pace from frame start: a 6ms blit must not add 6ms to every 16ms interval.
+            std::this_thread::sleep_until(nextFrame);
+            nextFrame = std::chrono::steady_clock::now() + std::chrono::milliseconds(16);
+            if (!ctx->dirty.load()) continue;
+            const auto start = std::chrono::steady_clock::now();
+
+            // FreeRDP's paint/resize lock protects only the CPU snapshot. Never hold it
+            // while Android waits for a compositor buffer or while posting a frame.
+            rdp_update_lock(instance->context->update);
             rdpGdi* gdi = instance->context->gdi;
-            if (!gdi || !gdi->primary_buffer) continue;
-            
-            if (!ctx->dirty.exchange(false)) continue;
-            auto start = std::chrono::steady_clock::now();
-            
-            int desktopWidth = freerdp_settings_get_uint32(instance->context->settings, FreeRDP_DesktopWidth);
-            int desktopHeight = freerdp_settings_get_uint32(instance->context->settings, FreeRDP_DesktopHeight);
-            int rowBytes = desktopWidth * 4;
-            
-            std::lock_guard<std::mutex> lock(ctx->windowMutex);
-            for (auto* window : ctx->windows) {
-                if (!window) continue;
-                ANativeWindow_Buffer buffer;
-                if (ANativeWindow_lock(window, &buffer, nullptr) == 0) {
-                    uint8_t* dst = (uint8_t*)buffer.bits;
-                    uint8_t* src = (uint8_t*)gdi->primary_buffer;
-                    
-                    for (int y = 0; y < desktopHeight && y < buffer.height; ++y) {
-                        memcpy(dst + (y * buffer.stride * 4), src + (y * rowBytes), rowBytes);
+            const int width = gdi ? gdi->width : 0;
+            const int height = gdi ? gdi->height : 0;
+            if (!gdi || !gdi->primary_buffer || width <= 0 || height <= 0) {
+                rdp_update_unlock(instance->context->update);
+                continue;
+            }
+            pixels.resize(static_cast<size_t>(width) * height * 4);
+            for (int y = 0; y < height; ++y)
+                memcpy(pixels.data() + static_cast<size_t>(y) * width * 4,
+                       gdi->primary_buffer + static_cast<size_t>(y) * gdi->stride, width * 4);
+            ctx->dirty = false;
+            rdp_update_unlock(instance->context->update);
+
+
+            {
+                std::lock_guard<std::mutex> lock(ctx->windowMutex);
+                for (auto* window : ctx->windows) {
+                    if (!window) continue;
+                    // getWidth/getHeight report the consumer's default, which can change
+                    // before the producer buffer size. Track our actual geometry requests.
+                    auto& configured = bufferSizes[window];
+                    if (configured.first != width || configured.second != height) {
+                        if (ANativeWindow_setBuffersGeometry(window, width, height, WINDOW_FORMAT_RGBA_8888) != 0)
+                            continue;
+                        configured = {width, height};
+                        LOGI("RDP_BUFFER: configured %dx%d", width, height);
                     }
-                    
+                    ANativeWindow_Buffer buffer;
+                    if (ANativeWindow_lock(window, &buffer, nullptr) != 0) continue;
+                    // A consumer resize can race the producer geometry update. Fill the
+                    // whole destination even for that transitional buffer.
+                    if (buffer.width == width && buffer.height == height) {
+                        for (int y = 0; y < height; ++y)
+                            memcpy(static_cast<uint8_t*>(buffer.bits) + static_cast<size_t>(y) * buffer.stride * 4,
+                                   pixels.data() + static_cast<size_t>(y) * width * 4, width * 4);
+                    } else {
+                        configured = {0, 0};
+                        // Our FreeRDP build has no swscale/Cairo scaler. Fill a rare
+                        // transitional buffer directly, then reapply geometry next frame.
+                        for (int y = 0; y < buffer.height; ++y) {
+                            const int srcY = static_cast<int>(static_cast<int64_t>(y) * height / buffer.height);
+                            auto* dst = static_cast<uint8_t*>(buffer.bits) + static_cast<size_t>(y) * buffer.stride * 4;
+                            for (int x = 0; x < buffer.width; ++x) {
+                                const int srcX = static_cast<int>(static_cast<int64_t>(x) * width / buffer.width);
+                                memcpy(dst + x * 4, pixels.data() + (static_cast<size_t>(srcY) * width + srcX) * 4, 4);
+                            }
+                        }
+                        ctx->dirty = true;
+                    }
                     ANativeWindow_unlockAndPost(window);
                 }
             }
-            
-            auto end = std::chrono::steady_clock::now();
-            int took = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-            if (took > 5) {
-                LOGI("RDP_LAG: Render thread blit took %d ms", took);
+            const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+            totalMs += ms;
+            maxMs = std::max(maxMs, ms);
+            frames++;
+            if (std::chrono::steady_clock::now() - statsStart >= std::chrono::seconds(3)) {
+                LOGI("RDP_RENDER: frames=%u snapshot+post avg=%.2fms max=%.2fms desktop=%dx%d", frames, totalMs / frames, maxMs, width, height);
+                statsStart = std::chrono::steady_clock::now();
+                frames = 0;
+                totalMs = maxMs = 0;
             }
         }
     });
     
     return TRUE;
+}
+
+static void destroy_client(freerdp* instance, bool connected) {
+    auto* ctx = (RdpContext*)instance->context;
+    ctx->network_running = false;
+    if (ctx->network_thread.joinable()) ctx->network_thread.join();
+    ctx->render_running = false;
+    if (ctx->render_thread.joinable()) ctx->render_thread.join();
+    if (connected) freerdp_disconnect(instance);
+    if (instance->context->gdi) gdi_free(instance);
+    for (auto* win : ctx->windows) if (win) ANativeWindow_release(win);
+    ctx->windows.~vector();
+    ctx->windowMutex.~mutex();
+    ctx->displayMutex.~mutex();
+    ctx->pendingDisplay.~atomic();
+    ctx->desktopWidth.~atomic();
+    ctx->desktopHeight.~atomic();
+    ctx->network_running.~atomic();
+    ctx->network_thread.~thread();
+    ctx->render_running.~atomic();
+    ctx->dirty.~atomic();
+    ctx->render_thread.~thread();
+    freerdp_context_free(instance);
+    freerdp_free(instance);
 }
 
 extern "C" JNIEXPORT jlong JNICALL
@@ -267,6 +350,13 @@ Java_com_multidesk_explorer_FreeRDPBridge_connect(
     new (&ctx->render_running) std::atomic<bool>(false);
     new (&ctx->dirty) std::atomic<bool>(false);
     new (&ctx->render_thread) std::thread();
+    new (&ctx->network_thread) std::thread();
+    new (&ctx->network_running) std::atomic<bool>(false);
+    new (&ctx->displayMutex) std::mutex();
+    new (&ctx->pendingDisplay) std::atomic<uint64_t>(0);
+    new (&ctx->desktopWidth) std::atomic<int>(1920);
+    new (&ctx->desktopHeight) std::atomic<int>(1080);
+    ctx->displayReady = false;
     ctx->disp = nullptr;
     
     if (surface) {
@@ -344,7 +434,15 @@ Java_com_multidesk_explorer_FreeRDPBridge_connect(
         LOGI("RDP_CODEC: channel connected: %s", e->name);
         auto* ctx = (RdpContext*)context;
         if (strcmp(e->name, DISP_DVC_CHANNEL_NAME) == 0) {
+            std::lock_guard<std::mutex> lock(ctx->displayMutex);
             ctx->disp = (DispClientContext*)e->pInterface;
+            ctx->disp->custom = ctx;
+            ctx->disp->DisplayControlCaps = [](DispClientContext* disp, UINT32, UINT32, UINT32) -> UINT {
+                auto* ctx = static_cast<RdpContext*>(disp->custom);
+                std::lock_guard<std::mutex> lock(ctx->displayMutex);
+                ctx->displayReady = true;
+                return CHANNEL_RC_OK;
+            };
         } else if (strcmp(e->name, RDPGFX_DVC_CHANNEL_NAME) == 0) {
             auto* gfx = (RdpgfxClientContext*)e->pInterface;
             rdpGdi* gdi = ((rdpContext*)context)->gdi;
@@ -362,7 +460,9 @@ Java_com_multidesk_explorer_FreeRDPBridge_connect(
     PubSub_SubscribeChannelDisconnected(instance->context->pubSub, [](void* context, const ChannelDisconnectedEventArgs* e) {
         auto* ctx = (RdpContext*)context;
         if (strcmp(e->name, DISP_DVC_CHANNEL_NAME) == 0) {
+            std::lock_guard<std::mutex> lock(ctx->displayMutex);
             ctx->disp = nullptr;
+            ctx->displayReady = false;
         } else if (strcmp(e->name, RDPGFX_DVC_CHANNEL_NAME) == 0) {
             auto* gfx = (RdpgfxClientContext*)e->pInterface;
             rdpGdi* gdi = ((rdpContext*)context)->gdi;
@@ -374,22 +474,34 @@ Java_com_multidesk_explorer_FreeRDPBridge_connect(
     LOGI("Connecting...");
     if (!freerdp_connect(instance)) {
         LOGE("Connection failed");
-        for (auto* win : ctx->windows) ANativeWindow_release(win);
-        ctx->windows.~vector();
-        ctx->windowMutex.~mutex();
-        freerdp_context_free(instance);
-        freerdp_free(instance);
+        destroy_client(instance, false);
         return 0;
     }
     
     LOGI("Connection succeeded");
     
-    std::thread([instance]() {
+    ctx->network_running = true;
+    ctx->network_thread = std::thread([instance, ctx]() {
         DWORD status;
         DWORD count;
         HANDLE handles[64];
         
-        while (!freerdp_shall_disconnect(instance)) {
+        while (ctx->network_running && !freerdp_shall_disconnect_context(instance->context)) {
+            {
+                std::lock_guard<std::mutex> lock(ctx->displayMutex);
+                if (ctx->disp && ctx->displayReady) {
+                    const uint64_t pending = ctx->pendingDisplay.exchange(0);
+                    if (pending) {
+                        DISPLAY_CONTROL_MONITOR_LAYOUT layout = {};
+                        layout.Flags = DISPLAY_CONTROL_MONITOR_PRIMARY;
+                        layout.Width = pending >> 32;
+                        layout.Height = pending & 0xFFFFFFFF;
+                        layout.DesktopScaleFactor = layout.DeviceScaleFactor = 100;
+                        const UINT result = ctx->disp->SendMonitorLayout(ctx->disp, 1, &layout);
+                        LOGI("RDP_SURFACE: requested desktop %ux%u result=%u", layout.Width, layout.Height, result);
+                    }
+                }
+            }
             count = freerdp_get_event_handles(instance->context, handles, 64);
             if (count == 0) {
                 LOGE("Failed to get FreeRDP event handles");
@@ -406,7 +518,7 @@ Java_com_multidesk_explorer_FreeRDPBridge_connect(
             }
         }
         LOGI("Disconnecting event loop");
-    }).detach();
+    });
 
     return (jlong)instance;
 }
@@ -418,29 +530,24 @@ Java_com_multidesk_explorer_FreeRDPBridge_disconnect(
         jlong instance_ptr) {
     if (!instance_ptr) return;
     
-    freerdp* instance = (freerdp*)instance_ptr;
-    auto* ctx = (RdpContext*)instance->context;
-    
-    ctx->render_running = false;
-    if (ctx->render_thread.joinable()) {
-        ctx->render_thread.join();
-    }
-    
-    freerdp_disconnect(instance);
-    
+    destroy_client((freerdp*)instance_ptr, true);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_multidesk_explorer_FreeRDPBridge_setSurface(
+        JNIEnv* env, jobject, jlong instance_ptr, jobject surface) {
+    if (!instance_ptr) return;
+    auto* ctx = (RdpContext*)((freerdp*)instance_ptr)->context;
+    ANativeWindow* replacement = surface ? ANativeWindow_fromSurface(env, surface) : nullptr;
     std::lock_guard<std::mutex> lock(ctx->windowMutex);
-    for (auto* win : ctx->windows) {
-        if (win) ANativeWindow_release(win);
+    for (auto* window : ctx->windows) if (window) ANativeWindow_release(window);
+    ctx->windows.clear();
+    if (replacement) {
+        ANativeWindow_setBuffersGeometry(replacement, ctx->desktopWidth, ctx->desktopHeight,
+                                         WINDOW_FORMAT_RGBA_8888);
+        ctx->windows.push_back(replacement);
     }
-    
-    ctx->windows.~vector();
-    ctx->windowMutex.~mutex();
-    ctx->render_running.~atomic();
-    ctx->dirty.~atomic();
-    ctx->render_thread.~thread();
-    
-    freerdp_context_free(instance);
-    freerdp_free(instance);
+    ctx->dirty = true;
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -501,23 +608,11 @@ Java_com_multidesk_explorer_FreeRDPBridge_updateDisplay(
     freerdp* instance = (freerdp*)instance_ptr;
     auto* ctx = (RdpContext*)instance->context;
     
-    if (ctx->disp && ctx->disp->SendMonitorLayout) {
-        DISPLAY_CONTROL_MONITOR_LAYOUT layout = {0};
-        layout.Flags = DISPLAY_CONTROL_MONITOR_PRIMARY;
-        layout.Left = 0;
-        layout.Top = 0;
-        layout.Width = width;
-        layout.Height = height;
-        layout.PhysicalWidth = (UINT32)(width / 96.0 * 25.4);
-        layout.PhysicalHeight = (UINT32)(height / 96.0 * 25.4);
-        layout.Orientation = ORIENTATION_LANDSCAPE;
-        
-        UINT32 scale = (UINT32)(zoom * 100.0f);
-        layout.DesktopScaleFactor = scale;
-        layout.DeviceScaleFactor = scale;
-        
-        ctx->disp->SendMonitorLayout(ctx->disp, 1, &layout);
-    }
+    // Debounced by Compose. The network thread sends after display capabilities arrive.
+    const uint32_t w = std::clamp(static_cast<int>(width), 200, 8192) & ~1;
+    const uint32_t h = std::clamp(static_cast<int>(height), 200, 8192);
+    ctx->pendingDisplay = (static_cast<uint64_t>(w) << 32) | h;
+    ctx->dirty = true;
 }
 extern "C" JNIEXPORT void JNICALL
 Java_com_multidesk_explorer_FreeRDPBridge_sendKeyEvent(
@@ -563,7 +658,7 @@ Java_com_multidesk_explorer_FreeRDPBridge_getDesktopWidth(
         jlong instance_ptr) {
     if (!instance_ptr) return 1920;
     freerdp* instance = (freerdp*)instance_ptr;
-    return freerdp_settings_get_uint32(instance->context->settings, FreeRDP_DesktopWidth);
+    return ((RdpContext*)instance->context)->desktopWidth.load();
 }
 
 extern "C" JNIEXPORT jint JNICALL
@@ -573,5 +668,5 @@ Java_com_multidesk_explorer_FreeRDPBridge_getDesktopHeight(
         jlong instance_ptr) {
     if (!instance_ptr) return 1080;
     freerdp* instance = (freerdp*)instance_ptr;
-    return freerdp_settings_get_uint32(instance->context->settings, FreeRDP_DesktopHeight);
+    return ((RdpContext*)instance->context)->desktopHeight.load();
 }

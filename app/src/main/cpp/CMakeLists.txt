@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.22)
 project("freerdp-jni" LANGUAGES C CXX)
 
+# Native codec/color-conversion loops need optimization in on-headset debug builds too.
+# Keep debug symbols, but avoid benchmarking the software stages at -O0.
+add_compile_options($<$<CONFIG:Debug>:-O2>)
+
 include(FetchContent)
 
 # 1. Fetch OpenSSL (CMake port to avoid Perl requirement on Windows)
@@ -45,6 +49,7 @@ set(WITH_DSP_FFMPEG OFF CACHE BOOL "Disable DSP FFmpeg" FORCE)
 set(WITH_VIDEO_FFMPEG OFF CACHE BOOL "Disable Video FFmpeg" FORCE)
 set(WITH_CAIRO OFF CACHE BOOL "Disable Cairo" FORCE)
 set(WITH_OPENH264 OFF CACHE BOOL "Disable OpenH264" FORCE)
+set(WITH_MEDIACODEC ON CACHE BOOL "Android hardware H.264 decoder" FORCE)
 set(WITH_WAYLAND OFF CACHE BOOL "Disable Wayland" FORCE)
 set(WITH_X11 OFF CACHE BOOL "Disable X11" FORCE)
 set(WITH_ALSA OFF CACHE BOOL "Disable ALSA" FORCE)
@@ -62,8 +67,17 @@ set(WITH_CLIENT_SDL OFF CACHE BOOL "Disable SDL client" FORCE)
 # 5. Build FreeRDP natively
 add_subdirectory(freerdp)
 
+# Keep the Quest MediaCodec fixes reviewable outside the upstream submodule.
+# FreeRDP 3.27.1's experimental backend has a compile error and assumes unpadded I420.
+get_target_property(quest_codec_sources freerdp-codecs SOURCES)
+list(FILTER quest_codec_sources EXCLUDE REGEX "(^|/)h264_mediacodec\\.c$")
+set_property(TARGET freerdp-codecs PROPERTY SOURCES ${quest_codec_sources}
+    "${CMAKE_CURRENT_SOURCE_DIR}/h264_mediacodec.c")
+target_include_directories(freerdp-codecs PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/freerdp/libfreerdp/codec")
+
 # 6. Build our JNI Bridge
 add_library(freerdp-jni SHARED freerdp_bridge.cpp)
+target_compile_features(freerdp-jni PRIVATE cxx_std_17)
 target_include_directories(freerdp-jni PRIVATE 
     freerdp/include
     freerdp/winpr/include

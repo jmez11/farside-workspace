@@ -27,11 +27,13 @@
 
         <activity
             android:name=".SessionActivity"
+            android:windowSoftInputMode="adjustResize"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:documentLaunchMode="always"
-            android:screenOrientation="landscape"
             android:taskAffinity=""
-            android:exported="false">
+            android:exported="false"
+            android:resizeableActivity="true">
+            <layout android:defaultWidth="1024dp" android:defaultHeight="640dp" />
             <meta-data android:name="com.oculus.vr.default_display_metrics" android:value="1280x800" />
         </activity>
 

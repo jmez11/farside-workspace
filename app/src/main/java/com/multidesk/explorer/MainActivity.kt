@@ -2,8 +2,9 @@ package com.multidesk.explorer
 
 import android.os.Bundle
 import android.util.Log
-import android.view.SurfaceHolder
-import android.view.SurfaceView
+import android.graphics.SurfaceTexture
+import android.view.TextureView
+import android.view.Surface
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
@@ -19,7 +20,15 @@ import androidx.compose.ui.unit.IntOffset
 import kotlin.math.roundToInt
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color
-import android.view.GestureDetector
+import androidx.compose.foundation.Canvas
+import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.geometry.Rect
+import android.os.SystemClock
+import android.view.ViewConfiguration
 import android.view.MotionEvent
 import androidx.compose.material.icons.Icons
 import androidx.compose.foundation.background
@@ -45,6 +54,7 @@ import metavrx.layout.window.compose.SpatialWindow
 import metavrx.layout.window.compose.layout.WindowModifier
 import metavrx.layout.window.compose.layout.size
 import android.content.Intent
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import com.multidesk.explorer.tunnel.CloudflaredService
 import com.multidesk.explorer.data.ConnectionProfile
@@ -198,14 +208,39 @@ fun mapAndroidKeyCodeToXt(keyCode: Int): Int {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Unit, onClose: () -> Unit) {
+fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Unit, onClose: () -> Unit, windowInteraction: Long = 0L) {
     val rdpBridge = remember { FreeRDPBridge() }
     var rdpInstance by remember { mutableStateOf(0L) }
     val context = LocalContext.current
+    val connection = remember(session.id) {
+        RdpSessionConnection(context, session, rdpBridge) {
+            rdpInstance = it
+            onInstanceCreated(it)
+        }
+    }
+    DisposableEffect(connection) {
+        onDispose {
+            rdpInstance = 0L
+            connection.close()
+        }
+    }
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     var showSoftKeyboard by remember { mutableStateOf(false) }
+    val imeVisible = WindowInsets.isImeVisible
+    var keyboardWasVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(imeVisible, showSoftKeyboard) {
+        Log.d("RdpKeyboard", "requested=$showSoftKeyboard visible=$imeVisible observed=$keyboardWasVisible")
+        if (showSoftKeyboard && imeVisible) keyboardWasVisible = true
+        if (showSoftKeyboard && keyboardWasVisible && !imeVisible) {
+            showSoftKeyboard = false
+            focusRequester.requestFocus()
+        }
+        if (!showSoftKeyboard) keyboardWasVisible = false
+    }
+
     
     var zoom by remember { mutableStateOf(1f) }
     var actualWidth by remember { mutableStateOf(1920) }
@@ -213,35 +248,74 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
 
     var panX by remember { mutableStateOf(0f) }
     var panY by remember { mutableStateOf(0f) }
-    var currentWidth by remember { mutableStateOf(1920) }
-    var currentHeight by remember { mutableStateOf(1080) }
+    var currentWidth by remember { mutableStateOf(0) }
+    var currentHeight by remember { mutableStateOf(0) }
     var offsetX by remember { mutableStateOf(0f) }
-    var offsetY by remember { mutableStateOf(0f) } // Flush with top
+    val density = LocalDensity.current
+    var offsetY by remember { mutableStateOf(with(density) { 16.dp.toPx() }) }
     var showZoomSlider by remember { mutableStateOf(false) }
 
     var isOverlayVisible by remember { mutableStateOf(true) }
-    
-    LaunchedEffect(isOverlayVisible, offsetX, offsetY, showZoomSlider) {
-        if (isOverlayVisible && !showZoomSlider) {
+    var toolbarPinned by remember { mutableStateOf(false) }
+    var toolbarActivity by remember { mutableStateOf(0L) }
+    var toolbarBounds by remember { mutableStateOf(Rect.Zero) }
+    var holdPoint by remember { mutableStateOf<Offset?>(null) }
+    var holdStarted by remember { mutableStateOf(0L) }
+    var holdProgress by remember { mutableStateOf(0f) }
+    val revealToolbar = {
+        isOverlayVisible = true
+        toolbarActivity += 1L
+    }
+
+    LaunchedEffect(windowInteraction, currentWidth, currentHeight) { revealToolbar() }
+    LaunchedEffect(isOverlayVisible, toolbarPinned, toolbarActivity, offsetX, offsetY) {
+        if (isOverlayVisible && !toolbarPinned) {
             delay(3000)
             isOverlayVisible = false
         }
     }
-    
+    LaunchedEffect(holdStarted) {
+        holdProgress = 0f
+        if (holdStarted != 0L) {
+            while (holdProgress < 1f) {
+                withFrameNanos { holdProgress = ((SystemClock.uptimeMillis() - holdStarted) / 1000f).coerceIn(0f, 1f) }
+            }
+        }
+    }
+
     val animatedAlpha by animateFloatAsState(
         targetValue = if (isOverlayVisible) 1f else 0f,
         animationSpec = tween(durationMillis = 500)
     )
 
-    LaunchedEffect(zoom, currentWidth, currentHeight) {
+    LaunchedEffect(rdpInstance) {
+        while (rdpInstance != 0L) {
+            actualWidth = rdpBridge.getDesktopWidth(rdpInstance)
+            actualHeight = rdpBridge.getDesktopHeight(rdpInstance)
+            delay(200)
+        }
+    }
+
+    // TextureView fills immediately; ask the server for matching resolution once resizing settles.
+    LaunchedEffect(rdpInstance, currentWidth, currentHeight) {
         if (rdpInstance != 0L && currentWidth > 0 && currentHeight > 0) {
-            rdpBridge.updateDisplay(rdpInstance, currentWidth, currentHeight, 1.0f)
-            for (i in 0..10) {
-                kotlinx.coroutines.delay(200)
-                actualWidth = rdpBridge.getDesktopWidth(rdpInstance)
-                actualHeight = rdpBridge.getDesktopHeight(rdpInstance)
+            delay(300)
+            val targetWidth = currentWidth.coerceIn(200, 8192) and -2
+            val targetHeight = currentHeight.coerceIn(200, 8192)
+            // Windows can ignore a layout while its initial GFX reset is in flight.
+            // Stop after acknowledgement; a new window size cancels this whole effect.
+            repeat(4) {
+                if (actualWidth == targetWidth && actualHeight == targetHeight) return@LaunchedEffect
+                rdpBridge.updateDisplay(rdpInstance, targetWidth, targetHeight, 1f)
+                delay(1500)
             }
         }
+    }
+    LaunchedEffect(zoom, currentWidth, currentHeight) {
+        val maxX = currentWidth * (zoom - 1f) / 2f
+        val maxY = currentHeight * (zoom - 1f) / 2f
+        panX = panX.coerceIn(-maxX, maxX)
+        panY = panY.coerceIn(-maxY, maxY)
     }
 
 
@@ -276,9 +350,8 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                         val event = awaitPointerEvent()
                         if (event.type == PointerEventType.Move || event.type == PointerEventType.Press) {
                             val pos = event.changes.first().position
-                            val overlayCenter = Offset(offsetX + 150f, offsetY + 50f)
-                            if ((pos - overlayCenter).getDistance() < 300f) {
-                                isOverlayVisible = true
+                            if (toolbarBounds.inflate(48.dp.toPx()).contains(pos)) {
+                                revealToolbar()
                             }
                         }
                     }
@@ -293,102 +366,49 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                 translationY = panY
             },
             factory = { viewContext ->
-                SurfaceView(viewContext).apply {
+                TextureView(viewContext).apply {
+                    layoutParams = android.view.ViewGroup.LayoutParams(
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT)
                     var lastMouseEventTime = 0L
-                    setZOrderMediaOverlay(true)
-                    pivotX = 0f
-                    pivotY = 0f
                     
-                    val gestureDetector = GestureDetector(viewContext, object : GestureDetector.SimpleOnGestureListener() {
-                        override fun onLongPress(e: MotionEvent) {
-                            if (rdpInstance != 0L) {
-                                val rdpX = e.x.toInt()
-                                val rdpY = e.y.toInt()
-                                rdpBridge.sendMouseEvent(rdpInstance, rdpX, rdpY, FreeRDPBridge.PTR_FLAGS_MOVE or FreeRDPBridge.PTR_FLAGS_BUTTON2 or FreeRDPBridge.PTR_FLAGS_DOWN)
-                                rdpBridge.sendMouseEvent(rdpInstance, rdpX, rdpY, FreeRDPBridge.PTR_FLAGS_MOVE or FreeRDPBridge.PTR_FLAGS_BUTTON2)
-                            }
-                        }
-                    })
+                    // TextureView stretches the complete desktop texture to its current bounds.
+                    // MotionEvent coordinates are already local to the transformed AndroidView.
+                    fun desktopPoint(event: MotionEvent): Pair<Int, Int> {
+                        val x = (event.x * actualWidth / width.coerceAtLeast(1)).toInt()
+                        val y = (event.y * actualHeight / height.coerceAtLeast(1)).toInt()
+                        return x.coerceIn(0, actualWidth - 1) to y.coerceIn(0, actualHeight - 1)
+                    }
 
-                    setOnTouchListener { view, event ->
+                    val input = RdpPointerGesture(
+                        touchSlop = ViewConfiguration.get(viewContext).scaledTouchSlop.toFloat(),
+                        send = { x, y, flags ->
+                            if (rdpInstance != 0L) {
+                                val remoteX = (x * actualWidth / width.coerceAtLeast(1)).toInt().coerceIn(0, actualWidth - 1)
+                                val remoteY = (y * actualHeight / height.coerceAtLeast(1)).toInt().coerceIn(0, actualHeight - 1)
+                                rdpBridge.sendMouseEvent(rdpInstance, remoteX, remoteY, flags)
+                            }
+                        },
+                        showHold = { point, started ->
+                            holdPoint = point?.let {
+                                Offset(it.first * zoom + width * (1f - zoom) / 2f + panX,
+                                    it.second * zoom + height * (1f - zoom) / 2f + panY)
+                            }
+                            holdStarted = started
+                        }
+                    )
+                    setOnTouchListener { _, event ->
                         focusRequester.requestFocus()
-                        gestureDetector.onTouchEvent(event)
-                        
-                        val actualRatio = actualWidth.toFloat() / actualHeight.toFloat()
-                        val viewRatio = view.width.toFloat() / view.height.toFloat()
-                        var renderWidth = view.width.toFloat()
-                        var renderHeight = view.height.toFloat()
-                        var offsetX = 0f
-                        var offsetY = 0f
-                        
-                        if (actualRatio > viewRatio) {
-                            renderHeight = view.width.toFloat() / actualRatio
-                            offsetY = (view.height.toFloat() - renderHeight) / 2f
-                        } else {
-                            renderWidth = view.height.toFloat() * actualRatio
-                            offsetX = (view.width.toFloat() - renderWidth) / 2f
-                        }
-                        
-                        val scaleX = actualWidth.toFloat() / renderWidth
-                        val scaleY = actualHeight.toFloat() / renderHeight
-                        val rdpX = ((event.x - offsetX) * scaleX).toInt().coerceIn(0, actualWidth - 1)
-                        val rdpY = ((event.y - offsetY) * scaleY).toInt().coerceIn(0, actualHeight - 1)
-                        
-                        var isRightClick = false
-                        if (event.buttonState and MotionEvent.BUTTON_SECONDARY != 0) {
-                            isRightClick = true
-                        }
-                        
-                        var flags = 0
-                        val btnFlag = if (isRightClick) FreeRDPBridge.PTR_FLAGS_BUTTON2 else FreeRDPBridge.PTR_FLAGS_BUTTON1
-                        
-                        when (event.actionMasked) {
-                            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
-                                flags = btnFlag or FreeRDPBridge.PTR_FLAGS_DOWN
-                            }
-                            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
-                                flags = btnFlag
-                            }
-                            MotionEvent.ACTION_MOVE -> {
-                                val now = System.currentTimeMillis()
-                                if (now - lastMouseEventTime < 32) return@setOnTouchListener true
-                                lastMouseEventTime = now
-                                flags = FreeRDPBridge.PTR_FLAGS_MOVE
-                            }
-                            else -> return@setOnTouchListener true
-                        }
-                        
-                        if (rdpInstance != 0L) {
-                            rdpBridge.sendMouseEvent(rdpInstance, rdpX, rdpY, flags)
-                        }
+                        input.onTouch(event)
                         true
                     }
-                    
+
                     setOnHoverListener { view, event ->
                         val now = System.currentTimeMillis()
-                        if (now - lastMouseEventTime < 32) return@setOnHoverListener true
-                        android.util.Log.d("RDP_LAG", "Mouse event sent")
+                        if (now - lastMouseEventTime < 16) return@setOnHoverListener true
                         lastMouseEventTime = now
 
-                        val actualRatio = actualWidth.toFloat() / actualHeight.toFloat()
-                        val viewRatio = view.width.toFloat() / view.height.toFloat()
-                        var renderWidth = view.width.toFloat()
-                        var renderHeight = view.height.toFloat()
-                        var offsetX = 0f
-                        var offsetY = 0f
-                        
-                        if (actualRatio > viewRatio) {
-                            renderHeight = view.width.toFloat() / actualRatio
-                            offsetY = (view.height.toFloat() - renderHeight) / 2f
-                        } else {
-                            renderWidth = view.height.toFloat() * actualRatio
-                            offsetX = (view.width.toFloat() - renderWidth) / 2f
-                        }
-                        
-                        val scaleX = actualWidth.toFloat() / renderWidth
-                        val scaleY = actualHeight.toFloat() / renderHeight
-                        val rdpX = ((event.x - offsetX) * scaleX).toInt().coerceIn(0, actualWidth - 1)
-                        val rdpY = ((event.y - offsetY) * scaleY).toInt().coerceIn(0, actualHeight - 1)
+                        val (rdpX, rdpY) = desktopPoint(event)
 
                         if (rdpInstance != 0L) {
                             rdpBridge.sendMouseEvent(rdpInstance, rdpX, rdpY, FreeRDPBridge.PTR_FLAGS_MOVE)
@@ -396,77 +416,84 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                         true
                     }
                     
-                    holder.addCallback(object : SurfaceHolder.Callback {
-                        override fun surfaceCreated(h: SurfaceHolder) {
-                            Log.i("RdpSession", "Surface created for ${session.id}")
-                            Thread {
-                                var targetHost = session.host
-                                var targetPort = session.port
-                                
-                                if (session.useCloudflare) {
-                                    val localPort = 33890 + (Math.random() * 1000).toInt()
-                                    val intent = Intent(context, CloudflaredService::class.java).apply {
-                                        action = CloudflaredService.ACTION_START
-                                        putExtra(CloudflaredService.EXTRA_HOSTNAME, session.host)
-                                        putExtra(CloudflaredService.EXTRA_LOCAL_PORT, localPort)
-                                    }
-                                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                                        context.startForegroundService(intent)
-                                    } else {
-                                        context.startService(intent)
-                                    }
-                                    targetHost = "127.0.0.1"
-                                    targetPort = localPort
-                                    Thread.sleep(2000) // Give cloudflared time to start
-                                }
-                                
-                                val newInst = rdpBridge.connect(targetHost, targetPort, session.user, session.pass, session.remoteApp, session.enableCamera, session.cameraId, h.surface)
-                                rdpInstance = newInst
-                                onInstanceCreated(newInst)
-                            }.start()
-                        }
-                        override fun surfaceChanged(h: SurfaceHolder, format: Int, width: Int, height: Int) {
+                    surfaceTextureListener = object : TextureView.SurfaceTextureListener {
+                        override fun onSurfaceTextureAvailable(texture: SurfaceTexture, width: Int, height: Int) {
                             currentWidth = width
                             currentHeight = height
-                            if (rdpInstance != 0L) {
-                                rdpBridge.updateDisplay(rdpInstance, width, height, zoom)
-                            }
+                            Log.i("RdpSession", "Texture available ${width}x${height}")
+                            connection.attach(Surface(texture))
                         }
-                        override fun surfaceDestroyed(h: SurfaceHolder) {
-                            Log.i("RdpSession", "Surface destroyed for ${session.id}")
-                            if (session.useCloudflare) {
-                                val intent = Intent(context, CloudflaredService::class.java).apply {
-                                    action = CloudflaredService.ACTION_STOP
-                                }
-                                context.startService(intent)
-                            }
-                            if (rdpInstance != 0L) {
-                                rdpBridge.disconnect(rdpInstance)
-                                rdpInstance = 0L
-                            }
+
+                        override fun onSurfaceTextureSizeChanged(texture: SurfaceTexture, width: Int, height: Int) {
+                            currentWidth = width
+                            currentHeight = height
+                            Log.i("RdpSession", "Texture resized ${width}x${height}")
                         }
-                    })
+
+                        override fun onSurfaceTextureDestroyed(texture: SurfaceTexture): Boolean {
+                            input.cancel()
+                            connection.detach()
+                            return true
+                        }
+
+                        override fun onSurfaceTextureUpdated(texture: SurfaceTexture) = Unit
+                    }
                 }
             }
         )
         
+        holdPoint?.let { point ->
+            Canvas(Modifier.fillMaxSize()) {
+                val half = (8.dp.toPx() + 8.dp.toPx() * holdProgress)
+                val corners = listOf(
+                    Offset(point.x - half, point.y - half), Offset(point.x + half, point.y - half),
+                    Offset(point.x + half, point.y + half), Offset(point.x - half, point.y + half),
+                    Offset(point.x - half, point.y - half)
+                )
+                val path = Path().apply {
+                    moveTo(corners[0].x, corners[0].y)
+                    val edges = holdProgress * 4f
+                    for (edge in 0..3) {
+                        val fraction = (edges - edge).coerceIn(0f, 1f)
+                        if (fraction > 0f) {
+                            val start = corners[edge]
+                            val end = corners[edge + 1]
+                            lineTo(start.x + (end.x - start.x) * fraction, start.y + (end.y - start.y) * fraction)
+                        }
+                    }
+                }
+                drawPath(path, Color.White.copy(alpha = 0.7f), style = Stroke(2.dp.toPx()))
+            }
+        }
+        if (isOverlayVisible || animatedAlpha > 0f) {
         Surface(
             modifier = Modifier
                 .align(androidx.compose.ui.Alignment.TopCenter)
                 .offset { IntOffset(offsetX.roundToInt(), offsetY.roundToInt()) }
                 .alpha(animatedAlpha)
+                .onGloballyPositioned { toolbarBounds = it.boundsInRoot() }
                 .pointerInput(Unit) {
                     detectDragGestures { change, dragAmount ->
                         change.consume()
                         offsetX += dragAmount.x
                         offsetY += dragAmount.y
+                        revealToolbar()
                     }
                 },
             shape = RoundedCornerShape(24.dp),
             color = Color.Black.copy(alpha = 0.7f)
         ) {
             Column(modifier = Modifier.padding(8.dp), horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
-                Row {
+                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    Column(Modifier.widthIn(max = 240.dp).padding(horizontal = 12.dp)) {
+                        Text(session.name, color = Color.White, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        Text(session.host, color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    }
+                    IconButton(onClick = { toolbarPinned = !toolbarPinned; revealToolbar() }) {
+                        Icon(Icons.Default.PushPin, if (toolbarPinned) "Unpin toolbar" else "Keep toolbar visible",
+                            tint = if (toolbarPinned) MaterialTheme.colorScheme.primary else Color.White)
+                    }
                     IconButton(onClick = { showZoomSlider = !showZoomSlider }) {
                         Icon(Icons.Default.Search, "Zoom", tint = Color.White)
                     }
@@ -478,7 +505,7 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                     IconButton(onClick = { /* Implement menu later */ }) {
                         Icon(Icons.Default.Menu, "Menu", tint = androidx.compose.ui.graphics.Color.White)
                     }
-                    IconButton(onClick = { showSoftKeyboard = !showSoftKeyboard; if (!showSoftKeyboard) { keyboardController?.hide() } }) {
+                    IconButton(onClick = { revealToolbar(); showSoftKeyboard = !showSoftKeyboard; if (!showSoftKeyboard) { keyboardController?.hide() } }) {
                         Icon(Icons.Default.Keyboard, "Keyboard", tint = Color.White)
                     }
                 }
@@ -493,7 +520,8 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                     )
                 }
             }
-        }        
+        }
+        }
         if (zoom > 1.0f) {
             Surface(
                 modifier = Modifier
@@ -525,7 +553,7 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
         var textValue by remember { mutableStateOf(TextFieldValue(" ", selection = TextRange(1))) }
         
         // Modifier keys row
-        androidx.compose.foundation.layout.Row(
+        if (imeVisible) androidx.compose.foundation.layout.Row(
             modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter).fillMaxWidth().padding(bottom = 80.dp),
             horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceEvenly
         ) {

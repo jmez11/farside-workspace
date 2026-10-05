@@ -18,6 +18,10 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
+        testInstrumentationRunner = "com.multidesk.explorer.RdpResizeInstrumentation"
+        ndk {
+            abiFilters += "arm64-v8a"
+        }
     }
 
     buildFeatures {

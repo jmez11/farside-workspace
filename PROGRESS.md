@@ -1,51 +1,47 @@
-# Progress Checklist: MultiDesk Explorer
+# Progress: MultiDesk Explorer
 
-## Current Status
-- [x] Initial architecture and design session completed.
-- [x] Standing rules (AGENTS.md), architecture (ARCHITECTURE.md), and progress notes initialized.
-- [x] Initialize the Android project (Command-line only).
-- [x] **Spike**: Set up FreeRDP NDK build and JNI bridge.
-- [x] **Spike**: Verify basic RDP connection and video decode on an Android Surface.
+## Current Status (2026-10-05)
+- Android/Compose app and FreeRDP JNI spike run on Quest 3; phase 2 (multiple sessions) remains in progress.
+- Latest arm64 debug APK is installed and verified on Quest 3. Native debug code uses `-O2` with symbols.
+- GFX now negotiates through `instance->LoadChannels`: static `drdynvc` Ex loader, dynamic `rdpgfx`/`disp`, and GDI pipeline lifecycle hooks. `RDP_CODEC` records actual server SurfaceCommand codecs.
+
+## Resize, Rendering, and Input
+- User confirmed resizing, dragging, and pointer accuracy. Touch/controller-trigger/hand-pinch hold now defers left down: a growing clockwise square completes in 1 second, then release sends only right-button down/up. Short release clicks left; movement beyond Android touch slop starts left drag; cancellation releases any held button. Hover retains the 16 ms throttle.
+- Session toolbar starts 16dp below the top, shows profile name/host, and supports pinning. Unpinned toolbar fades completely after 3 seconds with no minimized button. `WindowMovementObserver.kt` observes the Home panel pose through the headset framework's activity-scoped volumetric listener; pose changes reveal the full toolbar and restart its timeout. Focus changes, resizing, and hover near the toolbar also reveal it. No global window permission is requested by the app.
+- Replaced the fixed SurfaceView with a full-frame TextureView. It scales immediately during resizing; a 300 ms debounce requests matching remote resolution through DisplayControl after server capabilities arrive, with bounded retries if Windows ignores the initial layout. Zoom remains local, with pan clamped to avoid exposed edges.
+- Keyboard modifier buttons follow IME visibility. Session uses edge-to-edge inset delivery with `adjustResize`; after observed IME closure the hidden text field is removed and RDP focus restored, allowing the keyboard to reopen.
+- Session declares the standard 1024dp x 640dp landscape initial panel with resizability enabled; orientation remains unrestricted so landscape and portrait resizing still fill content bounds.
+- Fixed the missing `gdi_resize` callback and read framebuffer rows using GDI stride. The render thread snapshots under FreeRDP's update lock, then releases it before waiting for Android buffers.
+- Fixed a second resize bug: `ANativeWindow_getWidth/Height` can report new consumer defaults while locked producer buffers retain their old size. The renderer now tracks configured producer geometry explicitly and reapplies it when desktop dimensions change. Transitional buffers are filled completely.
+- Rendering checks actual invalid regions, paces from frame start, and logs aggregate copy/post timings instead of logging every blit.
+- Surface recreation detaches/reattaches the texture without disconnecting RDP. Closing a session joins native workers before freeing GDI/context resources.
+
+## MediaCodec Upgrade
+- Enabled `WITH_MEDIACODEC`; upstream CMake supplies `mediandk`. FFmpeg/OpenH264 remain disabled.
+- `app/src/main/cpp/h264_mediacodec.c` replaces the upstream experimental backend at build time without modifying the FreeRDP submodule. It fixes initialization/output-layout issues, configures at actual coded dimensions, handles padded I420/NV12, bounds decoder waits, and requests low latency.
+- Hardware resources are created only for actual AVC packets. Prefer `c2.qti.avc.decoder.low_latency`, with the platform AVC decoder as fallback.
+- Advertise AVC420/AVC444/v2 with thin-client preferences. The original Progressive preference caused Windows to keep choosing Progressive despite H.264 support. Frame acknowledgements remain at FreeRDP defaults; caches stay enabled.
+- **Observed on Quest 3:** `AVC444v2(H.264) (0x000f)` decoded by `c2.qti.avc.decoder.low_latency`, with I420 output. AVC444 reconstruction, YUV-to-RGBA conversion, and framebuffer copies still run on CPU.
+
+## Verification
+- **Standing user preference:** Continue proactively building and deploying app updates to Quest, creating/extending on-device automated tests, running them, inspecting logs/captures, and fixing discovered failures within the requested scope. Routine iterations need no renewed permission. Workflow and commands are documented in `AGENTS.md` and `ARCHITECTURE.md`.
+- Toolbar build and Quest UI checks passed: 16dp offset, full fade/no minimized control, pin/unpin, and toolbar reappearance after a real 5cm position-only panel transaction (restored afterward). No resize or focus change is needed. Final five-size landscape/portrait resize and close regression also passed with the inset changes. Updated debug APK is installed on Quest 3. Logs: `build/verification/toolbar-build.log`, `toolbar-ui.log`, `toolbar-window.log`, `toolbar-regression.log`.
+- Horizon rejected automated keyboard show (`PHASE_IME_ON_SHOW_SOFT_INPUT_TRUE`). The test therefore dispatched Android IME inset visibility transitions: modifier buttons appeared, disappeared on closure, and appeared on reopening. Actual floating keyboard dismissal via its close control still needs a worn-headset check; tests do not claim that was exercised.
+- Current panel/input build: `./gradlew :app:assembleDebug :app:assembleDebugAndroidTest` passed; updated APKs installed on Quest 3. Input-only device instrumentation passed short tap, 999/1000/1500 ms hold boundaries, hold-to-drag, cancellation, multitouch cancellation, and physical secondary-button release. The full five-size landscape/portrait resize and session-close regression also passed. Logs: `build/verification/panel-build.log`, `panel-regression.log`, `panel-device.log`.
+- Manual checks pending: initial size for a fresh Home task and clockwise hold feedback with real trigger/pinch. Automated MotionEvents validate RDP button routing, not Horizon gesture delivery or perceived animation.
+- Build: `./gradlew :app:assembleDebug :app:assembleDebugAndroidTest` passed. APK installed with `adb install -r`.
+- Device regression: `adb shell am instrument -w com.multidesk.explorer.test/com.multidesk.explorer.RdpResizeInstrumentation` passed all five steps: 1280x800 -> 1000x600 -> 1600x900 -> 800x1000 -> 1280x800, then session close.
+- Test checks texture/content bounds and nonblank frames, saving PNGs for visual review. Latest landscape/portrait captures have correct proportions and no outside black border. One connection survived the resize sequence; native event-loop shutdown completed without a logged crash.
+- Moving-window source: run `tools/rdp-motion-probe.ps1` on the Windows RDP host. Its temporary window closes automatically and leaves documents untouched.
+- Artifacts: `build/verification/quest-rdp.log` (motion), `quest-resize.log` (final resize/close run), and resolution-labelled PNGs (local build output).
+- Final moving-window run: sampled warm decode calls approximately 4-6 ms; render snapshot/post averages approximately 1.3-1.9 ms across tested sizes. Decoder startup/resolution changes took roughly 68-164 ms. These are processing timings, not end-to-end controller latency or a controlled comparison against the old build.
+- Remaining validation: user's controller drag feel and zoomed selection on the new TextureView path; NV12 output handling (device exercised I420 only). Automated window motion does not establish subjective controller responsiveness.
 
 ## Known Working Features
-- Spatial Windowing: Sessions launch as independent, repositionable Android Document Activities inside Horizon OS.
-- RDP Rendering: Stream displays correctly via FreeRDP/JNI onto the SurfaceView overlay.
-- Profile Management: Connections can be added, saved, and edited.
-- RDP Panning/Zooming: Visual scaling via Compose graphicsLayer (instead of protocol-level DisplayControl) is implemented and functioning correctly.
-- RDP Touch Pointers: Letterboxing and touch coordinates are mapped correctly to FreeRDP (PTR_FLAGS_DOWN/UP/MOVE).
-- Soft Keyboard: Custom row of PC modifiers securely overlayed over the system keyboard, sending scancodes via JNI.
+- Independent repositionable session activities in Horizon OS; saved connection profiles.
+- RDP desktop display, mouse input, modifier controls, and soft keyboard.
 
-## Reported Issues (To be fixed)
-- **SEVERE Window Dragging Lag**: 
-  - Dragging a window in the RDP session lags multiple seconds behind the pointer.
-  - **Root Cause & Discoveries (from Logcat & Source Auditing):**
-    1. **Frame Flow Control**: Disabling `FreeRDP_FrameAcknowledge` broke server-side flow control. Restoring default `FrameAcknowledge` (> 0) restored backpressure.
-    2. **Static Channel Loading Failure**: On Android with `BUILD_SHARED_LIBS=OFF`, FreeRDP builds channel plugins (`drdynvc`, `rdpgfx`, `disp`) as static libraries. FreeRDP's default client loader relies on `dlopen` which fails silently. Furthermore, `freerdp_connect()` calls `utils_reload_channels()` immediately after `PreConnect`, destroying and rebuilding `context->channels` via `instance->LoadChannels`. Any channels loaded in `PreConnect` were discarded before connection established.
-    3. **Missing GDI Pipeline Initialization**: Even when `rdpgfx` connects, `gdi_graphics_pipeline_init` must be wired to `PubSub_SubscribeChannelConnected` to connect the GFX pipeline to the GDI surface.
-    4. **Codec Negotiation Reality**: FreeRDP was falling back entirely to raw legacy uncompressed GDI over Wi-Fi, completely flooding the network. Because `WITH_FFMPEG=OFF` and `WITH_OPENH264=OFF`, H.264 decoders were not compiled into FreeRDP; advertising H.264 would cause unhandled AVC packets.
-  - **Things Attempted & Implemented:**
-    1. Re-enabled cache flags (`+glyph-cache`, `+bitmap-cache`, `+offscreen-cache`) and restored `FrameAcknowledge` defaults.
-    2. Set color depth to 32bpp (`FreeRDP_ColorDepth = 32`) required for RDPGFX negotiation.
-    3. Decoupled rendering: `client_end_paint` sets an atomic `dirty = true` flag; a dedicated background thread blits `gdi->primary_buffer` to `ANativeWindow` in ~6ms without stalling the FreeRDP network/packet-processing loop.
-    4. Implemented `my_addin_provider` to map static entry points (`drdynvc_VirtualChannelEntryEx`, `rdpgfx_DVCPluginEntry`, `disp_DVCPluginEntry`).
-    5. Moved static channel loading into `instance->LoadChannels` (`client_load_channels`) using `freerdp_channels_client_load_ex` with proper settings context.
-    6. Registered dynamic channels (`rdpgfx`, `disp`) via `freerdp_client_add_dynamic_channel`.
-    7. Attached `gdi_graphics_pipeline_init` / `gdi_graphics_pipeline_uninit` in channel lifecycle events.
-    8. Intercepted `gfx->SurfaceCommand` to log ground-truth negotiated server codecs (`RDP_CODEC: server sent codec ...`).
-    9. Disabled H.264 advertisement temporarily in favor of Progressive / RemoteFX while software-only decoders are present.
-  - **Immediate Next Steps & Plan:**
-    1. Deploy current build to Quest device once reconnected to verify `drdynvc` and `rdpgfx` channel negotiation and examine the live `RDP_CODEC` log to see whether Progressive/RemoteFX runs smoothly.
-    2. **Hardware Decoding Upgrade (MediaCodec)**: Enable `WITH_MEDIACODEC` in `app/src/main/cpp/freerdp/libfreerdp/codec/CMakeLists.txt` and link `mediandk` to enable hardware-accelerated H.264 decoding directly on Quest 3's Snapdragon XR2 Gen 2 DSP/VPU without third-party licensing baggage (avoiding FFmpeg GPL/LGPL issues and OpenH264 runtime binary distribution constraints).
-    3. Re-enable `FreeRDP_GfxH264`, `FreeRDP_GfxAVC444`, and test drag performance under native hardware decode.
-
-## Unverified / Stubbed Logic
-- Local PC Discovery: Implementation stubbed but requires DNS-SD/SMB scanning logic.
-- Tunneling: Cloudflared integration stubbed but not yet running background foreground services effectively.
-
-## Backlog
-- [x] Phase 1: Basic RDP Spatial Window implementation.
-- [ ] Phase 2: Multiple Sessions. (In Progress)
-- [ ] Phase 3: RemoteApp (RAIL).
-- [ ] Phase 4: Webcam support (rdpecam).
-- [ ] Phase 5: SSH Windows.
-- [ ] Phase 6: Tunneling & Proxies (Cloudflared).
+## Stubbed / Backlog
+- Local PC discovery: DNS-SD/SMB scanning remains stubbed.
+- Cloudflared: per-session and persistent foreground-service integration remains incomplete.
+- Phase 2: multiple sessions/mirroring; then RemoteApp, camera redirection, SSH, tunnels/proxies.

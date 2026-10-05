@@ -18,7 +18,7 @@
 
 ## Input Pipeline
 - **Quest Controllers**: Raycast to window coordinates and translated into RDP mouse events.
-- **Gestures**: Pinch and scroll gestures for panning and zooming desktop windows.
+- **RDP gestures**: Controller trigger/hand pinch arrive as Android touch events. A stationary 1-second hold draws a clockwise square and sends right-click on release; short taps click left and motion beyond touch slop starts left drag.
 - **Keyboard**: Meta virtual keyboard (IME) integration with an on-screen extra-keys row (Ctrl, Alt, Win, Esc, Tab, arrows).
 
 ## Camera Redirection (`rdpecam`)
@@ -33,15 +33,24 @@
 - **SSH**: Trust On First Use (TOFU) host-key verification.
 
 ## Threading Model & Performance
-- Each RDP session renders on a dedicated background thread blitting the GDI primary buffer to an `ANativeWindow` driven by a dirty flag (`client_end_paint`), fully decoupling rendering from the FreeRDP network event loop.
-- **Codec & Hardware Decoding Status**:
-  - Currently runs software GDI with RDPGFX / RemoteFX / Progressive decoding on CPU.
-  - FreeRDP static channel pipeline (`drdynvc`, `rdpgfx`, `disp`) is loaded via `LoadChannels` with custom static addin provider mapping.
-  - Native hardware acceleration (`WITH_MEDIACODEC` via `h264_mediacodec.c` / `libmediandk`) is planned as the definitive performance parity upgrade for AVC420/AVC444 hardware decoding without external licensing/patent burdens (in contrast to FFmpeg or OpenH264).
-- **Target**: 2–4 concurrent sessions on Quest 3.
-- **Degradation strategy**: Background windows drop to lower framerates or pause decoding if resource limits are reached.
+- FreeRDP owns protocol decoding and GDI painting. A render worker copies the completed RGBA framebuffer under FreeRDP's update lock, releases the lock, then posts to Android. Producer buffer geometry follows actual desktop dimensions; copies honor source and destination stride.
+- A full-frame TextureView scales immediately with its containing window. After a 300 ms debounce, DisplayControl requests matching remote resolution. Zoom/pan are Compose transforms; pointer coordinates map from the same local view bounds to desktop pixels.
+- Home panel pose observation uses the headset framework's activity-scoped volumetric window listener, loaded reflectively for Android compatibility. Position/orientation changes reveal the session toolbar; registration is removed on Activity destruction. IME insets control the keyboard modifier row and hidden text-field lifecycle.
+- Surface recreation replaces the native surface while retaining the connection. Session disposal joins native network/render workers before freeing the context.
+- **Codecs:** FreeRDP 3.x static channels load through `LoadChannels` and a custom addin provider. Hardware AVC444v2 decoding through Qualcomm's low-latency MediaCodec decoder is verified on Quest 3. AVC444 reconstruction and YUV/RGBA conversion remain CPU work; Progressive/RemoteFX software decoders remain available.
+- **MediaCodec implementation:** `app/src/main/cpp/h264_mediacodec.c` replaces the upstream experimental backend through the root CMake configuration; the FreeRDP submodule stays unchanged. Supports padded I420/NV12 output, bounded waits, and lazy decoder allocation. Only I420 output has been exercised on-device.
+- **Build:** arm64 only; native debug builds retain symbols and use `-O2` so codec/conversion performance is representative.
+- **Target:** 2-4 concurrent sessions on Quest 3. Background throttling remains planned.
 
 ---
+
+## Development and Device Validation
+- Default workflow for app changes: command-line build, ADB install on the connected Quest, relevant on-device regression tests, log/screenshot inspection, fixes, and rerun of affected checks. Extend the harness when the requested behavior needs new coverage.
+- Build app and test APKs: `./gradlew :app:assembleDebug :app:assembleDebugAndroidTest`. Install each with `adb install -r` from `app/build/outputs/apk/debug/app-debug.apk` and `app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk`.
+- Harness: `app/src/androidTest/java/com/multidesk/explorer/RdpResizeInstrumentation.kt`. Run `adb shell am instrument -w com.multidesk.explorer.test/com.multidesk.explorer.RdpResizeInstrumentation`; use `-e inputOnly true` or `-e toolbarOnly true` before the component for focused checks. RDP/toolbar runs use the first saved RDP profile and require its server to be reachable.
+- Coverage: real task resizing, texture bounds/nonblank frame captures, session shutdown, pointer gesture routing, toolbar visibility/pinning, and panel pose changes. Keyboard checks dispatch synthetic IME insets; physical trigger/pinch and floating-keyboard behavior still need headset validation.
+- Captures: app cache `rdp-verification-<width>x<height>.png`; collect logs and review artifacts under `build/verification/`. `tools/rdp-motion-probe.ps1` provides a temporary moving window on the Windows RDP host for decode/render observation.
+- Record outcomes and limits in `PROGRESS.md`; a successful build alone does not establish device behavior.
 
 ## Phased Build Plan
 

@@ -12,8 +12,28 @@ import com.multidesk.explorer.data.ConnectionType
 import com.multidesk.explorer.data.ProfileManager
 
 class SessionActivity : ComponentActivity() {
+    private val windowInteraction = androidx.compose.runtime.mutableStateOf(0L)
+    private val movementObserver = WindowMovementObserver(this) { windowInteraction.value += 1L }
+
+    override fun onPostResume() {
+        super.onPostResume()
+        window.decorView.post { if (!isDestroyed) movementObserver.start() }
+    }
+
+    override fun onDestroy() {
+        movementObserver.close()
+        super.onDestroy()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // System window affordances may take focus while moving/resizing the panel.
+        windowInteraction.value += 1L
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
         
         val profileId = intent.getStringExtra("profileId")
         if (profileId == null) {
@@ -42,6 +62,7 @@ class SessionActivity : ComponentActivity() {
                     if (profile.type == ConnectionType.RDP) {
                         RdpSessionScreen(
                             session = profile,
+                            windowInteraction = windowInteraction.value,
                             onInstanceCreated = { /* Handle instance creation if needed */ },
                             onClose = { finish() }
                         )
