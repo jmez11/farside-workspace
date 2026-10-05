@@ -39,7 +39,7 @@ struct RdpContext {
 static BOOL client_pre_connect(freerdp* instance) {
     // Configure settings
     freerdp_settings_set_bool(instance->context->settings, FreeRDP_SoftwareGdi, TRUE);
-    freerdp_settings_set_uint32(instance->context->settings, FreeRDP_ColorDepth, 16);
+    freerdp_settings_set_uint32(instance->context->settings, FreeRDP_ColorDepth, 32);
     freerdp_settings_set_bool(instance->context->settings, FreeRDP_IgnoreCertificate, TRUE);
     freerdp_settings_set_uint32(instance->context->settings, FreeRDP_AuthenticationLevel, 0);
     
@@ -50,6 +50,8 @@ static BOOL client_pre_connect(freerdp* instance) {
     freerdp_settings_set_bool(instance->context->settings, FreeRDP_SupportGraphicsPipeline, TRUE);
     freerdp_settings_set_bool(instance->context->settings, FreeRDP_GfxH264, TRUE);
     freerdp_settings_set_bool(instance->context->settings, FreeRDP_GfxAVC444, TRUE);
+    
+    freerdp_client_load_addins(instance->context->channels, instance->context->settings);
     
     return TRUE;
 }
@@ -227,7 +229,7 @@ Java_com_multidesk_explorer_FreeRDPBridge_connect(
         "+offscreen-cache",
         "/gfx:AVC420:on",
         "/rfx",
-        "/bpp:16",
+        "/bpp:32",
         "/compression",
         "/network:auto"
     };
