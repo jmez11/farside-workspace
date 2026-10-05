@@ -33,9 +33,7 @@ struct RdpContext {
     std::chrono::steady_clock::time_point last_render_time;
     std::atomic<bool> render_running;
     std::thread render_thread;
-    std::mutex bufferMutex;
-    std::vector<uint8_t> backBuffer;
-    bool dirty;
+    std::atomic<bool> dirty;
 };
 
 static BOOL client_pre_connect(freerdp* instance) {
@@ -59,20 +57,7 @@ static BOOL client_pre_connect(freerdp* instance) {
 
 static BOOL client_end_paint(rdpContext* context) {
     auto* ctx = (RdpContext*)context;
-    rdpGdi* gdi = context->gdi;
-    if (!gdi || !gdi->primary_buffer) return TRUE;
-    
-    int width = freerdp_settings_get_uint32(context->settings, FreeRDP_DesktopWidth);
-    int height = freerdp_settings_get_uint32(context->settings, FreeRDP_DesktopHeight);
-    size_t size = width * height * 4;
-    
-    std::lock_guard<std::mutex> lock(ctx->bufferMutex);
-    if (ctx->backBuffer.size() != size) {
-        ctx->backBuffer.resize(size);
-    }
-    memcpy(ctx->backBuffer.data(), gdi->primary_buffer, size);
     ctx->dirty = true;
-    
     return TRUE;
 }
 
@@ -118,20 +103,12 @@ static BOOL client_post_connect(freerdp* instance) {
             rdpGdi* gdi = instance->context->gdi;
             if (!gdi || !gdi->primary_buffer) continue;
             
+            if (!ctx->dirty.exchange(false)) continue;
             auto start = std::chrono::steady_clock::now();
             
             int desktopWidth = freerdp_settings_get_uint32(instance->context->settings, FreeRDP_DesktopWidth);
             int desktopHeight = freerdp_settings_get_uint32(instance->context->settings, FreeRDP_DesktopHeight);
             int rowBytes = desktopWidth * 4;
-            
-            // Fast copy out of backBuffer to minimize lock contention with FreeRDP thread
-            std::vector<uint8_t> localBuffer;
-            {
-                std::lock_guard<std::mutex> lock(ctx->bufferMutex);
-                if (!ctx->dirty || ctx->backBuffer.empty()) continue;
-                localBuffer = ctx->backBuffer; // copy
-                ctx->dirty = false;
-            }
             
             std::lock_guard<std::mutex> lock(ctx->windowMutex);
             for (auto* window : ctx->windows) {
@@ -139,7 +116,7 @@ static BOOL client_post_connect(freerdp* instance) {
                 ANativeWindow_Buffer buffer;
                 if (ANativeWindow_lock(window, &buffer, nullptr) == 0) {
                     uint8_t* dst = (uint8_t*)buffer.bits;
-                    uint8_t* src = localBuffer.data();
+                    uint8_t* src = (uint8_t*)gdi->primary_buffer;
                     
                     for (int y = 0; y < desktopHeight && y < buffer.height; ++y) {
                         memcpy(dst + (y * buffer.stride * 4), src + (y * rowBytes), rowBytes);
@@ -206,10 +183,8 @@ Java_com_multidesk_explorer_FreeRDPBridge_connect(
     new (&ctx->windows) std::vector<ANativeWindow*>();
     new (&ctx->windowMutex) std::mutex();
     new (&ctx->render_running) std::atomic<bool>(false);
+    new (&ctx->dirty) std::atomic<bool>(false);
     new (&ctx->render_thread) std::thread();
-    new (&ctx->bufferMutex) std::mutex();
-    new (&ctx->backBuffer) std::vector<uint8_t>();
-    ctx->dirty = false;
     ctx->disp = nullptr;
     
     if (surface) {
@@ -364,9 +339,8 @@ Java_com_multidesk_explorer_FreeRDPBridge_disconnect(
     ctx->windows.~vector();
     ctx->windowMutex.~mutex();
     ctx->render_running.~atomic();
+    ctx->dirty.~atomic();
     ctx->render_thread.~thread();
-    ctx->bufferMutex.~mutex();
-    ctx->backBuffer.~vector();
     
     freerdp_context_free(instance);
     freerdp_free(instance);
