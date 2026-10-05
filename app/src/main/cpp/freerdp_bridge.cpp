@@ -174,6 +174,18 @@ Java_com_multidesk_explorer_FreeRDPBridge_connect(
     freerdp_settings_set_string(instance->context->settings, FreeRDP_Username, user_c);
     freerdp_settings_set_string(instance->context->settings, FreeRDP_Password, pass_c);
     
+    LOGI("Applying performance optimizations");
+    const char* opt_args[] = {
+        "freerdp",
+        "-glyph-cache",
+        "-bitmap-cache",
+        "-offscreen-cache",
+        "/gfx:AVC420:on",
+        "/compression",
+        "/network:auto"
+    };
+    freerdp_client_settings_parse_command_line(instance->context->settings, 7, (char**)opt_args, FALSE);
+    
     LOGI("Setting remote app");
     if (remoteApp && env->GetStringLength(remoteApp) > 0) {
         const char* app_c = env->GetStringUTFChars(remoteApp, 0);
