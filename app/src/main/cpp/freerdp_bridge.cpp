@@ -22,11 +22,14 @@
 #include <thread>
 #include <winpr/synch.h>
 
+#include <chrono>
+
 struct RdpContext {
     rdpContext _p;
     std::vector<ANativeWindow*> windows;
     std::mutex windowMutex;
     DispClientContext* disp;
+    std::chrono::steady_clock::time_point last_render_time;
 };
 
 static BOOL client_pre_connect(freerdp* instance) {
@@ -46,6 +49,12 @@ static BOOL client_end_paint(rdpContext* context) {
     
     rdpGdi* gdi = context->gdi;
     if (!gdi || !gdi->primary_buffer) return TRUE;
+    
+    auto now = std::chrono::steady_clock::now();
+    if (std::chrono::duration_cast<std::chrono::milliseconds>(now - ctx->last_render_time).count() < 16) {
+        return TRUE;
+    }
+    ctx->last_render_time = now;
     
     std::lock_guard<std::mutex> lock(ctx->windowMutex);
     for (auto* window : ctx->windows) {

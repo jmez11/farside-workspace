@@ -63,6 +63,8 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.nativeKeyCode
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 
 
@@ -242,52 +244,6 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
         }
     }
 
-
-    if (showSoftKeyboard) {
-        val softKeyboardFocus = remember { FocusRequester() }
-        var textValue by remember { mutableStateOf("") }
-        
-        // Modifier keys row
-        androidx.compose.foundation.layout.Row(
-            modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter).fillMaxWidth().padding(bottom = 80.dp),
-            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceEvenly
-        ) {
-            val sendKey = { code: Int ->
-                if (rdpInstance != 0L) {
-                    rdpBridge.sendKeyEvent(rdpInstance, code, true)
-                    rdpBridge.sendKeyEvent(rdpInstance, code, false)
-                }
-            }
-            Button(onClick = { sendKey(0x01) }) { Text("ESC") }
-            Button(onClick = { sendKey(0x0F) }) { Text("TAB") }
-            Button(onClick = { sendKey(0x1D) }) { Text("CTRL") }
-            Button(onClick = { sendKey(0x38) }) { Text("ALT") }
-            Button(onClick = { sendKey(0x5B) }) { Text("WIN") }
-            Button(onClick = { sendKey(0x2A) }) { Text("SHIFT") }
-            Button(onClick = { sendKey(0x39) }) { Text("SPACE") }
-        }
-
-        androidx.compose.foundation.text.BasicTextField(
-            value = textValue,
-            onValueChange = { newVal ->
-                if (newVal.length > textValue.length && rdpInstance != 0L) {
-                    val char = newVal.last()
-                    rdpBridge.sendUnicodeKeyEvent(rdpInstance, char.code, true)
-                    rdpBridge.sendUnicodeKeyEvent(rdpInstance, char.code, false)
-                } else if (newVal.length < textValue.length && rdpInstance != 0L) {
-                    rdpBridge.sendKeyEvent(rdpInstance, 0x0E, true) // Backspace
-                    rdpBridge.sendKeyEvent(rdpInstance, 0x0E, false)
-                }
-                textValue = newVal
-            },
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            modifier = Modifier.size(1.dp).focusRequester(softKeyboardFocus)
-        )
-        LaunchedEffect(Unit) {
-            softKeyboardFocus.requestFocus()
-            keyboardController?.show()
-        }
-    }
 
     Box(
         modifier = Modifier
@@ -562,5 +518,51 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                 }
             }
         }
+        if (showSoftKeyboard) {
+        val softKeyboardFocus = remember { FocusRequester() }
+        var textValue by remember { mutableStateOf(TextFieldValue(" ", selection = TextRange(1))) }
+        
+        // Modifier keys row
+        androidx.compose.foundation.layout.Row(
+            modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter).fillMaxWidth().padding(bottom = 80.dp),
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceEvenly
+        ) {
+            val sendKey = { code: Int ->
+                if (rdpInstance != 0L) {
+                    rdpBridge.sendKeyEvent(rdpInstance, code, true)
+                    rdpBridge.sendKeyEvent(rdpInstance, code, false)
+                }
+            }
+            Button(onClick = { sendKey(0x01) }) { Text("ESC") }
+            Button(onClick = { sendKey(0x0F) }) { Text("TAB") }
+            Button(onClick = { sendKey(0x1D) }) { Text("CTRL") }
+            Button(onClick = { sendKey(0x38) }) { Text("ALT") }
+            Button(onClick = { sendKey(0x5B) }) { Text("WIN") }
+            Button(onClick = { sendKey(0x2A) }) { Text("SHIFT") }
+            
+        }
+
+        androidx.compose.foundation.text.BasicTextField(
+            value = textValue,
+            onValueChange = { newVal ->
+                if (newVal.text.length > textValue.text.length && rdpInstance != 0L) {
+                    val char = newVal.text.last()
+                    rdpBridge.sendUnicodeKeyEvent(rdpInstance, char.code, true)
+                    rdpBridge.sendUnicodeKeyEvent(rdpInstance, char.code, false)
+                } else if (newVal.text.length < textValue.text.length && rdpInstance != 0L) {
+                    rdpBridge.sendKeyEvent(rdpInstance, 0x0E, true) // Backspace
+                    rdpBridge.sendKeyEvent(rdpInstance, 0x0E, false)
+                }
+                textValue = TextFieldValue(" ", selection = TextRange(1))
+            },
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            modifier = Modifier.size(1.dp).focusRequester(softKeyboardFocus)
+        )
+        LaunchedEffect(Unit) {
+            softKeyboardFocus.requestFocus()
+            keyboardController?.show()
+        }
     }
+
+}
 }
