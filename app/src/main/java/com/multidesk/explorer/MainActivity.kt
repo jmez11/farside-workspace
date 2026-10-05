@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -225,9 +226,31 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
         }
     }
 
+
     if (showSoftKeyboard) {
         val softKeyboardFocus = remember { FocusRequester() }
         var textValue by remember { mutableStateOf("") }
+        
+        // Modifier keys row
+        androidx.compose.foundation.layout.Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceEvenly
+        ) {
+            val sendKey = { code: Int ->
+                if (rdpInstance != 0L) {
+                    rdpBridge.sendKeyEvent(rdpInstance, code, true)
+                    rdpBridge.sendKeyEvent(rdpInstance, code, false)
+                }
+            }
+            Button(onClick = { sendKey(0x01) }) { Text("ESC") }
+            Button(onClick = { sendKey(0x0F) }) { Text("TAB") }
+            Button(onClick = { sendKey(0x1D) }) { Text("CTRL") }
+            Button(onClick = { sendKey(0x38) }) { Text("ALT") }
+            Button(onClick = { sendKey(0x5B) }) { Text("WIN") }
+            Button(onClick = { sendKey(0x2A) }) { Text("SHIFT") }
+            Button(onClick = { sendKey(0x39) }) { Text("SPACE") }
+        }
+
         androidx.compose.foundation.text.BasicTextField(
             value = textValue,
             onValueChange = { newVal ->
@@ -291,7 +314,10 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
             }
     ) {
         AndroidView(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().graphicsLayer {
+                scaleX = zoom
+                scaleY = zoom
+            },
             factory = { viewContext ->
                 SurfaceView(viewContext).apply {
                     setZOrderMediaOverlay(true)
@@ -313,8 +339,10 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                         focusRequester.requestFocus()
                         gestureDetector.onTouchEvent(event)
                         
-                        val rdpX = event.x.toInt()
-                        val rdpY = event.y.toInt()
+                        val scaleX = 1920f / view.width.toFloat()
+                        val scaleY = 1080f / view.height.toFloat()
+                        val rdpX = (event.x * scaleX).toInt()
+                        val rdpY = (event.y * scaleY).toInt()
                         
                         var isRightClick = false
                         if (event.buttonState and MotionEvent.BUTTON_SECONDARY != 0) {
@@ -326,10 +354,10 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                         
                         when (event.actionMasked) {
                             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
-                                flags = FreeRDPBridge.PTR_FLAGS_MOVE or btnFlag or FreeRDPBridge.PTR_FLAGS_DOWN
+                                flags = btnFlag or FreeRDPBridge.PTR_FLAGS_DOWN
                             }
                             MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
-                                flags = FreeRDPBridge.PTR_FLAGS_MOVE or btnFlag
+                                flags = btnFlag
                             }
                             MotionEvent.ACTION_MOVE -> {
                                 flags = FreeRDPBridge.PTR_FLAGS_MOVE
@@ -344,8 +372,13 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                     }
                     
                     setOnHoverListener { view, event ->
+                        val scaleX = 1920f / view.width.toFloat()
+                        val scaleY = 1080f / view.height.toFloat()
+                        val rdpX = (event.x * scaleX).toInt()
+                        val rdpY = (event.y * scaleY).toInt()
+
                         if (rdpInstance != 0L) {
-                            rdpBridge.sendMouseEvent(rdpInstance, event.x.toInt(), event.y.toInt(), FreeRDPBridge.PTR_FLAGS_MOVE)
+                            rdpBridge.sendMouseEvent(rdpInstance, rdpX, rdpY, FreeRDPBridge.PTR_FLAGS_MOVE)
                         }
                         true
                     }
