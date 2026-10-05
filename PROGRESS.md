@@ -10,12 +10,12 @@
 - [x] **Spike**: Verify basic RDP connection and video decode on an Android Surface.
 
 ## Known Working Features
-- Spatial Windowing: Sessions launch as independent, repositionable Android Document Activities inside Horizon OS.
+- Spatial Windowing: Sessions launch as independent, repositionable Android Document Activities inside Horizon OS (only applies to *different* connections currently).
 - RDP Rendering: Stream displays correctly via FreeRDP/JNI onto the `SurfaceView` overlay.
 - Profile Management: Connections can be added, saved, and edited, with fields mapped properly to FreeRDP connection flags.
 
 ## Reported Issues (To be fixed)
-- Taskbar Integration: Sessions still display the generic app name instead of the connection name via `setTaskDescription`.
+- Taskbar Integration: Sessions still display the generic app name instead of the connection name via `setTaskDescription` (may be ignored by Horizon OS, code is implemented).
 - RDP Touch/Click Inputs: Clicks still unresponsive/unverified; needs further refinement.
 - RDP Dynamic Display/Zoom: Scaling UI via `SendMonitorLayout` unresponsive/unverified.
 - Floating Overlay: Auto-fade logic and repositioning behavior not functioning perfectly.

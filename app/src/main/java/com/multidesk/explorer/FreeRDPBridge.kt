@@ -6,6 +6,8 @@ class FreeRDPBridge {
     external fun connect(hostname: String, port: Int, username: String, password: String, remoteApp: String?, enableCamera: Boolean, cameraId: String?, surface: Surface): Long
     external fun disconnect(instance: Long)
     external fun sendMouseEvent(instance: Long, x: Int, y: Int, flags: Int)
+    external fun sendKeyEvent(instance: Long, scancode: Int, isDown: Boolean)
+    external fun sendUnicodeKeyEvent(instance: Long, unicodeChar: Int, isDown: Boolean)
     external fun addSurface(instance: Long, surface: Surface)
     external fun removeSurface(instance: Long, surface: Surface)
     external fun updateDisplay(instance: Long, width: Int, height: Int, zoom: Float)

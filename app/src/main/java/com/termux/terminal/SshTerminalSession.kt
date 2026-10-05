@@ -21,6 +21,9 @@ class SshTerminalSession(
         thread {
             try {
                 val ssh = SSHClient()
+                // TODO: Implement TOFU host-key verification. PromiscuousVerifier accepts everything (MITM vulnerable).
+                // TODO: Support Public Key authentication (currently password-only).
+                // TODO: Implement proper SSH disconnect cleanup.
                 ssh.addHostKeyVerifier(PromiscuousVerifier())
                 
                 var targetHost = sshSessionInfo.host

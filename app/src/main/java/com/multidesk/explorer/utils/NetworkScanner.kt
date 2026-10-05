@@ -17,12 +17,7 @@ data class DiscoveredHost(val ip: String, val name: String)
 
 object NetworkScanner {
     suspend fun scanLocalNetworkForRdp(context: Context): List<DiscoveredHost> = withContext(Dispatchers.IO) {
-        val ipAddress = try {
-            val wm = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-            Formatter.formatIpAddress(wm.connectionInfo.ipAddress)
-        } catch (e: Exception) {
-            "0.0.0.0"
-        }
+        val ipAddress = getLocalIpAddress()
         
         if (ipAddress == "0.0.0.0") return@withContext emptyList()
         
@@ -57,6 +52,26 @@ object NetworkScanner {
         }
         jobs.awaitAll()
         activeHosts.toList()
+    }
+
+    private fun getLocalIpAddress(): String {
+        try {
+            val interfaces = java.net.NetworkInterface.getNetworkInterfaces()
+            while (interfaces.hasMoreElements()) {
+                val networkInterface = interfaces.nextElement()
+                if (networkInterface.isLoopback || !networkInterface.isUp) continue
+                val addresses = networkInterface.inetAddresses
+                while (addresses.hasMoreElements()) {
+                    val address = addresses.nextElement()
+                    if (!address.isLoopbackAddress && address.hostAddress.indexOf(':') < 0) {
+                        return address.hostAddress
+                    }
+                }
+            }
+        } catch (ex: Exception) {
+            // Ignore
+        }
+        return "0.0.0.0"
     }
 
     private suspend fun getNetBiosName(ip: String): String? = withContext(Dispatchers.IO) {

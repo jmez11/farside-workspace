@@ -45,6 +45,17 @@ import com.multidesk.explorer.data.ConnectionType
 import com.multidesk.explorer.data.ProfileManager
 import com.multidesk.explorer.ui.LauncherScreen
 import java.util.UUID
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusable
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.nativeKeyCode
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 
 class MainActivity : ComponentActivity() {
 
@@ -157,12 +168,34 @@ fun SshSessionScreen(session: ConnectionProfile, onClose: () -> Unit) {
     }
 }
 
+fun mapAndroidKeyCodeToXt(keyCode: Int): Int {
+    return when(keyCode) {
+        67 -> 0x0E // DEL/Backspace
+        66 -> 0x1C // ENTER
+        19 -> 0x148 // UP
+        20 -> 0x150 // DOWN
+        21 -> 0x14B // LEFT
+        22 -> 0x14D // RIGHT
+        61 -> 0x0F // TAB
+        111 -> 0x01 // ESC
+        113 -> 0x1D // CTRL
+        57 -> 0x38 // ALT
+        59 -> 0x2A // SHIFT
+        62 -> 0x39 // SPACE
+        else -> 0
+    }
+}
+
 @Composable
 fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Unit, onClose: () -> Unit) {
     val rdpBridge = remember { FreeRDPBridge() }
     var rdpInstance by remember { mutableStateOf(0L) }
     val context = LocalContext.current
     
+    val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    var showSoftKeyboard by remember { mutableStateOf(false) }
+
     var zoom by remember { mutableStateOf(1f) }
     var currentWidth by remember { mutableStateOf(1920) }
     var currentHeight by remember { mutableStateOf(1080) }
@@ -190,9 +223,56 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
         }
     }
 
+        if (showSoftKeyboard) {
+        val softKeyboardFocus = remember { FocusRequester() }
+        var textValue by remember { mutableStateOf("") }
+        androidx.compose.foundation.text.BasicTextField(
+            value = textValue,
+            onValueChange = { newVal ->
+                if (newVal.length > textValue.length && rdpInstance != 0L) {
+                    val char = newVal.last()
+                    rdpBridge.sendUnicodeKeyEvent(rdpInstance, char.code, true)
+                    rdpBridge.sendUnicodeKeyEvent(rdpInstance, char.code, false)
+                } else if (newVal.length < textValue.length && rdpInstance != 0L) {
+                    rdpBridge.sendKeyEvent(rdpInstance, 0x0E, true) // Backspace
+                    rdpBridge.sendKeyEvent(rdpInstance, 0x0E, false)
+                }
+                textValue = newVal
+            },
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            modifier = Modifier.size(1.dp).focusRequester(softKeyboardFocus)
+        )
+        LaunchedEffect(Unit) {
+            softKeyboardFocus.requestFocus()
+            keyboardController?.show()
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .focusRequester(focusRequester)
+            .focusable()
+            .onKeyEvent { event ->
+                if (rdpInstance != 0L) {
+                    val isDown = event.type == KeyEventType.KeyDown
+                    val unicode = event.nativeKeyEvent.unicodeChar
+                    val scancode = mapAndroidKeyCodeToXt(event.nativeKeyEvent.keyCode)
+                    if (unicode != 0 && scancode == 0) {
+                        rdpBridge.sendUnicodeKeyEvent(rdpInstance, unicode, isDown)
+                        true
+                    } else if (scancode != 0) {
+                        rdpBridge.sendKeyEvent(rdpInstance, scancode, isDown)
+                        true
+                    } else {
+                        // Pass EVDEV scancode as fallback
+                        rdpBridge.sendKeyEvent(rdpInstance, event.nativeKeyEvent.scanCode, isDown)
+                        true
+                    }
+                } else {
+                    false
+                }
+            }
             .pointerInput(Unit) {
                 awaitPointerEventScope {
                     while (true) {
@@ -228,6 +308,7 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                     })
 
                     setOnTouchListener { view, event ->
+                        focusRequester.requestFocus()
                         gestureDetector.onTouchEvent(event)
                         
                         val rdpX = event.x.toInt()
@@ -256,6 +337,13 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                         
                         if (rdpInstance != 0L) {
                             rdpBridge.sendMouseEvent(rdpInstance, rdpX, rdpY, flags)
+                        }
+                        true
+                    }
+                    
+                    setOnHoverListener { view, event ->
+                        if (rdpInstance != 0L) {
+                            rdpBridge.sendMouseEvent(rdpInstance, event.x.toInt(), event.y.toInt(), FreeRDPBridge.PTR_FLAGS_MOVE)
                         }
                         true
                     }
@@ -337,9 +425,30 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                     IconButton(onClick = { /* Implement menu later */ }) {
                         Icon(Icons.Default.Menu, "Menu", tint = Color.White)
                     }
-                    IconButton(onClick = { /* Implement keyboard toggle later */ }) {
-                        Icon(Icons.Default.Keyboard, "Keyboard", tint = Color.White)
-                    }
+                    IconButton(onClick = { showSoftKeyboard = !showSoftKeyboard;     if (showSoftKeyboard) {
+        val softKeyboardFocus = remember { FocusRequester() }
+        var textValue by remember { mutableStateOf("") }
+        androidx.compose.foundation.text.BasicTextField(
+            value = textValue,
+            onValueChange = { newVal ->
+                if (newVal.length > textValue.length && rdpInstance != 0L) {
+                    val char = newVal.last()
+                    rdpBridge.sendUnicodeKeyEvent(rdpInstance, char.code, true)
+                    rdpBridge.sendUnicodeKeyEvent(rdpInstance, char.code, false)
+                } else if (newVal.length < textValue.length && rdpInstance != 0L) {
+                    rdpBridge.sendKeyEvent(rdpInstance, 0x0E, true) // Backspace
+                    rdpBridge.sendKeyEvent(rdpInstance, 0x0E, false)
+                }
+                textValue = newVal
+            },
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            modifier = Modifier.size(1.dp).focusRequester(softKeyboardFocus)
+        )
+        LaunchedEffect(Unit) {
+            softKeyboardFocus.requestFocus()
+            keyboardController?.show()
+        }
+    }
                 }
                 
                 if (showZoomSlider) {
@@ -354,3 +463,12 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
         }
     }
 }
+
+
+
+
+
+
+
+
+

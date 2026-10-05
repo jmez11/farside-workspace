@@ -352,3 +352,39 @@ Java_com_multidesk_explorer_FreeRDPBridge_updateDisplay(
         ctx->disp->SendMonitorLayout(ctx->disp, 1, &layout);
     }
 }
+extern "C" JNIEXPORT void JNICALL
+Java_com_multidesk_explorer_FreeRDPBridge_sendKeyEvent(
+        JNIEnv* env,
+        jobject /* this */,
+        jlong instance_ptr,
+        jint scancode,
+        jboolean isDown) {
+    if (!instance_ptr) return;
+    
+    freerdp* instance = (freerdp*)instance_ptr;
+    rdpInput* input = instance->context->input;
+    if (input) {
+        UINT16 flags = isDown ? KBD_FLAGS_DOWN : KBD_FLAGS_RELEASE;
+        if (scancode & 0x100) {
+            flags |= KBD_FLAGS_EXTENDED;
+            scancode &= 0xFF;
+        }
+        input->KeyboardEvent(input, flags, scancode);
+    }
+}
+extern "C" JNIEXPORT void JNICALL
+Java_com_multidesk_explorer_FreeRDPBridge_sendUnicodeKeyEvent(
+        JNIEnv* env,
+        jobject /* this */,
+        jlong instance_ptr,
+        jint unicode_char,
+        jboolean isDown) {
+    if (!instance_ptr) return;
+    
+    freerdp* instance = (freerdp*)instance_ptr;
+    rdpInput* input = instance->context->input;
+    if (input) {
+        UINT16 flags = isDown ? KBD_FLAGS_DOWN : KBD_FLAGS_RELEASE;
+        input->UnicodeKeyboardEvent(input, flags, unicode_char);
+    }
+}
