@@ -38,7 +38,15 @@ static BOOL client_pre_connect(freerdp* instance) {
     freerdp_settings_set_uint32(instance->context->settings, FreeRDP_ColorDepth, 16);
     freerdp_settings_set_bool(instance->context->settings, FreeRDP_IgnoreCertificate, TRUE);
     freerdp_settings_set_uint32(instance->context->settings, FreeRDP_AuthenticationLevel, 0);
-    freerdp_settings_set_bool(instance->context->settings, FreeRDP_SoftwareGdi, TRUE);
+    
+    // Force highly optimized protocols!
+    freerdp_settings_set_bool(instance->context->settings, FreeRDP_FastPathInput, TRUE);
+    freerdp_settings_set_bool(instance->context->settings, FreeRDP_FastPathOutput, TRUE);
+    freerdp_settings_set_bool(instance->context->settings, FreeRDP_RemoteFxCodec, TRUE);
+    freerdp_settings_set_bool(instance->context->settings, FreeRDP_SupportGraphicsPipeline, TRUE);
+    freerdp_settings_set_bool(instance->context->settings, FreeRDP_GfxH264, TRUE);
+    freerdp_settings_set_bool(instance->context->settings, FreeRDP_GfxAVC444, TRUE);
+    freerdp_settings_set_bool(instance->context->settings, FreeRDP_FrameAcknowledge, FALSE);
     
     return TRUE;
 }
