@@ -200,6 +200,9 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
     var showSoftKeyboard by remember { mutableStateOf(false) }
     
     var zoom by remember { mutableStateOf(1f) }
+    var actualWidth by remember { mutableStateOf(1920) }
+    var actualHeight by remember { mutableStateOf(1080) }
+    var lastMouseEventTime by remember { mutableStateOf(0L) }
     var currentWidth by remember { mutableStateOf(1920) }
     var currentHeight by remember { mutableStateOf(1080) }
     var offsetX by remember { mutableStateOf(0f) }
@@ -223,6 +226,11 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
     LaunchedEffect(zoom, currentWidth, currentHeight) {
         if (rdpInstance != 0L && currentWidth > 0 && currentHeight > 0) {
             rdpBridge.updateDisplay(rdpInstance, currentWidth, currentHeight, zoom)
+            for (i in 0..10) {
+                kotlinx.coroutines.delay(200)
+                actualWidth = rdpBridge.getDesktopWidth(rdpInstance)
+                actualHeight = rdpBridge.getDesktopHeight(rdpInstance)
+            }
         }
     }
 
@@ -336,8 +344,8 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                         focusRequester.requestFocus()
                         gestureDetector.onTouchEvent(event)
                         
-                        val scaleX = currentWidth.toFloat() / view.width.toFloat()
-                        val scaleY = currentHeight.toFloat() / view.height.toFloat()
+                        val scaleX = actualWidth.toFloat() / view.width.toFloat()
+                        val scaleY = actualHeight.toFloat() / view.height.toFloat()
                         val rdpX = (event.x * scaleX).toInt()
                         val rdpY = (event.y * scaleY).toInt()
                         
@@ -357,6 +365,9 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                                 flags = btnFlag
                             }
                             MotionEvent.ACTION_MOVE -> {
+                                val now = System.currentTimeMillis()
+                                if (now - lastMouseEventTime < 16) return@setOnTouchListener true
+                                lastMouseEventTime = now
                                 flags = FreeRDPBridge.PTR_FLAGS_MOVE
                             }
                             else -> return@setOnTouchListener true
@@ -369,8 +380,12 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                     }
                     
                     setOnHoverListener { view, event ->
-                        val scaleX = currentWidth.toFloat() / view.width.toFloat()
-                        val scaleY = currentHeight.toFloat() / view.height.toFloat()
+                        val now = System.currentTimeMillis()
+                        if (now - lastMouseEventTime < 16) return@setOnHoverListener true
+                        lastMouseEventTime = now
+
+                        val scaleX = actualWidth.toFloat() / view.width.toFloat()
+                        val scaleY = actualHeight.toFloat() / view.height.toFloat()
                         val rdpX = (event.x * scaleX).toInt()
                         val rdpY = (event.y * scaleY).toInt()
 

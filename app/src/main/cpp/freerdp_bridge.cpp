@@ -164,6 +164,9 @@ Java_com_multidesk_explorer_FreeRDPBridge_connect(
     freerdp_settings_set_uint32(instance->context->settings, FreeRDP_DesktopScaleFactor, 100);
     freerdp_settings_set_uint32(instance->context->settings, FreeRDP_DeviceScaleFactor, 100);
     freerdp_settings_set_bool(instance->context->settings, FreeRDP_SupportDisplayControl, TRUE);
+    freerdp_settings_set_bool(instance->context->settings, FreeRDP_SupportDynamicChannels, TRUE);
+    const char* const disp_params[] = { "disp" };
+    freerdp_client_add_dynamic_channel(instance->context->settings, 1, disp_params);
     
     if (port > 0) {
         freerdp_settings_set_uint32(instance->context->settings, FreeRDP_ServerPort, port);
@@ -341,8 +344,8 @@ Java_com_multidesk_explorer_FreeRDPBridge_updateDisplay(
         layout.Top = 0;
         layout.Width = width;
         layout.Height = height;
-        layout.PhysicalWidth = width;
-        layout.PhysicalHeight = height;
+        layout.PhysicalWidth = (UINT32)(width / 96.0 * 25.4);
+        layout.PhysicalHeight = (UINT32)(height / 96.0 * 25.4);
         layout.Orientation = ORIENTATION_LANDSCAPE;
         
         UINT32 scale = (UINT32)(zoom * 100.0f);
@@ -387,4 +390,24 @@ Java_com_multidesk_explorer_FreeRDPBridge_sendUnicodeKeyEvent(
         UINT16 flags = isDown ? KBD_FLAGS_DOWN : KBD_FLAGS_RELEASE;
         input->UnicodeKeyboardEvent(input, flags, unicode_char);
     }
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_multidesk_explorer_FreeRDPBridge_getDesktopWidth(
+        JNIEnv* env,
+        jobject /* this */,
+        jlong instance_ptr) {
+    if (!instance_ptr) return 1920;
+    freerdp* instance = (freerdp*)instance_ptr;
+    return freerdp_settings_get_uint32(instance->context->settings, FreeRDP_DesktopWidth);
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_multidesk_explorer_FreeRDPBridge_getDesktopHeight(
+        JNIEnv* env,
+        jobject /* this */,
+        jlong instance_ptr) {
+    if (!instance_ptr) return 1080;
+    freerdp* instance = (freerdp*)instance_ptr;
+    return freerdp_settings_get_uint32(instance->context->settings, FreeRDP_DesktopHeight);
 }

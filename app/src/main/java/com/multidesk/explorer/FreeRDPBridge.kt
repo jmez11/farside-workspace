@@ -11,6 +11,8 @@ class FreeRDPBridge {
     external fun addSurface(instance: Long, surface: Surface)
     external fun removeSurface(instance: Long, surface: Surface)
     external fun updateDisplay(instance: Long, width: Int, height: Int, zoom: Float)
+    external fun getDesktopWidth(instance: Long): Int
+    external fun getDesktopHeight(instance: Long): Int
 
     companion object {
         init {
