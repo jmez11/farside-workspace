@@ -321,8 +321,12 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                 }
             }
     ) {
+        val visualZoom = if (actualWidth != currentWidth || actualHeight != currentHeight) zoom else 1f
         AndroidView(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().graphicsLayer {
+                scaleX = visualZoom
+                scaleY = visualZoom
+            },
             factory = { viewContext ->
                 SurfaceView(viewContext).apply {
                     setZOrderMediaOverlay(true)
@@ -344,10 +348,25 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                         focusRequester.requestFocus()
                         gestureDetector.onTouchEvent(event)
                         
-                        val scaleX = actualWidth.toFloat() / view.width.toFloat()
-                        val scaleY = actualHeight.toFloat() / view.height.toFloat()
-                        val rdpX = (event.x * scaleX).toInt()
-                        val rdpY = (event.y * scaleY).toInt()
+                        val actualRatio = actualWidth.toFloat() / actualHeight.toFloat()
+                        val viewRatio = view.width.toFloat() / view.height.toFloat()
+                        var renderWidth = view.width.toFloat()
+                        var renderHeight = view.height.toFloat()
+                        var offsetX = 0f
+                        var offsetY = 0f
+                        
+                        if (actualRatio > viewRatio) {
+                            renderHeight = view.width.toFloat() / actualRatio
+                            offsetY = (view.height.toFloat() - renderHeight) / 2f
+                        } else {
+                            renderWidth = view.height.toFloat() * actualRatio
+                            offsetX = (view.width.toFloat() - renderWidth) / 2f
+                        }
+                        
+                        val scaleX = actualWidth.toFloat() / renderWidth
+                        val scaleY = actualHeight.toFloat() / renderHeight
+                        val rdpX = ((event.x - offsetX) * scaleX).toInt().coerceIn(0, actualWidth - 1)
+                        val rdpY = ((event.y - offsetY) * scaleY).toInt().coerceIn(0, actualHeight - 1)
                         
                         var isRightClick = false
                         if (event.buttonState and MotionEvent.BUTTON_SECONDARY != 0) {
@@ -384,10 +403,25 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                         if (now - lastMouseEventTime < 16) return@setOnHoverListener true
                         lastMouseEventTime = now
 
-                        val scaleX = actualWidth.toFloat() / view.width.toFloat()
-                        val scaleY = actualHeight.toFloat() / view.height.toFloat()
-                        val rdpX = (event.x * scaleX).toInt()
-                        val rdpY = (event.y * scaleY).toInt()
+                        val actualRatio = actualWidth.toFloat() / actualHeight.toFloat()
+                        val viewRatio = view.width.toFloat() / view.height.toFloat()
+                        var renderWidth = view.width.toFloat()
+                        var renderHeight = view.height.toFloat()
+                        var offsetX = 0f
+                        var offsetY = 0f
+                        
+                        if (actualRatio > viewRatio) {
+                            renderHeight = view.width.toFloat() / actualRatio
+                            offsetY = (view.height.toFloat() - renderHeight) / 2f
+                        } else {
+                            renderWidth = view.height.toFloat() * actualRatio
+                            offsetX = (view.width.toFloat() - renderWidth) / 2f
+                        }
+                        
+                        val scaleX = actualWidth.toFloat() / renderWidth
+                        val scaleY = actualHeight.toFloat() / renderHeight
+                        val rdpX = ((event.x - offsetX) * scaleX).toInt().coerceIn(0, actualWidth - 1)
+                        val rdpY = ((event.y - offsetY) * scaleY).toInt().coerceIn(0, actualHeight - 1)
 
                         if (rdpInstance != 0L) {
                             rdpBridge.sendMouseEvent(rdpInstance, rdpX, rdpY, FreeRDPBridge.PTR_FLAGS_MOVE)
