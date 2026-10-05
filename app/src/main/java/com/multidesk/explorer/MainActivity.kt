@@ -367,6 +367,7 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                     setOnHoverListener { view, event ->
                         val now = System.currentTimeMillis()
                         if (now - lastMouseEventTime < 32) return@setOnHoverListener true
+                        android.util.Log.d("RDP_LAG", "Mouse event sent, delta: \ms")
                         lastMouseEventTime = now
 
                         val actualRatio = actualWidth.toFloat() / actualHeight.toFloat()
