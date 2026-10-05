@@ -46,7 +46,7 @@ static BOOL client_pre_connect(freerdp* instance) {
     freerdp_settings_set_bool(instance->context->settings, FreeRDP_SupportGraphicsPipeline, TRUE);
     freerdp_settings_set_bool(instance->context->settings, FreeRDP_GfxH264, TRUE);
     freerdp_settings_set_bool(instance->context->settings, FreeRDP_GfxAVC444, TRUE);
-    freerdp_settings_set_bool(instance->context->settings, FreeRDP_FrameAcknowledge, FALSE);
+    freerdp_settings_set_uint32(instance->context->settings, FreeRDP_FrameAcknowledge, 0);
     
     return TRUE;
 }
