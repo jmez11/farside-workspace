@@ -210,7 +210,7 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
     var zoom by remember { mutableStateOf(1f) }
     var actualWidth by remember { mutableStateOf(1920) }
     var actualHeight by remember { mutableStateOf(1080) }
-    var lastMouseEventTime by remember { mutableStateOf(0L) }
+
     var panX by remember { mutableStateOf(0f) }
     var panY by remember { mutableStateOf(0f) }
     var currentWidth by remember { mutableStateOf(1920) }
@@ -294,6 +294,7 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
             },
             factory = { viewContext ->
                 SurfaceView(viewContext).apply {
+                    var lastMouseEventTime = 0L
                     setZOrderMediaOverlay(true)
                     pivotX = 0f
                     pivotY = 0f
