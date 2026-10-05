@@ -32,7 +32,7 @@ struct RdpContext {
 static BOOL client_pre_connect(freerdp* instance) {
     // Configure settings
     freerdp_settings_set_bool(instance->context->settings, FreeRDP_SoftwareGdi, TRUE);
-    freerdp_settings_set_uint32(instance->context->settings, FreeRDP_ColorDepth, 32);
+    freerdp_settings_set_uint32(instance->context->settings, FreeRDP_ColorDepth, 16);
     freerdp_settings_set_bool(instance->context->settings, FreeRDP_IgnoreCertificate, TRUE);
     freerdp_settings_set_uint32(instance->context->settings, FreeRDP_AuthenticationLevel, 0);
     freerdp_settings_set_bool(instance->context->settings, FreeRDP_SoftwareGdi, TRUE);
@@ -181,10 +181,12 @@ Java_com_multidesk_explorer_FreeRDPBridge_connect(
         "-bitmap-cache",
         "-offscreen-cache",
         "/gfx:AVC420:on",
+        "/rfx",
+        "/bpp:16",
         "/compression",
         "/network:auto"
     };
-    freerdp_client_settings_parse_command_line(instance->context->settings, 7, (char**)opt_args, FALSE);
+    freerdp_client_settings_parse_command_line(instance->context->settings, 9, (char**)opt_args, FALSE);
     
     LOGI("Setting remote app");
     if (remoteApp && env->GetStringLength(remoteApp) > 0) {

@@ -249,7 +249,7 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
         
         // Modifier keys row
         androidx.compose.foundation.layout.Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter).fillMaxWidth().padding(bottom = 80.dp),
             horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceEvenly
         ) {
             val sendKey = { code: Int ->
@@ -394,7 +394,7 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                             }
                             MotionEvent.ACTION_MOVE -> {
                                 val now = System.currentTimeMillis()
-                                if (now - lastMouseEventTime < 16) return@setOnTouchListener true
+                                if (now - lastMouseEventTime < 32) return@setOnTouchListener true
                                 lastMouseEventTime = now
                                 flags = FreeRDPBridge.PTR_FLAGS_MOVE
                             }
@@ -409,7 +409,7 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                     
                     setOnHoverListener { view, event ->
                         val now = System.currentTimeMillis()
-                        if (now - lastMouseEventTime < 16) return@setOnHoverListener true
+                        if (now - lastMouseEventTime < 32) return@setOnHoverListener true
                         lastMouseEventTime = now
 
                         val actualRatio = actualWidth.toFloat() / actualHeight.toFloat()
@@ -541,12 +541,13 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                 modifier = Modifier
                     .align(androidx.compose.ui.Alignment.Center)
                     .size(120.dp)
-                    .alpha(animatedAlpha)
                     .pointerInput(Unit) {
                         detectDragGestures { change, dragAmount ->
                             change.consume()
-                            panX += dragAmount.x
-                            panY += dragAmount.y
+                            val maxPanX = (currentWidth * (zoom - 1f)) / 2f
+                            val maxPanY = (currentHeight * (zoom - 1f)) / 2f
+                            panX = (panX + dragAmount.x).coerceIn(-maxPanX, maxPanX)
+                            panY = (panY + dragAmount.y).coerceIn(-maxPanY, maxPanY)
                         }
                     },
                 shape = androidx.compose.foundation.shape.CircleShape,
