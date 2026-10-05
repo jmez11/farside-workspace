@@ -37,6 +37,9 @@ struct RdpContext {
 };
 
 static BOOL client_pre_connect(freerdp* instance) {
+    // Enable full debug logging to see why GFX is failing
+    WLog_SetLogLevel(WLog_GetRoot(), WLOG_DEBUG);
+    
     // Configure settings
     freerdp_settings_set_bool(instance->context->settings, FreeRDP_SoftwareGdi, TRUE);
     freerdp_settings_set_uint32(instance->context->settings, FreeRDP_ColorDepth, 32);
