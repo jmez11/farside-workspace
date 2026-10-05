@@ -33,7 +33,11 @@
 - **SSH**: Trust On First Use (TOFU) host-key verification.
 
 ## Threading Model & Performance
-- Each RDP session decodes its own video stream on a background thread using hardware acceleration (MediaCodec) where possible.
+- Each RDP session renders on a dedicated background thread blitting the GDI primary buffer to an `ANativeWindow` driven by a dirty flag (`client_end_paint`), fully decoupling rendering from the FreeRDP network event loop.
+- **Codec & Hardware Decoding Status**:
+  - Currently runs software GDI with RDPGFX / RemoteFX / Progressive decoding on CPU.
+  - FreeRDP static channel pipeline (`drdynvc`, `rdpgfx`, `disp`) is loaded via `LoadChannels` with custom static addin provider mapping.
+  - Native hardware acceleration (`WITH_MEDIACODEC` via `h264_mediacodec.c` / `libmediandk`) is planned as the definitive performance parity upgrade for AVC420/AVC444 hardware decoding without external licensing/patent burdens (in contrast to FFmpeg or OpenH264).
 - **Target**: 2–4 concurrent sessions on Quest 3.
 - **Degradation strategy**: Background windows drop to lower framerates or pause decoding if resource limits are reached.
 

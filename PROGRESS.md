@@ -18,14 +18,25 @@
 ## Reported Issues (To be fixed)
 - **SEVERE Window Dragging Lag**: 
   - Dragging a window in the RDP session lags multiple seconds behind the pointer.
-  - **Things Attempted to Fix This:**
-    1. Enabled FreeRDP GFX/H264 flags (/gfx:AVC420:on, /rfx, /bpp:16, /compression, /network:auto) via command-line parsing to stop raw GDI bandwidth saturation.
-    2. Explicitly hardcoded protocol configurations in JNI PreConnect (FreeRDP_FastPathInput, FreeRDP_RemoteFxCodec, FreeRDP_SupportGraphicsPipeline, FreeRDP_GfxH264) and disabled FreeRDP_FrameAcknowledge.
-    3. Throttled Compose UI mouse event dispatches to 30Hz (32ms) to prevent event flooding.
-    4. Removed the lastMouseEventTime throttle counter from the Compose State system to prevent a catastrophic 60Hz UI Recomposition Storm during dragging.
-    5. Identified that client_end_paint was locking ANativeWindow and copying an 8MB buffer on the FreeRDP thread.
-    6. Decoupled rendering completely by spawning a dedicated 60 FPS std::thread that periodically locks the window and copies the gdi->primary_buffer, ensuring the FreeRDP networking thread is never blocked by Android's compositor.
-  - *Result*: Lag persists unaffected. The issue might be inherent to SoftwareGdi = TRUE in FreeRDP 3 failing to leverage hardware decoding, or an unresolved bufferbloat issue.
+  - **Root Cause & Discoveries (from Logcat & Source Auditing):**
+    1. **Frame Flow Control**: Disabling `FreeRDP_FrameAcknowledge` broke server-side flow control. Restoring default `FrameAcknowledge` (> 0) restored backpressure.
+    2. **Static Channel Loading Failure**: On Android with `BUILD_SHARED_LIBS=OFF`, FreeRDP builds channel plugins (`drdynvc`, `rdpgfx`, `disp`) as static libraries. FreeRDP's default client loader relies on `dlopen` which fails silently. Furthermore, `freerdp_connect()` calls `utils_reload_channels()` immediately after `PreConnect`, destroying and rebuilding `context->channels` via `instance->LoadChannels`. Any channels loaded in `PreConnect` were discarded before connection established.
+    3. **Missing GDI Pipeline Initialization**: Even when `rdpgfx` connects, `gdi_graphics_pipeline_init` must be wired to `PubSub_SubscribeChannelConnected` to connect the GFX pipeline to the GDI surface.
+    4. **Codec Negotiation Reality**: FreeRDP was falling back entirely to raw legacy uncompressed GDI over Wi-Fi, completely flooding the network. Because `WITH_FFMPEG=OFF` and `WITH_OPENH264=OFF`, H.264 decoders were not compiled into FreeRDP; advertising H.264 would cause unhandled AVC packets.
+  - **Things Attempted & Implemented:**
+    1. Re-enabled cache flags (`+glyph-cache`, `+bitmap-cache`, `+offscreen-cache`) and restored `FrameAcknowledge` defaults.
+    2. Set color depth to 32bpp (`FreeRDP_ColorDepth = 32`) required for RDPGFX negotiation.
+    3. Decoupled rendering: `client_end_paint` sets an atomic `dirty = true` flag; a dedicated background thread blits `gdi->primary_buffer` to `ANativeWindow` in ~6ms without stalling the FreeRDP network/packet-processing loop.
+    4. Implemented `my_addin_provider` to map static entry points (`drdynvc_VirtualChannelEntryEx`, `rdpgfx_DVCPluginEntry`, `disp_DVCPluginEntry`).
+    5. Moved static channel loading into `instance->LoadChannels` (`client_load_channels`) using `freerdp_channels_client_load_ex` with proper settings context.
+    6. Registered dynamic channels (`rdpgfx`, `disp`) via `freerdp_client_add_dynamic_channel`.
+    7. Attached `gdi_graphics_pipeline_init` / `gdi_graphics_pipeline_uninit` in channel lifecycle events.
+    8. Intercepted `gfx->SurfaceCommand` to log ground-truth negotiated server codecs (`RDP_CODEC: server sent codec ...`).
+    9. Disabled H.264 advertisement temporarily in favor of Progressive / RemoteFX while software-only decoders are present.
+  - **Immediate Next Steps & Plan:**
+    1. Deploy current build to Quest device once reconnected to verify `drdynvc` and `rdpgfx` channel negotiation and examine the live `RDP_CODEC` log to see whether Progressive/RemoteFX runs smoothly.
+    2. **Hardware Decoding Upgrade (MediaCodec)**: Enable `WITH_MEDIACODEC` in `app/src/main/cpp/freerdp/libfreerdp/codec/CMakeLists.txt` and link `mediandk` to enable hardware-accelerated H.264 decoding directly on Quest 3's Snapdragon XR2 Gen 2 DSP/VPU without third-party licensing baggage (avoiding FFmpeg GPL/LGPL issues and OpenH264 runtime binary distribution constraints).
+    3. Re-enable `FreeRDP_GfxH264`, `FreeRDP_GfxAVC444`, and test drag performance under native hardware decode.
 
 ## Unverified / Stubbed Logic
 - Local PC Discovery: Implementation stubbed but requires DNS-SD/SMB scanning logic.

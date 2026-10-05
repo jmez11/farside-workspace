@@ -25,6 +25,41 @@
 #include <chrono>
 
 #include <atomic>
+#include <freerdp/client/rdpgfx.h>
+#include <freerdp/codec/h264.h>
+
+// ---- Ground-truth codec logging -------------------------------------------------------
+// Wraps the GDI GFX SurfaceCommand handler so we log the codec the *server actually sends*,
+// rather than echoing the settings we requested.
+static pcRdpgfxSurfaceCommand g_origSurfaceCommand = nullptr;
+static std::atomic<uint32_t> g_codecCounts[16];
+
+static const char* gfx_codec_name(UINT32 codecId) {
+    switch (codecId) {
+        case RDPGFX_CODECID_UNCOMPRESSED: return "UNCOMPRESSED";
+        case RDPGFX_CODECID_CAVIDEO: return "RemoteFX(CAVIDEO)";
+        case RDPGFX_CODECID_CLEARCODEC: return "ClearCodec";
+        case RDPGFX_CODECID_PLANAR: return "Planar";
+        case RDPGFX_CODECID_AVC420: return "AVC420(H.264)";
+        case RDPGFX_CODECID_ALPHA: return "Alpha";
+        case RDPGFX_CODECID_AVC444: return "AVC444(H.264)";
+        case RDPGFX_CODECID_AVC444v2: return "AVC444v2(H.264)";
+        case RDPGFX_CODECID_CAPROGRESSIVE: return "Progressive";
+        case RDPGFX_CODECID_CAPROGRESSIVE_V2: return "ProgressiveV2";
+        default: return "UNKNOWN";
+    }
+}
+
+static UINT logging_surface_command(RdpgfxClientContext* context, const RDPGFX_SURFACE_COMMAND* cmd) {
+    uint32_t slot = cmd->codecId & 0x0F;
+    uint32_t n = ++g_codecCounts[slot];
+    if (n == 1 || (n % 300) == 0) {
+        LOGI("RDP_CODEC: server sent codec %s (0x%04x), count=%u, rect=%ux%u",
+             gfx_codec_name(cmd->codecId), cmd->codecId, n,
+             cmd->right - cmd->left, cmd->bottom - cmd->top);
+    }
+    return g_origSurfaceCommand ? g_origSurfaceCommand(context, cmd) : CHANNEL_RC_OK;
+}
 struct RdpContext {
     rdpContext _p;
     std::vector<ANativeWindow*> windows;
@@ -36,25 +71,66 @@ struct RdpContext {
     std::atomic<bool> dirty;
 };
 
+
+#include <freerdp/addin.h>
+
+extern "C" UINT VCAPITYPE rdpgfx_DVCPluginEntry(PVOID pEntryPoints);
+extern "C" UINT VCAPITYPE disp_DVCPluginEntry(PVOID pEntryPoints);
+extern "C" BOOL VCAPITYPE drdynvc_VirtualChannelEntryEx(PVOID pInitHandle, PVOID pContext);
+
+// Channels are compiled statically (BUILD_SHARED_LIBS OFF), so dlopen-based addin
+// lookup cannot find them. This provider maps channel names to the linked entry points.
+static PVOID my_addin_provider(LPCSTR pszName, LPCSTR pszSubsystem, LPCSTR pszType, DWORD dwFlags) {
+    LOGI("my_addin_provider called for: %s (flags=0x%x)", pszName ? pszName : "NULL", dwFlags);
+    if (pszName && strcmp(pszName, "drdynvc") == 0) return (PVOID)drdynvc_VirtualChannelEntryEx;
+    if (pszName && strcmp(pszName, "rdpgfx") == 0) return (PVOID)rdpgfx_DVCPluginEntry;
+    if (pszName && strcmp(pszName, "disp") == 0) return (PVOID)disp_DVCPluginEntry;
+    return nullptr;
+}
+
+static void add_dynamic_channel_once(rdpSettings* settings, const char* name) {
+    if (freerdp_dynamic_channel_collection_find(settings, name)) return;
+    const char* const params[] = { name };
+    if (!freerdp_client_add_dynamic_channel(settings, 1, params)) {
+        LOGE("Failed to add dynamic channel %s", name);
+    }
+}
+
+// IMPORTANT: freerdp_connect() calls utils_reload_channels() *after* PreConnect, which frees
+// context->channels and rebuilds it by invoking instance->LoadChannels. Static channels must
+// therefore be loaded here, not in PreConnect (anything loaded there is discarded).
+static BOOL client_load_channels(freerdp* instance) {
+    int res = freerdp_channels_client_load_ex(instance->context->channels, instance->context->settings,
+                                              (PVIRTUALCHANNELENTRYEX)drdynvc_VirtualChannelEntryEx,
+                                              instance->context->settings);
+    LOGI("RDP_CODEC: drdynvc static channel load res = %d (0 = ok)", res);
+    return res == 0;
+}
+
 static BOOL client_pre_connect(freerdp* instance) {
-    // Enable full debug logging to see why GFX is failing
-    WLog_SetLogLevel(WLog_GetRoot(), WLOG_DEBUG);
-    
+    rdpSettings* settings = instance->context->settings;
+
     // Configure settings
-    freerdp_settings_set_bool(instance->context->settings, FreeRDP_SoftwareGdi, TRUE);
-    freerdp_settings_set_uint32(instance->context->settings, FreeRDP_ColorDepth, 32);
-    freerdp_settings_set_bool(instance->context->settings, FreeRDP_IgnoreCertificate, TRUE);
-    freerdp_settings_set_uint32(instance->context->settings, FreeRDP_AuthenticationLevel, 0);
+    freerdp_settings_set_bool(settings, FreeRDP_SoftwareGdi, TRUE);
+    freerdp_settings_set_uint32(settings, FreeRDP_ColorDepth, 32);
+    freerdp_settings_set_bool(settings, FreeRDP_IgnoreCertificate, TRUE);
+    freerdp_settings_set_uint32(settings, FreeRDP_AuthenticationLevel, 0);
     
-    // Force highly optimized protocols!
-    freerdp_settings_set_bool(instance->context->settings, FreeRDP_FastPathInput, TRUE);
-    freerdp_settings_set_bool(instance->context->settings, FreeRDP_FastPathOutput, TRUE);
-    freerdp_settings_set_bool(instance->context->settings, FreeRDP_RemoteFxCodec, TRUE);
-    freerdp_settings_set_bool(instance->context->settings, FreeRDP_SupportGraphicsPipeline, TRUE);
-    freerdp_settings_set_bool(instance->context->settings, FreeRDP_GfxH264, TRUE);
-    freerdp_settings_set_bool(instance->context->settings, FreeRDP_GfxAVC444, TRUE);
+    freerdp_settings_set_bool(settings, FreeRDP_FastPathInput, TRUE);
+    freerdp_settings_set_bool(settings, FreeRDP_FastPathOutput, TRUE);
+    freerdp_settings_set_bool(settings, FreeRDP_RemoteFxCodec, TRUE);
+    freerdp_settings_set_bool(settings, FreeRDP_SupportGraphicsPipeline, TRUE);
+    freerdp_settings_set_bool(settings, FreeRDP_GfxProgressive, TRUE);
+    // No H.264 decoder is compiled in yet (FFmpeg/OpenH264/MediaCodec all off). Advertising
+    // AVC would make the server send frames we cannot decode, so keep it off for now.
+    freerdp_settings_set_bool(settings, FreeRDP_GfxH264, FALSE);
+    freerdp_settings_set_bool(settings, FreeRDP_GfxAVC444, FALSE);
+    freerdp_settings_set_bool(settings, FreeRDP_GfxAVC444v2, FALSE);
+    freerdp_settings_set_bool(settings, FreeRDP_SupportDynamicChannels, TRUE);
     
-    freerdp_client_load_addins(instance->context->channels, instance->context->settings);
+    freerdp_register_addin_provider((FREERDP_LOAD_CHANNEL_ADDIN_ENTRY_FN)my_addin_provider, 0);
+    add_dynamic_channel_once(settings, "rdpgfx");
+    add_dynamic_channel_once(settings, "disp");
     
     return TRUE;
 }
@@ -168,6 +244,7 @@ Java_com_multidesk_explorer_FreeRDPBridge_connect(
     
     instance->PreConnect = client_pre_connect;
     instance->PostConnect = client_post_connect;
+    instance->LoadChannels = client_load_channels;
     instance->ContextSize = sizeof(RdpContext);
     
     LOGI("freerdp_context_new called");
@@ -215,8 +292,6 @@ Java_com_multidesk_explorer_FreeRDPBridge_connect(
     freerdp_settings_set_uint32(instance->context->settings, FreeRDP_DeviceScaleFactor, 100);
     freerdp_settings_set_bool(instance->context->settings, FreeRDP_SupportDisplayControl, TRUE);
     freerdp_settings_set_bool(instance->context->settings, FreeRDP_SupportDynamicChannels, TRUE);
-    const char* const disp_params[] = { "disp" };
-    freerdp_client_add_dynamic_channel(instance->context->settings, 1, disp_params);
     
     if (port > 0) {
         freerdp_settings_set_uint32(instance->context->settings, FreeRDP_ServerPort, port);
@@ -230,7 +305,7 @@ Java_com_multidesk_explorer_FreeRDPBridge_connect(
         "+glyph-cache",
         "+bitmap-cache",
         "+offscreen-cache",
-        "/gfx:AVC420:on",
+        "/gfx",
         "/rfx",
         "/bpp:32",
         "/compression",
@@ -266,16 +341,33 @@ Java_com_multidesk_explorer_FreeRDPBridge_connect(
     env->ReleaseStringUTFChars(password, pass_c);
     
     PubSub_SubscribeChannelConnected(instance->context->pubSub, [](void* context, const ChannelConnectedEventArgs* e) {
+        LOGI("RDP_CODEC: channel connected: %s", e->name);
+        auto* ctx = (RdpContext*)context;
         if (strcmp(e->name, DISP_DVC_CHANNEL_NAME) == 0) {
-            auto* ctx = (RdpContext*)context;
             ctx->disp = (DispClientContext*)e->pInterface;
+        } else if (strcmp(e->name, RDPGFX_DVC_CHANNEL_NAME) == 0) {
+            auto* gfx = (RdpgfxClientContext*)e->pInterface;
+            rdpGdi* gdi = ((rdpContext*)context)->gdi;
+            if (gdi && gfx && gdi_graphics_pipeline_init(gdi, gfx)) {
+                g_origSurfaceCommand = gfx->SurfaceCommand;
+                gfx->SurfaceCommand = logging_surface_command;
+                for (auto& c : g_codecCounts) c = 0;
+                LOGI("RDP_CODEC: GFX pipeline initialized - server will use GFX codecs");
+            } else {
+                LOGE("RDP_CODEC: gdi_graphics_pipeline_init FAILED (gdi=%p gfx=%p)", gdi, gfx);
+            }
         }
     });
 
     PubSub_SubscribeChannelDisconnected(instance->context->pubSub, [](void* context, const ChannelDisconnectedEventArgs* e) {
+        auto* ctx = (RdpContext*)context;
         if (strcmp(e->name, DISP_DVC_CHANNEL_NAME) == 0) {
-            auto* ctx = (RdpContext*)context;
             ctx->disp = nullptr;
+        } else if (strcmp(e->name, RDPGFX_DVC_CHANNEL_NAME) == 0) {
+            auto* gfx = (RdpgfxClientContext*)e->pInterface;
+            rdpGdi* gdi = ((rdpContext*)context)->gdi;
+            if (gdi && gfx) gdi_graphics_pipeline_uninit(gdi, gfx);
+            g_origSurfaceCommand = nullptr;
         }
     });
     
