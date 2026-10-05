@@ -220,8 +220,8 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
         animationSpec = tween(durationMillis = 500)
     )
 
-    LaunchedEffect(zoom) {
-        if (rdpInstance != 0L) {
+    LaunchedEffect(zoom, currentWidth, currentHeight) {
+        if (rdpInstance != 0L && currentWidth > 0 && currentHeight > 0) {
             rdpBridge.updateDisplay(rdpInstance, currentWidth, currentHeight, zoom)
         }
     }
@@ -314,10 +314,7 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
             }
     ) {
         AndroidView(
-            modifier = Modifier.fillMaxSize().graphicsLayer {
-                scaleX = zoom
-                scaleY = zoom
-            },
+            modifier = Modifier.fillMaxSize(),
             factory = { viewContext ->
                 SurfaceView(viewContext).apply {
                     setZOrderMediaOverlay(true)
@@ -339,8 +336,8 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                         focusRequester.requestFocus()
                         gestureDetector.onTouchEvent(event)
                         
-                        val scaleX = 1920f / view.width.toFloat()
-                        val scaleY = 1080f / view.height.toFloat()
+                        val scaleX = currentWidth.toFloat() / view.width.toFloat()
+                        val scaleY = currentHeight.toFloat() / view.height.toFloat()
                         val rdpX = (event.x * scaleX).toInt()
                         val rdpY = (event.y * scaleY).toInt()
                         
@@ -372,8 +369,8 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                     }
                     
                     setOnHoverListener { view, event ->
-                        val scaleX = 1920f / view.width.toFloat()
-                        val scaleY = 1080f / view.height.toFloat()
+                        val scaleX = currentWidth.toFloat() / view.width.toFloat()
+                        val scaleY = currentHeight.toFloat() / view.height.toFloat()
                         val rdpX = (event.x * scaleX).toInt()
                         val rdpY = (event.y * scaleY).toInt()
 
@@ -466,10 +463,12 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                 }
                 
                 if (showZoomSlider) {
+                    Text("${(zoom * 100).toInt()}%", color = androidx.compose.ui.graphics.Color.White, modifier = Modifier.padding(bottom = 4.dp))
                     Slider(
                         value = zoom,
                         onValueChange = { zoom = it },
-                        valueRange = 0.5f..3f,
+                        valueRange = 1f..3f,
+                        steps = 7,
                         modifier = Modifier.width(150.dp)
                     )
                 }
