@@ -203,6 +203,8 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
     var actualWidth by remember { mutableStateOf(1920) }
     var actualHeight by remember { mutableStateOf(1080) }
     var lastMouseEventTime by remember { mutableStateOf(0L) }
+    var panX by remember { mutableStateOf(0f) }
+    var panY by remember { mutableStateOf(0f) }
     var currentWidth by remember { mutableStateOf(1920) }
     var currentHeight by remember { mutableStateOf(1080) }
     var offsetX by remember { mutableStateOf(0f) }
@@ -225,7 +227,7 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
 
     LaunchedEffect(zoom, currentWidth, currentHeight) {
         if (rdpInstance != 0L && currentWidth > 0 && currentHeight > 0) {
-            rdpBridge.updateDisplay(rdpInstance, currentWidth, currentHeight, zoom)
+            rdpBridge.updateDisplay(rdpInstance, currentWidth, currentHeight, 1.0f)
             for (i in 0..10) {
                 kotlinx.coroutines.delay(200)
                 actualWidth = rdpBridge.getDesktopWidth(rdpInstance)
@@ -321,11 +323,12 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                 }
             }
     ) {
-        val visualZoom = if (actualWidth != currentWidth || actualHeight != currentHeight) zoom else 1f
         AndroidView(
             modifier = Modifier.fillMaxSize().graphicsLayer {
-                scaleX = visualZoom
-                scaleY = visualZoom
+                scaleX = zoom
+                scaleY = zoom
+                translationX = panX
+                translationY = panY
             },
             factory = { viewContext ->
                 SurfaceView(viewContext).apply {
@@ -503,8 +506,13 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                     IconButton(onClick = { showZoomSlider = !showZoomSlider }) {
                         Icon(Icons.Default.Search, "Zoom", tint = Color.White)
                     }
+                    if (zoom > 1.0f) {
+                        IconButton(onClick = { zoom = 1f; panX = 0f; panY = 0f }) {
+                            Icon(androidx.compose.material.icons.Icons.Default.FullscreenExit, "Reset Zoom", tint = androidx.compose.ui.graphics.Color.White)
+                        }
+                    }
                     IconButton(onClick = { /* Implement menu later */ }) {
-                        Icon(Icons.Default.Menu, "Menu", tint = Color.White)
+                        Icon(Icons.Default.Menu, "Menu", tint = androidx.compose.ui.graphics.Color.White)
                     }
                     IconButton(onClick = { showSoftKeyboard = !showSoftKeyboard; if (!showSoftKeyboard) { keyboardController?.hide() } }) {
                         Icon(Icons.Default.Keyboard, "Keyboard", tint = Color.White)
@@ -517,9 +525,33 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                         value = zoom,
                         onValueChange = { zoom = it },
                         valueRange = 1f..3f,
-                        steps = 7,
                         modifier = Modifier.width(150.dp)
                     )
+                }
+            }
+        }        
+        if (zoom > 1.0f) {
+            Surface(
+                modifier = Modifier
+                    .align(androidx.compose.ui.Alignment.Center)
+                    .size(120.dp)
+                    .alpha(animatedAlpha)
+                    .pointerInput(Unit) {
+                        androidx.compose.foundation.gestures.detectDragGestures { change, dragAmount ->
+                            change.consume()
+                            panX += dragAmount.x
+                            panY += dragAmount.y
+                        }
+                    },
+                shape = androidx.compose.foundation.shape.CircleShape,
+                color = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.7f)
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Icon(androidx.compose.material.icons.Icons.Default.KeyboardArrowUp, "", tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.align(androidx.compose.ui.Alignment.TopCenter).padding(8.dp))
+                    Icon(androidx.compose.material.icons.Icons.Default.KeyboardArrowDown, "", tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter).padding(8.dp))
+                    Icon(androidx.compose.material.icons.Icons.Default.KeyboardArrowLeft, "", tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.align(androidx.compose.ui.Alignment.CenterStart).padding(8.dp))
+                    Icon(androidx.compose.material.icons.Icons.Default.KeyboardArrowRight, "", tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.align(androidx.compose.ui.Alignment.CenterEnd).padding(8.dp))
+                    Box(modifier = Modifier.align(androidx.compose.ui.Alignment.Center).size(50.dp).background(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.3f), androidx.compose.foundation.shape.CircleShape))
                 }
             }
         }
