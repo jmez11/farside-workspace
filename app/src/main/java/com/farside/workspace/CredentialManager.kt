@@ -10,7 +10,7 @@ import javax.crypto.spec.GCMParameterSpec
 
 class CredentialManager {
     companion object {
-        private const val KEY_ALIAS = "multidesk_credentials_key"
+        private const val KEY_ALIAS = "farside_credentials_key"
         private const val ANDROID_KEYSTORE = "AndroidKeyStore"
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
 
@@ -47,7 +47,7 @@ class CredentialManager {
         }
 
         fun decrypt(data: ByteArray): String {
-            if (data.size < 12) return ""
+            require(data.size >= 28) { "Invalid encrypted credential" }
             
             val iv = data.copyOfRange(0, 12)
             val encrypted = data.copyOfRange(12, data.size)
@@ -59,5 +59,14 @@ class CredentialManager {
             val decrypted = cipher.doFinal(encrypted)
             return String(decrypted, Charsets.UTF_8)
         }
+
+        fun writePassword(json: org.json.JSONObject, field: String, value: String?) {
+            json.remove(field)
+            if (value != null) json.put(field + "Encrypted", android.util.Base64.encodeToString(encrypt(value), android.util.Base64.NO_WRAP))
+        }
+
+        fun readPassword(json: org.json.JSONObject, field: String): String? =
+            if (json.has(field + "Encrypted")) decrypt(android.util.Base64.decode(json.getString(field + "Encrypted"), android.util.Base64.NO_WRAP))
+            else if (json.has(field) && !json.isNull(field)) json.getString(field) else null
     }
 }

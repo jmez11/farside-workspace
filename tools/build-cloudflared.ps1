@@ -28,7 +28,7 @@ try {
     $env:CC = Join-Path $Sdk 'ndk/26.1.10909125/toolchains/llvm/prebuilt/windows-x86_64/bin/aarch64-linux-android32-clang.cmd'
     $env:GOCACHE = Join-Path $build 'go-cache'
     Set-Location $source
-    & $Go build -mod=vendor -trimpath -buildvcs=false -ldflags '-s -w -X main.Version=2026.5.1-multidesk -X main.BuildType=android' -o $output ./cmd/cloudflared
+    & $Go build -mod=vendor -trimpath -buildvcs=false -ldflags '-s -w -X main.Version=2026.5.1-farside -X main.BuildType=android' -o $output ./cmd/cloudflared
     if ($LASTEXITCODE -ne 0) { throw 'Cloudflared Android build failed' }
     Get-FileHash $output -Algorithm SHA256
 } finally {

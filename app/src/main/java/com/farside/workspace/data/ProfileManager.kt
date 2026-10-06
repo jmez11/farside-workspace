@@ -5,16 +5,55 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 class ProfileManager(private val context: Context) {
-    private val prefs = context.getSharedPreferences("multidesk_profiles", Context.MODE_PRIVATE)
+    private val prefs = context.getSharedPreferences("farside_profiles", Context.MODE_PRIVATE)
+
+    init {
+        // Encrypt legacy plaintext in both arrays in one durable preference transaction.
+        val editor = prefs.edit()
+        var changed = false
+        for (key in listOf("credentials", "profiles")) {
+            val array = JSONArray(prefs.getString(key, "[]"))
+            var arrayChanged = false
+            for (i in 0 until array.length()) {
+                val json = array.getJSONObject(i)
+                for (field in listOf("pass", "proxyPass")) {
+                    if (json.has(field)) {
+                        if (!json.has(field + "Encrypted") && !json.isNull(field)) {
+                            com.farside.workspace.CredentialManager.writePassword(json, field, json.getString(field))
+                        } else json.remove(field)
+                        arrayChanged = true
+                    }
+                }
+            }
+            if (arrayChanged) {
+                editor.putString(key, array.toString())
+                changed = true
+            }
+        }
+        if (changed) check(editor.commit()) { "Could not migrate saved passwords" }
+    }
     
     fun getProfiles(): List<ConnectionProfile> {
         val profilesStr = prefs.getString("profiles", "[]")
         val profiles = mutableListOf<ConnectionProfile>()
+        val credentials = getCredentials()
+        var migrated = false
         try {
             val jsonArray = JSONArray(profilesStr)
             for (i in 0 until jsonArray.length()) {
-                profiles.add(ConnectionProfile.fromJson(jsonArray.getJSONObject(i)))
+                val json = jsonArray.getJSONObject(i)
+                val profile = ConnectionProfile.fromJson(json)
+                // Old profiles stored only a snapshot. Link only an unambiguous match.
+                val credential = if (profile.credentialId != null) credentials.find { it.id == profile.credentialId }
+                    else credentials.singleOrNull { it.user == profile.user && it.pass == profile.pass }
+                if (profile.credentialId == null && credential != null) {
+                    json.put("credentialId", credential.id)
+                    migrated = true
+                }
+                profiles.add(if (credential == null) profile else profile.copy(
+                    credentialId = credential.id, user = credential.user, pass = credential.pass))
             }
+            if (migrated) prefs.edit().putString("profiles", jsonArray.toString()).apply()
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -90,6 +129,20 @@ class ProfileManager(private val context: Context) {
         val creds = getCredentials().toMutableList()
         creds.add(cred)
         saveCredentials(creds)
+    }
+
+    fun updateCredential(cred: SavedCredential) {
+        // Establish legacy links while the old username/password still match.
+        val profiles = getProfiles()
+        val creds = getCredentials().toMutableList()
+        val index = creds.indexOfFirst { it.id == cred.id }
+        require(index >= 0) { "Saved credential no longer exists" }
+        creds[index] = cred
+        saveCredentials(creds)
+        // Keep the stored snapshot current too, including existing deletion/fallback behavior.
+        saveProfiles(profiles.map { profile ->
+            if (profile.credentialId == cred.id) profile.copy(user = cred.user, pass = cred.pass) else profile
+        })
     }
     
     fun deleteCredential(id: String) {

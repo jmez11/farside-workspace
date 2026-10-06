@@ -7,14 +7,16 @@ data class SavedCredential(
     val id: String = UUID.randomUUID().toString(),
     val name: String,
     val user: String,
-    val pass: String
+    val pass: String,
+    val pinVerifier: String? = null
 ) {
     fun toJson(): JSONObject {
         val json = JSONObject()
         json.put("id", id)
         json.put("name", name)
         json.put("user", user)
-        json.put("pass", pass)
+        com.farside.workspace.CredentialManager.writePassword(json, "pass", pass)
+        com.farside.workspace.CredentialManager.writePassword(json, "pinVerifier", pinVerifier)
         return json
     }
 
@@ -24,7 +26,8 @@ data class SavedCredential(
                 id = json.getString("id"),
                 name = json.getString("name"),
                 user = json.getString("user"),
-                pass = json.getString("pass")
+                pass = com.farside.workspace.CredentialManager.readPassword(json, "pass") ?: "",
+                pinVerifier = com.farside.workspace.CredentialManager.readPassword(json, "pinVerifier")
             )
         }
     }

@@ -51,7 +51,7 @@ class CloudflaredTunnel(private val context: Context) : AutoCloseable {
         val diagnostic = AtomicReference("")
         val noAccessMetadata = AtomicBoolean(false)
         val loginReader = drain(login, host, browserFailure) {
-            if (it == "MULTIDESK_AUTH_USER") userAuth.set(true)
+            if (it == "FARSIDE_AUTH_USER") userAuth.set(true)
             if ("failed to find Access application" in it) noAccessMetadata.set(true)
             val reason = when {
                 "x509:" in it -> "Cloudflare TLS certificate validation failed."
@@ -85,7 +85,7 @@ class CloudflaredTunnel(private val context: Context) : AutoCloseable {
         onStatus("Starting Cloudflared…")
         val process = launch(listOf("access", "rdp", "--hostname", host, "--url", "127.0.0.1:$port") + if (userAuth.get()) emptyList() else args)
         drain(process, host, browserFailure) { line ->
-            if (line == "MULTIDESK_LISTENER_READY 127.0.0.1:$port") ready.countDown()
+            if (line == "FARSIDE_LISTENER_READY 127.0.0.1:$port") ready.countDown()
         }
         val startupDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15)
         while (!ready.await(100, TimeUnit.MILLISECONDS)) {

@@ -103,7 +103,7 @@ class CloudflaredVerification(private val instrumentation: Instrumentation) {
             activity?.let { current -> instrumentation.runOnMainSync { current.finish() } }
             instrumentation.waitForIdleSync()
             val retained = manager.getProfiles().filter { it.id != profileId }
-            check(context.getSharedPreferences("multidesk_profiles", android.content.Context.MODE_PRIVATE).edit()
+            check(context.getSharedPreferences("farside_profiles", android.content.Context.MODE_PRIVATE).edit()
                 .putString("profiles", org.json.JSONArray(retained.map { it.toJson() }).toString()).commit())
             context.getSharedPreferences("session_window_positions", android.content.Context.MODE_PRIVATE).edit()
                 .remove("$profileId/0").commit()
@@ -137,15 +137,15 @@ class CloudflaredVerification(private val instrumentation: Instrumentation) {
         val work = File(context.cacheDir, "cloudflared-verification").apply { mkdirs() }
         try {
             val version = invoke(work, listOf("--version"))
-            check(version.first == 0 && version.second.contains("2026.5.1-multidesk")) { "Wrong bundled executable" }
+            check(version.first == 0 && version.second.contains("2026.5.1-farside")) { "Wrong bundled executable" }
             val port = ServerSocket(0, 0, InetAddress.getLoopbackAddress()).use { it.localPort }
             val listener = launch(work, listOf("access", "rdp", "--hostname", "rdp.example.com", "--url", "127.0.0.1:$port"))
             try {
                 val output = AtomicReference("")
-                val reader = Thread { runCatching { listener.inputStream.bufferedReader().useLines { lines -> lines.forEach { if (it.startsWith("MULTIDESK_LISTENER_READY")) output.set(it) } } } }.apply { start() }
+                val reader = Thread { runCatching { listener.inputStream.bufferedReader().useLines { lines -> lines.forEach { if (it.startsWith("FARSIDE_LISTENER_READY")) output.set(it) } } } }.apply { start() }
                 val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15)
                 while (output.get().isEmpty() && listener.isAlive && System.nanoTime() < deadline) Thread.sleep(50)
-                check(output.get() == "MULTIDESK_LISTENER_READY 127.0.0.1:$port") { "Listener not ready" }
+                check(output.get() == "FARSIDE_LISTENER_READY 127.0.0.1:$port") { "Listener not ready" }
                 listener.destroy()
                 check(listener.waitFor(3, TimeUnit.SECONDS)) { "Child did not stop" }
                 reader.join(1000)
@@ -213,19 +213,19 @@ class CloudflaredVerification(private val instrumentation: Instrumentation) {
             val creds = listOf("--service-token-id", "fixture-id", "--service-token-secret", "fixture-secret")
             check(invoke(work, login + creds + url, false).first != 0) { "Untrusted TLS certificate accepted" }
             val valid = invoke(work, login + creds + url)
-            check(valid.first == 0 && valid.second.contains("MULTIDESK_AUTH_CREDENTIALS")) { "Valid service token preflight failed" }
+            check(valid.first == 0 && valid.second.contains("FARSIDE_AUTH_CREDENTIALS")) { "Valid service token preflight failed" }
             val headers = invoke(work, login + listOf("--header", "Cf-Access-Client-Id: fixture-id", "--header", "Cf-Access-Client-Secret: fixture-secret") + url)
-            check(headers.first == 0 && headers.second.contains("MULTIDESK_AUTH_CREDENTIALS"))
+            check(headers.first == 0 && headers.second.contains("FARSIDE_AUTH_CREDENTIALS"))
             val cache = File(work, ".cloudflared").apply { mkdirs() }
             val tokenFile = File(cache, "localhost-fixture-aud-token").apply { writeText(token); Os.chmod(absolutePath, 384) }
             val cached = invoke(work, login + url)
-            check(cached.first == 0 && cached.second.contains("MULTIDESK_AUTH_USER") && !cached.second.contains(token)) { "Cached user JWT was not reused quietly" }
+            check(cached.first == 0 && cached.second.contains("FARSIDE_AUTH_USER") && !cached.second.contains(token)) { "Cached user JWT was not reused quietly" }
             omitDomain.set(true)
             val missingDomain = invoke(work, login + url)
-            check(missingDomain.first == 0 && missingDomain.second.contains("MULTIDESK_AUTH_USER")) { "Missing Access domain header did not use original application hostname" }
+            check(missingDomain.first == 0 && missingDomain.second.contains("FARSIDE_AUTH_USER")) { "Missing Access domain header did not use original application hostname" }
             omitDomain.set(false)
             val fallback = invoke(work, login + listOf("--service-token-id", "wrong", "--service-token-secret", "wrong") + url)
-            check(fallback.first == 0 && fallback.second.contains("MULTIDESK_AUTH_USER")) { "Invalid service token did not fall back to cached JWT" }
+            check(fallback.first == 0 && fallback.second.contains("FARSIDE_AUTH_USER")) { "Invalid service token did not fall back to cached JWT" }
             tokenFile.delete()
             val interactive = launch(work, login + url)
             val sawUrl = AtomicBoolean(false)

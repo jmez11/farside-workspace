@@ -49,6 +49,15 @@ internal class RdpSessionConnection(
                 return@execute
             }
             if (instance == 0L) {
+                if (!profile.useCloudflare && profile.proxyType !in listOf(ProxyType.NONE, ProxyType.CLOUDFLARED)) {
+                    next.release()
+                    ended.set(true)
+                    main.post { if (!closed.get()) {
+                        onDisconnected("${profile.proxyType.displayName} proxy connections are not supported yet. Select None or Cloudflared.", false)
+                        onConnected(0L)
+                    } }
+                    return@execute
+                }
                 var host = profile.host
                 var port = profile.port
                 if (tunnel != null) try {

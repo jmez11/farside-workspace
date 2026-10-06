@@ -7,7 +7,17 @@ enum class ConnectionType {
 }
 
 enum class ProxyType {
-    NONE, SOCKS4, SOCKS5, HTTP, LOCAL, TELNET, CLOUDFLARED
+    NONE, SOCKS4, SOCKS5, HTTP, LOCAL, TELNET, CLOUDFLARED;
+
+    val displayName: String get() = when (this) {
+        NONE -> "None"
+        CLOUDFLARED -> "Cloudflared"
+        else -> name
+    }
+    companion object {
+        // Retain other enum values only to read legacy profiles without silently dropping proxies.
+        val choices = listOf(NONE, CLOUDFLARED, SOCKS5, HTTP)
+    }
 }
 
 enum class SoundRedirection {
@@ -50,7 +60,8 @@ data class ConnectionProfile(
     val resolutionHeight: Int = 1080,
     val resolutionScaling: Int = 100,
     val swapMouseButtons: Boolean = false,
-    val adminMode: Boolean = false
+    val adminMode: Boolean = false,
+    val credentialId: String? = null
 ) {
     fun toJson(): JSONObject {
         val json = JSONObject()
@@ -60,7 +71,8 @@ data class ConnectionProfile(
         json.put("host", host)
         json.put("port", port)
         json.put("user", user)
-        json.put("pass", pass)
+        com.farside.workspace.CredentialManager.writePassword(json, "pass", pass)
+        json.put("credentialId", credentialId)
         json.put("remoteApp", remoteApp)
         json.put("useCloudflare", useCloudflare)
         json.put("enableCamera", enableCamera)
@@ -70,7 +82,7 @@ data class ConnectionProfile(
         json.put("proxyHost", proxyHost)
         json.put("proxyPort", proxyPort)
         json.put("proxyUser", proxyUser)
-        json.put("proxyPass", proxyPass)
+        com.farside.workspace.CredentialManager.writePassword(json, "proxyPass", proxyPass)
         json.put("proxyExclude", proxyExclude)
         json.put("proxyCommand", proxyCommand)
         if (cloudflaredParameters.isNotEmpty()) json.put("cloudflaredParametersEncrypted",
@@ -103,7 +115,8 @@ data class ConnectionProfile(
                 host = json.getString("host"),
                 port = json.getInt("port"),
                 user = json.getString("user"),
-                pass = json.getString("pass"),
+                pass = com.farside.workspace.CredentialManager.readPassword(json, "pass") ?: "",
+                credentialId = if (json.has("credentialId") && !json.isNull("credentialId")) json.getString("credentialId") else null,
                 remoteApp = if (json.has("remoteApp") && !json.isNull("remoteApp")) json.getString("remoteApp") else null,
                 useCloudflare = if (json.has("useCloudflare")) json.getBoolean("useCloudflare") else false,
                 enableCamera = if (json.has("enableCamera")) json.getBoolean("enableCamera") else false,
@@ -113,7 +126,7 @@ data class ConnectionProfile(
                 proxyHost = if (json.has("proxyHost") && !json.isNull("proxyHost")) json.getString("proxyHost") else null,
                 proxyPort = if (json.has("proxyPort") && !json.isNull("proxyPort")) json.getInt("proxyPort") else null,
                 proxyUser = if (json.has("proxyUser") && !json.isNull("proxyUser")) json.getString("proxyUser") else null,
-                proxyPass = if (json.has("proxyPass") && !json.isNull("proxyPass")) json.getString("proxyPass") else null,
+                proxyPass = com.farside.workspace.CredentialManager.readPassword(json, "proxyPass"),
                 proxyExclude = if (json.has("proxyExclude") && !json.isNull("proxyExclude")) json.getString("proxyExclude") else null,
                 proxyCommand = if (json.has("proxyCommand") && !json.isNull("proxyCommand")) json.getString("proxyCommand") else null,
                 cloudflaredParameters = if (json.has("cloudflaredParametersEncrypted"))

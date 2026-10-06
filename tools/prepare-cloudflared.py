@@ -48,7 +48,7 @@ def login(source):
         if resp.StatusCode >= 200 && resp.StatusCode < 500 &&
             !(resp.StatusCode >= 300 && resp.StatusCode < 400) &&
             resp.StatusCode != 401 && resp.StatusCode != 403 {
-            if c.Bool(loginQuietFlag) { fmt.Fprintln(os.Stderr, "MULTIDESK_AUTH_CREDENTIALS"); return nil }
+            if c.Bool(loginQuietFlag) { fmt.Fprintln(os.Stderr, "FARSIDE_AUTH_CREDENTIALS"); return nil }
         }
     }
 ''' + anchor, 1)
@@ -56,7 +56,7 @@ def login(source):
     assert anchor in source
     anchor = '\tcfdToken, err := token.GetAppTokenIfExists(appInfo)'
     source = source.replace(anchor, '''
-    if c.Bool(loginQuietFlag) { fmt.Fprintln(os.Stderr, "MULTIDESK_AUTH_USER"); return nil }
+    if c.Bool(loginQuietFlag) { fmt.Fprintln(os.Stderr, "FARSIDE_AUTH_USER"); return nil }
 ''' + anchor, 1)
     anchor = '\toptions := &carrier.StartOptions{AppInfo: appInfo, OriginURL: appUrl.String(), Headers: headers'
     assert anchor in source
@@ -69,7 +69,7 @@ def login(source):
 edit("cmd/cloudflared/access/cmd.go", login)
 # Android launches the validated URL through ACTION_VIEW in the parent app.
 edit("token/shell.go", lambda s: s.replace('package token', 'package token\n\nimport "errors"').replace('return getBrowserCmd(url).Start()', 'return errors.New("browser delegated to Android app")'))
-edit("carrier/carrier.go", lambda s: s.replace('return Serve(conn, listener, shutdownC, options)', 'fmt.Fprintln(os.Stderr, "MULTIDESK_LISTENER_READY", listener.Addr().String())\n\treturn Serve(conn, listener, shutdownC, options)'))
+edit("carrier/carrier.go", lambda s: s.replace('return Serve(conn, listener, shutdownC, options)', 'fmt.Fprintln(os.Stderr, "FARSIDE_LISTENER_READY", listener.Addr().String())\n\treturn Serve(conn, listener, shutdownC, options)'))
 # Access responses can omit CF-Access-Domain. The original TLS-verified application
 # hostname is the correct cache namespace; an audience is still mandatory above this.
 edit("token/token.go", lambda s: s.replace('return nil, errors.New("Empty app domain")', 'domain = reqURL.Hostname()'))

@@ -16,7 +16,7 @@ the standard user-token flow, delegate browser launch to Android, and signal rea
 after binding the loopback listener. Missing CF-Access-Domain metadata falls back to
 the original application hostname, with the audience still required. They do not
 change RDP or token transfer protocols.
-Executable SHA-256: `871a90807a30588f769817cd9e34486aac51a5cb73afd2e6943b1ace9703a20b`.
+Executable SHA-256: `93b607e975f775db4eb2c3dc044fb65b4468b6f6b29553d9f295c98f7f869866`.
 
 The app exports Android trust anchors for Go TLS verification and keeps HOME, token
 cache and transfer keys in `noBackupFilesDir/cloudflared` (0700). Authentication tokens

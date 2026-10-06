@@ -14,6 +14,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
@@ -55,6 +56,7 @@ fun LauncherScreen(
     var editingProfile by remember { mutableStateOf<ConnectionProfile?>(null) }
     var isSettingsOpen by rememberSaveable { mutableStateOf(false) }
     var settingsInitialTab by rememberSaveable { mutableStateOf(0) }
+    var credentialRevision by remember { mutableIntStateOf(0) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         if (isAdding || editingProfile != null) {
@@ -70,6 +72,7 @@ fun LauncherScreen(
                     editingProfile = null
                 },
                 profileManager = profileManager,
+                credentialRevision = credentialRevision,
                 onNavigateToSettings = {
                     settingsInitialTab = 1
                     isSettingsOpen = true
@@ -120,7 +123,10 @@ fun LauncherScreen(
         
         if (isSettingsOpen) {
             SettingsScreen(
-                onClose = { isSettingsOpen = false },
+                onClose = {
+                    credentialRevision++
+                    isSettingsOpen = false
+                },
                 profileManager = profileManager,
                 initialTab = settingsInitialTab
             )
@@ -202,13 +208,16 @@ fun SettingsTextField(
     placeholder: String = "", 
     visualTransformation: androidx.compose.ui.text.input.VisualTransformation = androidx.compose.ui.text.input.VisualTransformation.None,
     keyboardOptions: androidx.compose.foundation.text.KeyboardOptions = androidx.compose.foundation.text.KeyboardOptions.Default,
-    isError: Boolean = false
+    isError: Boolean = false,
+    accessibleLabel: String? = null
 ) {
     TextField(
         value = value,
         onValueChange = onValueChange,
         placeholder = { Text(placeholder, color = Color.Gray) },
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        label = if (accessibleLabel != null) { { Text(accessibleLabel, color = Color.Gray) } } else null,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+            .semantics { if (accessibleLabel != null) contentDescription = accessibleLabel },
         colors = TextFieldDefaults.colors(
             focusedContainerColor = Color(0xFF1C1C1E),
             unfocusedContainerColor = Color(0xFF1C1C1E),
@@ -218,7 +227,11 @@ fun SettingsTextField(
             unfocusedTextColor = Color.White
         ),
         visualTransformation = visualTransformation,
-        keyboardOptions = keyboardOptions,
+        keyboardOptions = if (visualTransformation is PasswordVisualTransformation)
+            keyboardOptions.copy(autoCorrectEnabled = false, keyboardType =
+                if (keyboardOptions.keyboardType == androidx.compose.ui.text.input.KeyboardType.NumberPassword)
+                    androidx.compose.ui.text.input.KeyboardType.NumberPassword else androidx.compose.ui.text.input.KeyboardType.Password)
+        else keyboardOptions,
         singleLine = true,
         isError = isError
     )
@@ -233,7 +246,44 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
     var credentials by remember { mutableStateOf(profileManager.getCredentials()) }
     var newCredName by rememberSaveable { mutableStateOf("") }
     var newCredUser by rememberSaveable { mutableStateOf("") }
-    var newCredPass by rememberSaveable { mutableStateOf("") }
+    var newCredPass by remember { mutableStateOf("") }
+    var editingCredentialId by remember { mutableStateOf<String?>(null) }
+    var requirePin by remember { mutableStateOf(false) }
+    var newPin by remember { mutableStateOf("") }
+    var confirmPin by remember { mutableStateOf("") }
+    var pinError by remember { mutableStateOf<String?>(null) }
+    var savingCredential by remember { mutableStateOf(false) }
+    var pendingCredential by remember { mutableStateOf<com.farside.workspace.data.SavedCredential?>(null) }
+    var pendingAction by remember { mutableStateOf("") }
+    val credentialScope = rememberCoroutineScope()
+    fun credentialAction(cred: com.farside.workspace.data.SavedCredential, action: String) {
+        if (action == "edit") {
+            editingCredentialId = cred.id
+            newCredName = cred.name
+            newCredUser = cred.user
+            newCredPass = ""
+            requirePin = cred.pinVerifier != null
+        } else {
+            profileManager.deleteCredential(cred.id)
+            credentials = profileManager.getCredentials()
+            if (editingCredentialId == cred.id) {
+                editingCredentialId = null
+                newCredName = ""
+                newCredUser = ""
+                newCredPass = ""
+                requirePin = false
+            }
+        }
+        newPin = ""
+        confirmPin = ""
+        pinError = null
+    }
+    pendingCredential?.let { cred ->
+        CredentialPinDialog(cred, onUnlocked = {
+            credentialAction(cred, pendingAction)
+            pendingCredential = null
+        }, onCancel = { pendingCredential = null })
+    }
 
     Column(
         modifier = Modifier
@@ -247,9 +297,17 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onClose) {
-                Text("<", color = Color(0xFF1E88E5), fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            Button(
+                onClick = onClose,
+                enabled = !savingCredential,
+                modifier = Modifier.heightIn(min = 56.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E88E5), contentColor = Color.White)
+            ) {
+                Icon(Icons.Default.ArrowBack, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Back", fontWeight = FontWeight.Bold, fontSize = 18.sp)
             }
+            Spacer(Modifier.width(16.dp))
             Text("App Settings", color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         }
         
@@ -289,31 +347,102 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                             Column {
                                 Text(cred.name, color = Color.White, fontWeight = FontWeight.Bold)
                                 Text(cred.user, color = Color.Gray, fontSize = 12.sp)
+                                if (cred.pinVerifier != null) Text("PIN protected", color = Color.Gray, fontSize = 12.sp)
                             }
-                            TextButton(onClick = { 
-                                profileManager.deleteCredential(cred.id)
-                                credentials = profileManager.getCredentials()
+                            Row {
+                            TextButton(enabled = !savingCredential, onClick = {
+                                if (cred.pinVerifier != null) {
+                                    pendingCredential = cred
+                                    pendingAction = "edit"
+                                } else credentialAction(cred, "edit")
+                            }) { Text("Edit", color = Color(0xFF1E88E5)) }
+                            TextButton(enabled = !savingCredential, onClick = {
+                                if (cred.pinVerifier != null) {
+                                    pendingCredential = cred
+                                    pendingAction = "delete"
+                                } else credentialAction(cred, "delete")
                             }) {
                                 Text("Delete", color = Color.Red)
+                            }
                             }
                         }
                     }
                     
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text("Add New Credential", color = Color(0xFF1E88E5), fontSize = 14.sp)
+                    Text(if (editingCredentialId == null) "Add New Credential" else "Edit Credential", color = Color(0xFF1E88E5), fontSize = 14.sp)
                     SettingsTextField(newCredName, { newCredName = it }, "Account Display Name")
                     SettingsTextField(newCredUser, { newCredUser = it }, "Username")
                     SettingsTextField(newCredPass, { newCredPass = it }, "Password", visualTransformation = PasswordVisualTransformation())
-                    TextButton(onClick = {
+                    if (editingCredentialId != null) Text("Leave password blank to keep the saved password.", color = Color.Gray, fontSize = 12.sp)
+                    SettingsSwitchRow("Require PIN", requirePin, { requirePin = it; pinError = null })
+                    if (requirePin) {
+                        SettingsTextField(newPin, { newPin = it; pinError = null }, "New PIN (4–12 digits)",
+                            accessibleLabel = "New PIN (4–12 digits)",
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword))
+                        SettingsTextField(confirmPin, { confirmPin = it; pinError = null }, "Confirm PIN",
+                            accessibleLabel = "Confirm PIN",
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword))
+                        if (credentials.any { it.id == editingCredentialId && it.pinVerifier != null })
+                            Text("Leave PIN blank to keep the current PIN.", color = Color.Gray, fontSize = 12.sp)
+                    }
+                    pinError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    TextButton(enabled = !savingCredential, onClick = {
                         if (newCredName.isNotBlank() && newCredUser.isNotBlank()) {
-                            profileManager.addCredential(com.farside.workspace.data.SavedCredential(name = newCredName, user = newCredUser, pass = newCredPass))
-                            credentials = profileManager.getCredentials()
+                            val previous = credentials.find { it.id == editingCredentialId }
+                            if (requirePin && !(newPin.isEmpty() && confirmPin.isEmpty() && previous?.pinVerifier != null)) {
+                                if (!com.farside.workspace.CredentialPin.valid(newPin)) {
+                                    pinError = "Use 4–12 digits for the PIN."
+                                    return@TextButton
+                                }
+                                if (newPin != confirmPin) {
+                                    pinError = "PINs do not match."
+                                    return@TextButton
+                                }
+                            }
+                            val credential = com.farside.workspace.data.SavedCredential(
+                                id = editingCredentialId ?: UUID.randomUUID().toString(),
+                                name = newCredName, user = newCredUser,
+                                pass = if (editingCredentialId != null && newCredPass.isEmpty())
+                                    credentials.first { it.id == editingCredentialId }.pass else newCredPass)
+                            val editing = editingCredentialId != null
+                            val pin = newPin
+                            val protect = requirePin
+                            savingCredential = true
+                            credentialScope.launch {
+                                try {
+                                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                                        val verifier = if (!protect) null else if (pin.isEmpty()) previous?.pinVerifier
+                                            else com.farside.workspace.CredentialPin.create(pin)
+                                        val saved = credential.copy(pinVerifier = verifier)
+                                        if (editing) profileManager.updateCredential(saved) else profileManager.addCredential(saved)
+                                    }
+                                    credentials = profileManager.getCredentials()
+                                    editingCredentialId = null
+                                    newCredName = ""
+                                    newCredUser = ""
+                                    newCredPass = ""
+                                    newPin = ""
+                                    confirmPin = ""
+                                    requirePin = false
+                                } finally { savingCredential = false }
+                            }
+                        }
+                    }, modifier = Modifier.align(Alignment.End)) {
+                        Text(if (editingCredentialId == null) "Save Credential" else "Save Changes", color = Color(0xFF1E88E5))
+                    }
+                    if (editingCredentialId != null) {
+                        TextButton(enabled = !savingCredential, onClick = {
+                            editingCredentialId = null
                             newCredName = ""
                             newCredUser = ""
                             newCredPass = ""
-                        }
-                    }, modifier = Modifier.align(Alignment.End)) {
-                        Text("Save Credential", color = Color(0xFF1E88E5))
+                            newPin = ""
+                            confirmPin = ""
+                            requirePin = false
+                            pinError = null
+                        }, modifier = Modifier.align(Alignment.End)) { Text("Cancel Edit") }
                     }
                         }
                     }
@@ -403,7 +532,7 @@ fun ProxyTypeSelector(selectedType: com.farside.workspace.data.ProxyType, onType
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
     ) {
         TextField(
-            value = if (selectedType == com.farside.workspace.data.ProxyType.CLOUDFLARED) "Cloudflared" else selectedType.name,
+            value = if (selectedType in com.farside.workspace.data.ProxyType.choices) selectedType.displayName else "Unsupported saved proxy",
             onValueChange = {},
             readOnly = true,
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
@@ -421,9 +550,9 @@ fun ProxyTypeSelector(selectedType: com.farside.workspace.data.ProxyType, onType
             expanded = expanded,
             onDismissRequest = { expanded = false }
         ) {
-            com.farside.workspace.data.ProxyType.values().forEach { selectionOption ->
+            com.farside.workspace.data.ProxyType.choices.forEach { selectionOption ->
                 DropdownMenuItem(
-                    text = { Text(if (selectionOption == com.farside.workspace.data.ProxyType.CLOUDFLARED) "Cloudflared" else selectionOption.name) },
+                    text = { Text(selectionOption.displayName) },
                     onClick = {
                         onTypeSelected(selectionOption)
                         expanded = false
@@ -553,14 +682,21 @@ fun AddProfileForm(
     onSave: (ConnectionProfile) -> Unit, 
     onCancel: () -> Unit, 
     profileManager: com.farside.workspace.data.ProfileManager,
-    onNavigateToSettings: () -> Unit
+    onNavigateToSettings: () -> Unit,
+    credentialRevision: Int = 0
 ) {
     var name by rememberSaveable { mutableStateOf(initialProfile?.name ?: "") }
     var type by rememberSaveable { mutableStateOf(initialProfile?.type ?: ConnectionType.RDP) }
     var host by rememberSaveable { mutableStateOf(initialProfile?.host ?: "") }
     var port by rememberSaveable { mutableStateOf(initialProfile?.port?.toString() ?: "") }
     var user by rememberSaveable { mutableStateOf(initialProfile?.user ?: "") }
-    var pass by rememberSaveable { mutableStateOf(initialProfile?.pass ?: "") }
+    var pass by remember { mutableStateOf(initialProfile?.pass ?: "") }
+    val creds = remember(profileManager, credentialRevision) { profileManager.getCredentials() }
+    var savedCredId by rememberSaveable {
+        mutableStateOf(initialProfile?.credentialId ?: initialProfile?.let { prof ->
+            creds.singleOrNull { it.user == prof.user && it.pass == prof.pass }?.id
+        } ?: "")
+    }
     
     var remoteApp by rememberSaveable { mutableStateOf(initialProfile?.remoteApp ?: "") }
     var enableCamera by rememberSaveable { mutableStateOf(initialProfile?.enableCamera ?: true) }
@@ -578,7 +714,7 @@ fun AddProfileForm(
     var proxyHost by rememberSaveable { mutableStateOf(initialProfile?.proxyHost ?: "") }
     var proxyPort by rememberSaveable { mutableStateOf(initialProfile?.proxyPort?.toString() ?: "") }
     var proxyUser by rememberSaveable { mutableStateOf(initialProfile?.proxyUser ?: "") }
-    var proxyPass by rememberSaveable { mutableStateOf(initialProfile?.proxyPass ?: "") }
+    var proxyPass by remember { mutableStateOf(initialProfile?.proxyPass ?: "") }
     var proxyExclude by rememberSaveable { mutableStateOf(initialProfile?.proxyExclude ?: "") }
     var proxyCommand by rememberSaveable { mutableStateOf(initialProfile?.proxyCommand ?: "") }
     
@@ -629,8 +765,12 @@ fun AddProfileForm(
                 }
                 Text("Add Connection", color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 TextButton(onClick = {
+                    if (proxyType !in com.farside.workspace.data.ProxyType.choices) {
+                        showValidationErrors = true
+                        return@TextButton
+                    }
                     val creds = profileManager.getCredentials()
-                    val selectedCred = creds.find { it.user == user && it.pass == pass }
+                    val selectedCred = creds.find { it.id == savedCredId }
                     val credSelected = selectedCred != null || (user.isNotBlank())
                     if (host.isBlank() || !credSelected) {
                         showValidationErrors = true
@@ -652,8 +792,9 @@ fun AddProfileForm(
                         type = type,
                         host = host,
                         port = port.toIntOrNull() ?: if (type == ConnectionType.RDP) 3389 else 22,
-                        user = user,
-                        pass = pass,
+                        user = selectedCred?.user ?: user,
+                        pass = selectedCred?.pass ?: pass,
+                        credentialId = selectedCred?.id,
                         remoteApp = remoteApp.takeIf { it.isNotBlank() },
                         useCloudflare = false,
                         enableCamera = enableCamera,
@@ -840,13 +981,6 @@ fun AddProfileForm(
                 )
 
                 SettingsHeader("User Account")
-                val creds = remember { profileManager.getCredentials() }
-                // Pre-select credential if editing
-                var savedCredId by rememberSaveable { 
-                    mutableStateOf(
-                        initialProfile?.let { prof -> creds.find { it.user == prof.user && it.pass == prof.pass }?.id } ?: ""
-                    ) 
-                }
                 var expandedCreds by rememberSaveable { mutableStateOf(false) }
                 
                 ExposedDropdownMenuBox(
@@ -897,6 +1031,9 @@ fun AddProfileForm(
                 
                 SettingsHeader("Proxy Settings")
                 ProxyTypeSelector(proxyType, { proxyType = it })
+                if (proxyType !in com.farside.workspace.data.ProxyType.choices) {
+                    Text("Select None, Cloudflared, SOCKS5 or HTTP before saving.", color = Color.Red, modifier = Modifier.padding(16.dp))
+                }
                 if (proxyType == com.farside.workspace.data.ProxyType.CLOUDFLARED) {
                     Text("Uses the connection hostname with cloudflared access rdp. Browser sign-in opens when needed; tokens stay in private app storage.", color = Color.Gray, modifier = Modifier.padding(16.dp))
                     SettingsTextField(cloudflaredParameters, { cloudflaredParameters = it; cloudflaredError = null }, "Extra parameters (optional)",
@@ -905,9 +1042,8 @@ fun AddProfileForm(
                     SettingsSwitchRow("Show Cloudflared parameters", showCloudflaredParameters, { showCloudflaredParameters = it })
                     Text("Allowed: --service-token-id and --service-token-secret, or --header (-H) for Cloudflare Access authentication. Quote header values containing spaces.", color = Color.Gray, modifier = Modifier.padding(horizontal = 16.dp))
                     cloudflaredError?.let { Text(it, color = Color.Red, modifier = Modifier.padding(16.dp)) }
-                } else if (proxyType == com.farside.workspace.data.ProxyType.LOCAL) {
-                    SettingsTextField(proxyCommand, { proxyCommand = it }, "Local Command (e.g. cloudflared access tcp...)")
-                } else if (proxyType != com.farside.workspace.data.ProxyType.NONE) {
+                } else if (proxyType == com.farside.workspace.data.ProxyType.SOCKS5 || proxyType == com.farside.workspace.data.ProxyType.HTTP) {
+                    Text("${proxyType.displayName} connections are not available yet.", color = Color.Gray, modifier = Modifier.padding(16.dp))
                     SettingsTextField(proxyHost, { proxyHost = it }, "Proxy Hostname or IP")
                     SettingsTextField(proxyPort, { proxyPort = it }, "Proxy Port")
                     SettingsTextField(proxyUser, { proxyUser = it }, "Proxy Username (Optional)")

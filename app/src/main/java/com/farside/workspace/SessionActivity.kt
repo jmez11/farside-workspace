@@ -8,6 +8,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.Modifier
+import androidx.compose.runtime.*
 import com.farside.workspace.data.ConnectionType
 import com.farside.workspace.data.ProfileManager
 
@@ -93,12 +94,17 @@ class SessionActivity : ComponentActivity() {
         }
 
         setContent {
+            val credential = profileManager.getCredentials().find { it.id == profile.credentialId }
+            var unlocked by remember { mutableStateOf(credential?.pinVerifier == null) }
             MaterialTheme(colorScheme = darkColorScheme()) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = androidx.compose.ui.graphics.Color.Transparent
                 ) {
-                    if (profile.type == ConnectionType.RDP) {
+                    if (!unlocked && credential != null) {
+                        com.farside.workspace.ui.CredentialPinDialog(credential,
+                            onUnlocked = { unlocked = true }, onCancel = { finish() })
+                    } else if (profile.type == ConnectionType.RDP) {
                         RdpSessionScreen(
                             session = profile,
                             windowInteraction = windowInteraction.value,

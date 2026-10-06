@@ -68,7 +68,7 @@ internal object SessionWindowSlots {
 
 internal object SessionWindowLauncher {
     fun intent(context: Context, profile: String, slot: Int) = Intent(context, SessionActivity::class.java).apply {
-        data = android.net.Uri.parse("multidesk://session/$profile/$slot")
+        data = android.net.Uri.parse("farside://session/$profile/$slot")
         putExtra("profileId", profile)
         putExtra(SessionWindowSlots.EXTRA_SLOT, slot)
         addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)

@@ -21,6 +21,8 @@ class RdpResizeInstrumentation : Instrumentation() {
     private var audioProbe: String? = null
     private var audioMode: String? = null
     private var inputOnly = false
+    private var credentialsOnly = false
+    private var proxiesOnly = false
     private var toolbarOnly = false
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(arguments)
@@ -32,6 +34,8 @@ class RdpResizeInstrumentation : Instrumentation() {
         audioProbe = arguments?.getString("audioProbe")
         audioMode = arguments?.getString("audioMode")
         inputOnly = arguments?.getString("inputOnly") == "true"
+        credentialsOnly = arguments?.getString("credentialsOnly") == "true"
+        proxiesOnly = arguments?.getString("proxiesOnly") == "true"
         toolbarOnly = arguments?.getString("toolbarOnly") == "true"
         start()
     }
@@ -47,6 +51,18 @@ class RdpResizeInstrumentation : Instrumentation() {
     override fun onStart() {
         val results = Bundle()
         try {
+            if (proxiesOnly) {
+                ProxyVerification(this).run()
+                results.putString("stream", "PASS: four proxy choices, selection/legacy handling and unsupported proxy rejection without direct TCP fallback.\n")
+                finish(0, results)
+                return
+            }
+            if (credentialsOnly) {
+                CredentialUiVerification(this).run()
+                results.putString("stream", "PASS: optional credential PIN setup/change/removal, protected edit/delete and session startup, wrong/cancel/correct PIN, persistent backoff, password encryption/IME and stable links.\n")
+                finish(0, results)
+                return
+            }
             cloudflaredHost?.let {
                 CloudflaredVerification(this).runLive(it, cloudflaredCredential)
                 results.putString("stream", "PASS: live Cloudflared RDP and cached reconnect.\n")
