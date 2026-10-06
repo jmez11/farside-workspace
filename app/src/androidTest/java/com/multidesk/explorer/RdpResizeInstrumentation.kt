@@ -14,6 +14,9 @@ import java.io.File
 /** On-device regression check: saved RDP profile, actual task resizes, full-frame captures. */
 class RdpResizeInstrumentation : Instrumentation() {
     private var lifecycleMode: String? = null
+    private var cloudflaredOnly = false
+    private var cloudflaredHost: String? = null
+    private var cloudflaredCredential: String? = null
     private var certificateMode: String? = null
     private var audioProbe: String? = null
     private var audioMode: String? = null
@@ -21,6 +24,9 @@ class RdpResizeInstrumentation : Instrumentation() {
     private var toolbarOnly = false
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(arguments)
+        cloudflaredOnly = arguments?.getString("cloudflaredOnly") == "true"
+        cloudflaredHost = arguments?.getString("cloudflaredHost")
+        cloudflaredCredential = arguments?.getString("cloudflaredCredential")
         lifecycleMode = arguments?.getString("lifecycleMode")
         certificateMode = arguments?.getString("certificateMode")
         audioProbe = arguments?.getString("audioProbe")
@@ -41,6 +47,18 @@ class RdpResizeInstrumentation : Instrumentation() {
     override fun onStart() {
         val results = Bundle()
         try {
+            cloudflaredHost?.let {
+                CloudflaredVerification(this).runLive(it, cloudflaredCredential)
+                results.putString("stream", "PASS: live Cloudflared RDP and cached reconnect.\n")
+                finish(0, results)
+                return
+            }
+            if (cloudflaredOnly) {
+                CloudflaredVerification(this).run()
+                results.putString("stream", "PASS: Cloudflared security and packaged process/authentication fixtures.\n")
+                finish(0, results)
+                return
+            }
             lifecycleMode?.let {
                 SessionLifecycleVerification(this).run(it)
                 results.putString("stream", "PASS: session lifecycle $it.\n")

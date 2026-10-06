@@ -403,7 +403,7 @@ fun ProxyTypeSelector(selectedType: com.multidesk.explorer.data.ProxyType, onTyp
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
     ) {
         TextField(
-            value = selectedType.name,
+            value = if (selectedType == com.multidesk.explorer.data.ProxyType.CLOUDFLARED) "Cloudflared" else selectedType.name,
             onValueChange = {},
             readOnly = true,
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
@@ -423,7 +423,7 @@ fun ProxyTypeSelector(selectedType: com.multidesk.explorer.data.ProxyType, onTyp
         ) {
             com.multidesk.explorer.data.ProxyType.values().forEach { selectionOption ->
                 DropdownMenuItem(
-                    text = { Text(selectionOption.name) },
+                    text = { Text(if (selectionOption == com.multidesk.explorer.data.ProxyType.CLOUDFLARED) "Cloudflared" else selectionOption.name) },
                     onClick = {
                         onTypeSelected(selectionOption)
                         expanded = false
@@ -571,7 +571,10 @@ fun AddProfileForm(
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
     
-    var proxyType by rememberSaveable { mutableStateOf(initialProfile?.proxyType ?: com.multidesk.explorer.data.ProxyType.NONE) }
+    var proxyType by rememberSaveable { mutableStateOf(if (initialProfile?.useCloudflare == true) com.multidesk.explorer.data.ProxyType.CLOUDFLARED else initialProfile?.proxyType ?: com.multidesk.explorer.data.ProxyType.NONE) }
+    var cloudflaredParameters by remember { mutableStateOf(initialProfile?.cloudflaredParameters ?: "") }
+    var showCloudflaredParameters by remember { mutableStateOf(false) }
+    var cloudflaredError by remember { mutableStateOf<String?>(null) }
     var proxyHost by rememberSaveable { mutableStateOf(initialProfile?.proxyHost ?: "") }
     var proxyPort by rememberSaveable { mutableStateOf(initialProfile?.proxyPort?.toString() ?: "") }
     var proxyUser by rememberSaveable { mutableStateOf(initialProfile?.proxyUser ?: "") }
@@ -633,6 +636,14 @@ fun AddProfileForm(
                         showValidationErrors = true
                         return@TextButton
                     }
+                    if (proxyType == com.multidesk.explorer.data.ProxyType.CLOUDFLARED) {
+                        cloudflaredError = runCatching {
+                            require(type == ConnectionType.RDP) { "Cloudflared is currently supported for RDP connections." }
+                            com.multidesk.explorer.tunnel.CloudflaredOptions.hostname(host)
+                            com.multidesk.explorer.tunnel.CloudflaredOptions.parse(cloudflaredParameters)
+                        }.exceptionOrNull()?.message
+                        if (cloudflaredError != null) return@TextButton
+                    }
                     
                     onSave(
                         ConnectionProfile(
@@ -654,6 +665,7 @@ fun AddProfileForm(
                         proxyPass = proxyPass.takeIf { it.isNotBlank() },
                         proxyExclude = proxyExclude.takeIf { it.isNotBlank() },
                         proxyCommand = proxyCommand.takeIf { it.isNotBlank() },
+                        cloudflaredParameters = cloudflaredParameters,
                         soundRedirection = soundRedirection,
                         redirectMicrophone = redirectMicrophone && com.multidesk.explorer.hasMicrophonePermission(context),
                         redirectStorage = redirectStorage,
@@ -885,7 +897,15 @@ fun AddProfileForm(
                 
                 SettingsHeader("Proxy Settings")
                 ProxyTypeSelector(proxyType, { proxyType = it })
-                if (proxyType == com.multidesk.explorer.data.ProxyType.LOCAL) {
+                if (proxyType == com.multidesk.explorer.data.ProxyType.CLOUDFLARED) {
+                    Text("Uses the connection hostname with cloudflared access rdp. Browser sign-in opens when needed; tokens stay in private app storage.", color = Color.Gray, modifier = Modifier.padding(16.dp))
+                    SettingsTextField(cloudflaredParameters, { cloudflaredParameters = it; cloudflaredError = null }, "Extra parameters (optional)",
+                        visualTransformation = if (showCloudflaredParameters) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(autoCorrect = false, keyboardType = androidx.compose.ui.text.input.KeyboardType.Password))
+                    SettingsSwitchRow("Show Cloudflared parameters", showCloudflaredParameters, { showCloudflaredParameters = it })
+                    Text("Allowed: --service-token-id and --service-token-secret, or --header (-H) for Cloudflare Access authentication. Quote header values containing spaces.", color = Color.Gray, modifier = Modifier.padding(horizontal = 16.dp))
+                    cloudflaredError?.let { Text(it, color = Color.Red, modifier = Modifier.padding(16.dp)) }
+                } else if (proxyType == com.multidesk.explorer.data.ProxyType.LOCAL) {
                     SettingsTextField(proxyCommand, { proxyCommand = it }, "Local Command (e.g. cloudflared access tcp...)")
                 } else if (proxyType != com.multidesk.explorer.data.ProxyType.NONE) {
                     SettingsTextField(proxyHost, { proxyHost = it }, "Proxy Hostname or IP")

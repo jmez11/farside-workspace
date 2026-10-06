@@ -7,7 +7,7 @@ enum class ConnectionType {
 }
 
 enum class ProxyType {
-    NONE, SOCKS4, SOCKS5, HTTP, LOCAL, TELNET
+    NONE, SOCKS4, SOCKS5, HTTP, LOCAL, TELNET, CLOUDFLARED
 }
 
 enum class SoundRedirection {
@@ -35,6 +35,7 @@ data class ConnectionProfile(
     val proxyPass: String? = null,
     val proxyExclude: String? = null,
     val proxyCommand: String? = null,
+    val cloudflaredParameters: String = "",
     
     // RDP specific options
     val soundRedirection: SoundRedirection = SoundRedirection.PLAY_ON_DEVICE,
@@ -72,6 +73,8 @@ data class ConnectionProfile(
         json.put("proxyPass", proxyPass)
         json.put("proxyExclude", proxyExclude)
         json.put("proxyCommand", proxyCommand)
+        if (cloudflaredParameters.isNotEmpty()) json.put("cloudflaredParametersEncrypted",
+            android.util.Base64.encodeToString(com.multidesk.explorer.CredentialManager.encrypt(cloudflaredParameters), android.util.Base64.NO_WRAP))
         
         json.put("soundRedirection", soundRedirection.name)
         json.put("redirectMicrophone", redirectMicrophone)
@@ -113,6 +116,8 @@ data class ConnectionProfile(
                 proxyPass = if (json.has("proxyPass") && !json.isNull("proxyPass")) json.getString("proxyPass") else null,
                 proxyExclude = if (json.has("proxyExclude") && !json.isNull("proxyExclude")) json.getString("proxyExclude") else null,
                 proxyCommand = if (json.has("proxyCommand") && !json.isNull("proxyCommand")) json.getString("proxyCommand") else null,
+                cloudflaredParameters = if (json.has("cloudflaredParametersEncrypted"))
+                    com.multidesk.explorer.CredentialManager.decrypt(android.util.Base64.decode(json.getString("cloudflaredParametersEncrypted"), android.util.Base64.NO_WRAP)) else "",
                 
                 soundRedirection = try { SoundRedirection.valueOf(sRedirectStr) } catch (e: Exception) { SoundRedirection.PLAY_ON_DEVICE },
                 redirectMicrophone = json.optBoolean("redirectMicrophone", false),

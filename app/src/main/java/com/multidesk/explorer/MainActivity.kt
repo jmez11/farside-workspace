@@ -58,7 +58,6 @@ import metavrx.layout.window.compose.layout.size
 import android.content.Intent
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
-import com.multidesk.explorer.tunnel.CloudflaredService
 import com.multidesk.explorer.data.ConnectionProfile
 import com.multidesk.explorer.data.ConnectionType
 import com.multidesk.explorer.data.ProfileManager
@@ -241,13 +240,14 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
     var connectionFailed by remember { mutableStateOf(false) }
     var connectFailureReason by remember { mutableStateOf("") }
     var disconnectedReason by remember { mutableStateOf<String?>(null) }
+    var tunnelStatus by remember { mutableStateOf("") }
     val certificates = remember(session.id) {
         RdpCertificateVerifier(context, session.host, session.port, { certificateRequest = it })
     }
     val connection = remember(session.id) {
         RdpSessionConnection(context, effectiveSession, rdpBridge, certificates, onDisconnected = { reason, established ->
             if (established) disconnectedReason = reason else connectFailureReason = reason
-        }) {
+        }, onStatus = { tunnelStatus = it }) {
             rdpInstance = it
             connectionFailed = it == 0L
             onInstanceCreated(it)
@@ -260,6 +260,12 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
         }
     }
     certificateRequest?.let { RdpCertificateDialog(it) }
+    if (tunnelStatus.isNotEmpty() && !connectionFailed && disconnectedReason == null) AlertDialog(
+        onDismissRequest = {},
+        title = { Text("Cloudflared") },
+        text = { Text(tunnelStatus) },
+        confirmButton = { TextButton(onClick = onClose) { Text("Cancel") } },
+    )
     if (connectionFailed) AlertDialog(
         onDismissRequest = { (context as? android.app.Activity)?.finish() },
         title = { Text("Connection failed") },

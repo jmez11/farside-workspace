@@ -44,6 +44,7 @@ android {
     }
     
     ndkVersion = "26.1.10909125"
+    packaging { jniLibs { useLegacyPackaging = true; keepDebugSymbols += "**/libcloudflared.so" } }
 }
 
 dependencies {

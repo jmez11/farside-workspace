@@ -10,13 +10,10 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import kotlinx.coroutines.*
-import java.io.File
-import java.io.InputStream
-import java.io.FileOutputStream
 
 class CloudflaredService : Service() {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private var process: Process? = null
+    private var tunnel: CloudflaredTunnel? = null
 
     companion object {
         const val CHANNEL_ID = "CloudflaredTunnelChannel"
@@ -43,7 +40,7 @@ class CloudflaredService : Service() {
             startForeground(NOTIFICATION_ID, buildNotification(hostname))
             startTunnel(hostname, localPort)
             
-            return START_STICKY
+            return START_NOT_STICKY
         } else if (intent?.action == ACTION_STOP) {
             stopTunnel()
             stopSelf()
@@ -54,57 +51,24 @@ class CloudflaredService : Service() {
     }
 
     private fun startTunnel(hostname: String, localPort: Int) {
+        if (tunnel != null) return
+        val active = CloudflaredTunnel(applicationContext)
+        tunnel = active
         scope.launch {
             try {
-                val executable = extractCloudflaredBinary()
-                if (executable == null) {
-                    Log.e("CloudflaredService", "Could not extract cloudflared binary")
-                    stopSelf()
-                    return@launch
-                }
-
-                val pb = ProcessBuilder(
-                    executable.absolutePath,
-                    "access",
-                    "tcp",
-                    "--hostname", hostname,
-                    "--url", "localhost:$localPort"
-                )
-                pb.redirectErrorStream(true)
-                process = pb.start()
-                
-                val reader = process?.inputStream?.bufferedReader()
-                var line: String?
-                while (reader?.readLine().also { line = it } != null) {
-                    Log.i("CloudflaredService", "[cloudflared] $line")
-                }
-                
-                Log.w("CloudflaredService", "Cloudflared process exited with code ${process?.exitValue()}")
+                active.start(hostname, "", {}, { stopSelf() }, localPort)
             } catch (e: Exception) {
-                Log.e("CloudflaredService", "Error running cloudflared: ${e.message}", e)
-            } finally {
+                Log.e("CloudflaredService", "Tunnel setup failed: ${e.message}")
+                active.close()
                 stopSelf()
             }
         }
     }
 
     private fun stopTunnel() {
-        process?.destroy()
-        process = null
+        tunnel?.close()
+        tunnel = null
         scope.cancel()
-    }
-
-    private fun extractCloudflaredBinary(): File? {
-        // In a real implementation, we would extract the binary from res/raw or assets
-        // For this spike/implementation, we assume it's in the app's files directory.
-        val binaryFile = File(filesDir, "cloudflared")
-        if (!binaryFile.exists()) {
-            // Mock: Create a dummy shell script that just loops, for testing without the real binary.
-            // In reality, we'd copy it from assets: assets.open("cloudflared-arm64").use { ... }
-            binaryFile.writeText("#!/system/bin/sh\necho 'Mock cloudflared starting'\nwhile true; do sleep 1; done\n")
-            binaryFile.setExecutable(true)
-        }
-        return binaryFile
     }
 
     private fun createNotificationChannel() {
@@ -132,7 +96,7 @@ class CloudflaredService : Service() {
         return builder
             .setContentTitle("Cloudflare Tunnel Active")
             .setContentText("Tunneling to $hostname")
-            // .setSmallIcon(R.drawable.ic_tunnel) // Need an icon resource
+            .setSmallIcon(android.R.drawable.stat_sys_upload)
             .build()
     }
 

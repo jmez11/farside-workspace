@@ -1,0 +1,93 @@
+--- a/cmd/cloudflared/access/cmd.go
++++ b/cmd/cloudflared/access/cmd.go
+@@ -100,6 +100,9 @@
+ 					scoped to your identity, the application you intend to reach, and valid for a session duration set by your
+ 					administrator. cloudflared stores the token in local storage.`,
+ 					Flags: []cli.Flag{
++                        &cli.StringFlag{Name: sshTokenIDFlag},
++                        &cli.StringFlag{Name: sshTokenSecretFlag},
++                        &cli.StringSliceFlag{Name: sshHeaderFlag},
+ 						&cli.BoolFlag{
+ 							Name:    loginQuietFlag,
+ 							Aliases: []string{"q"},
+@@ -257,6 +260,28 @@
+ 		return err
+ 	}
+ 
++
++    // Quest preflight: try explicit Access credentials before fetching a user JWT.
++    headers := parseRequestHeaders(c.StringSlice(sshHeaderFlag))
++    if c.IsSet(sshTokenIDFlag) { headers.Set(cfAccessClientIDHeader, c.String(sshTokenIDFlag)) }
++    if c.IsSet(sshTokenSecretFlag) { headers.Set(cfAccessClientSecretHeader, c.String(sshTokenSecretFlag)) }
++    if len(headers) > 0 {
++        req, err := http.NewRequest(http.MethodGet, appURL.String(), nil)
++        if err != nil { return err }
++        req.Header = headers
++        q := req.URL.Query()
++        q.Set("cloudflared_token_check", "true")
++        req.URL.RawQuery = q.Encode()
++        client := &http.Client{Timeout: 15 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
++        resp, err := client.Do(req)
++        if err != nil { return err }
++        resp.Body.Close()
++        if resp.StatusCode >= 200 && resp.StatusCode < 500 &&
++            !(resp.StatusCode >= 300 && resp.StatusCode < 400) &&
++            resp.StatusCode != 401 && resp.StatusCode != 403 {
++            if c.Bool(loginQuietFlag) { fmt.Fprintln(os.Stderr, "MULTIDESK_AUTH_CREDENTIALS"); return nil }
++        }
++    }
+ 	appInfo, err := token.GetAppInfo(appURL)
+ 	if err != nil {
+ 		return err
+@@ -267,6 +292,8 @@
+ 		return err
+ 	}
+ 
++
++    if c.Bool(loginQuietFlag) { fmt.Fprintln(os.Stderr, "MULTIDESK_AUTH_USER"); return nil }
+ 	cfdToken, err := token.GetAppTokenIfExists(appInfo)
+ 	if err != nil {
+ 		fmt.Fprintln(os.Stderr, "Unable to find token for provided application.")
+@@ -551,6 +578,9 @@
+ 	if c.IsSet(sshTokenSecretFlag) {
+ 		headers.Add(cfAccessClientSecretHeader, c.String(sshTokenSecretFlag))
+ 	}
++
++    // A failed explicit-credential preflight falls back to a cached/browser user JWT.
++    if c.Command.Name == "login" { headers = make(http.Header) }
+ 	options := &carrier.StartOptions{AppInfo: appInfo, OriginURL: appUrl.String(), Headers: headers, AutoCloseInterstitial: c.Bool(cfdflags.AutoCloseInterstitial), IsFedramp: c.Bool(fedrampFlag)}
+ 
+ 	if valid, err := isTokenValid(options, log); err != nil {
+--- a/token/shell.go
++++ b/token/shell.go
+@@ -1,6 +1,8 @@
+ package token
++
++import "errors"
+ 
+ // OpenBrowser opens the specified URL in the default browser of the user
+ func OpenBrowser(url string) error {
+-	return getBrowserCmd(url).Start()
++	return errors.New("browser delegated to Android app")
+ }
+--- a/carrier/carrier.go
++++ b/carrier/carrier.go
+@@ -69,6 +69,7 @@
+ 	if err != nil {
+ 		return errors.Wrap(err, "failed to start forwarding server")
+ 	}
++	fmt.Fprintln(os.Stderr, "MULTIDESK_LISTENER_READY", listener.Addr().String())
+ 	return Serve(conn, listener, shutdownC, options)
+ }
+ 
+--- a/token/token.go
++++ b/token/token.go
+@@ -398,7 +398,7 @@
+ 
+ 	domain := resp.Header.Get(appDomainHeader)
+ 	if domain == "" {
+-		return nil, errors.New("Empty app domain")
++		domain = reqURL.Hostname()
+ 	}
+ 
+ 	return &AppInfo{location.Hostname(), aud, domain}, nil
