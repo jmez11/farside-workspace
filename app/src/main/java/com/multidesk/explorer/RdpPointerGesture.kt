@@ -1,7 +1,12 @@
 package com.multidesk.explorer
 
 import android.view.MotionEvent
+import android.view.ViewConfiguration
 import kotlin.math.hypot
+
+/** Wait half a second before drawing the one-second clockwise hold indicator. */
+internal fun rightClickBoxProgress(elapsedMillis: Long): Float =
+    ((elapsedMillis - 500L) / 1000f).coerceIn(0f, 1f)
 
 /** Horizon delivers controller trigger and hand pinch as Android touch down/up. */
 internal class RdpPointerGesture(
@@ -17,11 +22,14 @@ internal class RdpPointerGesture(
     private var started = 0L
     private var lastX = 0f
     private var lastY = 0f
+    private var previousTapTime = -1L
+    private var previousTapX = 0f
+    private var previousTapY = 0f
 
     fun onTouch(event: MotionEvent) {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                cancel()
+                if (active) cancel()
                 active = true
                 startX = event.x
                 startY = event.y
@@ -39,6 +47,7 @@ internal class RdpPointerGesture(
                 lastX = event.x
                 lastY = event.y
                 if (!dragging && hypot(event.x - startX, event.y - startY) > touchSlop) {
+                    previousTapTime = -1L
                     dragging = true
                     showHold(null, 0L)
                     send(startX, startY, button or FreeRDPBridge.PTR_FLAGS_DOWN)
@@ -47,12 +56,23 @@ internal class RdpPointerGesture(
             }
             MotionEvent.ACTION_UP -> if (active) {
                 showHold(null, 0L)
-                if (dragging) send(event.x, event.y, button)
+                if (dragging) {
+                    previousTapTime = -1L
+                    send(event.x, event.y, button)
+                }
                 else {
                     val click = if (event.eventTime - started >= 1000L)
                         FreeRDPBridge.PTR_FLAGS_BUTTON2 else FreeRDPBridge.PTR_FLAGS_BUTTON1
-                    send(startX, startY, click or FreeRDPBridge.PTR_FLAGS_DOWN)
-                    send(startX, startY, click)
+                    val nearbySecondTap = click == FreeRDPBridge.PTR_FLAGS_BUTTON1 && previousTapTime >= 0L &&
+                        event.eventTime - previousTapTime in 0L..ViewConfiguration.getDoubleTapTimeout().toLong() &&
+                        hypot(startX - previousTapX, startY - previousTapY) <= touchSlop * 2f
+                    val clickX = if (nearbySecondTap) previousTapX else startX
+                    val clickY = if (nearbySecondTap) previousTapY else startY
+                    send(clickX, clickY, click or FreeRDPBridge.PTR_FLAGS_DOWN)
+                    send(clickX, clickY, click)
+                    previousTapTime = if (click == FreeRDPBridge.PTR_FLAGS_BUTTON1 && !nearbySecondTap) event.eventTime else -1L
+                    previousTapX = clickX
+                    previousTapY = clickY
                 }
                 active = false
             }
@@ -61,6 +81,7 @@ internal class RdpPointerGesture(
     }
 
     fun cancel() {
+        previousTapTime = -1L
         if (active && dragging) send(lastX, lastY, button)
         active = false
         dragging = false

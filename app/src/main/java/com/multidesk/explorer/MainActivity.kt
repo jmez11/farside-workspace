@@ -326,6 +326,13 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
     var toolbarActivity by remember { mutableStateOf(0L) }
     var toolbarBounds by remember { mutableStateOf(Rect.Zero) }
     val remotePointer = remember { intArrayOf(0, 0) }
+    DisposableEffect(rdpInstance) {
+        val activity = context as? SessionActivity
+        activity?.remoteScroll = { flags ->
+            if (rdpInstance != 0L) rdpBridge.sendMouseEvent(rdpInstance, remotePointer[0], remotePointer[1], flags)
+        }
+        onDispose { activity?.remoteScroll = null }
+    }
     var holdPoint by remember { mutableStateOf<Offset?>(null) }
     var holdStarted by remember { mutableStateOf(0L) }
     var holdProgress by remember { mutableStateOf(0f) }
@@ -345,7 +352,7 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
         holdProgress = 0f
         if (holdStarted != 0L) {
             while (holdProgress < 1f) {
-                withFrameNanos { holdProgress = ((SystemClock.uptimeMillis() - holdStarted) / 1000f).coerceIn(0f, 1f) }
+                withFrameNanos { holdProgress = rightClickBoxProgress(SystemClock.uptimeMillis() - holdStarted) }
             }
         }
     }
@@ -514,7 +521,7 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
             }
         )
         
-        holdPoint?.let { point ->
+        holdPoint?.takeIf { holdProgress > 0f }?.let { point ->
             Canvas(Modifier.fillMaxSize()) {
                 val half = (8.dp.toPx() + 8.dp.toPx() * holdProgress)
                 val corners = listOf(

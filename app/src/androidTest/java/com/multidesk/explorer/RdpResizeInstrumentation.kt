@@ -60,8 +60,10 @@ class RdpResizeInstrumentation : Instrumentation() {
                 return
             }
             verifyPointerGestures()
+            verifyDoubleTapTolerance()
+            verifyControllerScroll()
             if (inputOnly) {
-                results.putString("stream", "PASS: tap, hold threshold, drag, cancel, secondary mouse, multitouch.\n")
+                results.putString("stream", "PASS: pointer gestures, double-tap position tolerance and four-direction controller wheel/deadzone/repeat/stop.\n")
                 finish(0, results)
                 return
             }
@@ -342,7 +344,82 @@ class RdpResizeInstrumentation : Instrumentation() {
         }
     }
 
+    private fun verifyControllerScroll() {
+        val sent = mutableListOf<Int>()
+        lateinit var scroll: RdpControllerScroll
+        fun motion(x: Float, y: Float, source: Int = android.view.InputDevice.SOURCE_JOYSTICK) {
+            val coords = android.view.MotionEvent.PointerCoords().apply {
+                setAxisValue(android.view.MotionEvent.AXIS_X, x)
+                setAxisValue(android.view.MotionEvent.AXIS_Y, y)
+            }
+            val event = android.view.MotionEvent.obtain(0, android.os.SystemClock.uptimeMillis(),
+                android.view.MotionEvent.ACTION_MOVE, 1,
+                arrayOf(android.view.MotionEvent.PointerProperties().apply { id = 0 }),
+                arrayOf(coords), 0, 0, 1f, 1f, 0, 0, source, 0)
+            try { check(scroll.onMotion(event) == (source == android.view.InputDevice.SOURCE_JOYSTICK)) }
+            finally { event.recycle() }
+        }
+        runOnMainSync {
+            scroll = RdpControllerScroll { sent.add(it) }
+            motion(0.1f, -0.1f)
+            check(sent.isEmpty())
+            for ((x, y, expected) in listOf(Triple(0f, -1f, 0x278), Triple(0f, 1f, 0x388),
+                Triple(-1f, 0f, 0x588), Triple(1f, 0f, 0x478))) {
+                motion(x, y)
+                check(sent.last() == expected) { "Incorrect wheel direction: ${sent.last()}" }
+                motion(0f, 0f)
+            }
+            motion(1f, -1f)
+        }
+        Thread.sleep(250)
+        var stoppedCount = 0
+        runOnMainSync {
+            check(sent.size >= 10) { "Held stick did not repeat both axes" }
+            scroll.stop()
+            stoppedCount = sent.size
+            motion(1f, 1f, android.view.InputDevice.SOURCE_TOUCHSCREEN)
+        }
+        Thread.sleep(200)
+        runOnMainSync { check(sent.size == stoppedCount) { "Scroll continued after stop" } }
+    }
+
+    private fun verifyDoubleTapTolerance() {
+        val sent = mutableListOf<Triple<Float, Float, Int>>()
+        val gesture = RdpPointerGesture(8f, { x, y, flags -> sent.add(Triple(x, y, flags)) }, { _, _ -> })
+        fun event(action: Int, time: Long, x: Float, y: Float = 30f) {
+            val motion = android.view.MotionEvent.obtain(0, time, action, x, y, 0)
+            try { gesture.onTouch(motion) } finally { motion.recycle() }
+        }
+        fun pair(x: Float, y: Float, delay: Long, expectedX: Float, expectedY: Float) {
+            gesture.cancel()
+            sent.clear()
+            event(android.view.MotionEvent.ACTION_DOWN, 1000, 30f)
+            event(android.view.MotionEvent.ACTION_UP, 1050, 30f)
+            event(android.view.MotionEvent.ACTION_DOWN, 1050 + delay, x, y)
+            event(android.view.MotionEvent.ACTION_UP, 1100 + delay, x, y)
+            check(sent.size == 4 && sent[2].first == expectedX && sent[2].second == expectedY) {
+                "Incorrect double-tap snapping: $sent"
+            }
+        }
+        pair(42f, 38f, 100, 30f, 30f) // Diagonal jitter beyond ordinary drag slop, within double-tap radius.
+        pair(46f, 30f, 100, 30f, 30f) // Inclusive radius boundary.
+        pair(47f, 30f, 100, 47f, 30f)
+        pair(42f, 38f, android.view.ViewConfiguration.getDoubleTapTimeout().toLong(), 42f, 38f)
+        gesture.cancel()
+        sent.clear()
+        event(android.view.MotionEvent.ACTION_DOWN, 2000, 30f)
+        event(android.view.MotionEvent.ACTION_UP, 2050, 30f)
+        gesture.cancel()
+        event(android.view.MotionEvent.ACTION_DOWN, 2100, 42f)
+        event(android.view.MotionEvent.ACTION_UP, 2150, 42f)
+        check(sent[2].first == 42f) { "Cancellation retained a double-tap candidate" }
+    }
+
     private fun verifyPointerGestures() {
+        for ((elapsed, expected) in listOf(0L to 0f, 499L to 0f, 500L to 0f,
+            750L to 0.25f, 1000L to 0.5f, 1500L to 1f, 2000L to 1f)) {
+            check(rightClickBoxProgress(elapsed) == expected) { "Wrong right-click box progress at $elapsed" }
+        }
         val sent = mutableListOf<Int>()
         var indicator = false
         val gesture = RdpPointerGesture(8f, { _, _, flags -> sent.add(flags) }, { point, _ -> indicator = point != null })

@@ -12,6 +12,18 @@ import com.multidesk.explorer.data.ConnectionType
 import com.multidesk.explorer.data.ProfileManager
 
 class SessionActivity : ComponentActivity() {
+    internal var remoteScroll: ((Int) -> Unit)? = null
+    private val controllerScroll = RdpControllerScroll { remoteScroll?.invoke(it) }
+
+    override fun dispatchGenericMotionEvent(event: android.view.MotionEvent): Boolean {
+        if (rdpInstance != 0L && remoteScroll != null && controllerScroll.onMotion(event)) return true
+        return super.dispatchGenericMotionEvent(event)
+    }
+
+    override fun onPause() {
+        controllerScroll.stop()
+        super.onPause()
+    }
     internal var rdpInstance = 0L
         private set
     private val windowInteraction = androidx.compose.runtime.mutableStateOf(0L)
@@ -47,6 +59,7 @@ class SessionActivity : ComponentActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
+        if (!hasFocus) controllerScroll.stop()
         // System window affordances may take focus while moving/resizing the panel.
         windowInteraction.value += 1L
     }

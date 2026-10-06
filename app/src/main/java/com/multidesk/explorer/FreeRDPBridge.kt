@@ -34,6 +34,7 @@ class FreeRDPBridge {
         
         // Mouse flags based on PTR_FLAGS
         const val PTR_FLAGS_WHEEL = 0x0200
+        const val PTR_FLAGS_HWHEEL = 0x0400
         const val PTR_FLAGS_WHEEL_NEGATIVE = 0x0100
         const val PTR_FLAGS_MOVE = 0x0800
         const val PTR_FLAGS_DOWN = 0x8000

@@ -19,7 +19,8 @@
 
 ## Input Pipeline
 - **Quest Controllers**: Raycast to window coordinates and translated into RDP mouse events.
-- **RDP gestures**: Controller trigger/hand pinch arrive as Android touch events. A stationary 1-second hold draws a clockwise square and sends right-click on release; short taps click left and motion beyond touch slop starts left drag.
+- **RDP gestures**: Controller trigger/hand pinch arrive as Android touch events. The clockwise square stays hidden for 0.5 seconds, then draws over the next second. A stationary hold of at least one second sends right-click on release; short taps click left and motion beyond touch slop starts left drag. `inputOnly` checks indicator timing at the delay/drawing/completion boundaries.
+- Nearby second touch taps within Android's double-tap timeout reuse the first click position within twice touch slop, allowing ray jitter while the remote OS still owns double-click recognition. Drag/hold/mouse input and cancellation clear the candidate; drag threshold stays unchanged. `inputOnly` checks diagonal/radius/time boundaries and cancellation.
 - **Keyboard**: Meta IME plus `RemoteExtraKeys.kt`: Win, Shift, Ctrl, Alt, AltGr, Del, Esc, Tab, 123. First five latch RDP down/up with teal held indicators and release on IME closure. `123` opens the second level below the strip and changes to `ABC` to close it: F1-F12, right-click at the last remote pointer position, Print Screen, Backspace, keypad Enter/arithmetic, and Home/End/Page/Insert/Delete/Enter/arrows. Number Keys swaps the function bank for digits/decimal; Function Keys restores it. Expansion preserves held modifiers; narrow panels scroll. Extended RDP scancodes distinguish right Alt/Win/navigation/keypad keys.
 - RDP surface touches request container focus only when the software keyboard is closed. While open, the hidden IME editor retains focus through remote taps, holds, and drags; explicit toolbar/IME dismissal still removes it and restores desktop focus.
 
@@ -56,6 +57,7 @@
 ---
 
 ## Development and Device Validation
+- Controller scrolling: `SessionActivity.dispatchGenericMotionEvent` routes RDP joystick X/Y and Android scroll axes through `RdpControllerScroll` to FreeRDP vertical/horizontal wheel flags at the last remote pointer. Joystick uses a 0.2/device deadzone and 100ms repeat; neutral/pause/focus loss stop it. Remote applications control wheel targeting. `inputOnly` covers synthetic four directions, diagonal repeat, deadzone, stop and unrelated-source rejection; physical Horizon delivery and remote application wheel effects remain manual checks.
 - Build/cache/scratch outputs are disposable; the 2026-10-05 cleanup removed local `build/verification/` evidence. Historical validation outcomes remain in `PROGRESS.md`; rerun the relevant harness to regenerate artifacts.
 - Store artwork lives in root `assets/`, separate from packaged Android resources. Manifest icon/roundIcon reference `app/src/main/res/mipmap-nodpi/ic_launcher.png`, an exact copy of `assets/spatialized/farside-tile-preview-512x512.png`. Validate the installed APK's launcher path with `aapt dump badging` and compare packaged image bytes to that source; Home presentation still requires visual inspection.
 - Fresh checkout: apply the checkpoint's existing Termux edit with `git -C termux-app apply ../tools/termux-terminal-session.patch` if `TerminalSession` is still final; this workspace already has it applied.
