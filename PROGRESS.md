@@ -1,6 +1,7 @@
 # Progress: MultiDesk Explorer
 
 ## Current Status (2026-10-05)
+- Workspace cleanup: removed scratch files, Gradle/Kotlin caches, app/submodule build outputs and native CMake intermediates. Historical `build/verification/` logs, screenshots and pulled APKs listed below were removed with the build directory; prior results remain recorded here. Source/assets and the existing Termux patch are preserved. Cleanup required no app/device validation.
 - Farside assets: complete replacement ZIP passed CRC checks; all 12 files extracted into root `assets/` and ZIP deleted. Manifest icon/roundIcon use `@mipmap/ic_launcher`, copied byte-for-byte from `assets/spatialized/farside-tile-preview-512x512.png`. Debug build and Quest install passed; installed APK was pulled and its launcher resource/path and image bytes verified against the source. App launch passed. Evidence: `build/verification/farside-icon-{build,install,badging,check,launch,device}.log`; installed APK: `farside-icon-installed.apk` in that directory. Remaining manual check: icon appearance/caching in Horizon Home; package verification does not establish Home's visual presentation.
 - Android/Compose app and FreeRDP JNI spike run on Quest 3; phase 2 (multiple sessions) remains in progress.
 - Current arm64 debug APK is installed on Quest 3; disconnect, placement, certificate and expanded-keyboard focused checks passed. Native debug code uses `-O2` with symbols.

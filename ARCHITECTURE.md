@@ -56,6 +56,7 @@
 ---
 
 ## Development and Device Validation
+- Build/cache/scratch outputs are disposable; the 2026-10-05 cleanup removed local `build/verification/` evidence. Historical validation outcomes remain in `PROGRESS.md`; rerun the relevant harness to regenerate artifacts.
 - Store artwork lives in root `assets/`, separate from packaged Android resources. Manifest icon/roundIcon reference `app/src/main/res/mipmap-nodpi/ic_launcher.png`, an exact copy of `assets/spatialized/farside-tile-preview-512x512.png`. Validate the installed APK's launcher path with `aapt dump badging` and compare packaged image bytes to that source; Home presentation still requires visual inspection.
 - Fresh checkout: apply the checkpoint's existing Termux edit with `git -C termux-app apply ../tools/termux-terminal-session.patch` if `TerminalSession` is still final; this workspace already has it applied.
 - Default workflow for app changes: command-line build, ADB install on the connected Quest, relevant on-device regression tests, log/screenshot inspection, fixes, and rerun of affected checks. Extend the harness when the requested behavior needs new coverage.
