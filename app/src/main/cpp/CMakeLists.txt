@@ -64,6 +64,9 @@ set(WITH_MANPAGES OFF CACHE BOOL "Disable manpages" FORCE)
 set(WITH_CLIENT_SDL OFF CACHE BOOL "Disable SDL client" FORCE)
 
 
+set(CHANNEL_RDPSND_CLIENT ON CACHE BOOL "RDP playback" FORCE)
+set(CHANNEL_AUDIN_CLIENT ON CACHE BOOL "RDP microphone" FORCE)
+
 # 5. Build FreeRDP natively
 add_subdirectory(freerdp)
 
@@ -76,7 +79,7 @@ set_property(TARGET freerdp-codecs PROPERTY SOURCES ${quest_codec_sources}
 target_include_directories(freerdp-codecs PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/freerdp/libfreerdp/codec")
 
 # 6. Build our JNI Bridge
-add_library(freerdp-jni SHARED freerdp_bridge.cpp)
+add_library(freerdp-jni SHARED freerdp_bridge.cpp quest_audio.cpp)
 target_compile_features(freerdp-jni PRIVATE cxx_std_17)
 target_include_directories(freerdp-jni PRIVATE 
     freerdp/include
@@ -99,4 +102,5 @@ target_link_libraries(
         ${dl-lib}
         ${jnigraphics-lib}
         android
+        aaudio
 )

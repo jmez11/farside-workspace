@@ -21,6 +21,10 @@ import kotlin.math.roundToInt
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.Canvas
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MicOff
+import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -211,11 +215,34 @@ fun mapAndroidKeyCodeToXt(keyCode: Int): Int {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Unit, onClose: () -> Unit, windowInteraction: Long = 0L) {
+    val permissionContext = LocalContext.current
+    var microphoneReady by remember(session.id) {
+        mutableStateOf(!session.redirectMicrophone || hasMicrophonePermission(permissionContext))
+    }
+    var microphoneAllowed by remember(session.id) {
+        mutableStateOf(session.redirectMicrophone && hasMicrophonePermission(permissionContext))
+    }
+    val microphonePermission = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        microphoneAllowed = granted && hasMicrophonePermission(permissionContext)
+        microphoneReady = true
+    }
+    LaunchedEffect(session.id) {
+        if (!microphoneReady) microphonePermission.launch(android.Manifest.permission.RECORD_AUDIO)
+    }
+    if (!microphoneReady) {
+        Text("Waiting for microphone permission?", color = Color.White)
+        return
+    }
+    val effectiveSession = remember(session, microphoneAllowed) {
+        session.copy(redirectMicrophone = microphoneAllowed && hasMicrophonePermission(permissionContext))
+    }
     val rdpBridge = remember { FreeRDPBridge() }
     var rdpInstance by remember { mutableStateOf(0L) }
     val context = LocalContext.current
     val connection = remember(session.id) {
-        RdpSessionConnection(context, session, rdpBridge) {
+        RdpSessionConnection(context, effectiveSession, rdpBridge) {
             rdpInstance = it
             onInstanceCreated(it)
         }
@@ -254,6 +281,18 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
     val density = LocalDensity.current
     var offsetY by remember { mutableStateOf(with(density) { 16.dp.toPx() }) }
     var showZoomSlider by remember { mutableStateOf(false) }
+    var speakerMuted by remember { mutableStateOf(false) }
+    var micMuted by remember { mutableStateOf(false) }
+    var micRecording by remember { mutableStateOf(false) }
+    LaunchedEffect(rdpInstance, speakerMuted, micMuted) {
+        if (rdpInstance != 0L) rdpBridge.setAudioMuted(rdpInstance, speakerMuted, micMuted)
+    }
+    LaunchedEffect(rdpInstance) {
+        while (rdpInstance != 0L) {
+            micRecording = rdpBridge.isMicrophoneRecording(rdpInstance)
+            delay(100)
+        }
+    }
 
     var isOverlayVisible by remember { mutableStateOf(true) }
     var toolbarPinned by remember { mutableStateOf(false) }
@@ -493,6 +532,17 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                     IconButton(onClick = { toolbarPinned = !toolbarPinned; revealToolbar() }) {
                         Icon(Icons.Default.PushPin, if (toolbarPinned) "Unpin toolbar" else "Keep toolbar visible",
                             tint = if (toolbarPinned) MaterialTheme.colorScheme.primary else Color.White)
+                    }
+                    IconButton(onClick = { speakerMuted = !speakerMuted; revealToolbar() }) {
+                        Icon(if (speakerMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
+                            if (speakerMuted) "Unmute speakers" else "Mute speakers", tint = Color.White)
+                    }
+                    if (effectiveSession.redirectMicrophone) {
+                        IconButton(onClick = { micMuted = !micMuted; revealToolbar() }) {
+                            Icon(if (micMuted) Icons.Default.MicOff else Icons.Default.Mic,
+                                if (micMuted) "Unmute microphone" else if (micRecording) "Mute microphone (recording)" else "Mute microphone",
+                                tint = if (!micMuted && micRecording) Color.Red else Color.White)
+                        }
                     }
                     IconButton(onClick = { showZoomSlider = !showZoomSlider }) {
                         Icon(Icons.Default.Search, "Zoom", tint = Color.White)

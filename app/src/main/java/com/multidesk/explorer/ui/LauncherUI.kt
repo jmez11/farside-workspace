@@ -9,6 +9,8 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -347,6 +349,7 @@ fun SettingsSwitchRow(label: String, checked: Boolean, onCheckedChange: (Boolean
     ) {
         Text(label, color = Color.White, style = MaterialTheme.typography.bodyMedium)
         Switch(
+            modifier = Modifier.semantics { contentDescription = label },
             checked = checked,
             onCheckedChange = onCheckedChange,
             colors = SwitchDefaults.colors(
@@ -578,7 +581,12 @@ fun AddProfileForm(
     
     // RDP Specific Options
     var soundRedirection by rememberSaveable { mutableStateOf(initialProfile?.soundRedirection ?: com.multidesk.explorer.data.SoundRedirection.PLAY_ON_DEVICE) }
-    var redirectMicrophone by rememberSaveable { mutableStateOf(initialProfile?.redirectMicrophone ?: true) }
+    var redirectMicrophone by rememberSaveable {
+        mutableStateOf((initialProfile?.redirectMicrophone ?: true) && com.multidesk.explorer.hasMicrophonePermission(context))
+    }
+    val microphonePermission = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { granted -> redirectMicrophone = granted && com.multidesk.explorer.hasMicrophonePermission(context) }
     var redirectStorage by rememberSaveable { mutableStateOf(initialProfile?.redirectStorage ?: true) }
     var redirectClipboard by rememberSaveable { mutableStateOf(initialProfile?.redirectClipboard ?: true) }
     var redirectLocation by rememberSaveable { mutableStateOf(initialProfile?.redirectLocation ?: true) }
@@ -647,7 +655,7 @@ fun AddProfileForm(
                         proxyExclude = proxyExclude.takeIf { it.isNotBlank() },
                         proxyCommand = proxyCommand.takeIf { it.isNotBlank() },
                         soundRedirection = soundRedirection,
-                        redirectMicrophone = redirectMicrophone,
+                        redirectMicrophone = redirectMicrophone && com.multidesk.explorer.hasMicrophonePermission(context),
                         redirectStorage = redirectStorage,
                         redirectClipboard = redirectClipboard,
                         redirectLocation = redirectLocation,
@@ -891,7 +899,11 @@ fun AddProfileForm(
                     SettingsHeader("Device & Audio Redirection")
                     // We can reuse ProxyTypeSelector logic for SoundRedirection dropdown if we wanted, or just a simple segmented control.
                     SettingsTextField(remoteApp, { remoteApp = it }, "RemoteApp Alias (e.g. ||cmd)")
-                    SettingsSwitchRow("Redirect Microphone", redirectMicrophone, { redirectMicrophone = it })
+                    SettingsSwitchRow("Redirect Microphone", redirectMicrophone, { enabled ->
+                        if (!enabled) redirectMicrophone = false
+                        else if (com.multidesk.explorer.hasMicrophonePermission(context)) redirectMicrophone = true
+                        else microphonePermission.launch(android.Manifest.permission.RECORD_AUDIO)
+                    })
                     SettingsSwitchRow("Redirect Camera", enableCamera, { enableCamera = it })
                     if (enableCamera) {
                         CameraSelector(selectedCameraId = cameraId.takeIf { it.isNotBlank() }, onCameraSelected = { cameraId = it })

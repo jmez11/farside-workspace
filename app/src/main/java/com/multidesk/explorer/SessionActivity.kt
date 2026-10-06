@@ -12,6 +12,8 @@ import com.multidesk.explorer.data.ConnectionType
 import com.multidesk.explorer.data.ProfileManager
 
 class SessionActivity : ComponentActivity() {
+    internal var rdpInstance = 0L
+        private set
     private val windowInteraction = androidx.compose.runtime.mutableStateOf(0L)
     private val movementObserver = WindowMovementObserver(this) { windowInteraction.value += 1L }
 
@@ -63,7 +65,7 @@ class SessionActivity : ComponentActivity() {
                         RdpSessionScreen(
                             session = profile,
                             windowInteraction = windowInteraction.value,
-                            onInstanceCreated = { /* Handle instance creation if needed */ },
+                            onInstanceCreated = { rdpInstance = it },
                             onClose = { finish() }
                         )
                     } else {

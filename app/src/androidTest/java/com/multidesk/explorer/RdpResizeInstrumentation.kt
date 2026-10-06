@@ -13,10 +13,14 @@ import java.io.File
 
 /** On-device regression check: saved RDP profile, actual task resizes, full-frame captures. */
 class RdpResizeInstrumentation : Instrumentation() {
+    private var audioProbe: String? = null
+    private var audioMode: String? = null
     private var inputOnly = false
     private var toolbarOnly = false
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(arguments)
+        audioProbe = arguments?.getString("audioProbe")
+        audioMode = arguments?.getString("audioMode")
         inputOnly = arguments?.getString("inputOnly") == "true"
         toolbarOnly = arguments?.getString("toolbarOnly") == "true"
         start()
@@ -33,6 +37,12 @@ class RdpResizeInstrumentation : Instrumentation() {
     override fun onStart() {
         val results = Bundle()
         try {
+            audioMode?.let {
+                RdpAudioVerification(this).run(it, audioProbe)
+                results.putString("stream", "PASS: RDP audio $it.\n")
+                finish(0, results)
+                return
+            }
             verifyPointerGestures()
             if (inputOnly) {
                 results.putString("stream", "PASS: tap, hold threshold, drag, cancel, secondary mouse, multitouch.\n")

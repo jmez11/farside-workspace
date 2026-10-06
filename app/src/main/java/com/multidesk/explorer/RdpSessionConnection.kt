@@ -49,7 +49,7 @@ internal class RdpSessionConnection(
                     Thread.sleep(2000)
                 }
                 instance = bridge.connect(host, port, profile.user, profile.pass, profile.remoteApp,
-                    profile.enableCamera, profile.cameraId, next)
+                    profile.enableCamera, profile.cameraId, profile.redirectMicrophone && hasMicrophonePermission(context), next)
                 val connected = instance
                 main.post { if (!closed.get()) onConnected(connected) }
             } else {

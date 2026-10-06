@@ -3,7 +3,11 @@ package com.multidesk.explorer
 import android.view.Surface
 
 class FreeRDPBridge {
-    external fun connect(hostname: String, port: Int, username: String, password: String, remoteApp: String?, enableCamera: Boolean, cameraId: String?, surface: Surface): Long
+    external fun connect(hostname: String, port: Int, username: String, password: String, remoteApp: String?, enableCamera: Boolean, cameraId: String?, enableMicrophone: Boolean, surface: Surface): Long
+    external fun setAudioMuted(instance: Long, speakerMuted: Boolean, micMuted: Boolean)
+    external fun isMicrophoneRecording(instance: Long): Boolean
+    // Playback/capture frames, then nonzero playback/capture samples (verification; no audio content).
+    external fun getAudioFrameCounts(instance: Long): LongArray
     external fun disconnect(instance: Long)
     external fun setSurface(instance: Long, surface: Surface?)
     external fun sendMouseEvent(instance: Long, x: Int, y: Int, flags: Int)

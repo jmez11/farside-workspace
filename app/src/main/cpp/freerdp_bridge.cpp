@@ -26,14 +26,13 @@
 #include <chrono>
 
 #include <atomic>
+#include "quest_audio.h"
 #include <freerdp/client/rdpgfx.h>
 #include <freerdp/codec/h264.h>
 
 // ---- Ground-truth codec logging -------------------------------------------------------
 // Wraps the GDI GFX SurfaceCommand handler so we log the codec the *server actually sends*,
 // rather than echoing the settings we requested.
-static pcRdpgfxSurfaceCommand g_origSurfaceCommand = nullptr;
-static std::atomic<uint32_t> g_codecCounts[16];
 
 static const char* gfx_codec_name(UINT32 codecId) {
     switch (codecId) {
@@ -51,18 +50,11 @@ static const char* gfx_codec_name(UINT32 codecId) {
     }
 }
 
-static UINT logging_surface_command(RdpgfxClientContext* context, const RDPGFX_SURFACE_COMMAND* cmd) {
-    uint32_t slot = cmd->codecId & 0x0F;
-    uint32_t n = ++g_codecCounts[slot];
-    if (n == 1 || (n % 300) == 0) {
-        LOGI("RDP_CODEC: server sent codec %s (0x%04x), count=%u, rect=%ux%u",
-             gfx_codec_name(cmd->codecId), cmd->codecId, n,
-             cmd->right - cmd->left, cmd->bottom - cmd->top);
-    }
-    return g_origSurfaceCommand ? g_origSurfaceCommand(context, cmd) : CHANNEL_RC_OK;
-}
 struct RdpContext {
     rdpContext _p;
+    QuestAudioState* audio;
+    pcRdpgfxSurfaceCommand origSurfaceCommand;
+    std::atomic<uint32_t> codecCounts[16];
     std::vector<ANativeWindow*> windows;
     std::mutex windowMutex;
     DispClientContext* disp;
@@ -77,17 +69,48 @@ struct RdpContext {
     std::atomic<bool> dirty;
 };
 
+static UINT logging_surface_command(RdpgfxClientContext* context, const RDPGFX_SURFACE_COMMAND* cmd) {
+    // GDI owns custom; all its callbacks expect an rdpGdi, not an RdpContext.
+    auto* gdi = static_cast<rdpGdi*>(context->custom);
+    auto* ctx = gdi ? reinterpret_cast<RdpContext*>(gdi->context) : nullptr;
+    if (!ctx) {
+        static std::atomic_flag missingContextLogged = ATOMIC_FLAG_INIT;
+        if (!missingContextLogged.test_and_set())
+            LOGE("RDP_CODEC: SurfaceCommand missing session context");
+        return CHANNEL_RC_OK;
+    }
+    uint32_t slot = cmd->codecId & 0x0F;
+    uint32_t n = ++ctx->codecCounts[slot];
+    if (n == 1 || (n % 300) == 0) {
+        LOGI("RDP_CODEC: server sent codec %s (0x%04x), count=%u, rect=%ux%u, session=%p",
+             gfx_codec_name(cmd->codecId), cmd->codecId, n,
+             cmd->right - cmd->left, cmd->bottom - cmd->top, static_cast<void*>(ctx));
+    }
+    return ctx->origSurfaceCommand ? ctx->origSurfaceCommand(context, cmd) : CHANNEL_RC_OK;
+}
+
 
 #include <freerdp/addin.h>
 
 extern "C" UINT VCAPITYPE rdpgfx_DVCPluginEntry(PVOID pEntryPoints);
 extern "C" UINT VCAPITYPE disp_DVCPluginEntry(PVOID pEntryPoints);
+extern "C" UINT VCAPITYPE audin_DVCPluginEntry(PVOID pEntryPoints);
+extern "C" BOOL VCAPITYPE rdpsnd_VirtualChannelEntryEx(PVOID, PVOID);
+extern "C" BOOL VCAPITYPE rdpdr_VirtualChannelEntryEx(PVOID, PVOID);
+
+QuestAudioState* quest_audio_state(rdpContext* context) { return ((RdpContext*)context)->audio; }
 extern "C" BOOL VCAPITYPE drdynvc_VirtualChannelEntryEx(PVOID pInitHandle, PVOID pContext);
 
 // Channels are compiled statically (BUILD_SHARED_LIBS OFF), so dlopen-based addin
 // lookup cannot find them. This provider maps channel names to the linked entry points.
 static PVOID my_addin_provider(LPCSTR pszName, LPCSTR pszSubsystem, LPCSTR pszType, DWORD dwFlags) {
     LOGI("my_addin_provider called for: %s (flags=0x%x)", pszName ? pszName : "NULL", dwFlags);
+    if (pszName && pszSubsystem && strcmp(pszSubsystem, "quest") == 0) {
+        if (strcmp(pszName, "rdpsnd") == 0) return (PVOID)quest_rdpsnd_entry;
+        if (strcmp(pszName, "audin") == 0) return (PVOID)quest_audin_entry;
+    }
+    if (pszName && strcmp(pszName, "audin") == 0) return (PVOID)audin_DVCPluginEntry;
+    if (pszName && strcmp(pszName, "rdpsnd") == 0) return (PVOID)rdpsnd_VirtualChannelEntryEx;
     if (pszName && strcmp(pszName, "drdynvc") == 0) return (PVOID)drdynvc_VirtualChannelEntryEx;
     if (pszName && strcmp(pszName, "rdpgfx") == 0) return (PVOID)rdpgfx_DVCPluginEntry;
     if (pszName && strcmp(pszName, "disp") == 0) return (PVOID)disp_DVCPluginEntry;
@@ -110,7 +133,12 @@ static BOOL client_load_channels(freerdp* instance) {
                                               (PVIRTUALCHANNELENTRYEX)drdynvc_VirtualChannelEntryEx,
                                               instance->context->settings);
     LOGI("RDP_CODEC: drdynvc static channel load res = %d (0 = ok)", res);
-    return res == 0;
+    if (res != 0) return FALSE;
+    if (freerdp_channels_client_load_ex(instance->context->channels, instance->context->settings,
+        (PVIRTUALCHANNELENTRYEX)rdpdr_VirtualChannelEntryEx, instance->context->settings) != 0) return FALSE;
+    return freerdp_channels_client_load_ex(instance->context->channels, instance->context->settings,
+        (PVIRTUALCHANNELENTRYEX)rdpsnd_VirtualChannelEntryEx,
+        freerdp_static_channel_collection_find(instance->context->settings, "rdpsnd")) == 0;
 }
 
 static BOOL client_pre_connect(freerdp* instance) {
@@ -296,8 +324,11 @@ static void destroy_client(freerdp* instance, bool connected) {
     ctx->network_thread.~thread();
     ctx->render_running.~atomic();
     ctx->dirty.~atomic();
+    for (auto& count : ctx->codecCounts) count.~atomic();
+    auto* audio = ctx->audio;
     ctx->render_thread.~thread();
     freerdp_context_free(instance);
+    delete audio;
     freerdp_free(instance);
 }
 
@@ -312,6 +343,7 @@ Java_com_multidesk_explorer_FreeRDPBridge_connect(
         jstring remoteApp,
         jboolean enableCamera,
         jstring cameraId,
+        jboolean enableMicrophone,
         jobject surface) {
         
     if (!getenv("HOME")) {
@@ -345,6 +377,9 @@ Java_com_multidesk_explorer_FreeRDPBridge_connect(
         return 0;
     }
     
+    ctx->origSurfaceCommand = nullptr;
+    for (auto& count : ctx->codecCounts) new (&count) std::atomic<uint32_t>(0);
+    ctx->audio = new QuestAudioState();
     new (&ctx->windows) std::vector<ANativeWindow*>();
     new (&ctx->windowMutex) std::mutex();
     new (&ctx->render_running) std::atomic<bool>(false);
@@ -403,6 +438,17 @@ Java_com_multidesk_explorer_FreeRDPBridge_connect(
     };
     freerdp_client_settings_parse_command_line(instance->context->settings, 9, (char**)opt_args, FALSE);
     
+    freerdp_settings_set_bool(instance->context->settings, FreeRDP_DeviceRedirection, TRUE);
+    freerdp_settings_set_bool(instance->context->settings, FreeRDP_AudioPlayback, TRUE);
+    freerdp_settings_set_bool(instance->context->settings, FreeRDP_RemoteConsoleAudio, FALSE);
+    freerdp_settings_set_bool(instance->context->settings, FreeRDP_AudioCapture, enableMicrophone);
+    const char* soundArgs[] = { "rdpsnd", "sys:quest" };
+    freerdp_client_add_static_channel(instance->context->settings, 2, soundArgs);
+    if (enableMicrophone) {
+        const char* micArgs[] = { "audin", "sys:quest" };
+        freerdp_client_add_dynamic_channel(instance->context->settings, 2, micArgs);
+    }
+    LOGI("RDP_AUDIO: playback enabled, microphone=%d", enableMicrophone);
     LOGI("Setting remote app");
     if (remoteApp && env->GetStringLength(remoteApp) > 0) {
         const char* app_c = env->GetStringUTFChars(remoteApp, 0);
@@ -447,9 +493,9 @@ Java_com_multidesk_explorer_FreeRDPBridge_connect(
             auto* gfx = (RdpgfxClientContext*)e->pInterface;
             rdpGdi* gdi = ((rdpContext*)context)->gdi;
             if (gdi && gfx && gdi_graphics_pipeline_init(gdi, gfx)) {
-                g_origSurfaceCommand = gfx->SurfaceCommand;
+                ctx->origSurfaceCommand = gfx->SurfaceCommand;
                 gfx->SurfaceCommand = logging_surface_command;
-                for (auto& c : g_codecCounts) c = 0;
+                for (auto& c : ctx->codecCounts) c = 0;
                 LOGI("RDP_CODEC: GFX pipeline initialized - server will use GFX codecs");
             } else {
                 LOGE("RDP_CODEC: gdi_graphics_pipeline_init FAILED (gdi=%p gfx=%p)", gdi, gfx);
@@ -467,7 +513,7 @@ Java_com_multidesk_explorer_FreeRDPBridge_connect(
             auto* gfx = (RdpgfxClientContext*)e->pInterface;
             rdpGdi* gdi = ((rdpContext*)context)->gdi;
             if (gdi && gfx) gdi_graphics_pipeline_uninit(gdi, gfx);
-            g_origSurfaceCommand = nullptr;
+            ctx->origSurfaceCommand = nullptr;
         }
     });
     
@@ -669,4 +715,28 @@ Java_com_multidesk_explorer_FreeRDPBridge_getDesktopHeight(
     if (!instance_ptr) return 1080;
     freerdp* instance = (freerdp*)instance_ptr;
     return ((RdpContext*)instance->context)->desktopHeight.load();
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_multidesk_explorer_FreeRDPBridge_setAudioMuted(JNIEnv*, jobject, jlong instance, jboolean speaker, jboolean mic) {
+    if (!instance) return;
+    auto* state = quest_audio_state(((freerdp*)instance)->context);
+    state->speakerMuted = speaker;
+    state->micMuted = mic;
+}
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_multidesk_explorer_FreeRDPBridge_isMicrophoneRecording(JNIEnv*, jobject, jlong instance) {
+    return instance && quest_audio_state(((freerdp*)instance)->context)->recording;
+}
+extern "C" JNIEXPORT jlongArray JNICALL
+Java_com_multidesk_explorer_FreeRDPBridge_getAudioFrameCounts(JNIEnv* env, jobject, jlong instance) {
+    jlong counts[4] = {};
+    if (instance) {
+        auto* state = quest_audio_state(((freerdp*)instance)->context);
+        counts[0] = state->playbackFrames.load(); counts[1] = state->captureFrames.load();
+        counts[2] = state->playbackNonzeroSamples.load(); counts[3] = state->captureNonzeroSamples.load();
+    }
+    auto result = env->NewLongArray(4);
+    env->SetLongArrayRegion(result, 0, 4, counts);
+    return result;
 }
