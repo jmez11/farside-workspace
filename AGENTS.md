@@ -1,4 +1,4 @@
-# Standing Rules: MultiDesk Explorer
+# Standing Rules: Farside Workspace
 
 ## Mandated Stack and Constraints
 - **Platform**: Native Android app for Meta Quest (Horizon OS).

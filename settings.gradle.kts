@@ -13,7 +13,7 @@ dependencyResolutionManagement {
         maven { url = uri("https://jitpack.io") }
     }
 }
-rootProject.name = "MultiDesk Explorer"
+rootProject.name = "farside-workspace"
 include(":app")
 
 include(":termux-shared")

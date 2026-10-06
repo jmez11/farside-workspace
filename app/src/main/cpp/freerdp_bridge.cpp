@@ -163,7 +163,7 @@ static int client_verify_certificate(freerdp* instance, const BYTE* data, size_t
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_com_multidesk_explorer_FreeRDPBridge_certificateMatchesHost(JNIEnv* env, jobject, jbyteArray pem, jstring host) {
+Java_com_farside_workspace_FreeRDPBridge_certificateMatchesHost(JNIEnv* env, jobject, jbyteArray pem, jstring host) {
     if (!pem || !host) return JNI_FALSE;
     jbyte* data = env->GetByteArrayElements(pem, nullptr);
     const char* hostname = env->GetStringUTFChars(host, nullptr);
@@ -445,7 +445,7 @@ static void destroy_client(freerdp* instance, bool connected) {
 }
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_com_multidesk_explorer_FreeRDPBridge_connect(
+Java_com_farside_workspace_FreeRDPBridge_connect(
         JNIEnv* env,
         jobject bridge,
         jstring hostname,
@@ -461,7 +461,7 @@ Java_com_multidesk_explorer_FreeRDPBridge_connect(
         jobject certificateVerifier) {
         
     if (!getenv("HOME")) {
-        setenv("HOME", "/data/data/com.multidesk.explorer/files", 1);
+        setenv("HOME", "/data/data/com.farside.workspace/files", 1);
     }
     
     LOGI("freerdp_new called");
@@ -710,7 +710,7 @@ Java_com_multidesk_explorer_FreeRDPBridge_connect(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_multidesk_explorer_FreeRDPBridge_disconnect(
+Java_com_farside_workspace_FreeRDPBridge_disconnect(
         JNIEnv* env,
         jobject /* this */,
         jlong instance_ptr) {
@@ -720,7 +720,7 @@ Java_com_multidesk_explorer_FreeRDPBridge_disconnect(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_multidesk_explorer_FreeRDPBridge_setSurface(
+Java_com_farside_workspace_FreeRDPBridge_setSurface(
         JNIEnv* env, jobject, jlong instance_ptr, jobject surface) {
     if (!instance_ptr) return;
     auto* ctx = (RdpContext*)((freerdp*)instance_ptr)->context;
@@ -737,7 +737,7 @@ Java_com_multidesk_explorer_FreeRDPBridge_setSurface(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_multidesk_explorer_FreeRDPBridge_addSurface(
+Java_com_farside_workspace_FreeRDPBridge_addSurface(
         JNIEnv* env,
         jobject /* this */,
         jlong instance_ptr,
@@ -752,7 +752,7 @@ Java_com_multidesk_explorer_FreeRDPBridge_addSurface(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_multidesk_explorer_FreeRDPBridge_removeSurface(
+Java_com_farside_workspace_FreeRDPBridge_removeSurface(
         JNIEnv* env,
         jobject /* this */,
         jlong instance_ptr,
@@ -765,7 +765,7 @@ Java_com_multidesk_explorer_FreeRDPBridge_removeSurface(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_multidesk_explorer_FreeRDPBridge_sendMouseEvent(
+Java_com_farside_workspace_FreeRDPBridge_sendMouseEvent(
         JNIEnv* env,
         jobject /* this */,
         jlong instance_ptr,
@@ -782,7 +782,7 @@ Java_com_multidesk_explorer_FreeRDPBridge_sendMouseEvent(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_multidesk_explorer_FreeRDPBridge_updateDisplay(
+Java_com_farside_workspace_FreeRDPBridge_updateDisplay(
         JNIEnv* env,
         jobject /* this */,
         jlong instance_ptr,
@@ -801,7 +801,7 @@ Java_com_multidesk_explorer_FreeRDPBridge_updateDisplay(
     ctx->dirty = true;
 }
 extern "C" JNIEXPORT void JNICALL
-Java_com_multidesk_explorer_FreeRDPBridge_sendKeyEvent(
+Java_com_farside_workspace_FreeRDPBridge_sendKeyEvent(
         JNIEnv* env,
         jobject /* this */,
         jlong instance_ptr,
@@ -821,7 +821,7 @@ Java_com_multidesk_explorer_FreeRDPBridge_sendKeyEvent(
     }
 }
 extern "C" JNIEXPORT void JNICALL
-Java_com_multidesk_explorer_FreeRDPBridge_sendUnicodeKeyEvent(
+Java_com_farside_workspace_FreeRDPBridge_sendUnicodeKeyEvent(
         JNIEnv* env,
         jobject /* this */,
         jlong instance_ptr,
@@ -838,7 +838,7 @@ Java_com_multidesk_explorer_FreeRDPBridge_sendUnicodeKeyEvent(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_com_multidesk_explorer_FreeRDPBridge_getDesktopWidth(
+Java_com_farside_workspace_FreeRDPBridge_getDesktopWidth(
         JNIEnv* env,
         jobject /* this */,
         jlong instance_ptr) {
@@ -848,7 +848,7 @@ Java_com_multidesk_explorer_FreeRDPBridge_getDesktopWidth(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_com_multidesk_explorer_FreeRDPBridge_getDesktopHeight(
+Java_com_farside_workspace_FreeRDPBridge_getDesktopHeight(
         JNIEnv* env,
         jobject /* this */,
         jlong instance_ptr) {
@@ -858,18 +858,18 @@ Java_com_multidesk_explorer_FreeRDPBridge_getDesktopHeight(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_multidesk_explorer_FreeRDPBridge_setAudioMuted(JNIEnv*, jobject, jlong instance, jboolean speaker, jboolean mic) {
+Java_com_farside_workspace_FreeRDPBridge_setAudioMuted(JNIEnv*, jobject, jlong instance, jboolean speaker, jboolean mic) {
     if (!instance) return;
     auto* state = quest_audio_state(((freerdp*)instance)->context);
     state->speakerMuted = speaker;
     state->micMuted = mic;
 }
 extern "C" JNIEXPORT jboolean JNICALL
-Java_com_multidesk_explorer_FreeRDPBridge_isMicrophoneRecording(JNIEnv*, jobject, jlong instance) {
+Java_com_farside_workspace_FreeRDPBridge_isMicrophoneRecording(JNIEnv*, jobject, jlong instance) {
     return instance && quest_audio_state(((freerdp*)instance)->context)->recording;
 }
 extern "C" JNIEXPORT jlongArray JNICALL
-Java_com_multidesk_explorer_FreeRDPBridge_getAudioFrameCounts(JNIEnv* env, jobject, jlong instance) {
+Java_com_farside_workspace_FreeRDPBridge_getAudioFrameCounts(JNIEnv* env, jobject, jlong instance) {
     jlong counts[4] = {};
     if (instance) {
         auto* state = quest_audio_state(((freerdp*)instance)->context);

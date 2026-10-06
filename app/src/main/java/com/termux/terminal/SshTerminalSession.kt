@@ -4,7 +4,7 @@ import android.os.Handler
 import android.os.Looper
 import net.schmizz.sshj.SSHClient
 import net.schmizz.sshj.transport.verification.PromiscuousVerifier
-import com.multidesk.explorer.data.ConnectionProfile
+import com.farside.workspace.data.ConnectionProfile
 import java.io.OutputStream
 import kotlin.concurrent.thread
 

@@ -98,7 +98,7 @@ if ($QuestSerial) {
         $ErrorActionPreference = 'Continue'
         & adb -s $QuestSerial push $reportFile /data/local/tmp/multidesk-rdp-host-capabilities.json
         if ($LASTEXITCODE -ne 0) { throw 'Could not copy capability evidence to Quest' }
-        & adb -s $QuestSerial shell run-as com.multidesk.explorer cp /data/local/tmp/multidesk-rdp-host-capabilities.json files/rdp-host-capabilities.json
+        & adb -s $QuestSerial shell run-as com.farside.workspace cp /data/local/tmp/multidesk-rdp-host-capabilities.json files/rdp-host-capabilities.json
         if ($LASTEXITCODE -ne 0) { throw 'Could not install capability evidence in the debug app' }
     } finally { $ErrorActionPreference = 'Stop'; Remove-Item -LiteralPath $reportFile }
 }

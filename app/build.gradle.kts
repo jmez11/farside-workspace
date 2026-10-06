@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.multidesk.explorer"
+    namespace = "com.farside.workspace"
     compileSdk = 35
 
     configurations.all {
@@ -13,12 +13,12 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.multidesk.explorer"
+        applicationId = "com.farside.workspace"
         minSdk = 32 // Required for Meta Spatial SDK features (Android 12L)
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
-        testInstrumentationRunner = "com.multidesk.explorer.RdpResizeInstrumentation"
+        testInstrumentationRunner = "com.farside.workspace.RdpResizeInstrumentation"
         ndk {
             abiFilters += "arm64-v8a"
         }
