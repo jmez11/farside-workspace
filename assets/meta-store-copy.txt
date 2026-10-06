@@ -1,0 +1,26 @@
+APP TITLE
+Farside
+
+POSITIONING
+Spatial Remote Workspace
+
+TAGLINE
+Remote systems, in your space.
+
+SHORT DESCRIPTION
+Connect to remote desktops and terminals through RDP, VNC, and SSH in an AR workspace built for IT professionals and developers.
+
+APP BLURB
+Remote systems, in your space.
+
+Farside brings remote desktop access and terminal sessions into your AR workspace on Meta Quest. Connect through RDP, VNC, and SSH to work with your computers and servers using one professional tool.
+
+Open a graphical desktop when you need the full interface, or use SSH when the command line is the right tool for the job. Farside is built for developers, system administrators, and IT professionals who want their remote systems within reach.
+
+Requires access to a host configured for the selected protocol and a working network connection.
+
+SUGGESTED SEARCH TERMS
+remote desktop, SSH, RDP, VNC, terminal
+
+PUBLISHING NOTE
+Draft copy assumes the stated RDP, VNC, SSH, and AR capabilities are present in the submitted release. Validate against the shipping build. No claims are made about encryption, latency, host operating-system compatibility, simultaneous session limits, or input-device support.

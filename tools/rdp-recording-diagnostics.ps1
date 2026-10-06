@@ -1,4 +1,6 @@
-# Read-only host diagnosis. Run inside the Windows RDP session being tested.
+param([string]$QuestSerial)
+# Read-only host diagnosis by default. Optional QuestSerial copies verified capability evidence
+# to this debug app's private files; it does not change Windows settings.
 $ErrorActionPreference = 'Stop'
 if (-not ('QuestRecordingDiagnostics' -as [type])) {
     Add-Type @'
@@ -64,7 +66,10 @@ $outputDevices = @(
         [pscustomobject]@{ Name = $caps.name; Result = $result }
     }
 )
-[pscustomobject]@{
+$report = [pscustomobject]@{
+    HostAliases = @($env:COMPUTERNAME; Get-NetIPAddress -AddressFamily IPv4 | Where-Object {
+        $_.IPAddress -ne '127.0.0.1' -and $_.IPAddress -notlike '169.254.*'
+    } | Select-Object -ExpandProperty IPAddress)
     Edition = $windows.EditionID
     Build = "$($windows.CurrentBuild).$($windows.UBR)"
     SessionId = $sessionIdForProbe
@@ -82,3 +87,18 @@ $outputDevices = @(
         [pscustomobject]@{ Name = $_.Name; Status = $_.Status.ToString() }
     })
 } | ConvertTo-Json -Depth 4
+
+$report
+if ($QuestSerial) {
+    $reportFile = [IO.Path]::GetTempFileName()
+    try {
+        [IO.File]::WriteAllText($reportFile, $report, [Text.UTF8Encoding]::new($false))
+        # Windows PowerShell treats adb's successful progress on stderr as an error;
+        # use adb's exit code to decide whether transfer failed.
+        $ErrorActionPreference = 'Continue'
+        & adb -s $QuestSerial push $reportFile /data/local/tmp/multidesk-rdp-host-capabilities.json
+        if ($LASTEXITCODE -ne 0) { throw 'Could not copy capability evidence to Quest' }
+        & adb -s $QuestSerial shell run-as com.multidesk.explorer cp /data/local/tmp/multidesk-rdp-host-capabilities.json files/rdp-host-capabilities.json
+        if ($LASTEXITCODE -ne 0) { throw 'Could not install capability evidence in the debug app' }
+    } finally { $ErrorActionPreference = 'Stop'; Remove-Item -LiteralPath $reportFile }
+}

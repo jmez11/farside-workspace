@@ -1,10 +1,15 @@
 #include <jni.h>
+#include <openssl/pem.h>
+#include <openssl/x509v3.h>
+#include <arpa/inet.h>
+#include <climits>
 #include <string>
 #include <android/log.h>
 #include <android/native_window.h>
 #include <android/native_window_jni.h>
 
 #include <freerdp/freerdp.h>
+#include <freerdp/error.h>
 #include <freerdp/gdi/gdi.h>
 #include <freerdp/gdi/gfx.h>
 #include <freerdp/client/cmdline.h>
@@ -53,6 +58,12 @@ static const char* gfx_codec_name(UINT32 codecId) {
 struct RdpContext {
     rdpContext _p;
     QuestAudioState* audio;
+    JavaVM* javaVm;
+    jobject certificateVerifier;
+    jmethodID verifyCertificates;
+    jobject eventReceiver;
+    jmethodID disconnectedMethod;
+    std::string certificateHost;
     pcRdpgfxSurfaceCommand origSurfaceCommand;
     std::atomic<uint32_t> codecCounts[16];
     std::vector<ANativeWindow*> windows;
@@ -68,6 +79,99 @@ struct RdpContext {
     std::thread render_thread;
     std::atomic<bool> dirty;
 };
+
+static void report_disconnect(freerdp* instance, bool established, const char* fallback = "") {
+    auto* ctx = reinterpret_cast<RdpContext*>(instance->context);
+    std::string reason;
+    const UINT32 info = freerdp_error_info(instance);
+    const UINT32 error = freerdp_get_last_error(instance->context);
+    if (info != ERRINFO_SUCCESS) {
+        const char* description = freerdp_get_error_info_string(info);
+        if (description) reason = description;
+    }
+    if (reason.empty() && error != FREERDP_ERROR_SUCCESS) {
+        const char* description = freerdp_get_last_error_string(error);
+        if (description) reason = description;
+    }
+    if (reason.empty()) {
+        switch (freerdp_get_disconnect_ultimatum(instance->context)) {
+            case Disconnect_Ultimatum_provider_initiated: reason = "The remote server ended the connection."; break;
+            case Disconnect_Ultimatum_user_requested: reason = "The remote session was disconnected by a user."; break;
+            case Disconnect_Ultimatum_token_purged:
+            case Disconnect_Ultimatum_channel_purged: reason = "The remote server removed the session channel."; break;
+            default: reason = fallback; break;
+        }
+    }
+    LOGI("RDP_DISCONNECTED: established=%d error=0x%08x info=0x%08x reason=%s", established, error, info, reason.c_str());
+    if (!ctx->javaVm || !ctx->eventReceiver || !ctx->disconnectedMethod) return;
+    JNIEnv* env = nullptr;
+    bool attached = false;
+    if (ctx->javaVm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) {
+        if (ctx->javaVm->AttachCurrentThread(&env, nullptr) != JNI_OK) return;
+        attached = true;
+    }
+    jstring message = env->NewStringUTF(reason.c_str());
+    if (message) {
+        env->CallVoidMethod(ctx->eventReceiver, ctx->disconnectedMethod, message, established ? JNI_TRUE : JNI_FALSE);
+        env->DeleteLocalRef(message);
+    }
+    if (env->ExceptionCheck()) { env->ExceptionClear(); LOGE("Cannot deliver disconnect notification"); }
+    if (attached) ctx->javaVm->DetachCurrentThread();
+}
+
+static bool certificate_matches_host(const BYTE* data, size_t length, const char* host) {
+    if (!data || length == 0 || length > INT_MAX || !host || !*host) return false;
+    BIO* bio = BIO_new_mem_buf(data, static_cast<int>(length));
+    if (!bio) return false;
+    X509* certificate = PEM_read_bio_X509(bio, nullptr, nullptr, nullptr);
+    BIO_free(bio);
+    if (!certificate) return false;
+    unsigned char address[16];
+    bool ip = inet_pton(AF_INET, host, address) == 1 || inet_pton(AF_INET6, host, address) == 1;
+    int match = ip ? X509_check_ip_asc(certificate, host, 0)
+                   : X509_check_host(certificate, host, 0, X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS, nullptr);
+    X509_free(certificate);
+    return match == 1;
+}
+
+static int client_verify_certificate(freerdp* instance, const BYTE* data, size_t length,
+                                     const char*, UINT16, DWORD) {
+    auto* ctx = reinterpret_cast<RdpContext*>(instance->context);
+    if (!ctx->javaVm || !ctx->certificateVerifier || !ctx->verifyCertificates || length > INT_MAX) return 0;
+    JNIEnv* env = nullptr;
+    bool attached = false;
+    if (ctx->javaVm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) {
+        if (ctx->javaVm->AttachCurrentThread(&env, nullptr) != JNI_OK) return 0;
+        attached = true;
+    }
+    jbyteArray pem = env->NewByteArray(static_cast<jsize>(length));
+    jboolean accepted = JNI_FALSE;
+    if (pem) {
+        env->SetByteArrayRegion(pem, 0, static_cast<jsize>(length), reinterpret_cast<const jbyte*>(data));
+        if (!env->ExceptionCheck()) accepted = env->CallBooleanMethod(ctx->certificateVerifier,
+            ctx->verifyCertificates, pem, certificate_matches_host(data, length, ctx->certificateHost.c_str()));
+        env->DeleteLocalRef(pem);
+    }
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        LOGE("Certificate verifier failed; rejecting connection");
+        accepted = JNI_FALSE;
+    }
+    if (attached) ctx->javaVm->DetachCurrentThread();
+    // Persistence belongs to the app, not FreeRDP's known_hosts file.
+    return accepted == JNI_TRUE ? 2 : 0;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_multidesk_explorer_FreeRDPBridge_certificateMatchesHost(JNIEnv* env, jobject, jbyteArray pem, jstring host) {
+    if (!pem || !host) return JNI_FALSE;
+    jbyte* data = env->GetByteArrayElements(pem, nullptr);
+    const char* hostname = env->GetStringUTFChars(host, nullptr);
+    bool match = data && hostname && certificate_matches_host(reinterpret_cast<BYTE*>(data), env->GetArrayLength(pem), hostname);
+    if (data) env->ReleaseByteArrayElements(pem, data, JNI_ABORT);
+    if (hostname) env->ReleaseStringUTFChars(host, hostname);
+    return match ? JNI_TRUE : JNI_FALSE;
+}
 
 static UINT logging_surface_command(RdpgfxClientContext* context, const RDPGFX_SURFACE_COMMAND* cmd) {
     // GDI owns custom; all its callbacks expect an rdpGdi, not an RdpContext.
@@ -147,8 +251,9 @@ static BOOL client_pre_connect(freerdp* instance) {
     // Configure settings
     freerdp_settings_set_bool(settings, FreeRDP_SoftwareGdi, TRUE);
     freerdp_settings_set_uint32(settings, FreeRDP_ColorDepth, 32);
-    freerdp_settings_set_bool(settings, FreeRDP_IgnoreCertificate, TRUE);
-    freerdp_settings_set_uint32(settings, FreeRDP_AuthenticationLevel, 0);
+    freerdp_settings_set_bool(settings, FreeRDP_IgnoreCertificate, FALSE);
+    freerdp_settings_set_bool(settings, FreeRDP_ExternalCertificateManagement, TRUE);
+    freerdp_settings_set_bool(settings, FreeRDP_RdpSecurity, FALSE); // Require certificate-backed TLS/NLA.
     
     freerdp_settings_set_bool(settings, FreeRDP_FastPathInput, TRUE);
     freerdp_settings_set_bool(settings, FreeRDP_FastPathOutput, TRUE);
@@ -316,6 +421,11 @@ static void destroy_client(freerdp* instance, bool connected) {
     if (connected) freerdp_disconnect(instance);
     if (instance->context->gdi) gdi_free(instance);
     for (auto* win : ctx->windows) if (win) ANativeWindow_release(win);
+    JNIEnv* env = nullptr;
+    if (ctx->javaVm && ctx->javaVm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) == JNI_OK && ctx->certificateVerifier)
+        env->DeleteGlobalRef(ctx->certificateVerifier);
+    if (env && ctx->eventReceiver) env->DeleteGlobalRef(ctx->eventReceiver);
+    ctx->certificateHost.~basic_string();
     ctx->windows.~vector();
     ctx->windowMutex.~mutex();
     ctx->displayMutex.~mutex();
@@ -337,7 +447,7 @@ static void destroy_client(freerdp* instance, bool connected) {
 extern "C" JNIEXPORT jlong JNICALL
 Java_com_multidesk_explorer_FreeRDPBridge_connect(
         JNIEnv* env,
-        jobject /* this */,
+        jobject bridge,
         jstring hostname,
         jint port,
         jstring username,
@@ -346,7 +456,9 @@ Java_com_multidesk_explorer_FreeRDPBridge_connect(
         jboolean enableCamera,
         jstring cameraId,
         jboolean enableMicrophone,
-        jobject surface) {
+        jobject surface,
+        jstring certificateHost,
+        jobject certificateVerifier) {
         
     if (!getenv("HOME")) {
         setenv("HOME", "/data/data/com.multidesk.explorer/files", 1);
@@ -362,6 +474,7 @@ Java_com_multidesk_explorer_FreeRDPBridge_connect(
     instance->PreConnect = client_pre_connect;
     instance->PostConnect = client_post_connect;
     instance->LoadChannels = client_load_channels;
+    instance->VerifyX509Certificate = client_verify_certificate;
     instance->ContextSize = sizeof(RdpContext);
     
     LOGI("freerdp_context_new called");
@@ -379,6 +492,22 @@ Java_com_multidesk_explorer_FreeRDPBridge_connect(
         return 0;
     }
     
+    ctx->javaVm = nullptr;
+    env->GetJavaVM(&ctx->javaVm);
+    ctx->certificateVerifier = certificateVerifier ? env->NewGlobalRef(certificateVerifier) : nullptr;
+    ctx->eventReceiver = env->NewGlobalRef(bridge);
+    jclass bridgeClass = env->GetObjectClass(bridge);
+    ctx->disconnectedMethod = env->GetMethodID(bridgeClass, "onNativeDisconnected", "(Ljava/lang/String;Z)V");
+    env->DeleteLocalRef(bridgeClass);
+    ctx->verifyCertificates = nullptr;
+    if (certificateVerifier) {
+        jclass verifierClass = env->GetObjectClass(certificateVerifier);
+        ctx->verifyCertificates = env->GetMethodID(verifierClass, "verifyCertificates", "([BZ)Z");
+        env->DeleteLocalRef(verifierClass);
+    }
+    const char* certificateHostChars = certificateHost ? env->GetStringUTFChars(certificateHost, nullptr) : nullptr;
+    new (&ctx->certificateHost) std::string(certificateHostChars ? certificateHostChars : "");
+    if (certificateHostChars) env->ReleaseStringUTFChars(certificateHost, certificateHostChars);
     ctx->origSurfaceCommand = nullptr;
     for (auto& count : ctx->codecCounts) new (&count) std::atomic<uint32_t>(0);
     ctx->audio = new QuestAudioState();
@@ -522,6 +651,7 @@ Java_com_multidesk_explorer_FreeRDPBridge_connect(
     LOGI("Connecting...");
     if (!freerdp_connect(instance)) {
         LOGE("Connection failed");
+        report_disconnect(instance, false);
         destroy_client(instance, false);
         return 0;
     }
@@ -533,6 +663,7 @@ Java_com_multidesk_explorer_FreeRDPBridge_connect(
         DWORD status;
         DWORD count;
         HANDLE handles[64];
+        const char* endReason = "";
         
         while (ctx->network_running && !freerdp_shall_disconnect_context(instance->context)) {
             {
@@ -553,17 +684,24 @@ Java_com_multidesk_explorer_FreeRDPBridge_connect(
             count = freerdp_get_event_handles(instance->context, handles, 64);
             if (count == 0) {
                 LOGE("Failed to get FreeRDP event handles");
+                endReason = "The RDP connection no longer has an active network channel.";
                 break;
             }
             status = WaitForMultipleObjects(count, handles, FALSE, 100);
             if (status == WAIT_FAILED) {
                 LOGE("WaitForMultipleObjects failed");
+                endReason = "An error occurred while waiting for network data.";
                 break;
             }
             if (!freerdp_check_event_handles(instance->context)) {
                 LOGE("Failed to check FreeRDP event handles");
+                endReason = "The connection to the remote PC was lost.";
                 break;
             }
+        }
+        if (ctx->network_running) {
+            ctx->render_running = false;
+            report_disconnect(instance, true, endReason);
         }
         LOGI("Disconnecting event loop");
     });

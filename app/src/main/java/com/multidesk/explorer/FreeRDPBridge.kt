@@ -3,7 +3,15 @@ package com.multidesk.explorer
 import android.view.Surface
 
 class FreeRDPBridge {
-    external fun connect(hostname: String, port: Int, username: String, password: String, remoteApp: String?, enableCamera: Boolean, cameraId: String?, enableMicrophone: Boolean, surface: Surface): Long
+    @Volatile internal var disconnectListener: ((String, Boolean) -> Unit)? = null
+
+    @androidx.annotation.Keep
+    fun onNativeDisconnected(reason: String, established: Boolean) {
+        disconnectListener?.invoke(reason, established)
+    }
+
+    external fun connect(hostname: String, port: Int, username: String, password: String, remoteApp: String?, enableCamera: Boolean, cameraId: String?, enableMicrophone: Boolean, surface: Surface, certificateHost: String, certificateVerifier: RdpCertificateVerifier): Long
+    external fun certificateMatchesHost(pem: ByteArray, host: String): Boolean
     external fun setAudioMuted(instance: Long, speakerMuted: Boolean, micMuted: Boolean)
     external fun isMicrophoneRecording(instance: Long): Boolean
     // Playback/capture frames, then nonzero playback/capture samples (verification; no audio content).

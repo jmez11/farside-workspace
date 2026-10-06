@@ -8,7 +8,7 @@ import java.util.concurrent.Executor
 /** Observe the Home-owned panel pose without requesting global window-management access.
  * Horizon APIs live in the headset framework; reflection keeps ordinary Android builds runnable.
  */
-internal class WindowMovementObserver(private val activity: Activity, private val onMoved: () -> Unit) {
+internal class WindowMovementObserver(private val activity: Activity, private val onMoved: () -> Unit, private val onPose: (Any) -> Unit = {}) {
     private var removeListener: (() -> Unit)? = null
 
     fun start() {
@@ -33,6 +33,7 @@ internal class WindowMovementObserver(private val activity: Activity, private va
                                 Log.d("SessionWindow", "Panel pose changed")
                                 onMoved()
                             }
+                            if (pose != null) onPose(pose)
                             lastPose = pose
                             return
                         }
@@ -42,7 +43,7 @@ internal class WindowMovementObserver(private val activity: Activity, private va
                 val listener = Proxy.newProxyInstance(listenerClass.classLoader, arrayOf(listenerClass)) { proxy, method, args ->
                     when (method.name) {
                         "onWindowsChanged" -> {
-                            try { observe(args!![0] as List<*>) }
+                            try { if (!activity.isDestroyed) observe(args!![0] as List<*>) }
                             catch (error: ReflectiveOperationException) { Log.w("SessionWindow", "Cannot read panel pose", error) }
                             null
                         }

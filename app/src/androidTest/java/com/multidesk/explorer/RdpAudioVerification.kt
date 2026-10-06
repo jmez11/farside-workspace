@@ -20,7 +20,7 @@ internal class RdpAudioVerification(private val test: Instrumentation) {
     private fun find(label: String): AccessibilityNodeInfo? {
         automation.clearCache()
         fun search(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
-            if (node.contentDescription?.toString() == label ||
+            if (node.contentDescription?.toString() == label || node.text?.toString() == label && label != "Redirect Microphone" ||
                 node.viewIdResourceName?.endsWith(":id/$label") == true) return node
             for (i in 0 until node.childCount) node.getChild(i)?.let { search(it)?.let { return it } }
             return null
@@ -51,6 +51,57 @@ internal class RdpAudioVerification(private val test: Instrumentation) {
         service.flags = service.flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
             android.accessibilityservice.AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
         automation.serviceInfo = service
+        if (mode == "blocked-ui") {
+            val activity = test.startActivitySync(Intent(test.targetContext, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
+            val toggles = java.util.concurrent.atomic.AtomicInteger(0)
+            try {
+                test.runOnMainSync {
+                    activity.setContent {
+                        MaterialTheme(colorScheme = darkColorScheme()) {
+                            androidx.compose.material3.Surface(color = androidx.compose.ui.graphics.Color.Black) {
+                                RdpMicrophoneControl(muted = false, recording = false, hostUnsupported = true,
+                                    onToggleMute = { toggles.incrementAndGet() }, onInteraction = {})
+                            }
+                        }
+                    }
+                }
+                await("Microphone redirection unsupported")
+                val icon = checkNotNull(find("Microphone redirection unsupported"))
+                val iconBounds = android.graphics.Rect().also { icon.getBoundsInScreen(it) }
+                val capture = android.graphics.Bitmap.createBitmap(activity.window.decorView.width,
+                    activity.window.decorView.height, android.graphics.Bitmap.Config.ARGB_8888)
+                val copied = java.util.concurrent.CountDownLatch(1)
+                var copyResult = -1
+                test.runOnMainSync {
+                    android.view.PixelCopy.request(activity.window, capture, { result -> copyResult = result; copied.countDown() },
+                        android.os.Handler(android.os.Looper.getMainLooper()))
+                }
+                check(copied.await(5, java.util.concurrent.TimeUnit.SECONDS) && copyResult == android.view.PixelCopy.SUCCESS)
+                java.io.File(test.targetContext.cacheDir, "rdp-mic-blocked.png").outputStream().use {
+                    capture.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                }
+                var redPixels = 0
+                var whitePixels = 0
+                for (y in iconBounds.top.coerceAtLeast(0) until iconBounds.bottom.coerceAtMost(capture.height))
+                    for (x in iconBounds.left.coerceAtLeast(0) until iconBounds.right.coerceAtMost(capture.width)) {
+                        val c = capture.getPixel(x, y)
+                        if (android.graphics.Color.red(c) > 180 && android.graphics.Color.green(c) < 80) redPixels++
+                        if (android.graphics.Color.red(c) > 180 && android.graphics.Color.green(c) > 180) whitePixels++
+                    }
+                check(redPixels > 10 && whitePixels > 2) { "Missing red prohibition overlay or white mic: $redPixels/$whitePixels" }
+                capture.recycle()
+                click("Microphone redirection unsupported")
+                await("This host does not support microphone redirection.")
+                check(toggles.get() == 0) { "Blocked button changed mute" }
+                click("OK")
+                check(find("This host does not support microphone redirection.") == null)
+                click("Microphone redirection unsupported")
+                await("This host does not support microphone redirection.")
+                click("OK")
+                check(toggles.get() == 0)
+            } finally { test.runOnMainSync { activity.finish() } }
+            return
+        }
         val manager = ProfileManager(test.targetContext)
         if (mode.startsWith("setup-")) {
             check(!hasMicrophonePermission(test.targetContext)) { "Revoke permission before setup test" }
@@ -91,7 +142,16 @@ internal class RdpAudioVerification(private val test: Instrumentation) {
         val temporary = original.copy(id = "audio-verification", name = "RDP audio verification", redirectMicrophone = mode != "session-off", enableCamera = false)
         manager.addProfile(temporary)
         var activity: SessionActivity? = null
+        val evidenceFile = java.io.File(test.targetContext.filesDir, "rdp-host-capabilities.json")
+        val evidenceBackup = if (mode == "host-unknown") evidenceFile.readText() else null
         try {
+            if (evidenceBackup != null) {
+                val otherHost = org.json.JSONObject(evidenceBackup)
+                    .put("HostAliases", org.json.JSONArray().put("unrelated-host"))
+                evidenceFile.writeText(otherHost.toString())
+                check(!RdpHostCapabilities(test.targetContext).microphoneUnsupported(temporary.host))
+                check(RdpHostCapabilities(test.targetContext).microphoneUnsupported("unrelated-host"))
+            }
             val permissionBefore = hasMicrophonePermission(test.targetContext)
             activity = test.startActivitySync(Intent(test.targetContext, SessionActivity::class.java).apply {
                 putExtra("profileId", temporary.id)
@@ -117,7 +177,33 @@ internal class RdpAudioVerification(private val test: Instrumentation) {
             click("Unmute speakers")
             await("Mute speakers")
             val micEnabled = temporary.redirectMicrophone && hasMicrophonePermission(test.targetContext)
-            if (micEnabled) {
+            if (mode == "host-unsupported") {
+                check(micEnabled && RdpHostCapabilities(test.targetContext).microphoneUnsupported(temporary.host)) {
+                    "This check requires microphone permission and verified host evidence"
+                }
+            }
+            if (micEnabled && RdpHostCapabilities(test.targetContext).microphoneUnsupported(temporary.host)) {
+                await("Microphone redirection unsupported")
+                check(find("Mute microphone") == null && find("Unmute microphone") == null)
+                click("Microphone redirection unsupported")
+                await("This host does not support microphone redirection.")
+                click("OK")
+                await("Microphone redirection unsupported")
+                check(find("Unmute microphone") == null) { "Blocked button toggled mute" }
+                val image = android.graphics.Bitmap.createBitmap(activity.window.decorView.width,
+                    activity.window.decorView.height, android.graphics.Bitmap.Config.ARGB_8888)
+                val copied = java.util.concurrent.CountDownLatch(1)
+                var copyResult = -1
+                test.runOnMainSync {
+                    android.view.PixelCopy.request(activity.window, image, { result -> copyResult = result; copied.countDown() },
+                        android.os.Handler(android.os.Looper.getMainLooper()))
+                }
+                check(copied.await(5, java.util.concurrent.TimeUnit.SECONDS) && copyResult == android.view.PixelCopy.SUCCESS)
+                java.io.File(test.targetContext.cacheDir, "rdp-mic-host-blocked.png").outputStream().use {
+                    image.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                }
+                image.recycle()
+            } else if (micEnabled) {
                 await("Mute microphone")
                 check(!FreeRDPBridge().isMicrophoneRecording(activity.rdpInstance)) { "Recording before remote request" }
                 click("Mute microphone")
@@ -125,6 +211,15 @@ internal class RdpAudioVerification(private val test: Instrumentation) {
                 click("Unmute microphone")
                 await("Mute microphone")
             } else check(find("Mute microphone") == null && find("Unmute microphone") == null) { "Denied/disabled microphone still has toolbar control" }
+            if (mode == "host-unknown") {
+                check(micEnabled)
+                Thread.sleep(15000)
+                await("Mute microphone")
+                check(find("Microphone redirection unsupported") == null) { "Idle host was falsely marked unsupported" }
+                click("Mute microphone")
+                await("Unmute microphone")
+                click("Unmute microphone")
+            }
             if (mode == "stream" || mode == "playback") {
                 // Optionally launch the bounded Windows probe through the existing RDP input path.
                 if (encodedProbe != null) {
@@ -202,6 +297,7 @@ internal class RdpAudioVerification(private val test: Instrumentation) {
         } finally {
             activity?.let { test.runOnMainSync { it.finish() } }
             manager.deleteProfile(temporary.id)
+            if (evidenceBackup != null) evidenceFile.writeText(evidenceBackup)
         }
     }
 }

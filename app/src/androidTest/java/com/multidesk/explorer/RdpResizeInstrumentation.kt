@@ -13,12 +13,16 @@ import java.io.File
 
 /** On-device regression check: saved RDP profile, actual task resizes, full-frame captures. */
 class RdpResizeInstrumentation : Instrumentation() {
+    private var lifecycleMode: String? = null
+    private var certificateMode: String? = null
     private var audioProbe: String? = null
     private var audioMode: String? = null
     private var inputOnly = false
     private var toolbarOnly = false
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(arguments)
+        lifecycleMode = arguments?.getString("lifecycleMode")
+        certificateMode = arguments?.getString("certificateMode")
         audioProbe = arguments?.getString("audioProbe")
         audioMode = arguments?.getString("audioMode")
         inputOnly = arguments?.getString("inputOnly") == "true"
@@ -37,6 +41,18 @@ class RdpResizeInstrumentation : Instrumentation() {
     override fun onStart() {
         val results = Bundle()
         try {
+            lifecycleMode?.let {
+                SessionLifecycleVerification(this).run(it)
+                results.putString("stream", "PASS: session lifecycle $it.\n")
+                finish(0, results)
+                return
+            }
+            certificateMode?.let {
+                RdpCertificateVerification(this).run(it)
+                results.putString("stream", "PASS: RDP certificates $it.\n")
+                finish(0, results)
+                return
+            }
             audioMode?.let {
                 RdpAudioVerification(this).run(it, audioProbe)
                 results.putString("stream", "PASS: RDP audio $it.\n")
@@ -58,7 +74,7 @@ class RdpResizeInstrumentation : Instrumentation() {
             if (toolbarOnly) {
                 verifyToolbar(activity)
                 runOnMainSync { activity.finish() }
-                results.putString("stream", "PASS: toolbar offset, full fade, real panel pose change, pin, keyboard dismissal.\n")
+                results.putString("stream", "PASS: toolbar offset, full fade, real panel pose change, pin, expanded keyboard/modifier/numeric controls, keyboard focus through RDP tap/hold/drag, dismissal/reopening.\n")
                 finish(0, results)
                 return
             }
@@ -207,6 +223,95 @@ class RdpResizeInstrumentation : Instrumentation() {
                 imeVisibility(true)
             }
             check(find("ESC") != null) { "Keyboard modifier controls missing" }
+            for (label in listOf("WIN", "SHIFT", "CTRL", "ALT", "AltGr")) {
+                fun state(): String? {
+                    var node = checkNotNull(find(label))
+                    while (node.stateDescription == null && node.parent != null) node = node.parent
+                    return node.stateDescription?.toString()
+                }
+                check(state() == "Released") { "$label starts held" }
+                click(label)
+                check(state() == "Held") { "$label did not latch" }
+                click(label)
+                check(state() == "Released") { "$label did not release" }
+            }
+            for (label in listOf("DEL", "TAB")) click(label)
+            check(find("Up") == null && find("F1") == null) { "Expanded keys visible in first level" }
+            click("CTRL")
+            click("123")
+            check(find("ABC") != null && find("123") == null) { "Expanded close label missing" }
+            var heldCtrl = checkNotNull(find("CTRL"))
+            while (heldCtrl.stateDescription == null && heldCtrl.parent != null) heldCtrl = heldCtrl.parent
+            check(heldCtrl.stateDescription?.toString() == "Held") { "Expansion released CTRL" }
+            fun captureKeyboard(name: String) {
+                val image = Bitmap.createBitmap(activity.window.decorView.width,
+                    activity.window.decorView.height, Bitmap.Config.ARGB_8888)
+                val done = java.util.concurrent.CountDownLatch(1)
+                var result = -1
+                runOnMainSync {
+                    android.view.PixelCopy.request(activity.window, image, { result = it; done.countDown() },
+                        android.os.Handler(android.os.Looper.getMainLooper()))
+                }
+                check(done.await(5, java.util.concurrent.TimeUnit.SECONDS) && result == android.view.PixelCopy.SUCCESS) { "Keyboard capture failed: $result" }
+                File(targetContext.cacheDir, "keyboard-$name.png").outputStream().use {
+                    image.compress(Bitmap.CompressFormat.PNG, 100, it)
+                }
+                image.recycle()
+            }
+            captureKeyboard("expanded")
+            click("CTRL")
+            for (n in 1..12) click("F$n")
+            for (label in listOf("Home", "Up", "PgUp", "Left", "Right", "End", "Down", "PgDn",
+                "Insert", "Delete", "Enter", "Backspace", "Keypad Enter", "/", "*", "-", "+", "Print Screen")) click(label)
+            click("Right click")
+            click("ESC") // Close any resulting remote context menu.
+            click("Number Keys")
+            check(find("F1") == null && find("Function Keys") != null) { "Function bank did not switch to numbers" }
+            for (label in listOf("7", "8", "9", "4", "5", "6", "1", "2", "3", "0", ".")) click(label)
+            captureKeyboard("numbers")
+            click("Function Keys")
+            check(find("F1") != null && find("1") == null) { "Function bank did not restore" }
+            click("ABC")
+            check(find("123") != null && find("F1") == null && find("Up") == null) { "ABC did not close extras" }
+            click("123")
+            check(find("F12") != null) { "Extras could not reopen" }
+            click("ABC")
+            captureKeyboard("collapsed")
+            click("CTRL") // Dismissal must release a held modifier.
+
+            fun keyboardRetainsFocus() {
+                check(find("Remote keyboard input") != null) { "Missing keyboard input" }
+                // Horizon's headless accessibility window does not expose IME input focus.
+                // Observe Compose's actual onFocusChanged callback, scoped to this process.
+                val focusLog = android.os.ParcelFileDescriptor.AutoCloseInputStream(
+                    uiAutomation.executeShellCommand("logcat -d --pid=${android.os.Process.myPid()} -s RdpKeyboard")
+                ).bufferedReader().use { reader -> reader.readLines().lastOrNull { it.contains("editor focused=") } }
+                check(focusLog?.contains("editor focused=true hasFocus=true") == true) {
+                    "Remote touch stole focus from keyboard input: $focusLog"
+                }
+                check(find("ESC") != null) { "Remote touch dismissed keyboard modifier controls" }
+            }
+            keyboardRetainsFocus()
+            fun remoteTouch(action: Int, downTime: Long, eventTime: Long, dx: Float = 0f) {
+                runOnMainSync {
+                    val view = checkNotNull(texture(activity.window.decorView))
+                    val event = android.view.MotionEvent.obtain(downTime, eventTime, action,
+                        view.width * 0.5f + dx, view.height * 0.65f, 0)
+                    event.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
+                    try { check(view.dispatchTouchEvent(event)) { "Remote touch not handled" } }
+                    finally { event.recycle() }
+                }
+                Thread.sleep(200)
+                keyboardRetainsFocus()
+            }
+            for ((duration, movement) in listOf(80L to 0f, 1200L to 0f, 150L to 60f)) {
+                val start = android.os.SystemClock.uptimeMillis()
+                remoteTouch(android.view.MotionEvent.ACTION_DOWN, start, start)
+                if (movement != 0f) remoteTouch(android.view.MotionEvent.ACTION_MOVE, start, start + duration / 2, movement)
+                remoteTouch(android.view.MotionEvent.ACTION_UP, start, start + duration, movement)
+            }
+            android.util.Log.i("ToolbarTest", "PASS: keyboard input focus survived RDP tap, hold, and drag; simulatedIme=$simulatedIme")
+
             if (simulatedIme) imeVisibility(false)
             else {
                 runOnMainSync {
@@ -219,6 +324,9 @@ class RdpResizeInstrumentation : Instrumentation() {
             click("Keyboard")
             if (simulatedIme) imeVisibility(true) else Thread.sleep(1500)
             check(find("ESC") != null) { "Keyboard could not be reopened after dismissal" }
+            var ctrl = checkNotNull(find("CTRL"))
+            while (ctrl.stateDescription == null && ctrl.parent != null) ctrl = ctrl.parent
+            check(ctrl.stateDescription?.toString() == "Released") { "CTRL remained held after dismissal" }
             if (simulatedIme) imeVisibility(false)
             else runOnMainSync {
                 activity.getSystemService(android.view.inputmethod.InputMethodManager::class.java)

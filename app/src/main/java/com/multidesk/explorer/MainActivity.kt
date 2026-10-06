@@ -21,8 +21,6 @@ import kotlin.math.roundToInt
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.Canvas
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.PushPin
@@ -68,6 +66,9 @@ import com.multidesk.explorer.ui.LauncherScreen
 import java.util.UUID
 
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.focusable
 import androidx.compose.ui.input.key.onKeyEvent
@@ -109,12 +110,7 @@ class MainActivity : ComponentActivity() {
                             refreshProfiles()
                         },
                         onConnectProfile = { profileId ->
-                            val intent = Intent(this@MainActivity, SessionActivity::class.java).apply {
-                                data = android.net.Uri.parse("multidesk://session/${profileId}")
-                                putExtra("profileId", profileId)
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
-                            }
-                            startActivity(intent)
+                            SessionWindowLauncher.launch(this@MainActivity, profileId)
                         },
                         profileManager = profileManager
                     )
@@ -241,9 +237,19 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
     val rdpBridge = remember { FreeRDPBridge() }
     var rdpInstance by remember { mutableStateOf(0L) }
     val context = LocalContext.current
+    var certificateRequest by remember { mutableStateOf<RdpCertificateRequest?>(null) }
+    var connectionFailed by remember { mutableStateOf(false) }
+    var connectFailureReason by remember { mutableStateOf("") }
+    var disconnectedReason by remember { mutableStateOf<String?>(null) }
+    val certificates = remember(session.id) {
+        RdpCertificateVerifier(context, session.host, session.port, { certificateRequest = it })
+    }
     val connection = remember(session.id) {
-        RdpSessionConnection(context, effectiveSession, rdpBridge) {
+        RdpSessionConnection(context, effectiveSession, rdpBridge, certificates, onDisconnected = { reason, established ->
+            if (established) disconnectedReason = reason else connectFailureReason = reason
+        }) {
             rdpInstance = it
+            connectionFailed = it == 0L
             onInstanceCreated(it)
         }
     }
@@ -252,6 +258,21 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
             rdpInstance = 0L
             connection.close()
         }
+    }
+    certificateRequest?.let { RdpCertificateDialog(it) }
+    if (connectionFailed) AlertDialog(
+        onDismissRequest = { (context as? android.app.Activity)?.finish() },
+        title = { Text("Connection failed") },
+        text = { Text(connectFailureReason.ifBlank { "The RDP connection could not be established or its certificate was not accepted." }) },
+        confirmButton = { TextButton(onClick = { (context as? android.app.Activity)?.finish() }) { Text("Close") } },
+    )
+    disconnectedReason?.let { reason ->
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Disconnected") },
+            text = { Text(if (reason.isBlank()) "The RDP session has disconnected." else "The RDP session has disconnected.\n\n$reason") },
+            confirmButton = { TextButton(onClick = onClose) { Text("OK") } },
+        )
     }
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -284,12 +305,18 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
     var speakerMuted by remember { mutableStateOf(false) }
     var micMuted by remember { mutableStateOf(false) }
     var micRecording by remember { mutableStateOf(false) }
+    val hostCapabilities = remember(session.host) { RdpHostCapabilities(context) }
+    var micHostUnsupported by remember(session.host) {
+        mutableStateOf(hostCapabilities.microphoneUnsupported(session.host))
+    }
     LaunchedEffect(rdpInstance, speakerMuted, micMuted) {
         if (rdpInstance != 0L) rdpBridge.setAudioMuted(rdpInstance, speakerMuted, micMuted)
     }
     LaunchedEffect(rdpInstance) {
         while (rdpInstance != 0L) {
             micRecording = rdpBridge.isMicrophoneRecording(rdpInstance)
+            // Actual capture overrides older host evidence, even after recording stops.
+            if (micRecording) micHostUnsupported = false
             delay(100)
         }
     }
@@ -298,6 +325,7 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
     var toolbarPinned by remember { mutableStateOf(false) }
     var toolbarActivity by remember { mutableStateOf(0L) }
     var toolbarBounds by remember { mutableStateOf(Rect.Zero) }
+    val remotePointer = remember { intArrayOf(0, 0) }
     var holdPoint by remember { mutableStateOf<Offset?>(null) }
     var holdStarted by remember { mutableStateOf(0L) }
     var holdProgress by remember { mutableStateOf(0f) }
@@ -425,6 +453,8 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                             if (rdpInstance != 0L) {
                                 val remoteX = (x * actualWidth / width.coerceAtLeast(1)).toInt().coerceIn(0, actualWidth - 1)
                                 val remoteY = (y * actualHeight / height.coerceAtLeast(1)).toInt().coerceIn(0, actualHeight - 1)
+                                remotePointer[0] = remoteX
+                                remotePointer[1] = remoteY
                                 rdpBridge.sendMouseEvent(rdpInstance, remoteX, remoteY, flags)
                             }
                         },
@@ -437,7 +467,8 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                         }
                     )
                     setOnTouchListener { _, event ->
-                        focusRequester.requestFocus()
+                        // Keep the IME text editor focused while clicking/dragging the remote desktop.
+                        if (!showSoftKeyboard) focusRequester.requestFocus()
                         input.onTouch(event)
                         true
                     }
@@ -450,6 +481,8 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                         val (rdpX, rdpY) = desktopPoint(event)
 
                         if (rdpInstance != 0L) {
+                            remotePointer[0] = rdpX
+                            remotePointer[1] = rdpY
                             rdpBridge.sendMouseEvent(rdpInstance, rdpX, rdpY, FreeRDPBridge.PTR_FLAGS_MOVE)
                         }
                         true
@@ -538,11 +571,13 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                             if (speakerMuted) "Unmute speakers" else "Mute speakers", tint = Color.White)
                     }
                     if (effectiveSession.redirectMicrophone) {
-                        IconButton(onClick = { micMuted = !micMuted; revealToolbar() }) {
-                            Icon(if (micMuted) Icons.Default.MicOff else Icons.Default.Mic,
-                                if (micMuted) "Unmute microphone" else if (micRecording) "Mute microphone (recording)" else "Mute microphone",
-                                tint = if (!micMuted && micRecording) Color.Red else Color.White)
-                        }
+                        RdpMicrophoneControl(
+                            muted = micMuted,
+                            recording = micRecording,
+                            hostUnsupported = micHostUnsupported,
+                            onToggleMute = { micMuted = !micMuted },
+                            onInteraction = revealToolbar,
+                        )
                     }
                     IconButton(onClick = { showZoomSlider = !showZoomSlider }) {
                         Icon(Icons.Default.Search, "Zoom", tint = Color.White)
@@ -602,25 +637,20 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
         val softKeyboardFocus = remember { FocusRequester() }
         var textValue by remember { mutableStateOf(TextFieldValue(" ", selection = TextRange(1))) }
         
-        // Modifier keys row
-        if (imeVisible) androidx.compose.foundation.layout.Row(
-            modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter).fillMaxWidth().padding(bottom = 80.dp),
-            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceEvenly
-        ) {
-            val sendKey = { code: Int ->
+        if (imeVisible) RemoteExtraKeys(
+            modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter).fillMaxWidth(),
+            sendKey = { code, down ->
+                if (rdpInstance != 0L) rdpBridge.sendKeyEvent(rdpInstance, code, down)
+            },
+            rightClick = {
                 if (rdpInstance != 0L) {
-                    rdpBridge.sendKeyEvent(rdpInstance, code, true)
-                    rdpBridge.sendKeyEvent(rdpInstance, code, false)
+                    val x = remotePointer[0].coerceIn(0, actualWidth - 1)
+                    val y = remotePointer[1].coerceIn(0, actualHeight - 1)
+                    rdpBridge.sendMouseEvent(rdpInstance, x, y, FreeRDPBridge.PTR_FLAGS_BUTTON2 or FreeRDPBridge.PTR_FLAGS_DOWN)
+                    rdpBridge.sendMouseEvent(rdpInstance, x, y, FreeRDPBridge.PTR_FLAGS_BUTTON2)
                 }
             }
-            Button(onClick = { sendKey(0x01) }) { Text("ESC") }
-            Button(onClick = { sendKey(0x0F) }) { Text("TAB") }
-            Button(onClick = { sendKey(0x1D) }) { Text("CTRL") }
-            Button(onClick = { sendKey(0x38) }) { Text("ALT") }
-            Button(onClick = { sendKey(0x5B) }) { Text("WIN") }
-            Button(onClick = { sendKey(0x2A) }) { Text("SHIFT") }
-            
-        }
+        )
 
         androidx.compose.foundation.text.BasicTextField(
             value = textValue,
@@ -637,6 +667,8 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
             },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             modifier = Modifier.size(1.dp).focusRequester(softKeyboardFocus)
+                .onFocusChanged { Log.d("RdpKeyboard", "editor focused=${it.isFocused} hasFocus=${it.hasFocus}") }
+                .semantics { contentDescription = "Remote keyboard input" }
         )
         LaunchedEffect(Unit) {
             softKeyboardFocus.requestFocus()

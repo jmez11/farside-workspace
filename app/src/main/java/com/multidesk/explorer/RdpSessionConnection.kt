@@ -15,23 +15,32 @@ internal class RdpSessionConnection(
     context: Context,
     private val profile: ConnectionProfile,
     private val bridge: FreeRDPBridge,
+    private val certificates: RdpCertificateVerifier,
+    private val onDisconnected: (String, Boolean) -> Unit,
     private val onConnected: (Long) -> Unit,
 ) {
     private val context = context.applicationContext
     private val worker = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
     private val closed = AtomicBoolean(false)
+    private val ended = AtomicBoolean(false)
     // Accessed only on worker.
     private var instance = 0L
     private var surface: Surface? = null
 
+    init {
+        bridge.disconnectListener = { reason, established ->
+            if (ended.compareAndSet(false, true)) main.post { if (!closed.get()) onDisconnected(reason, established) }
+        }
+    }
+
     fun attach(next: Surface) {
-        if (closed.get()) {
+        if (closed.get() || ended.get()) {
             next.release()
             return
         }
         worker.execute {
-            if (closed.get()) {
+            if (closed.get() || ended.get()) {
                 next.release()
                 return@execute
             }
@@ -49,7 +58,7 @@ internal class RdpSessionConnection(
                     Thread.sleep(2000)
                 }
                 instance = bridge.connect(host, port, profile.user, profile.pass, profile.remoteApp,
-                    profile.enableCamera, profile.cameraId, profile.redirectMicrophone && hasMicrophonePermission(context), next)
+                    profile.enableCamera, profile.cameraId, profile.redirectMicrophone && hasMicrophonePermission(context), next, profile.host.removeSurrounding("[", "]"), certificates)
                 val connected = instance
                 main.post { if (!closed.get()) onConnected(connected) }
             } else {
@@ -71,6 +80,8 @@ internal class RdpSessionConnection(
 
     fun close() {
         if (!closed.compareAndSet(false, true)) return
+        bridge.disconnectListener = null
+        certificates.close() // Unblock certificate confirmation before queuing teardown.
         worker.execute {
             if (instance != 0L) bridge.disconnect(instance)
             instance = 0L

@@ -82,6 +82,7 @@ target_include_directories(freerdp-codecs PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/f
 add_library(freerdp-jni SHARED freerdp_bridge.cpp quest_audio.cpp)
 target_compile_features(freerdp-jni PRIVATE cxx_std_17)
 target_include_directories(freerdp-jni PRIVATE 
+    ${OPENSSL_INCLUDE_DIR}
     freerdp/include
     freerdp/winpr/include
     ${CMAKE_CURRENT_BINARY_DIR}/freerdp/include
