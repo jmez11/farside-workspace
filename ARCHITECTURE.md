@@ -60,6 +60,7 @@
 - Record outcomes and limits in `PROGRESS.md`; a successful build alone does not establish device behavior.
 - Audio harness: add `-e audioMode setup-deny|setup-grant|session-deny|session-grant|session-off|playback|stream` to the instrumentation command (one mode per run). Permission tests require `adb shell pm revoke com.multidesk.explorer android.permission.RECORD_AUDIO` and `adb shell pm clear-permission-flags com.multidesk.explorer android.permission.RECORD_AUDIO user-set user-fixed` before each denied-permission run. Restore the original permission afterward.
 - Run `tools/rdp-audio-probe.ps1` in the Windows session during `playback`/`stream`; it plays a quiet bounded tone and requests recording, discarding captured audio. Playback checks actual AAudio writes, silence while muted, and resumed samples after unmute. `stream` requires an available Windows recording endpoint; packet counts do not establish audible quality or remote recording fidelity.
+- Missing Windows recording device: run read-only `tools/rdp-recording-diagnostics.ps1` during the active RDP session. It reports edition, endpoint enumerator, capture group/listener policy, the distinct `TSAudioCaptureAllowed` edition policy, services, and WinMM devices. Current Home/RDP Wrapper host returns 0 for the edition policy even when listener policy allows capture; client capture settings cannot override the host endpoint gate.
 
 ## Phased Build Plan
 

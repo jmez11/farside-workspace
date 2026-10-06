@@ -197,7 +197,9 @@ static BOOL client_desktop_resize(rdpContext* context) {
 }
 
 static BOOL client_post_connect(freerdp* instance) {
-    LOGI("Post connect!");
+    LOGI("Post connect! RDP_AUDIO capture=%d playback=%d",
+         freerdp_settings_get_bool(instance->context->settings, FreeRDP_AudioCapture),
+         freerdp_settings_get_bool(instance->context->settings, FreeRDP_AudioPlayback));
     
     BOOL rfx = freerdp_settings_get_bool(instance->context->settings, FreeRDP_RemoteFxCodec);
     BOOL gfxH264 = freerdp_settings_get_bool(instance->context->settings, FreeRDP_GfxH264);
