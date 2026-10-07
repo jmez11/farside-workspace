@@ -10,6 +10,7 @@
 - **Proxy Options**: Limited to None, Cloudflared, SOCKS5, and HTTP (SOCKS5/HTTP mark unavailable and reject RDP). Bundled arm64 `cloudflared` binary with loopback proxy and browser handoff verified on Quest.
 - **RDP Certificates & Diagnostics**: Platform X509 trust manager and OpenSSL identity verification with photo-matched warning dialog and persistent leaf fingerprint exceptions.
 - **Keyboard Extra Keys**: Separate attached spatial window (76dp/314dp), unshifted desktop surface with `adjustNothing`, synchronized compositor compaction/reveal (`KeyboardPanelResize.kt`), dual `RemoteImeEditor` native focus handoff.
+- **Display Resize Height Parity**: Masked height to even with `& ~1` in `Java_com_farside_workspace_FreeRDPBridge_updateDisplay` matching width, ensuring MediaCodec I420 chroma subsampling requirements are met and preventing decode failure on odd-height resizes.
 
 ## Verification Evidence
 - Build: `./gradlew :app:assembleDebug :app:assembleDebugAndroidTest`
@@ -21,6 +22,7 @@
   - `toolbarOnly`: PASS (toolbar offset/fade/movement/pin, keyboard companion, native focus handoff, desktop click/drag focus).
   - `proxiesOnly`: PASS (proxy choices, legacy decoding, unsupported proxy rejection).
   - Default resize suite: PASS (5 resolutions: 1280x800 -> 1000x600 -> 1600x900 -> 800x1000 -> 1280x800, nonblank captures, session close).
+  - Odd-height smoke test: PASS (task resized to height 1279; `RDP_SURFACE` requested and established 1280x1278; MediaCodec low-latency decoder initialized and decoded frames cleanly without error).
 
 ## Known Working Features
 - Independent repositionable session activities in Horizon OS; saved connection profiles.

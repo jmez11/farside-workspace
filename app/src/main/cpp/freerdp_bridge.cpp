@@ -796,7 +796,7 @@ Java_com_farside_workspace_FreeRDPBridge_updateDisplay(
     
     // Debounced by Compose. The network thread sends after display capabilities arrive.
     const uint32_t w = std::clamp(static_cast<int>(width), 200, 8192) & ~1;
-    const uint32_t h = std::clamp(static_cast<int>(height), 200, 8192);
+    const uint32_t h = std::clamp(static_cast<int>(height), 200, 8192) & ~1;
     ctx->pendingDisplay = (static_cast<uint64_t>(w) << 32) | h;
     ctx->dirty = true;
 }
