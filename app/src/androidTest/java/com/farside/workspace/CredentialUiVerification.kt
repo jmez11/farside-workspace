@@ -145,44 +145,60 @@ class CredentialUiVerification(private val instrumentation: Instrumentation) {
         error("Timed out waiting for credential operation")
     }
 
+    private fun awaitDialogDismissed() {
+        awaitCheck {
+            automation.clearCache()
+            val displays = automation.windowsOnAllDisplays
+            val nodes = (0 until displays.size()).flatMap { index ->
+                displays.valueAt(index).flatMap { it.root?.let(::descendants).orEmpty() }
+            }
+            nodes.none { it.text?.toString() in listOf("Unlock credential", "Unlock connection", "Remove PIN requirement", "Remove App PIN", "Change App PIN") }
+        }
+    }
+
     private fun verifyPin(activity: android.app.Activity, manager: com.farside.workspace.data.ProfileManager,
                           credentialId: String, profileId: String) {
         click("Settings")
         click("Credentials")
         click("Edit")
+        // 1. Toggling Require PIN without App PIN set should show an error
         click("Require PIN")
+        find("Set an App PIN in Tunnels & Global settings first.")
+        click("Cancel Edit")
+
+        // 2. Go to Tunnels & Global and set App PIN
+        click("Tunnels & Global")
         enter("New PIN (4–12 digits)", "246810")
         enter("Confirm PIN", "135790")
-        click("Save Changes")
+        click("Save PIN")
         find("PINs do not match.")
         enter("Confirm PIN", "246810")
         capture(activity, "credential-pin-setup.png")
-        click("Save Changes")
-        awaitCheck { manager.getCredentials().single { it.id == credentialId }.pinVerifier != null }
-        val protected = manager.getCredentials().single { it.id == credentialId }
-        instrumentation.sendStatus(0, Bundle().apply { putString("stream", "PIN setup and confirmation passed.\n") })
-        check(CredentialPin.matches("246810", protected.pinVerifier!!))
-        check(!CredentialPin.matches("000000", protected.pinVerifier))
-        check(protected.toJson().let { !it.has("pinVerifier") && it.has("pinVerifierEncrypted") })
+        click("Save PIN")
+        awaitCheck { manager.getAppPinVerifier() != null }
+        val verifier = manager.getAppPinVerifier()!!
+        instrumentation.sendStatus(0, Bundle().apply { putString("stream", "App PIN setup and confirmation passed.\n") })
+        check(CredentialPin.matches("246810", verifier))
+        check(!CredentialPin.matches("000000", verifier))
         val prefs = instrumentation.targetContext.getSharedPreferences("farside_profiles", Context.MODE_PRIVATE)
-        check("246810" !in prefs.getString("credentials", "")!!)
-        // PIN is required for management, including removal, and cancellation changes nothing.
+        check("246810" !in prefs.getString("app_pinVerifier", "")!!)
+        find("App PIN active")
+
+        // 3. Go to Credentials and enable Require PIN on the credential
+        click("Credentials")
         click("Edit")
-        enter("PIN", "000000")
-        click("Unlock")
-        find("Incorrect PIN.")
-        click("Cancel")
-        check(manager.getCredentials().single { it.id == credentialId } == protected)
-        click("Delete")
-        find("Unlock credential")
-        click("Cancel")
+        click("Require PIN")
+        click("Save Changes")
+        awaitCheck { manager.getCredentials().single { it.id == credentialId }.requirePin }
+        find("PIN required")
+
+        // 4. Test SessionActivity gate: PIN required to connect
         click("Back")
-        // Even a direct Activity launch cannot begin RDP until this credential is unlocked.
         fun session() = instrumentation.startActivitySync(Intent(instrumentation.targetContext, SessionActivity::class.java)
             .putExtra("profileId", profileId).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as SessionActivity
         var session = session()
         try {
-            find("Unlock credential")
+            find("Unlock connection")
             check(session.rdpInstance == 0L)
             enter("PIN", "000000")
             click("Unlock")
@@ -191,45 +207,49 @@ class CredentialUiVerification(private val instrumentation: Instrumentation) {
             click("Cancel")
             awaitCheck { session.isFinishing || session.isDestroyed }
             session = session()
-            find("Unlock credential")
+            find("Unlock connection")
             capture(session, "credential-pin-prompt.png")
             enter("PIN", "246810")
             click("Unlock")
-            // The localhost fixture deliberately refuses RDP; this dialog proves connection
-            // startup ran only after successful unlock, even if its native handle was short-lived.
             find("Connection failed")
-            instrumentation.sendStatus(0, Bundle().apply { putString("stream", "Direct session PIN gate, rejection, cancellation and unlock passed.\n") })
+            instrumentation.sendStatus(0, Bundle().apply { putString("stream", "Session PIN gate, rejection, cancellation and unlock passed.\n") })
         } finally { instrumentation.runOnMainSync { session.finish() } }
         Thread.sleep(500)
-        // Changing the PIN requires the old one; a blank edit preserves the login password.
+
+        // 5. Backoff throttling on App PIN
+        val now = System.currentTimeMillis()
+        val currentVerifier = manager.getAppPinVerifier()!!
+        repeat(5) { check(CredentialPin.unlock(instrumentation.targetContext, currentVerifier, "000000", now) != null) }
+        check(CredentialPin.unlock(instrumentation.targetContext, currentVerifier, "246810", now + 1) != null)
+        check(CredentialPin.unlock(instrumentation.targetContext, currentVerifier, "246810", now + 30_001) == null)
+        instrumentation.sendStatus(0, Bundle().apply { putString("stream", "Persistent backoff passed.\n") })
+
+        // 6. Disable Require PIN on the credential (prompts for App PIN)
         click("Settings")
         click("Credentials")
         click("Edit")
+        click("Require PIN")
+        find("Remove PIN requirement")
+        enter("PIN", "000000")
+        click("Unlock")
+        find("Incorrect PIN.")
+        click("Cancel")
+        check(manager.getCredentials().single { it.id == credentialId }.requirePin)
+        click("Require PIN")
+        find("Remove PIN requirement")
         enter("PIN", "246810")
         click("Unlock")
-        enter("New PIN (4–12 digits)", "864200")
-        enter("Confirm PIN", "864200")
+        awaitDialogDismissed()
         click("Save Changes")
-        awaitCheck { manager.getCredentials().single { it.id == credentialId }.pinVerifier != protected.pinVerifier }
-        val changed = manager.getCredentials().single { it.id == credentialId }
-        check(changed.pass == protected.pass && changed.id == protected.id)
-        check(CredentialPin.matches("864200", changed.pinVerifier!!))
-        check(!CredentialPin.matches("246810", changed.pinVerifier))
-        // Persisted backoff survives a fresh verifier invocation, without sleeping in the test.
-        val now = System.currentTimeMillis()
-        repeat(5) { check(CredentialPin.unlock(instrumentation.targetContext, changed, "000000", now) != null) }
-        check(CredentialPin.unlock(instrumentation.targetContext, changed, "864200", now + 1) != null)
-        check(CredentialPin.unlock(instrumentation.targetContext, changed, "864200", now + 30_001) == null)
-        instrumentation.sendStatus(0, Bundle().apply { putString("stream", "PIN change, old-PIN rejection, password preservation and persistent backoff passed.\n") })
-        click("Edit")
-        enter("PIN", "864200")
-        click("Unlock")
-        // Accessibility can reach controls beneath a modal; wait for unlock to finish first.
-        find("New PIN (4–12 digits)", editable = true)
-        click("Require PIN")
-        click("Save Changes")
-        awaitCheck { manager.getCredentials().single { it.id == credentialId }.pinVerifier == null }
-        check(manager.getProfiles().single { it.id == profileId }.credentialId == credentialId)
+        awaitCheck { !manager.getCredentials().single { it.id == credentialId }.requirePin }
+        click("Back")
+
+        // 7. Verify session connects without PIN when requirePin is false
+        session = session()
+        try {
+            find("Connection failed")
+            instrumentation.sendStatus(0, Bundle().apply { putString("stream", "Unprotected credential connects without PIN prompt.\n") })
+        } finally { instrumentation.runOnMainSync { session.finish() } }
         capture(activity)
     }
 
@@ -240,10 +260,11 @@ class CredentialUiVerification(private val instrumentation: Instrumentation) {
         val prefs = instrumentation.targetContext.getSharedPreferences("farside_profiles", Context.MODE_PRIVATE)
         val original = prefs.getString("credentials", null)
         val originalProfiles = prefs.getString("profiles", null)
-        val originalPinKeys = prefs.all.keys.filter { it.startsWith("pin-") }.toSet()
+        val originalPinKeys = prefs.all.keys.filter { it.contains("pin-") || it.contains("Pin") }.toSet()
+        val originalAppPin = prefs.getString("app_pinVerifier", null)
         val placementPrefs = instrumentation.targetContext.getSharedPreferences("session_window_positions", Context.MODE_PRIVATE)
         val originalPlacementKeys = placementPrefs.all.keys.toSet()
-        check(prefs.edit().putString("credentials", "[]").putString("profiles", "[]").commit())
+        check(prefs.edit().remove("app_pinVerifier").putString("credentials", "[]").putString("profiles", "[]").commit())
         var activity: android.app.Activity? = null
         try {
             verifyMigration(prefs)
@@ -317,7 +338,8 @@ class CredentialUiVerification(private val instrumentation: Instrumentation) {
         } finally {
             activity?.let { current -> instrumentation.runOnMainSync { current.finish() } }
             val editor = prefs.edit()
-            prefs.all.keys.filter { it.startsWith("pin-") && it !in originalPinKeys }.forEach { editor.remove(it) }
+            prefs.all.keys.filter { (it.contains("pin-") || it.contains("Pin")) && it !in originalPinKeys }.forEach { editor.remove(it) }
+            if (originalAppPin == null) editor.remove("app_pinVerifier") else editor.putString("app_pinVerifier", originalAppPin)
             if (original == null) editor.remove("credentials") else editor.putString("credentials", original)
             if (originalProfiles == null) editor.remove("profiles") else editor.putString("profiles", originalProfiles)
             check(editor.commit())

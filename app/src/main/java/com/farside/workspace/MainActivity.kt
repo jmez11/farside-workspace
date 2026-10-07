@@ -50,6 +50,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInteropFilter
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.ExperimentalComposeUiApi
 
 import metavrx.layout.compose.SpatialScene
 import metavrx.layout.window.compose.SpatialWindow
@@ -207,7 +210,7 @@ fun mapAndroidKeyCodeToXt(keyCode: Int): Int {
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalComposeUiApi::class)
 @Composable
 fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Unit, onClose: () -> Unit, windowInteraction: Long = 0L) {
     val permissionContext = LocalContext.current
@@ -284,15 +287,25 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
     val keyboardController = LocalSoftwareKeyboardController.current
     var showSoftKeyboard by remember { mutableStateOf(false) }
     val imeVisible = WindowInsets.isImeVisible
+    var panelImeVisible by remember { mutableStateOf(false) }
+    val keyboardVisible = imeVisible || panelImeVisible
+    var extraKeysExpanded by remember { mutableStateOf(false) }
+    val keyboardPanelState = metavrx.layout.window.compose.state.rememberWindowState()
+    var keyboardInteraction by remember { mutableStateOf(0L) }
+    var panelKeyboardActivation by remember { mutableStateOf(0L) }
+    var desktopKeyboardActivation by remember { mutableStateOf(0L) }
+    SideEffect { (context as? SessionActivity)?.keyboardPanelState = keyboardPanelState }
     var keyboardWasVisible by remember { mutableStateOf(false) }
-    LaunchedEffect(imeVisible, showSoftKeyboard) {
-        Log.d("RdpKeyboard", "requested=$showSoftKeyboard visible=$imeVisible observed=$keyboardWasVisible")
-        if (showSoftKeyboard && imeVisible) keyboardWasVisible = true
-        if (showSoftKeyboard && keyboardWasVisible && !imeVisible) {
+    LaunchedEffect(keyboardVisible, showSoftKeyboard, keyboardInteraction) {
+        Log.d("RdpKeyboard", "requested=$showSoftKeyboard rootIme=$imeVisible panelIme=$panelImeVisible observed=$keyboardWasVisible")
+        if (showSoftKeyboard && keyboardVisible) keyboardWasVisible = true
+        if (showSoftKeyboard && keyboardWasVisible && !keyboardVisible) {
+            // A key-surface activation can briefly hide the IME while its owner regains focus.
+            delay(600)
             showSoftKeyboard = false
             focusRequester.requestFocus()
         }
-        if (!showSoftKeyboard) keyboardWasVisible = false
+        if (!showSoftKeyboard) { keyboardWasVisible = false; extraKeysExpanded = false; keyboardInteraction = 0L; desktopKeyboardActivation = 0L; panelKeyboardActivation = 0L }
     }
 
     
@@ -302,6 +315,10 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
 
     var panX by remember { mutableStateOf(0f) }
     var panY by remember { mutableStateOf(0f) }
+    SideEffect {
+        (context as? SessionActivity)?.setZoom = { zoom = it }
+        (context as? SessionActivity)?.setPan = { x, y -> panX = x; panY = y }
+    }
     var currentWidth by remember { mutableStateOf(0) }
     var currentHeight by remember { mutableStateOf(0) }
     var offsetX by remember { mutableStateOf(0f) }
@@ -399,9 +416,50 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
     }
 
 
+    val baseTouchSlop = ViewConfiguration.get(context).scaledTouchSlop.toFloat()
+    val desktopPoint = { eventX: Float, eventY: Float ->
+        val w = if (currentWidth > 0) currentWidth.toFloat() else 1280f
+        val h = if (currentHeight > 0) currentHeight.toFloat() else 800f
+        mapScreenToDesktop(
+            eventX = eventX,
+            eventY = eventY,
+            viewWidth = w,
+            viewHeight = h,
+            zoom = zoom,
+            panX = panX,
+            panY = panY,
+            actualWidth = actualWidth,
+            actualHeight = actualHeight
+        )
+    }
+
+    val input = remember {
+        RdpPointerGesture(
+            touchSlop = baseTouchSlop,
+            send = { x, y, flags ->
+                if (rdpInstance != 0L) {
+                    val (remoteX, remoteY) = desktopPoint(x, y)
+                    remotePointer[0] = remoteX
+                    remotePointer[1] = remoteY
+                    rdpBridge.sendMouseEvent(rdpInstance, remoteX, remoteY, flags)
+                }
+            },
+            showHold = { point, started ->
+                holdPoint = point?.let { Offset(it.first, it.second) }
+                holdStarted = started
+            }
+        )
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .onSizeChanged { size ->
+                if (size.width > 0 && size.height > 0) {
+                    currentWidth = size.width
+                    currentHeight = size.height
+                }
+            }
             .focusRequester(focusRequester)
             .focusable()
             .onKeyEvent { event ->
@@ -451,37 +509,14 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                         android.view.ViewGroup.LayoutParams.MATCH_PARENT,
                         android.view.ViewGroup.LayoutParams.MATCH_PARENT)
                     var lastMouseEventTime = 0L
-                    
-                    // TextureView stretches the complete desktop texture to its current bounds.
-                    // MotionEvent coordinates are already local to the transformed AndroidView.
-                    fun desktopPoint(event: MotionEvent): Pair<Int, Int> {
-                        val x = (event.x * actualWidth / width.coerceAtLeast(1)).toInt()
-                        val y = (event.y * actualHeight / height.coerceAtLeast(1)).toInt()
-                        return x.coerceIn(0, actualWidth - 1) to y.coerceIn(0, actualHeight - 1)
-                    }
 
-                    val input = RdpPointerGesture(
-                        touchSlop = ViewConfiguration.get(viewContext).scaledTouchSlop.toFloat(),
-                        send = { x, y, flags ->
-                            if (rdpInstance != 0L) {
-                                val remoteX = (x * actualWidth / width.coerceAtLeast(1)).toInt().coerceIn(0, actualWidth - 1)
-                                val remoteY = (y * actualHeight / height.coerceAtLeast(1)).toInt().coerceIn(0, actualHeight - 1)
-                                remotePointer[0] = remoteX
-                                remotePointer[1] = remoteY
-                                rdpBridge.sendMouseEvent(rdpInstance, remoteX, remoteY, flags)
-                            }
-                        },
-                        showHold = { point, started ->
-                            holdPoint = point?.let {
-                                Offset(it.first * zoom + width * (1f - zoom) / 2f + panX,
-                                    it.second * zoom + height * (1f - zoom) / 2f + panY)
-                            }
-                            holdStarted = started
-                        }
-                    )
                     setOnTouchListener { _, event ->
                         // Keep the IME text editor focused while clicking/dragging the remote desktop.
                         if (!showSoftKeyboard) focusRequester.requestFocus()
+                        else if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                            desktopKeyboardActivation = SystemClock.uptimeMillis()
+                            keyboardInteraction = desktopKeyboardActivation
+                        }
                         input.onTouch(event)
                         true
                     }
@@ -491,7 +526,7 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                         if (now - lastMouseEventTime < 16) return@setOnHoverListener true
                         lastMouseEventTime = now
 
-                        val (rdpX, rdpY) = desktopPoint(event)
+                        val (rdpX, rdpY) = desktopPoint(event.x, event.y)
 
                         if (rdpInstance != 0L) {
                             remotePointer[0] = rdpX
@@ -525,6 +560,40 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                     }
                 }
             }
+        )
+
+        val toolbarMargin = with(density) { 48.dp.toPx() }
+        var lastHoverTime by remember { mutableStateOf(0L) }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInteropFilter { event ->
+                    (context as? SessionActivity)?.onTouchDebug?.invoke(event, zoom, panX, panY)
+                    if (toolbarBounds.inflate(toolbarMargin).contains(Offset(event.x, event.y))) {
+                        revealToolbar()
+                    }
+                    if (!showSoftKeyboard) focusRequester.requestFocus()
+                    else if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                        desktopKeyboardActivation = SystemClock.uptimeMillis()
+                        keyboardInteraction = desktopKeyboardActivation
+                    }
+                    if (event.actionMasked == MotionEvent.ACTION_HOVER_MOVE) {
+                        val now = SystemClock.uptimeMillis()
+                        if (now - lastHoverTime >= 16) {
+                            lastHoverTime = now
+                            val (rdpX, rdpY) = desktopPoint(event.x, event.y)
+                            if (rdpInstance != 0L) {
+                                remotePointer[0] = rdpX
+                                remotePointer[1] = rdpY
+                                rdpBridge.sendMouseEvent(rdpInstance, rdpX, rdpY, FreeRDPBridge.PTR_FLAGS_MOVE)
+                            }
+                        }
+                        true
+                    } else {
+                        input.onTouch(event)
+                        true
+                    }
+                }
         )
         
         holdPoint?.takeIf { holdProgress > 0f }?.let { point ->
@@ -646,12 +715,32 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                 }
             }
         }
-        if (showSoftKeyboard) {
-        val softKeyboardFocus = remember { FocusRequester() }
-        var textValue by remember { mutableStateOf(TextFieldValue(" ", selection = TextRange(1))) }
-        
-        if (imeVisible) RemoteExtraKeys(
-            modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter).fillMaxWidth(),
+        if (showSoftKeyboard) RemoteImeEditor(
+            label = "Remote keyboard input", activation = desktopKeyboardActivation, showInitially = true,
+            keyboardVisible = keyboardVisible, onActions = { (context as? SessionActivity)?.keyboardEditorActions = it },
+            onFocus = { (context as? SessionActivity)?.keyboardEditorHasFocus = it },
+            onView = { (context as? SessionActivity)?.keyboardEditorView = it },
+            sendUnicode = { code, down -> if (rdpInstance != 0L) rdpBridge.sendUnicodeKeyEvent(rdpInstance, code, down) },
+            sendKey = { code, down -> if (rdpInstance != 0L) rdpBridge.sendKeyEvent(rdpInstance, code, down) })
+
+        RemoteKeyboardPanel(visible = showSoftKeyboard, expanded = extraKeysExpanded,
+            state = keyboardPanelState, onInteraction = {
+                panelKeyboardActivation = SystemClock.uptimeMillis()
+                keyboardInteraction = panelKeyboardActivation
+            }) {
+        if (showSoftKeyboard) RemoteImeEditor(
+            label = "Remote key panel input", activation = panelKeyboardActivation, showInitially = false,
+            keyboardVisible = keyboardVisible, onActions = { (context as? SessionActivity)?.keyboardPanelEditorActions = it },
+            onImeVisibility = { panelImeVisible = it },
+            onFocus = { (context as? SessionActivity)?.keyboardPanelEditorHasFocus = it },
+            onView = { (context as? SessionActivity)?.keyboardPanelEditorView = it },
+            sendUnicode = { code, down -> if (rdpInstance != 0L) rdpBridge.sendUnicodeKeyEvent(rdpInstance, code, down) },
+            sendKey = { code, down -> if (rdpInstance != 0L) rdpBridge.sendKeyEvent(rdpInstance, code, down) })
+        RemoteExtraKeys(
+            modifier = Modifier.fillMaxSize(),
+            enabled = showSoftKeyboard,
+            expanded = extraKeysExpanded,
+            onExpandedChange = { extraKeysExpanded = it },
             sendKey = { code, down ->
                 if (rdpInstance != 0L) rdpBridge.sendKeyEvent(rdpInstance, code, down)
             },
@@ -664,30 +753,6 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                 }
             }
         )
-
-        androidx.compose.foundation.text.BasicTextField(
-            value = textValue,
-            onValueChange = { newVal ->
-                if (newVal.text.length > textValue.text.length && rdpInstance != 0L) {
-                    val char = newVal.text.last()
-                    rdpBridge.sendUnicodeKeyEvent(rdpInstance, char.code, true)
-                    rdpBridge.sendUnicodeKeyEvent(rdpInstance, char.code, false)
-                } else if (newVal.text.length < textValue.text.length && rdpInstance != 0L) {
-                    rdpBridge.sendKeyEvent(rdpInstance, 0x0E, true) // Backspace
-                    rdpBridge.sendKeyEvent(rdpInstance, 0x0E, false)
-                }
-                textValue = TextFieldValue(" ", selection = TextRange(1))
-            },
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            modifier = Modifier.size(1.dp).focusRequester(softKeyboardFocus)
-                .onFocusChanged { Log.d("RdpKeyboard", "editor focused=${it.isFocused} hasFocus=${it.hasFocus}") }
-                .semantics { contentDescription = "Remote keyboard input" }
-        )
-        LaunchedEffect(Unit) {
-            softKeyboardFocus.requestFocus()
-            keyboardController?.show()
         }
     }
-
-}
 }

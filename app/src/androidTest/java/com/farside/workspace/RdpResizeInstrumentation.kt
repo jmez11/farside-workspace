@@ -24,6 +24,7 @@ class RdpResizeInstrumentation : Instrumentation() {
     private var credentialsOnly = false
     private var proxiesOnly = false
     private var toolbarOnly = false
+    private var zoomTest = false
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(arguments)
         cloudflaredOnly = arguments?.getString("cloudflaredOnly") == "true"
@@ -37,6 +38,7 @@ class RdpResizeInstrumentation : Instrumentation() {
         credentialsOnly = arguments?.getString("credentialsOnly") == "true"
         proxiesOnly = arguments?.getString("proxiesOnly") == "true"
         toolbarOnly = arguments?.getString("toolbarOnly") == "true"
+        zoomTest = arguments?.getString("zoomTest") == "true"
         start()
     }
 
@@ -51,6 +53,12 @@ class RdpResizeInstrumentation : Instrumentation() {
     override fun onStart() {
         val results = Bundle()
         try {
+            if (zoomTest) {
+                val report = verifyZoomTouchCoordinates()
+                results.putString("stream", "PASS:\n$report\n")
+                finish(0, results)
+                return
+            }
             if (proxiesOnly) {
                 ProxyVerification(this).run()
                 results.putString("stream", "PASS: four proxy choices, selection/legacy handling and unsupported proxy rejection without direct TCP fallback.\n")
@@ -96,21 +104,25 @@ class RdpResizeInstrumentation : Instrumentation() {
             verifyPointerGestures()
             verifyDoubleTapTolerance()
             verifyControllerScroll()
+            verifyZoomedPointerMapping()
             if (inputOnly) {
-                results.putString("stream", "PASS: pointer gestures, double-tap position tolerance and four-direction controller wheel/deadzone/repeat/stop.\n")
+                results.putString("stream", "PASS: pointer gestures, double-tap position tolerance, four-direction controller wheel/deadzone/repeat/stop, and zoomed pointer coordinate mapping.\n")
                 finish(0, results)
                 return
             }
             val profile = ProfileManager(targetContext).getProfiles().first { it.type == ConnectionType.RDP }
-            val activity = startActivitySync(Intent(targetContext, SessionActivity::class.java).apply {
+            // A test-only window session can emulate Home's unhosted embedded-window focus grants.
+            // Drop identity before any keyboard UI/input code runs. No app permission is added.
+            if (toolbarOnly) uiAutomation.adoptShellPermissionIdentity("android.permission.INTERNAL_SYSTEM_WINDOW")
+            val activity = try { startActivitySync(Intent(targetContext, SessionActivity::class.java).apply {
                 putExtra("profileId", profile.id)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            })
+            }) } finally { if (toolbarOnly) uiAutomation.dropShellPermissionIdentity() }
             Thread.sleep(6000)
             if (toolbarOnly) {
                 verifyToolbar(activity)
                 runOnMainSync { activity.finish() }
-                results.putString("stream", "PASS: toolbar offset, full fade, real panel pose change, pin, expanded keyboard/modifier/numeric controls, keyboard focus through RDP tap/hold/drag, dismissal/reopening.\n")
+                results.putString("stream", "PASS: toolbar offset, full fade, real panel pose change, pin, expanded keyboard/modifier/numeric controls, unchanged desktop/pose, real key-window focus handoff and key touch events, keyboard focus through RDP tap/hold/drag, dismissal/reopening.\n")
                 finish(0, results)
                 return
             }
@@ -224,6 +236,9 @@ class RdpResizeInstrumentation : Instrumentation() {
         val shiftedPosition = vectorClass.getConstructor(Float::class.javaPrimitiveType, Float::class.javaPrimitiveType, Float::class.javaPrimitiveType)
             .newInstance(component("getX") + 0.05f, component("getY"), component("getZ"))
         val shiftedPose = poseClass.getConstructor(orientation.javaClass, vectorClass).newInstance(orientation, shiftedPosition)
+        val fixtureHandler = android.os.Handler(android.os.Looper.getMainLooper())
+        var fixtureVisible = false
+        var fixturePump: Runnable? = null
         fun applyPose(value: Any) {
             val builderClass = Class.forName("horizonos.app.volumetricwindow.VolumetricWindowTransaction\$Builder")
             val builder = builderClass.getConstructor().newInstance()
@@ -241,24 +256,138 @@ class RdpResizeInstrumentation : Instrumentation() {
             check(find("Unpin toolbar") != null) { "Pin action did not toggle toolbar" }
             Thread.sleep(4500)
             check(find("Unpin toolbar") != null) { "Pinned toolbar faded (display ${activity.display?.displayId}; pin=${find("Keep toolbar visible")})" }
+            applyPose(pose)
+            Thread.sleep(500)
+            uiAutomation.dropShellPermissionIdentity() // All keyboard placement/resize checks use app permissions.
+            val desktop = checkNotNull(texture(activity.window.decorView))
+            val desktopWidth = desktop.width
+            val desktopHeight = desktop.height
+            val desktopOrigin = IntArray(2).also { desktop.getLocationInWindow(it) }.toList()
+            val sessionActivity = activity as SessionActivity
+            val keyboardState = checkNotNull(sessionActivity.keyboardPanelState)
+            val desktopBridge = FreeRDPBridge()
+            check(sessionActivity.rdpInstance != 0L) { "No live desktop for keyboard geometry verification" }
+            val remoteWidth = desktopBridge.getDesktopWidth(sessionActivity.rdpInstance)
+            val remoteHeight = desktopBridge.getDesktopHeight(sessionActivity.rdpInstance)
+            fun parentPose(): SavedWindowPose {
+                val current = managerClass.getMethod("getWindowInfo", tokenClass).invoke(manager, token)
+                return SavedWindowPose.read(current.javaClass.getMethod("getPose").invoke(current))
+            }
+            val desktopPose = parentPose()
+            fun panelView(): View = checkNotNull(keyboardState.javaClass.methods.single {
+                it.name.startsWith("getHostedView") }.invoke(keyboardState) as? View)
+            fun verifyKeyboardGeometry(): Int {
+                check(keyboardState.lifecycle.value == metavrx.layout.window.compose.state.WindowLifecycle.Active) { "Key window not placed: ${keyboardState.lifecycle.value}" }
+                check(desktop.width == desktopWidth && desktop.height == desktopHeight) { "Keyboard changed desktop texture bounds" }
+                check(IntArray(2).also { desktop.getLocationInWindow(it) }.toList() == desktopOrigin) { "Keyboard shifted the desktop content" }
+                check(desktopBridge.getDesktopWidth(sessionActivity.rdpInstance) == remoteWidth &&
+                    desktopBridge.getDesktopHeight(sessionActivity.rdpInstance) == remoteHeight) { "Keyboard changed the server desktop resolution" }
+                check(parentPose() == desktopPose) { "Keyboard moved the desktop panel" }
+                val panel = panelView()
+                check(panel.width == desktopWidth) { "Key window width differs from desktop" }
+                android.util.Log.i("KeyboardPanelTest", "fixed desktop=${desktop.width}x${desktop.height}, keys=${panel.width}x${panel.height}, pose=$desktopPose")
+                return panel.height
+            }
             click("Keyboard")
-            Thread.sleep(1500)
-            val simulatedIme = find("ESC") == null
+            val simulatedIme = !activity.window.decorView.rootWindowInsets.isVisible(android.view.WindowInsets.Type.ime())
             fun imeVisibility(visible: Boolean) {
+                fixtureVisible = visible
                 runOnMainSync {
                     val decor = activity.window.decorView
                     decor.dispatchApplyWindowInsets(android.view.WindowInsets.Builder(decor.rootWindowInsets)
                         .setVisible(android.view.WindowInsets.Type.ime(), visible).build())
                 }
-                Thread.sleep(500)
+                Thread.sleep(if (visible) 500 else 1000)
             }
             if (simulatedIme) {
                 // Horizon can reject automated keyboard show while the headset is unworn.
                 // Dispatch real Android inset objects to exercise the Compose visibility path.
                 android.util.Log.i("ToolbarTest", "Horizon rejected automated IME show; testing inset transitions")
                 imeVisibility(true)
-            }
+                fixturePump = object : Runnable {
+                    override fun run() {
+                        if (fixtureVisible && !activity.isDestroyed) {
+                            val decor = activity.window.decorView
+                            decor.dispatchApplyWindowInsets(android.view.WindowInsets.Builder(decor.rootWindowInsets)
+                                .setVisible(android.view.WindowInsets.Type.ime(), true).build())
+                        }
+                        fixtureHandler.postDelayed(this, 100)
+                    }
+                }
+                fixtureHandler.post(checkNotNull(fixturePump))
+            } else Thread.sleep(1000)
             check(find("ESC") != null) { "Keyboard modifier controls missing" }
+            fun keyboardRetainsFocus() {
+                check(find("Remote keyboard input") != null) { "Missing keyboard input" }
+                // Observe the current Compose focus callback, rather than a stale/evicted log line.
+                check(activity.keyboardEditorHasFocus || activity.keyboardPanelEditorHasFocus) {
+                    "Pointer touch stole focus from keyboard input"
+                }
+                check(find("ESC") != null) { "Remote touch dismissed keyboard modifier controls" }
+            }
+            fun nativeFocus(panel: Boolean): Boolean {
+                try {
+                    val host = keyboardState.javaClass.methods.find { it.name.startsWith("getSurfaceControlViewHost") }
+                        ?.invoke(keyboardState) as? android.view.SurfaceControlViewHost ?: return false
+                    val target = try {
+                        host.javaClass.getMethod("getFocusGrantToken").invoke(host)
+                    } catch (e: Throwable) {
+                        null
+                    } ?: return false
+                    val nativeSession = Class.forName("android.view.WindowManagerGlobal").getMethod("getWindowSession").invoke(null)
+                    val windowClass = Class.forName("android.view.IWindow")
+                    uiAutomation.adoptShellPermissionIdentity("android.permission.INTERNAL_SYSTEM_WINDOW")
+                    try {
+                        nativeSession.javaClass.getMethod("grantEmbeddedWindowFocus", windowClass, android.os.IBinder::class.java,
+                            Boolean::class.javaPrimitiveType).invoke(nativeSession, null, target, panel)
+                    } finally { uiAutomation.dropShellPermissionIdentity() }
+                    Thread.sleep(100)
+                    val input = android.os.ParcelFileDescriptor.AutoCloseInputStream(uiAutomation.executeShellCommand("dumpsys input"))
+                        .bufferedReader().use { it.readText() }
+                    File(targetContext.cacheDir, "keyboard-native-focus.txt").writeText(input)
+                    val focused = input.substringAfter("FocusedWindows:").substringBefore("FocusRequests:")
+                    check(focused.contains("Embedded{SurfaceControlViewHost}") == panel) { "Native focus handoff not exercised: $focused" }
+                    return true
+                } catch (e: NoSuchMethodException) {
+                    android.util.Log.i("KeyboardTest", "grantEmbeddedWindowFocus not supported on this OS: ${e.message}")
+                    return false
+                }
+            }
+            fun touchKey(label: String, nativeFocus: Boolean = false) {
+                val actions = checkNotNull(sessionActivity.keyboardPanelEditorActions)
+                val actionCounts = listOf(actions.focusRequests, actions.focusResets, actions.restarts, actions.showRequests)
+                val exercisedNativeFocus = if (nativeFocus) nativeFocus(true) else false
+                val node = checkNotNull(find(label)) { "Missing touch key: $label" }
+                val bounds = android.graphics.Rect().also { node.getBoundsInScreen(it) }
+                runOnMainSync {
+                    val panel = panelView()
+                    val origin = IntArray(2).also { panel.getLocationOnScreen(it) }
+                    val started = android.os.SystemClock.uptimeMillis()
+                    for (action in listOf(android.view.MotionEvent.ACTION_DOWN, android.view.MotionEvent.ACTION_UP)) {
+                        val event = android.view.MotionEvent.obtain(started, started + if (action == android.view.MotionEvent.ACTION_UP) 50 else 0,
+                            action, bounds.exactCenterX() - origin[0], bounds.exactCenterY() - origin[1], 0)
+                        event.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
+                        try { check(panel.dispatchTouchEvent(event)) { "$label touch was not handled" } }
+                        finally { event.recycle() }
+                    }
+                }
+                // Unworn Horizon rejects automatic IME show. Keep only its visibility synthetic;
+                // the native child activation and parent-focus restoration above remain real.
+                if (simulatedIme && nativeFocus) imeVisibility(true) else Thread.sleep(500)
+                if (exercisedNativeFocus) {
+                    val editor = checkNotNull(sessionActivity.keyboardPanelEditorView)
+                    check(sessionActivity.keyboardPanelEditorHasFocus) { "Key window did not focus its IME editor" }
+                    val input = editor.context.getSystemService(android.view.inputmethod.InputMethodManager::class.java)
+                    check(input.isActive(editor)) { "Key window does not own Android's active InputConnection" }
+                    check(editor.onCheckIsTextEditor() && input.isAcceptingText) { "Key window has no accepting text InputConnection" }
+                    check(listOf(actions.focusRequests, actions.focusResets, actions.restarts, actions.showRequests) == actionCounts) {
+                        "Prepared key editor restarted focus/IME during native handoff"
+                    }
+                }
+                keyboardRetainsFocus()
+                verifyKeyboardGeometry()
+            }
+            val collapsedHeight = verifyKeyboardGeometry()
             for (label in listOf("WIN", "SHIFT", "CTRL", "ALT", "AltGr")) {
                 fun state(): String? {
                     var node = checkNotNull(find(label))
@@ -266,29 +395,25 @@ class RdpResizeInstrumentation : Instrumentation() {
                     return node.stateDescription?.toString()
                 }
                 check(state() == "Released") { "$label starts held" }
-                click(label)
+                touchKey(label)
                 check(state() == "Held") { "$label did not latch" }
-                click(label)
+                touchKey(label)
                 check(state() == "Released") { "$label did not release" }
             }
-            for (label in listOf("DEL", "TAB")) click(label)
+            for (label in listOf("DEL", "TAB")) touchKey(label)
             check(find("Up") == null && find("F1") == null) { "Expanded keys visible in first level" }
-            click("CTRL")
-            click("123")
+            touchKey("CTRL", nativeFocus = true)
+            touchKey("123", nativeFocus = true)
             check(find("ABC") != null && find("123") == null) { "Expanded close label missing" }
+            val expandedHeight = verifyKeyboardGeometry()
+            check(expandedHeight > collapsedHeight * 3) { "123 did not extend the bottom panel" }
             var heldCtrl = checkNotNull(find("CTRL"))
             while (heldCtrl.stateDescription == null && heldCtrl.parent != null) heldCtrl = heldCtrl.parent
             check(heldCtrl.stateDescription?.toString() == "Held") { "Expansion released CTRL" }
             fun captureKeyboard(name: String) {
-                val image = Bitmap.createBitmap(activity.window.decorView.width,
-                    activity.window.decorView.height, Bitmap.Config.ARGB_8888)
-                val done = java.util.concurrent.CountDownLatch(1)
-                var result = -1
-                runOnMainSync {
-                    android.view.PixelCopy.request(activity.window, image, { result = it; done.countDown() },
-                        android.os.Handler(android.os.Looper.getMainLooper()))
-                }
-                check(done.await(5, java.util.concurrent.TimeUnit.SECONDS) && result == android.view.PixelCopy.SUCCESS) { "Keyboard capture failed: $result" }
+                val panel = panelView()
+                val image = Bitmap.createBitmap(panel.width, panel.height, Bitmap.Config.ARGB_8888)
+                runOnMainSync { panel.draw(android.graphics.Canvas(image)) }
                 File(targetContext.cacheDir, "keyboard-$name.png").outputStream().use {
                     image.compress(Bitmap.CompressFormat.PNG, 100, it)
                 }
@@ -296,39 +421,34 @@ class RdpResizeInstrumentation : Instrumentation() {
             }
             captureKeyboard("expanded")
             click("CTRL")
-            for (n in 1..12) click("F$n")
+            for (n in 1..12) if (n == 1) touchKey("F$n") else click("F$n")
             for (label in listOf("Home", "Up", "PgUp", "Left", "Right", "End", "Down", "PgDn",
                 "Insert", "Delete", "Enter", "Backspace", "Keypad Enter", "/", "*", "-", "+", "Print Screen")) click(label)
             click("Right click")
             click("ESC") // Close any resulting remote context menu.
-            click("Number Keys")
+            touchKey("Number Keys")
             check(find("F1") == null && find("Function Keys") != null) { "Function bank did not switch to numbers" }
             for (label in listOf("7", "8", "9", "4", "5", "6", "1", "2", "3", "0", ".")) click(label)
             captureKeyboard("numbers")
             click("Function Keys")
             check(find("F1") != null && find("1") == null) { "Function bank did not restore" }
-            click("ABC")
+            val committedBeforeCollapse = KeyboardPanelResize.committedCompactions
+            touchKey("ABC", nativeFocus = true)
             check(find("123") != null && find("F1") == null && find("Up") == null) { "ABC did not close extras" }
+            check(verifyKeyboardGeometry() == collapsedHeight) { "ABC did not restore collapsed panel height" }
+            check(KeyboardPanelResize.committedCompactions > committedBeforeCollapse &&
+                KeyboardPanelResize.committedHeight == collapsedHeight) { "Compact key buffer was not committed before reveal" }
             click("123")
             check(find("F12") != null) { "Extras could not reopen" }
             click("ABC")
             captureKeyboard("collapsed")
             click("CTRL") // Dismissal must release a held modifier.
 
-            fun keyboardRetainsFocus() {
-                check(find("Remote keyboard input") != null) { "Missing keyboard input" }
-                // Horizon's headless accessibility window does not expose IME input focus.
-                // Observe Compose's actual onFocusChanged callback, scoped to this process.
-                val focusLog = android.os.ParcelFileDescriptor.AutoCloseInputStream(
-                    uiAutomation.executeShellCommand("logcat -d --pid=${android.os.Process.myPid()} -s RdpKeyboard")
-                ).bufferedReader().use { reader -> reader.readLines().lastOrNull { it.contains("editor focused=") } }
-                check(focusLog?.contains("editor focused=true hasFocus=true") == true) {
-                    "Remote touch stole focus from keyboard input: $focusLog"
-                }
-                check(find("ESC") != null) { "Remote touch dismissed keyboard modifier controls" }
-            }
             keyboardRetainsFocus()
             fun remoteTouch(action: Int, downTime: Long, eventTime: Long, dx: Float = 0f) {
+                val actions = checkNotNull(sessionActivity.keyboardEditorActions)
+                val actionCounts = listOf(actions.focusRequests, actions.focusResets, actions.restarts, actions.showRequests)
+                if (action == android.view.MotionEvent.ACTION_DOWN) nativeFocus(false)
                 runOnMainSync {
                     val view = checkNotNull(texture(activity.window.decorView))
                     val event = android.view.MotionEvent.obtain(downTime, eventTime, action,
@@ -339,6 +459,9 @@ class RdpResizeInstrumentation : Instrumentation() {
                 }
                 Thread.sleep(200)
                 keyboardRetainsFocus()
+                check(listOf(actions.focusRequests, actions.focusResets, actions.restarts, actions.showRequests) == actionCounts) {
+                    "Prepared desktop editor restarted focus/IME during native handoff"
+                }
             }
             for ((duration, movement) in listOf(80L to 0f, 1200L to 0f, 150L to 60f)) {
                 val start = android.os.SystemClock.uptimeMillis()
@@ -348,6 +471,7 @@ class RdpResizeInstrumentation : Instrumentation() {
             }
             android.util.Log.i("ToolbarTest", "PASS: keyboard input focus survived RDP tap, hold, and drag; simulatedIme=$simulatedIme")
 
+            nativeFocus(false)
             if (simulatedIme) imeVisibility(false)
             else {
                 runOnMainSync {
@@ -357,9 +481,16 @@ class RdpResizeInstrumentation : Instrumentation() {
                 Thread.sleep(1000)
             }
             check(find("ESC") == null) { "Keyboard modifier controls survived dismissal" }
+            check(keyboardState.lifecycle.value != metavrx.layout.window.compose.state.WindowLifecycle.Active) { "Key window survived dismissal" }
+            check(desktop.width == desktopWidth && desktop.height == desktopHeight && parentPose() == desktopPose)
+            check(desktopBridge.getDesktopWidth(sessionActivity.rdpInstance) == remoteWidth &&
+                desktopBridge.getDesktopHeight(sessionActivity.rdpInstance) == remoteHeight) { "Keyboard dismissal changed the server desktop resolution" }
             click("Keyboard")
             if (simulatedIme) imeVisibility(true) else Thread.sleep(1500)
             check(find("ESC") != null) { "Keyboard could not be reopened after dismissal" }
+            check(verifyKeyboardGeometry() == collapsedHeight) { "Reopened keyboard retained expanded height" }
+            touchKey("SHIFT", nativeFocus = true)
+            touchKey("SHIFT", nativeFocus = true)
             var ctrl = checkNotNull(find("CTRL"))
             while (ctrl.stateDescription == null && ctrl.parent != null) ctrl = ctrl.parent
             check(ctrl.stateDescription?.toString() == "Released") { "CTRL remained held after dismissal" }
@@ -373,6 +504,8 @@ class RdpResizeInstrumentation : Instrumentation() {
             Thread.sleep(4500)
             check(find("Keep toolbar visible") == null && find("Show session toolbar") == null)
         } finally {
+            fixturePump?.let { fixtureHandler.removeCallbacks(it) }
+            uiAutomation.adoptShellPermissionIdentity("horizonos.permission.MANAGE_VOLUMETRIC_WINDOWS")
             applyPose(pose)
             uiAutomation.dropShellPermissionIdentity()
         }
@@ -503,6 +636,93 @@ class RdpResizeInstrumentation : Instrumentation() {
             motion.recycle()
         }
         check(sent == listOf(right or down, right)) { "Secondary button release lost its identity" }
+    }
+
+
+    private fun verifyZoomedPointerMapping() {
+        val viewW = 1280f
+        val viewH = 800f
+        val actualW = 1280
+        val actualH = 800
+
+        // 1. Identity transform: 100% zoom, 0 pan
+        check(mapScreenToDesktop(0f, 0f, viewW, viewH, 1f, 0f, 0f, actualW, actualH) == 0 to 0)
+        check(mapScreenToDesktop(640f, 400f, viewW, viewH, 1f, 0f, 0f, actualW, actualH) == 640 to 400)
+        check(mapScreenToDesktop(1280f, 800f, viewW, viewH, 1f, 0f, 0f, actualW, actualH) == (actualW - 1) to (actualH - 1))
+
+        // 2. 142% zoom (user scenario: zoom = 1.42f, centered)
+        val zoom = 1.42f
+        check(mapScreenToDesktop(640f, 400f, viewW, viewH, zoom, 0f, 0f, actualW, actualH) == 640 to 400)
+
+        for (tx in listOf(100f, 300f, 640f, 900f, 1100f)) {
+            for (ty in listOf(100f, 250f, 400f, 600f, 750f)) {
+                val screenX = (tx - viewW / 2f) * zoom + viewW / 2f
+                val screenY = (ty - viewH / 2f) * zoom + viewH / 2f
+                val (rdpX, rdpY) = mapScreenToDesktop(screenX, screenY, viewW, viewH, zoom, 0f, 0f, actualW, actualH)
+                check(kotlin.math.abs(rdpX - tx.toInt()) <= 1) { "142% zoom mapping error: got ($rdpX, $rdpY), expected (${tx.toInt()}, ${ty.toInt()})" }
+                check(kotlin.math.abs(rdpY - ty.toInt()) <= 1) { "142% zoom mapping error: got ($rdpX, $rdpY), expected (${tx.toInt()}, ${ty.toInt()})" }
+            }
+        }
+
+        // 3. High zoom (2.0f and 3.0f) with pan
+        for (z in listOf(2.0f, 3.0f)) {
+            val panX = 120f
+            val panY = -80f
+            for (tx in listOf(500f, 640f, 800f)) {
+                for (ty in listOf(300f, 400f, 500f)) {
+                    val screenX = (tx - viewW / 2f) * z + viewW / 2f + panX
+                    val screenY = (ty - viewH / 2f) * z + viewH / 2f + panY
+                    val (rdpX, rdpY) = mapScreenToDesktop(screenX, screenY, viewW, viewH, z, panX, panY, actualW, actualH)
+                    check(kotlin.math.abs(rdpX - tx.toInt()) <= 1) { "$z zoom mapping error: got ($rdpX, $rdpY), expected (${tx.toInt()}, ${ty.toInt()})" }
+                    check(kotlin.math.abs(rdpY - ty.toInt()) <= 1) { "$z zoom mapping error: got ($rdpX, $rdpY), expected (${tx.toInt()}, ${ty.toInt()})" }
+                }
+            }
+        }
+
+        // 4. Clamping bounds check
+        check(mapScreenToDesktop(-500f, -500f, viewW, viewH, 1.42f, 0f, 0f, actualW, actualH) == 0 to 0)
+        check(mapScreenToDesktop(5000f, 5000f, viewW, viewH, 1.42f, 0f, 0f, actualW, actualH) == (actualW - 1) to (actualH - 1))
+    }
+
+
+    private fun verifyZoomTouchCoordinates(): String {
+        val profile = ProfileManager(targetContext).getProfiles().first { it.type == ConnectionType.RDP }
+        val activity = startActivitySync(Intent(targetContext, SessionActivity::class.java).apply {
+            putExtra("profileId", profile.id)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }) as SessionActivity
+        val sb = StringBuilder()
+        Thread.sleep(6000)
+
+        val touchesReceived = mutableListOf<Triple<Float, Float, Float>>()
+        activity.onTouchDebug = { event, z, _, _ ->
+            if (event.actionMasked == android.view.MotionEvent.ACTION_DOWN) {
+                touchesReceived.add(Triple(z, event.x, event.y))
+                sb.append("onTouchDebug z=$z: event=(${event.x}, ${event.y})\n")
+            }
+        }
+
+        for (z in listOf(1.0f, 1.25f, 1.42f, 1.5f, 2.0f, 3.0f)) {
+            runOnMainSync {
+                activity.setZoom?.invoke(z)
+            }
+            Thread.sleep(300)
+            runOnMainSync {
+                val downTime = android.os.SystemClock.uptimeMillis()
+                val event1 = android.view.MotionEvent.obtain(downTime, downTime, android.view.MotionEvent.ACTION_DOWN, 800f, 500f, 0)
+                event1.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
+                activity.dispatchTouchEvent(event1)
+                event1.recycle()
+            }
+            Thread.sleep(200)
+        }
+        runOnMainSync { activity.finish() }
+        check(touchesReceived.size == 6) { "Expected 6 touch events across all zoom levels, got ${touchesReceived.size}: $touchesReceived" }
+        for ((z, x, y) in touchesReceived) {
+            check(x == 800f && y == 500f) { "At zoom $z: expected unscaled screen coords (800, 500), got ($x, $y)" }
+        }
+        sb.append("ALL 6 ZOOM LEVELS (1.0x to 3.0x) PASSED: Screen coordinates are unscaled (800, 500) and delivered properly!\n")
+        return sb.toString()
     }
 
 }

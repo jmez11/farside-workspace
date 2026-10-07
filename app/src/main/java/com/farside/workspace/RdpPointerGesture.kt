@@ -8,9 +8,34 @@ import kotlin.math.hypot
 internal fun rightClickBoxProgress(elapsedMillis: Long): Float =
     ((elapsedMillis - 500L) / 1000f).coerceIn(0f, 1f)
 
+/**
+ * Invert Compose graphicsLayer scale and pan to map raw screen pointer events
+ * back to the underlying remote desktop pixel coordinates.
+ */
+internal fun mapScreenToDesktop(
+    eventX: Float,
+    eventY: Float,
+    viewWidth: Float,
+    viewHeight: Float,
+    zoom: Float,
+    panX: Float,
+    panY: Float,
+    actualWidth: Int,
+    actualHeight: Int
+): Pair<Int, Int> {
+    val w = viewWidth.coerceAtLeast(1f)
+    val h = viewHeight.coerceAtLeast(1f)
+    val z = zoom.coerceAtLeast(0.01f)
+    val tx = (eventX - panX - w / 2f) / z + w / 2f
+    val ty = (eventY - panY - h / 2f) / z + h / 2f
+    val rdpX = (tx * actualWidth / w).toInt().coerceIn(0, actualWidth - 1)
+    val rdpY = (ty * actualHeight / h).toInt().coerceIn(0, actualHeight - 1)
+    return rdpX to rdpY
+}
+
 /** Horizon delivers controller trigger and hand pinch as Android touch down/up. */
 internal class RdpPointerGesture(
-    private val touchSlop: Float,
+    var touchSlop: Float,
     private val send: (Float, Float, Int) -> Unit,
     private val showHold: (Pair<Float, Float>?, Long) -> Unit
 ) {

@@ -6,7 +6,6 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.PBEKeySpec
-import com.farside.workspace.data.SavedCredential
 
 /** An app access lock; login passwords remain encrypted separately by Android Keystore. */
 object CredentialPin {
@@ -34,10 +33,10 @@ object CredentialPin {
         }.getOrDefault(false)
     }
     @Synchronized
-    fun unlock(context: Context, credential: SavedCredential, pin: String, now: Long = System.currentTimeMillis()): String? {
-        val verifier = credential.pinVerifier ?: return null
+    fun unlock(context: Context, verifier: String?, pin: String, now: Long = System.currentTimeMillis()): String? {
+        if (verifier == null) return null
         val prefs = context.getSharedPreferences("farside_profiles", Context.MODE_PRIVATE)
-        val prefix = "pin-${credential.id}-"
+        val prefix = "app-pin-"
         val until = prefs.getLong(prefix + "until", 0)
         if (until > now) return "Too many attempts. Try again in ${(until - now + 999) / 1000} seconds."
         if (matches(pin, verifier)) {

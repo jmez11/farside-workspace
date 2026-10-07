@@ -150,4 +150,23 @@ class ProfileManager(private val context: Context) {
         creds.removeAll { it.id == id }
         saveCredentials(creds)
     }
+
+    fun getAppPinVerifier(): String? {
+        val stored = prefs.getString("app_pinVerifier", null) ?: return null
+        return if (stored.startsWith("{")) {
+            com.farside.workspace.CredentialManager.readPassword(org.json.JSONObject(stored), "pin")
+        } else if (stored.startsWith("v1:")) {
+            stored
+        } else null
+    }
+
+    fun setAppPinVerifier(verifier: String?) {
+        if (verifier == null) {
+            prefs.edit().remove("app_pinVerifier").apply()
+        } else {
+            val json = org.json.JSONObject()
+            com.farside.workspace.CredentialManager.writePassword(json, "pin", verifier)
+            prefs.edit().putString("app_pinVerifier", json.toString()).apply()
+        }
+    }
 }

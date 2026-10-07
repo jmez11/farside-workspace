@@ -8,7 +8,7 @@ data class SavedCredential(
     val name: String,
     val user: String,
     val pass: String,
-    val pinVerifier: String? = null
+    val requirePin: Boolean = false
 ) {
     fun toJson(): JSONObject {
         val json = JSONObject()
@@ -16,7 +16,7 @@ data class SavedCredential(
         json.put("name", name)
         json.put("user", user)
         com.farside.workspace.CredentialManager.writePassword(json, "pass", pass)
-        com.farside.workspace.CredentialManager.writePassword(json, "pinVerifier", pinVerifier)
+        json.put("requirePin", requirePin)
         return json
     }
 
@@ -27,7 +27,7 @@ data class SavedCredential(
                 name = json.getString("name"),
                 user = json.getString("user"),
                 pass = com.farside.workspace.CredentialManager.readPassword(json, "pass") ?: "",
-                pinVerifier = com.farside.workspace.CredentialManager.readPassword(json, "pinVerifier")
+                requirePin = json.optBoolean("requirePin", json.has("pinVerifier") || json.has("pinVerifierEncrypted"))
             )
         }
     }

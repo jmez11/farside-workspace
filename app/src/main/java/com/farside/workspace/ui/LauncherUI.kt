@@ -239,22 +239,27 @@ fun SettingsTextField(
 
 @Composable
 fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.data.ProfileManager, initialTab: Int = 0) {
-    var selectedTab by rememberSaveable { mutableStateOf(initialTab) }
+    var selectedTab by rememberSaveable(initialTab) { mutableStateOf(initialTab) }
     var cloudflarePersistent by rememberSaveable { mutableStateOf(false) }
     var cloudflareTunnelId by rememberSaveable { mutableStateOf("") }
     
+    var appPinVerifier by remember { mutableStateOf(profileManager.getAppPinVerifier()) }
+    var settingAppPin by remember { mutableStateOf(false) }
+    var changingAppPin by remember { mutableStateOf(false) }
+    var removingAppPin by remember { mutableStateOf(false) }
+    var appPinNew by remember { mutableStateOf("") }
+    var appPinConfirm by remember { mutableStateOf("") }
+    var appPinError by remember { mutableStateOf<String?>(null) }
+
     var credentials by remember { mutableStateOf(profileManager.getCredentials()) }
     var newCredName by rememberSaveable { mutableStateOf("") }
     var newCredUser by rememberSaveable { mutableStateOf("") }
     var newCredPass by remember { mutableStateOf("") }
     var editingCredentialId by remember { mutableStateOf<String?>(null) }
     var requirePin by remember { mutableStateOf(false) }
-    var newPin by remember { mutableStateOf("") }
-    var confirmPin by remember { mutableStateOf("") }
     var pinError by remember { mutableStateOf<String?>(null) }
     var savingCredential by remember { mutableStateOf(false) }
-    var pendingCredential by remember { mutableStateOf<com.farside.workspace.data.SavedCredential?>(null) }
-    var pendingAction by remember { mutableStateOf("") }
+    var pendingPinDisable by remember { mutableStateOf(false) }
     val credentialScope = rememberCoroutineScope()
     fun credentialAction(cred: com.farside.workspace.data.SavedCredential, action: String) {
         if (action == "edit") {
@@ -262,7 +267,7 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
             newCredName = cred.name
             newCredUser = cred.user
             newCredPass = ""
-            requirePin = cred.pinVerifier != null
+            requirePin = cred.requirePin
         } else {
             profileManager.deleteCredential(cred.id)
             credentials = profileManager.getCredentials()
@@ -274,15 +279,42 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                 requirePin = false
             }
         }
-        newPin = ""
-        confirmPin = ""
         pinError = null
     }
-    pendingCredential?.let { cred ->
-        CredentialPinDialog(cred, onUnlocked = {
-            credentialAction(cred, pendingAction)
-            pendingCredential = null
-        }, onCancel = { pendingCredential = null })
+    if (pendingPinDisable) {
+        CredentialPinDialog(
+            title = "Remove PIN requirement",
+            message = "Enter the App PIN to remove PIN requirement.",
+            onUnlocked = {
+                requirePin = false
+                pinError = null
+                pendingPinDisable = false
+            },
+            onCancel = { pendingPinDisable = false }
+        )
+    }
+    if (removingAppPin) {
+        CredentialPinDialog(
+            title = "Remove App PIN",
+            message = "Enter the current App PIN to remove it.",
+            onUnlocked = {
+                profileManager.setAppPinVerifier(null)
+                appPinVerifier = null
+                removingAppPin = false
+            },
+            onCancel = { removingAppPin = false }
+        )
+    }
+    if (changingAppPin) {
+        CredentialPinDialog(
+            title = "Change App PIN",
+            message = "Enter the current App PIN.",
+            onUnlocked = {
+                changingAppPin = false
+                settingAppPin = true
+            },
+            onCancel = { changingAppPin = false }
+        )
     }
 
     Column(
@@ -335,115 +367,151 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                 
                 when (selectedTab) {
                     0 -> {
+                        SettingsHeader("App Security")
+                        if (appPinVerifier == null || settingAppPin) {
+                            Text(if (settingAppPin) "Enter new App PIN:" else "Set an App-wide PIN to secure credentials.",
+                                color = Color.Gray, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 16.dp))
+                            SettingsTextField(appPinNew, { appPinNew = it; appPinError = null }, "New PIN (4–12 digits)",
+                                accessibleLabel = "New PIN (4–12 digits)",
+                                visualTransformation = PasswordVisualTransformation(),
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword))
+                            SettingsTextField(appPinConfirm, { appPinConfirm = it; appPinError = null }, "Confirm PIN",
+                                accessibleLabel = "Confirm PIN",
+                                visualTransformation = PasswordVisualTransformation(),
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword))
+                            appPinError?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 16.dp)) }
+                            Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                                TextButton(onClick = {
+                                    if (!com.farside.workspace.CredentialPin.valid(appPinNew)) {
+                                        appPinError = "Use 4–12 digits for the PIN."
+                                        return@TextButton
+                                    }
+                                    if (appPinNew != appPinConfirm) {
+                                        appPinError = "PINs do not match."
+                                        return@TextButton
+                                    }
+                                    val verifier = com.farside.workspace.CredentialPin.create(appPinNew)
+                                    profileManager.setAppPinVerifier(verifier)
+                                    appPinVerifier = verifier
+                                    settingAppPin = false
+                                    appPinNew = ""
+                                    appPinConfirm = ""
+                                    appPinError = null
+                                }) { Text("Save PIN", color = Color(0xFF1E88E5)) }
+                                if (settingAppPin) {
+                                    TextButton(onClick = { settingAppPin = false; appPinNew = ""; appPinConfirm = ""; appPinError = null }) {
+                                        Text("Cancel", color = Color.Gray)
+                                    }
+                                }
+                            }
+                        } else {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text("App PIN active", color = Color.White, fontWeight = FontWeight.Bold)
+                                    Text("Secures credentials with Require PIN enabled", color = Color.Gray, fontSize = 12.sp)
+                                }
+                                Row {
+                                    TextButton(onClick = { changingAppPin = true }) {
+                                        Text("Change PIN", color = Color(0xFF1E88E5))
+                                    }
+                                    TextButton(onClick = { removingAppPin = true }) {
+                                        Text("Remove PIN", color = Color.Red)
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
                         SettingsHeader("Cloudflared Tunnel Service")
                         SettingsSwitchRow("Enable Persistent Service", cloudflarePersistent, { cloudflarePersistent = it })
                         SettingsTextField(cloudflareTunnelId, { cloudflareTunnelId = it }, "Tunnel ID (e.g. 1234abcd-...)")
                     }
                     1 -> {
                         SettingsHeader("User Management")
-                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                    credentials.forEach { cred ->
-                        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Column {
-                                Text(cred.name, color = Color.White, fontWeight = FontWeight.Bold)
-                                Text(cred.user, color = Color.Gray, fontSize = 12.sp)
-                                if (cred.pinVerifier != null) Text("PIN protected", color = Color.Gray, fontSize = 12.sp)
-                            }
-                            Row {
-                            TextButton(enabled = !savingCredential, onClick = {
-                                if (cred.pinVerifier != null) {
-                                    pendingCredential = cred
-                                    pendingAction = "edit"
-                                } else credentialAction(cred, "edit")
-                            }) { Text("Edit", color = Color(0xFF1E88E5)) }
-                            TextButton(enabled = !savingCredential, onClick = {
-                                if (cred.pinVerifier != null) {
-                                    pendingCredential = cred
-                                    pendingAction = "delete"
-                                } else credentialAction(cred, "delete")
-                            }) {
-                                Text("Delete", color = Color.Red)
-                            }
-                            }
-                        }
-                    }
-                    
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(if (editingCredentialId == null) "Add New Credential" else "Edit Credential", color = Color(0xFF1E88E5), fontSize = 14.sp)
-                    SettingsTextField(newCredName, { newCredName = it }, "Account Display Name")
-                    SettingsTextField(newCredUser, { newCredUser = it }, "Username")
-                    SettingsTextField(newCredPass, { newCredPass = it }, "Password", visualTransformation = PasswordVisualTransformation())
-                    if (editingCredentialId != null) Text("Leave password blank to keep the saved password.", color = Color.Gray, fontSize = 12.sp)
-                    SettingsSwitchRow("Require PIN", requirePin, { requirePin = it; pinError = null })
-                    if (requirePin) {
-                        SettingsTextField(newPin, { newPin = it; pinError = null }, "New PIN (4–12 digits)",
-                            accessibleLabel = "New PIN (4–12 digits)",
-                            visualTransformation = PasswordVisualTransformation(),
-                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword))
-                        SettingsTextField(confirmPin, { confirmPin = it; pinError = null }, "Confirm PIN",
-                            accessibleLabel = "Confirm PIN",
-                            visualTransformation = PasswordVisualTransformation(),
-                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword))
-                        if (credentials.any { it.id == editingCredentialId && it.pinVerifier != null })
-                            Text("Leave PIN blank to keep the current PIN.", color = Color.Gray, fontSize = 12.sp)
-                    }
-                    pinError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                    TextButton(enabled = !savingCredential, onClick = {
-                        if (newCredName.isNotBlank() && newCredUser.isNotBlank()) {
-                            val previous = credentials.find { it.id == editingCredentialId }
-                            if (requirePin && !(newPin.isEmpty() && confirmPin.isEmpty() && previous?.pinVerifier != null)) {
-                                if (!com.farside.workspace.CredentialPin.valid(newPin)) {
-                                    pinError = "Use 4–12 digits for the PIN."
-                                    return@TextButton
-                                }
-                                if (newPin != confirmPin) {
-                                    pinError = "PINs do not match."
-                                    return@TextButton
-                                }
-                            }
-                            val credential = com.farside.workspace.data.SavedCredential(
-                                id = editingCredentialId ?: UUID.randomUUID().toString(),
-                                name = newCredName, user = newCredUser,
-                                pass = if (editingCredentialId != null && newCredPass.isEmpty())
-                                    credentials.first { it.id == editingCredentialId }.pass else newCredPass)
-                            val editing = editingCredentialId != null
-                            val pin = newPin
-                            val protect = requirePin
-                            savingCredential = true
-                            credentialScope.launch {
-                                try {
-                                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-                                        val verifier = if (!protect) null else if (pin.isEmpty()) previous?.pinVerifier
-                                            else com.farside.workspace.CredentialPin.create(pin)
-                                        val saved = credential.copy(pinVerifier = verifier)
-                                        if (editing) profileManager.updateCredential(saved) else profileManager.addCredential(saved)
+                        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                            credentials.forEach { cred ->
+                                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                    Column {
+                                        Text(cred.name, color = Color.White, fontWeight = FontWeight.Bold)
+                                        Text(cred.user, color = Color.Gray, fontSize = 12.sp)
+                                        if (cred.requirePin) Text("PIN required", color = Color.Gray, fontSize = 12.sp)
                                     }
-                                    credentials = profileManager.getCredentials()
+                                    Row {
+                                        TextButton(enabled = !savingCredential, onClick = {
+                                            credentialAction(cred, "edit")
+                                        }) { Text("Edit", color = Color(0xFF1E88E5)) }
+                                        TextButton(enabled = !savingCredential, onClick = {
+                                            credentialAction(cred, "delete")
+                                        }) { Text("Delete", color = Color.Red) }
+                                    }
+                                }
+                            }
+                            
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(if (editingCredentialId == null) "Add New Credential" else "Edit Credential", color = Color(0xFF1E88E5), fontSize = 14.sp)
+                            SettingsTextField(newCredName, { newCredName = it }, "Account Display Name")
+                            SettingsTextField(newCredUser, { newCredUser = it }, "Username")
+                            SettingsTextField(newCredPass, { newCredPass = it }, "Password", visualTransformation = PasswordVisualTransformation())
+                            if (editingCredentialId != null) Text("Leave password blank to keep the saved password.", color = Color.Gray, fontSize = 12.sp)
+                            SettingsSwitchRow("Require PIN", requirePin, { enabled ->
+                                val previous = credentials.find { it.id == editingCredentialId }
+                                if (!enabled && previous?.requirePin == true) {
+                                    pendingPinDisable = true
+                                } else if (enabled) {
+                                    if (appPinVerifier == null) {
+                                        pinError = "Set an App PIN in Tunnels & Global settings first."
+                                    } else {
+                                        requirePin = true
+                                        pinError = null
+                                    }
+                                } else {
+                                    requirePin = false
+                                    pinError = null
+                                }
+                            })
+                            pinError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                            TextButton(enabled = !savingCredential && !pendingPinDisable, onClick = {
+                                if (newCredName.isNotBlank() && newCredUser.isNotBlank()) {
+                                    val credential = com.farside.workspace.data.SavedCredential(
+                                        id = editingCredentialId ?: java.util.UUID.randomUUID().toString(),
+                                        name = newCredName, user = newCredUser,
+                                        pass = if (editingCredentialId != null && newCredPass.isEmpty())
+                                            credentials.first { it.id == editingCredentialId }.pass else newCredPass,
+                                        requirePin = requirePin)
+                                    val editing = editingCredentialId != null
+                                    savingCredential = true
+                                    credentialScope.launch {
+                                        try {
+                                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                                                val saved = credential
+                                                if (editing) profileManager.updateCredential(saved) else profileManager.addCredential(saved)
+                                            }
+                                            credentials = profileManager.getCredentials()
+                                            editingCredentialId = null
+                                            newCredName = ""
+                                            newCredUser = ""
+                                            newCredPass = ""
+                                            requirePin = false
+                                        } finally { savingCredential = false }
+                                    }
+                                }
+                            }, modifier = Modifier.align(Alignment.End)) {
+                                Text(if (editingCredentialId == null) "Save Credential" else "Save Changes", color = Color(0xFF1E88E5))
+                            }
+                            if (editingCredentialId != null) {
+                                TextButton(enabled = !savingCredential && !pendingPinDisable, onClick = {
                                     editingCredentialId = null
                                     newCredName = ""
                                     newCredUser = ""
                                     newCredPass = ""
-                                    newPin = ""
-                                    confirmPin = ""
                                     requirePin = false
-                                } finally { savingCredential = false }
+                                    pinError = null
+                                }, modifier = Modifier.align(Alignment.End)) { Text("Cancel Edit") }
                             }
-                        }
-                    }, modifier = Modifier.align(Alignment.End)) {
-                        Text(if (editingCredentialId == null) "Save Credential" else "Save Changes", color = Color(0xFF1E88E5))
-                    }
-                    if (editingCredentialId != null) {
-                        TextButton(enabled = !savingCredential, onClick = {
-                            editingCredentialId = null
-                            newCredName = ""
-                            newCredUser = ""
-                            newCredPass = ""
-                            newPin = ""
-                            confirmPin = ""
-                            requirePin = false
-                            pinError = null
-                        }, modifier = Modifier.align(Alignment.End)) { Text("Cancel Edit") }
-                    }
                         }
                     }
                     2 -> {
@@ -729,15 +797,10 @@ fun AddProfileForm(
     var redirectStorage by rememberSaveable { mutableStateOf(initialProfile?.redirectStorage ?: true) }
     var redirectClipboard by rememberSaveable { mutableStateOf(initialProfile?.redirectClipboard ?: true) }
     var redirectLocation by rememberSaveable { mutableStateOf(initialProfile?.redirectLocation ?: true) }
-    var customResolution by rememberSaveable { mutableStateOf(initialProfile?.customResolution ?: false) }
-    var matchDevice by rememberSaveable { mutableStateOf(initialProfile?.matchDevice ?: true) }
-    var useDefaultResolution by rememberSaveable { mutableStateOf(initialProfile?.useDefaultResolution ?: false) }
-    var resolutionDropdown by rememberSaveable { mutableStateOf("${initialProfile?.resolutionWidth ?: 1920} x ${initialProfile?.resolutionHeight ?: 1080}") }
-    var scaling by rememberSaveable { mutableFloatStateOf(initialProfile?.resolutionScaling?.toFloat() ?: 100f) }
+
     var swapMouseButtons by rememberSaveable { mutableStateOf(initialProfile?.swapMouseButtons ?: false) }
     var adminMode by rememberSaveable { mutableStateOf(initialProfile?.adminMode ?: false) }
-    
-    var resolutionSubMenuOpen by rememberSaveable { mutableStateOf(false) }
+
     var showValidationErrors by rememberSaveable { mutableStateOf(false) }
 
     Column(
@@ -753,18 +816,11 @@ fun AddProfileForm(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            if (resolutionSubMenuOpen) {
-                IconButton(onClick = { resolutionSubMenuOpen = false }) {
-                    Text("<", color = Color(0xFF1E88E5), fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                }
-                Text("Customize display resolution", color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.width(48.dp))
-            } else {
-                IconButton(onClick = onCancel) {
-                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color(0xFF1E88E5))
-                }
-                Text("Add Connection", color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                TextButton(onClick = {
+            IconButton(onClick = onCancel) {
+                Icon(Icons.Default.Close, contentDescription = "Close", tint = Color(0xFF1E88E5))
+            }
+            Text("Add Connection", color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            TextButton(onClick = {
                     if (proxyType !in com.farside.workspace.data.ProxyType.choices) {
                         showValidationErrors = true
                         return@TextButton
@@ -812,12 +868,12 @@ fun AddProfileForm(
                         redirectStorage = redirectStorage,
                         redirectClipboard = redirectClipboard,
                         redirectLocation = redirectLocation,
-                        customResolution = customResolution,
-                        matchDevice = matchDevice,
-                        useDefaultResolution = useDefaultResolution,
-                        resolutionWidth = if (matchDevice) 0 else if (useDefaultResolution) 1920 else (resolutionDropdown.substringBefore(" x ").toIntOrNull() ?: 1920),
-                        resolutionHeight = if (matchDevice) 0 else if (useDefaultResolution) 1080 else (resolutionDropdown.substringAfter(" x ").toIntOrNull() ?: 1080),
-                        resolutionScaling = scaling.toInt(),
+                        customResolution = initialProfile?.customResolution ?: false,
+                        matchDevice = initialProfile?.matchDevice ?: true,
+                        useDefaultResolution = initialProfile?.useDefaultResolution ?: false,
+                        resolutionWidth = initialProfile?.resolutionWidth ?: 1920,
+                        resolutionHeight = initialProfile?.resolutionHeight ?: 1080,
+                        resolutionScaling = initialProfile?.resolutionScaling ?: 100,
                         swapMouseButtons = swapMouseButtons,
                         adminMode = adminMode
                     )
@@ -826,83 +882,8 @@ fun AddProfileForm(
                 Text("SAVE", color = Color(0xFF1E88E5), fontWeight = FontWeight.Bold)
             }
         }
-        }
         
         Divider(color = Color.DarkGray, thickness = 1.dp)
-
-        if (resolutionSubMenuOpen) {
-            // Resolution Submenu
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-                Column(
-                    modifier = Modifier
-                        .widthIn(max = 700.dp)
-                        .fillMaxHeight()
-                        .padding(top = 16.dp, bottom = 32.dp)
-                ) {
-                    SettingsSwitchRow("On", customResolution, { customResolution = it })
-                    if (customResolution) {
-                        // Match this device
-                        Row(
-                            modifier = Modifier.fillMaxWidth().clickable { matchDevice = true; useDefaultResolution = false }.padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(selected = matchDevice && !useDefaultResolution, onClick = null, colors = RadioButtonDefaults.colors(selectedColor = Color(0xFF1E88E5), unselectedColor = Color.Gray))
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Text("Match this device", color = Color.White, fontSize = 16.sp)
-                        }
-                        
-                        // Default 1920x1080
-                        Row(
-                            modifier = Modifier.fillMaxWidth().clickable { matchDevice = false; useDefaultResolution = true }.padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(selected = !matchDevice && useDefaultResolution, onClick = null, colors = RadioButtonDefaults.colors(selectedColor = Color(0xFF1E88E5), unselectedColor = Color.Gray))
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Text("Default 1920x1080", color = Color.White, fontSize = 16.sp)
-                        }
-                        
-                        // Custom
-                        Row(
-                            modifier = Modifier.fillMaxWidth().clickable { matchDevice = false; useDefaultResolution = false }.padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(selected = !matchDevice && !useDefaultResolution, onClick = null, colors = RadioButtonDefaults.colors(selectedColor = Color(0xFF1E88E5), unselectedColor = Color.Gray))
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Text("+ Custom", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        }
-                        
-                        if (!matchDevice && !useDefaultResolution) {
-                            Column(modifier = Modifier.padding(start = 56.dp, end = 16.dp)) {
-                                Text("RESOLUTION", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
-                                ResolutionDropdown(resolutionDropdown, { resolutionDropdown = it })
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Text("SCALING", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                Slider(
-                                    value = scaling,
-                                    onValueChange = { scaling = it },
-                                    valueRange = 100f..300f,
-                                    steps = 3,
-                                    colors = SliderDefaults.colors(thumbColor = Color(0xFF1E88E5), activeTrackColor = Color(0xFF1E88E5))
-                                )
-                                Text("${scaling.toInt()} %", color = Color.White, modifier = Modifier.align(Alignment.End))
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Text("These settings affect the amount of data used and performance. Scaling is available beginning with Windows 8.1 and Windows Server 2012 R2.", color = Color.Gray, fontSize = 12.sp)
-                                Spacer(modifier = Modifier.height(24.dp))
-                                Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
-                                    TextButton(onClick = { resolutionSubMenuOpen = false }) {
-                                        Text("CANCEL", color = Color(0xFF1E88E5), fontWeight = FontWeight.Bold)
-                                    }
-                                    Spacer(modifier = Modifier.width(16.dp))
-                                    TextButton(onClick = { resolutionSubMenuOpen = false }) {
-                                        Text("SAVE", color = Color(0xFF1E88E5), fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        } else {
             // Settings List centered in a wide window
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
             Column(
@@ -1068,29 +1049,9 @@ fun AddProfileForm(
                     SettingsSwitchRow("Redirect Clipboard", redirectClipboard, { redirectClipboard = it })
                     SettingsSwitchRow("Redirect Location", redirectLocation, { redirectLocation = it })
                     
-                    SettingsHeader("Display")
-                    // Custom clickable row for Resolution Submenu
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { resolutionSubMenuOpen = true }
-                            .padding(horizontal = 16.dp, vertical = 2.dp)
-                            .background(Color(0xFF1C1C1E))
-                            .padding(horizontal = 16.dp, vertical = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column {
-                            Text("Customize display resolution", color = Color.White, fontSize = 16.sp)
-                            val displayResText = if (customResolution) {
-                                if (matchDevice) "Match this device" else if (useDefaultResolution) "Default 1920x1080" else "Custom ($resolutionDropdown)"
-                            } else "Off"
-                            Text(displayResText, color = Color.Gray, fontSize = 14.sp)
-                        }
-                    }
+                    // Display settings removed
                 }
             }
         }
     }
-}
 }

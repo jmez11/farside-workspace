@@ -22,6 +22,7 @@ static AAudioStream* open_stream(const AUDIO_FORMAT* f, aaudio_direction_t direc
     AAudioStreamBuilder_setChannelCount(b, f->nChannels);
     AAudioStreamBuilder_setSharingMode(b, AAUDIO_SHARING_MODE_SHARED);
     AAudioStreamBuilder_setPerformanceMode(b, AAUDIO_PERFORMANCE_MODE_LOW_LATENCY);
+    AAudioStreamBuilder_setSessionId(b, AAUDIO_SESSION_ID_ALLOCATE);
     if (direction == AAUDIO_DIRECTION_INPUT)
         AAudioStreamBuilder_setInputPreset(b, AAUDIO_INPUT_PRESET_VOICE_RECOGNITION);
     const auto result = AAudioStreamBuilder_openStream(b, &stream);
