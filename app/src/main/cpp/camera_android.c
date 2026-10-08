@@ -47,6 +47,21 @@ static volatile BOOL g_camera_muted = FALSE;
 static volatile UINT g_camera_count = 0;
 static volatile int g_camera_max_dimension = 720; /* Default 720p */
 
+#ifndef NDEBUG
+static volatile BOOL g_verification_pattern = FALSE;
+#endif
+
+BOOL cam_android_set_verification_pattern(BOOL enabled)
+{
+#ifndef NDEBUG
+	g_verification_pattern = enabled;
+	return TRUE;
+#else
+	WINPR_UNUSED(enabled);
+	return FALSE;
+#endif
+}
+
 BOOL cam_android_is_recording(void)
 {
 	return g_camera_recording;
@@ -69,7 +84,9 @@ UINT cam_android_get_camera_count(void)
 
 void cam_android_set_max_dimension(int maxDim)
 {
-	if (maxDim <= 0)
+	if (maxDim == -1)
+		g_camera_max_dimension = -1; /* Highest native Camera2 resolution. */
+	else if (maxDim <= 0)
 		g_camera_max_dimension = 720;
 	else
 		g_camera_max_dimension = maxDim;
@@ -281,6 +298,30 @@ static void cam_android_deliver_frame(CamAndroidStream* stream, AImage* image)
 	cam_android_yuv420_888_to_nv12(stream->nv12Buffer, width, height, yData, yRowStride, uData,
 	                               uRowStride, uPixelStride, vData, vRowStride, vPixelStride);
 
+#ifndef NDEBUG
+	if (g_verification_pattern)
+	{
+		/* Known BT.601 limited-range colors, repeated at different image positions.
+		 * This replaces content only: production packing/encoder/transport stays intact. */
+		static const BYTE colors[8][3] = {
+			{81, 90, 240}, {145, 54, 34}, {41, 240, 110}, {235, 128, 128},
+			{210, 16, 146}, {170, 166, 16}, {106, 202, 222}, {16, 128, 128}
+		};
+		for (int row = 0; row < height; row++)
+			for (int col = 0; col < width; col++)
+				stream->nv12Buffer[(size_t)row * width + col] =
+					colors[(col * 8 / width + (row * 4 / height) * 3) % 8][0];
+		for (int row = 0; row < height / 2; row++)
+			for (int col = 0; col < width / 2; col++)
+			{
+				const BYTE* color = colors[(col * 16 / width + (row * 8 / height) * 3) % 8];
+				const size_t offset = ySize + (size_t)row * width + col * 2;
+				stream->nv12Buffer[offset] = color[1];
+				stream->nv12Buffer[offset + 1] = color[2];
+			}
+	}
+#endif
+
 	if (g_camera_muted)
 	{
 		memset(stream->nv12Buffer, 0, ySize);
@@ -292,6 +333,8 @@ static void cam_android_deliver_frame(CamAndroidStream* stream, AImage* image)
 	{
 		LOGI("cam_android_deliver_frame: delivered frame #%u (%dx%d, size=%zu)",
 		     frameCount, width, height, nv12Size);
+		LOGI("Camera2 plane layout: Y stride=%d U stride=%d pixel=%d V stride=%d pixel=%d",
+		     yRowStride, uRowStride, uPixelStride, vRowStride, vPixelStride);
 	}
 
 	stream->sampleCallback(stream->dev, stream->streamIndex, stream->nv12Buffer, nv12Size);
@@ -728,7 +771,7 @@ static INT16 cam_android_get_media_type_descriptions(ICamHal* ihal, const char* 
 		const int maxDim = g_camera_max_dimension > 0 ? g_camera_max_dimension : 720;
 		if (isH264)
 		{
-			if (h > maxDim || w > (maxDim * 16 / 9 + 64))
+			if (g_camera_max_dimension != -1 && (h > maxDim || w > (maxDim * 16 / 9 + 64)))
 				continue;
 		}
 		else

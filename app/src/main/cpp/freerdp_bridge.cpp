@@ -224,6 +224,8 @@ extern "C" void cam_android_set_muted(BOOL muted);
 extern "C" BOOL cam_android_is_muted(void);
 extern "C" UINT cam_android_get_camera_count(void);
 extern "C" void cam_android_set_max_dimension(int maxDim);
+extern "C" BOOL cam_android_set_verification_pattern(BOOL enabled);
+extern "C" BOOL quest_camera_encoder_register(JNIEnv* env);
 
 QuestAudioState* quest_audio_state(rdpContext* context) { return ((RdpContext*)context)->audio; }
 extern "C" BOOL VCAPITYPE drdynvc_VirtualChannelEntryEx(PVOID pInitHandle, PVOID pContext);
@@ -525,6 +527,7 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
         setenv("HOME", "/data/data/com.farside.workspace/files", 1);
     }
     
+    if (enableCamera && !quest_camera_encoder_register(env)) return 0;
     LOGI("freerdp_new called");
     freerdp* instance = freerdp_new();
     if (!instance) {
@@ -1188,6 +1191,55 @@ Java_com_farside_workspace_FreeRDPBridge_isCameraMuted(JNIEnv*, jobject, jlong) 
 extern "C" JNIEXPORT void JNICALL
 Java_com_farside_workspace_FreeRDPBridge_setCameraMaxDimension(JNIEnv*, jobject, jint maxDim) {
     cam_android_set_max_dimension(maxDim);
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_farside_workspace_FreeRDPBridge_setCameraVerificationPattern(JNIEnv*, jobject, jboolean enabled) {
+    return cam_android_set_verification_pattern(enabled) ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_farside_workspace_QuestCameraPlaneCopy_copyNv12(
+    JNIEnv* env, jclass, jobject source, jint width, jint height,
+    jobject yBuffer, jint yRow, jint yPixel, jobject uBuffer, jint uRow, jint uPixel,
+    jobject vBuffer, jint vRow, jint vPixel) {
+    if (width <= 0 || height <= 0 || (width & 1) || (height & 1)) return JNI_FALSE;
+    auto* src = static_cast<const uint8_t*>(env->GetDirectBufferAddress(source));
+    const size_t ySize = static_cast<size_t>(width) * height;
+    if (!src || env->GetDirectBufferCapacity(source) < static_cast<jlong>(ySize + ySize / 2))
+        return JNI_FALSE;
+    struct Plane { jobject buffer; int row; int pixel; int width; int height; } planes[] = {
+        {yBuffer, yRow, yPixel, width, height},
+        {uBuffer, uRow, uPixel, width / 2, height / 2},
+        {vBuffer, vRow, vPixel, width / 2, height / 2}
+    };
+    uint8_t* destinations[3] = {};
+    for (int i = 0; i < 3; i++) {
+        const auto& p = planes[i];
+        destinations[i] = static_cast<uint8_t*>(env->GetDirectBufferAddress(p.buffer));
+        if (!destinations[i] || p.row <= 0 || p.pixel <= 0 ||
+            static_cast<int64_t>(p.row) < static_cast<int64_t>(p.width - 1) * p.pixel + 1)
+            return JNI_FALSE;
+        const int64_t required = static_cast<int64_t>(p.height - 1) * p.row +
+            static_cast<int64_t>(p.width - 1) * p.pixel + 1;
+        if (env->GetDirectBufferCapacity(p.buffer) < required) return JNI_FALSE;
+    }
+    for (int row = 0; row < height; row++) {
+        auto* dst = destinations[0] + static_cast<size_t>(row) * yRow;
+        if (yPixel == 1) memcpy(dst, src + static_cast<size_t>(row) * width, width);
+        else for (int col = 0; col < width; col++)
+            dst[static_cast<size_t>(col) * yPixel] = src[static_cast<size_t>(row) * width + col];
+    }
+    // Write each chroma plane using its own offset/stride. U/V may be planar or alias.
+    for (int plane = 1; plane < 3; plane++) {
+        const auto& p = planes[plane];
+        for (int row = 0; row < p.height; row++) {
+            auto* dst = destinations[plane] + static_cast<size_t>(row) * p.row;
+            const auto* uv = src + ySize + static_cast<size_t>(row) * width + (plane - 1);
+            for (int col = 0; col < p.width; col++) dst[static_cast<size_t>(col) * p.pixel] = uv[col * 2];
+        }
+    }
+    return JNI_TRUE;
 }
 
 extern "C" JNIEXPORT jboolean JNICALL

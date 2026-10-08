@@ -27,7 +27,7 @@ enum class SoundRedirection {
 enum class CameraResolution(val displayName: String, val maxDim: Int) {
     SD("SD (480p)", 480),
     HD_720("720p", 720),
-    FHD_1080("1080p", 1080)
+    NATIVE_MAX("Highest native resolution", -1)
 }
 
 data class ConnectionProfile(
@@ -130,7 +130,8 @@ data class ConnectionProfile(
                 remoteApp = if (json.has("remoteApp") && !json.isNull("remoteApp")) json.getString("remoteApp") else null,
                 useCloudflare = if (json.has("useCloudflare")) json.getBoolean("useCloudflare") else false,
                 enableCamera = if (json.has("enableCamera")) json.getBoolean("enableCamera") else false,
-                cameraResolution = try { CameraResolution.valueOf(camResStr) } catch(e: Exception) { CameraResolution.HD_720 },
+                cameraResolution = if (camResStr == "FHD_1080") CameraResolution.NATIVE_MAX
+                    else try { CameraResolution.valueOf(camResStr) } catch(e: Exception) { CameraResolution.HD_720 },
                 cameraId = if (json.has("cameraId") && !json.isNull("cameraId")) json.getString("cameraId") else null,
                 
                 proxyType = try { ProxyType.valueOf(pTypeStr) } catch(e: Exception) { ProxyType.NONE },

@@ -27,6 +27,8 @@ class FreeRDPBridge {
     external fun isCameraMuted(instance: Long): Boolean
     external fun isCameraUnsupported(instance: Long): Boolean
     external fun setCameraMaxDimension(maxDim: Int)
+    // Debug instrumentation only; release native builds refuse verification patterns.
+    external fun setCameraVerificationPattern(enabled: Boolean): Boolean
     external fun isStorageConnected(instance: Long): Boolean
     // Playback/capture frames, then nonzero playback/capture samples (verification; no audio content).
     external fun getAudioFrameCounts(instance: Long): LongArray
