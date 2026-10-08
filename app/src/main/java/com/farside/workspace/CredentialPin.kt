@@ -10,7 +10,42 @@ import javax.crypto.spec.PBEKeySpec
 /** An app access lock; login passwords remain encrypted separately by Android Keystore. */
 object CredentialPin {
     private const val ITERATIONS = 600_000
+    private const val FIVE_MINUTES_MS = 5 * 60 * 1000L
+
+    private var cachedPinChars: CharArray? = null
+    private var cachedPinExpiresAt: Long = 0L
+
     fun valid(pin: String) = pin.length in 4..12 && pin.all { it in '0'..'9' }
+
+    @Synchronized
+    fun cachePin(pin: String, durationMs: Long = FIVE_MINUTES_MS) {
+        clearCache()
+        cachedPinChars = pin.toCharArray()
+        cachedPinExpiresAt = System.currentTimeMillis() + durationMs
+    }
+
+    @Synchronized
+    fun clearCache() {
+        cachedPinChars?.let { java.util.Arrays.fill(it, '0') }
+        cachedPinChars = null
+        cachedPinExpiresAt = 0L
+    }
+
+    @Synchronized
+    fun getCachedPin(): String? {
+        if (cachedPinChars == null) return null
+        if (System.currentTimeMillis() > cachedPinExpiresAt) {
+            clearCache()
+            return null
+        }
+        return String(cachedPinChars!!)
+    }
+
+    @Synchronized
+    fun hasValidCachedPin(verifier: String): Boolean {
+        val pin = getCachedPin() ?: return false
+        return matches(pin, verifier)
+    }
     private fun derive(pin: String, salt: ByteArray): ByteArray {
         val spec = PBEKeySpec(pin.toCharArray(), salt, ITERATIONS, 256)
         return try { SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded }

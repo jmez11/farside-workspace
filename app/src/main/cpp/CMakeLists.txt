@@ -66,6 +66,11 @@ set(WITH_CLIENT_SDL OFF CACHE BOOL "Disable SDL client" FORCE)
 
 set(CHANNEL_RDPSND_CLIENT ON CACHE BOOL "RDP playback" FORCE)
 set(CHANNEL_AUDIN_CLIENT ON CACHE BOOL "RDP microphone" FORCE)
+set(CHANNEL_RDPECAM_CLIENT ON CACHE BOOL "RDP camera" FORCE)
+set(CHANNEL_RDPDR ON CACHE BOOL "RDP device redirection" FORCE)
+set(CHANNEL_RDPDR_CLIENT ON CACHE BOOL "RDP device redirection" FORCE)
+set(CHANNEL_DRIVE ON CACHE BOOL "RDP drive redirection" FORCE)
+set(CHANNEL_DRIVE_CLIENT ON CACHE BOOL "RDP drive redirection" FORCE)
 
 # 5. Build FreeRDP natively
 add_subdirectory(freerdp)
@@ -77,6 +82,20 @@ list(FILTER quest_codec_sources EXCLUDE REGEX "(^|/)h264_mediacodec\\.c$")
 set_property(TARGET freerdp-codecs PROPERTY SOURCES ${quest_codec_sources}
     "${CMAKE_CURRENT_SOURCE_DIR}/h264_mediacodec.c")
 target_include_directories(freerdp-codecs PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/freerdp/libfreerdp/codec")
+
+get_target_property(quest_camera_sources rdpecam-client-android SOURCES)
+list(FILTER quest_camera_sources EXCLUDE REGEX "(^|/)camera_android\\.c$")
+set_property(TARGET rdpecam-client-android PROPERTY SOURCES ${quest_camera_sources}
+    "${CMAKE_CURRENT_SOURCE_DIR}/camera_android.c")
+target_include_directories(rdpecam-client-android PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/freerdp/channels/rdpecam/client")
+
+get_target_property(quest_rdpecam_sources rdpecam-client SOURCES)
+list(FILTER quest_rdpecam_sources EXCLUDE REGEX "(^|/)camera_device_main\\.c$")
+set_property(TARGET rdpecam-client PROPERTY SOURCES ${quest_rdpecam_sources}
+    "${CMAKE_CURRENT_SOURCE_DIR}/camera_device_main.c")
+target_include_directories(rdpecam-client PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/freerdp/channels/rdpecam/client"
+    "${CMAKE_CURRENT_SOURCE_DIR}/freerdp/channels/rdpecam/common")
 
 # 6. Build our JNI Bridge
 add_library(freerdp-jni SHARED freerdp_bridge.cpp quest_audio.cpp)
@@ -104,4 +123,6 @@ target_link_libraries(
         ${jnigraphics-lib}
         android
         aaudio
+        camera2ndk
+        mediandk
 )

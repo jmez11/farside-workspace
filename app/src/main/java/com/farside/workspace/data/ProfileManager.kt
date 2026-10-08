@@ -151,6 +151,47 @@ class ProfileManager(private val context: Context) {
         saveCredentials(creds)
     }
 
+    fun getSshKeys(): List<SavedSshKey> {
+        val str = prefs.getString("ssh_keys", "[]")
+        val list = mutableListOf<SavedSshKey>()
+        try {
+            val jsonArray = JSONArray(str)
+            for (i in 0 until jsonArray.length()) {
+                list.add(SavedSshKey.fromJson(jsonArray.getJSONObject(i)))
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return list
+    }
+
+    fun saveSshKeys(keys: List<SavedSshKey>) {
+        val jsonArray = JSONArray()
+        keys.forEach { jsonArray.put(it.toJson()) }
+        prefs.edit().putString("ssh_keys", jsonArray.toString()).commit()
+    }
+
+    fun addSshKey(key: SavedSshKey) {
+        val list = getSshKeys().toMutableList()
+        list.removeAll { it.id == key.id }
+        list.add(key)
+        saveSshKeys(list)
+    }
+
+    fun updateSshKey(key: SavedSshKey) {
+        val list = getSshKeys().toMutableList()
+        val index = list.indexOfFirst { it.id == key.id }
+        require(index >= 0) { "Saved SSH key no longer exists" }
+        list[index] = key
+        saveSshKeys(list)
+    }
+
+    fun deleteSshKey(id: String) {
+        val list = getSshKeys().toMutableList()
+        list.removeAll { it.id == id }
+        saveSshKeys(list)
+    }
+
     fun getAppPinVerifier(): String? {
         val stored = prefs.getString("app_pinVerifier", null) ?: return null
         return if (stored.startsWith("{")) {
@@ -161,12 +202,14 @@ class ProfileManager(private val context: Context) {
     }
 
     fun setAppPinVerifier(verifier: String?) {
+        com.farside.workspace.CredentialPin.clearCache()
         if (verifier == null) {
-            prefs.edit().remove("app_pinVerifier").apply()
+            prefs.edit().remove("app_pinVerifier").commit()
         } else {
             val json = org.json.JSONObject()
             com.farside.workspace.CredentialManager.writePassword(json, "pin", verifier)
-            prefs.edit().putString("app_pinVerifier", json.toString()).apply()
+            prefs.edit().putString("app_pinVerifier", json.toString()).commit()
         }
     }
 }
+

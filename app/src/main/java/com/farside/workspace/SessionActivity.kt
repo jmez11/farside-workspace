@@ -107,8 +107,10 @@ class SessionActivity : ComponentActivity() {
 
         setContent {
             val credential = profileManager.getCredentials().find { it.id == profile.credentialId }
-            val requiresPin = credential?.requirePin == true && profileManager.getAppPinVerifier() != null
-            var unlocked by remember { mutableStateOf(!requiresPin) }
+            val sshKey = profileManager.getSshKeys().find { it.id == profile.sshKeyId }
+            val appPinVerifier = profileManager.getAppPinVerifier()
+            val requiresPin = ((credential?.requirePin == true) || (sshKey?.requirePin == true)) && appPinVerifier != null
+            var unlocked by remember { mutableStateOf(!requiresPin || (appPinVerifier != null && CredentialPin.hasValidCachedPin(appPinVerifier))) }
             MaterialTheme(colorScheme = darkColorScheme()) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -131,10 +133,13 @@ class SessionActivity : ComponentActivity() {
                         )
                         }
                     } else {
+                        SpatialScene {
                         SshSessionScreen(
                             session = profile,
+                            windowInteraction = windowInteraction.value,
                             onClose = { finish() }
                         )
+                        }
                     }
                 }
             }

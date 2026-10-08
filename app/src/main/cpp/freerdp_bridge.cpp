@@ -16,6 +16,7 @@
 #include <freerdp/client/disp.h>
 #include <freerdp/event.h>
 #include <freerdp/channels/channels.h>
+#include <freerdp/channels/rdpdr.h>
 
 #define LOG_TAG "FreeRDP-JNI"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -78,6 +79,12 @@ struct RdpContext {
     std::atomic<bool> render_running;
     std::thread render_thread;
     std::atomic<bool> dirty;
+    std::atomic<bool> cameraRequested;
+    std::atomic<bool> cameraConnected;
+    std::atomic<bool> storageRequested;
+    std::atomic<bool> storageConnected;
+    std::string storagePath;
+    std::chrono::steady_clock::time_point connectTime;
 };
 
 static void report_disconnect(freerdp* instance, bool established, const char* fallback = "") {
@@ -199,8 +206,15 @@ static UINT logging_surface_command(RdpgfxClientContext* context, const RDPGFX_S
 extern "C" UINT VCAPITYPE rdpgfx_DVCPluginEntry(PVOID pEntryPoints);
 extern "C" UINT VCAPITYPE disp_DVCPluginEntry(PVOID pEntryPoints);
 extern "C" UINT VCAPITYPE audin_DVCPluginEntry(PVOID pEntryPoints);
+extern "C" UINT VCAPITYPE rdpecam_DVCPluginEntry(PVOID pEntryPoints);
+extern "C" UINT VCAPITYPE android_freerdp_rdpecam_client_subsystem_entry(PVOID pEntryPoints);
 extern "C" BOOL VCAPITYPE rdpsnd_VirtualChannelEntryEx(PVOID, PVOID);
 extern "C" BOOL VCAPITYPE rdpdr_VirtualChannelEntryEx(PVOID, PVOID);
+extern "C" UINT VCAPITYPE drive_DeviceServiceEntry(PDEVICE_SERVICE_ENTRY_POINTS);
+extern "C" BOOL cam_android_is_recording(void);
+extern "C" void cam_android_set_muted(BOOL muted);
+extern "C" BOOL cam_android_is_muted(void);
+extern "C" UINT cam_android_get_camera_count(void);
 
 QuestAudioState* quest_audio_state(rdpContext* context) { return ((RdpContext*)context)->audio; }
 extern "C" BOOL VCAPITYPE drdynvc_VirtualChannelEntryEx(PVOID pInitHandle, PVOID pContext);
@@ -208,16 +222,23 @@ extern "C" BOOL VCAPITYPE drdynvc_VirtualChannelEntryEx(PVOID pInitHandle, PVOID
 // Channels are compiled statically (BUILD_SHARED_LIBS OFF), so dlopen-based addin
 // lookup cannot find them. This provider maps channel names to the linked entry points.
 static PVOID my_addin_provider(LPCSTR pszName, LPCSTR pszSubsystem, LPCSTR pszType, DWORD dwFlags) {
-    LOGI("my_addin_provider called for: %s (flags=0x%x)", pszName ? pszName : "NULL", dwFlags);
+    LOGI("my_addin_provider called for: %s (subsystem=%s, flags=0x%x)",
+         pszName ? pszName : "NULL", pszSubsystem ? pszSubsystem : "NULL", dwFlags);
     if (pszName && pszSubsystem && strcmp(pszSubsystem, "quest") == 0) {
         if (strcmp(pszName, "rdpsnd") == 0) return (PVOID)quest_rdpsnd_entry;
         if (strcmp(pszName, "audin") == 0) return (PVOID)quest_audin_entry;
+    }
+    if (pszName && strcmp(pszName, "rdpecam") == 0) {
+        if (pszSubsystem && strcmp(pszSubsystem, "android") == 0)
+            return (PVOID)android_freerdp_rdpecam_client_subsystem_entry;
+        return (PVOID)rdpecam_DVCPluginEntry;
     }
     if (pszName && strcmp(pszName, "audin") == 0) return (PVOID)audin_DVCPluginEntry;
     if (pszName && strcmp(pszName, "rdpsnd") == 0) return (PVOID)rdpsnd_VirtualChannelEntryEx;
     if (pszName && strcmp(pszName, "drdynvc") == 0) return (PVOID)drdynvc_VirtualChannelEntryEx;
     if (pszName && strcmp(pszName, "rdpgfx") == 0) return (PVOID)rdpgfx_DVCPluginEntry;
     if (pszName && strcmp(pszName, "disp") == 0) return (PVOID)disp_DVCPluginEntry;
+    if (pszName && strcmp(pszName, "drive") == 0) return (PVOID)drive_DeviceServiceEntry;
     return nullptr;
 }
 
@@ -270,6 +291,22 @@ static BOOL client_pre_connect(freerdp* instance) {
     freerdp_register_addin_provider((FREERDP_LOAD_CHANNEL_ADDIN_ENTRY_FN)my_addin_provider, 0);
     add_dynamic_channel_once(settings, "rdpgfx");
     add_dynamic_channel_once(settings, "disp");
+
+    auto* ctx = (RdpContext*)instance->context;
+    if (ctx && ctx->storageRequested) {
+        const char* const args[] = { "Quest", ctx->storagePath.c_str() };
+        RDPDR_DEVICE* dev = freerdp_device_new(RDPDR_DTYP_FILESYSTEM, 2, args);
+        if (dev) {
+            if (!freerdp_device_collection_add(settings, dev)) {
+                LOGE("RDP_STORAGE: freerdp_device_collection_add failed");
+                freerdp_device_free(dev);
+            } else {
+                LOGI("RDP_STORAGE: Added redirected drive Quest -> %s", ctx->storagePath.c_str());
+            }
+        } else {
+            LOGE("RDP_STORAGE: freerdp_device_new failed");
+        }
+    }
     
     return TRUE;
 }
@@ -426,6 +463,7 @@ static void destroy_client(freerdp* instance, bool connected) {
         env->DeleteGlobalRef(ctx->certificateVerifier);
     if (env && ctx->eventReceiver) env->DeleteGlobalRef(ctx->eventReceiver);
     ctx->certificateHost.~basic_string();
+    ctx->storagePath.~basic_string();
     ctx->windows.~vector();
     ctx->windowMutex.~mutex();
     ctx->displayMutex.~mutex();
@@ -436,6 +474,10 @@ static void destroy_client(freerdp* instance, bool connected) {
     ctx->network_thread.~thread();
     ctx->render_running.~atomic();
     ctx->dirty.~atomic();
+    ctx->cameraRequested.~atomic();
+    ctx->cameraConnected.~atomic();
+    ctx->storageRequested.~atomic();
+    ctx->storageConnected.~atomic();
     for (auto& count : ctx->codecCounts) count.~atomic();
     auto* audio = ctx->audio;
     ctx->render_thread.~thread();
@@ -454,8 +496,8 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
         jstring password,
         jstring remoteApp,
         jboolean enableCamera,
-        jstring cameraId,
         jboolean enableMicrophone,
+        jboolean enableStorage,
         jobject surface,
         jstring certificateHost,
         jobject certificateVerifier) {
@@ -524,6 +566,12 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
     new (&ctx->desktopHeight) std::atomic<int>(1080);
     ctx->displayReady = false;
     ctx->disp = nullptr;
+    new (&ctx->cameraRequested) std::atomic<bool>(enableCamera == JNI_TRUE);
+    new (&ctx->cameraConnected) std::atomic<bool>(false);
+    new (&ctx->storageRequested) std::atomic<bool>(enableStorage == JNI_TRUE);
+    new (&ctx->storageConnected) std::atomic<bool>(false);
+    new (&ctx->storagePath) std::string("/sdcard");
+    ctx->connectTime = std::chrono::steady_clock::now();
     
     if (surface) {
         ANativeWindow* win = ANativeWindow_fromSurface(env, surface);
@@ -590,18 +638,9 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
 
     if (enableCamera) {
         freerdp_settings_set_bool(instance->context->settings, FreeRDP_SupportDynamicChannels, TRUE);
-        // Add rdpecam dynamic channel
-        char* args[] = { (char*)"freerdp", (char*)"/camera", nullptr };
-        if (cameraId && env->GetStringLength(cameraId) > 0) {
-            const char* cam_c = env->GetStringUTFChars(cameraId, 0);
-            char cam_arg[256];
-            snprintf(cam_arg, sizeof(cam_arg), "/camera:dev:%s", cam_c);
-            char* args_with_id[] = { (char*)"freerdp", cam_arg, nullptr };
-            freerdp_client_settings_parse_command_line(instance->context->settings, 2, args_with_id, FALSE);
-            env->ReleaseStringUTFChars(cameraId, cam_c);
-        } else {
-            freerdp_client_settings_parse_command_line(instance->context->settings, 2, args, FALSE);
-        }
+        const char* camArgs[] = { "rdpecam" };
+        freerdp_client_add_dynamic_channel(instance->context->settings, 1, camArgs);
+        LOGI("RDP_CAMERA: rdpecam dynamic channel added");
     }
     
     env->ReleaseStringUTFChars(username, user_c);
@@ -631,6 +670,12 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
             } else {
                 LOGE("RDP_CODEC: gdi_graphics_pipeline_init FAILED (gdi=%p gfx=%p)", gdi, gfx);
             }
+        } else if (strcmp(e->name, "RDCamera_Device_Enumerator") == 0 || strcmp(e->name, "rdpecam") == 0) {
+            LOGI("RDP_CAMERA: camera channel connected: %s", e->name);
+            ctx->cameraConnected = true;
+        } else if (strcmp(e->name, "rdpdr") == 0) {
+            LOGI("RDP_STORAGE: rdpdr channel connected");
+            ctx->storageConnected = true;
         }
     });
 
@@ -645,6 +690,12 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
             rdpGdi* gdi = ((rdpContext*)context)->gdi;
             if (gdi && gfx) gdi_graphics_pipeline_uninit(gdi, gfx);
             ctx->origSurfaceCommand = nullptr;
+        } else if (strcmp(e->name, "RDCamera_Device_Enumerator") == 0 || strcmp(e->name, "rdpecam") == 0) {
+            LOGI("RDP_CAMERA: camera channel disconnected: %s", e->name);
+            ctx->cameraConnected = false;
+        } else if (strcmp(e->name, "rdpdr") == 0) {
+            LOGI("RDP_STORAGE: rdpdr channel disconnected");
+            ctx->storageConnected = false;
         }
     });
     
@@ -879,4 +930,40 @@ Java_com_farside_workspace_FreeRDPBridge_getAudioFrameCounts(JNIEnv* env, jobjec
     auto result = env->NewLongArray(4);
     env->SetLongArrayRegion(result, 0, 4, counts);
     return result;
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_farside_workspace_FreeRDPBridge_setCameraMuted(JNIEnv*, jobject, jlong, jboolean muted) {
+    cam_android_set_muted(muted == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_farside_workspace_FreeRDPBridge_isCameraRecording(JNIEnv*, jobject, jlong) {
+    return cam_android_is_recording() ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_farside_workspace_FreeRDPBridge_isCameraMuted(JNIEnv*, jobject, jlong) {
+    return cam_android_is_muted() ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_farside_workspace_FreeRDPBridge_isCameraUnsupported(JNIEnv*, jobject, jlong instance) {
+    if (!instance) return JNI_FALSE;
+    auto* ctx = reinterpret_cast<RdpContext*>(((freerdp*)instance)->context);
+    if (!ctx || !ctx->cameraRequested.load()) return JNI_FALSE;
+    if (ctx->cameraConnected.load()) return JNI_FALSE;
+    auto elapsed = std::chrono::steady_clock::now() - ctx->connectTime;
+    if (elapsed > std::chrono::seconds(4)) {
+        return JNI_TRUE;
+    }
+    return JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_farside_workspace_FreeRDPBridge_isStorageConnected(JNIEnv*, jobject, jlong instance) {
+    if (!instance) return JNI_FALSE;
+    auto* ctx = reinterpret_cast<RdpContext*>(((freerdp*)instance)->context);
+    if (!ctx || !ctx->storageRequested.load()) return JNI_FALSE;
+    return ctx->storageConnected.load() ? JNI_TRUE : JNI_FALSE;
 }

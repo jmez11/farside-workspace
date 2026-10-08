@@ -22,4 +22,17 @@ internal class RdpHostCapabilities(context: Context) {
     } catch (_: Exception) {
         false // Missing/incomplete evidence means unknown, not unsupported.
     }
+
+    fun cameraUnsupported(host: String): Boolean = try {
+        val json = JSONObject(report.readText())
+        val aliases = json.optJSONArray("HostAliases")
+        val matchesHost = aliases != null && (0 until aliases.length()).any {
+            aliases.optString(it).equals(host.trim(), ignoreCase = true)
+        }
+        val isCore = json.optString("Edition").equals("Core", ignoreCase = true)
+        val captureLicenseAllowed = if (json.has("CaptureLicenseAllowed") && !json.isNull("CaptureLicenseAllowed")) json.getInt("CaptureLicenseAllowed") else 1
+        matchesHost && (isCore || captureLicenseAllowed == 0)
+    } catch (_: Exception) {
+        false
+    }
 }

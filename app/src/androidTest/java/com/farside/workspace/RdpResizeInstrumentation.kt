@@ -20,10 +20,15 @@ class RdpResizeInstrumentation : Instrumentation() {
     private var certificateMode: String? = null
     private var audioProbe: String? = null
     private var audioMode: String? = null
+    private var cameraMode: String? = null
+    private var cameraTarget: String? = null
+    private var storageMode: String? = null
     private var inputOnly = false
     private var credentialsOnly = false
     private var proxiesOnly = false
     private var toolbarOnly = false
+    private var sshOnly = false
+    private var sshKeysOnly = false
     private var zoomTest = false
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(arguments)
@@ -34,10 +39,15 @@ class RdpResizeInstrumentation : Instrumentation() {
         certificateMode = arguments?.getString("certificateMode")
         audioProbe = arguments?.getString("audioProbe")
         audioMode = arguments?.getString("audioMode")
+        cameraMode = arguments?.getString("cameraMode")
+        cameraTarget = arguments?.getString("cameraTarget")
+        storageMode = arguments?.getString("storageMode")
         inputOnly = arguments?.getString("inputOnly") == "true"
         credentialsOnly = arguments?.getString("credentialsOnly") == "true"
         proxiesOnly = arguments?.getString("proxiesOnly") == "true"
         toolbarOnly = arguments?.getString("toolbarOnly") == "true"
+        sshOnly = arguments?.getString("sshOnly") == "true"
+        sshKeysOnly = arguments?.getString("sshKeysOnly") == "true"
         zoomTest = arguments?.getString("zoomTest") == "true"
         start()
     }
@@ -62,6 +72,18 @@ class RdpResizeInstrumentation : Instrumentation() {
             if (proxiesOnly) {
                 ProxyVerification(this).run()
                 results.putString("stream", "PASS: four proxy choices, selection/legacy handling and unsupported proxy rejection without direct TCP fallback.\n")
+                finish(0, results)
+                return
+            }
+            if (sshOnly) {
+                SshVerification(this).run()
+                results.putString("stream", "PASS: SSH session floating toolbar (name, host, pin, zoom font sizing, keyboard toggle), extra keys strip, 123 expansion to 314dp, ABC contraction to 76dp, and unchanged main content window geometry.\n")
+                finish(0, results)
+                return
+            }
+            if (sshKeysOnly) {
+                SshKeyAndPinVerification(this).run()
+                results.putString("stream", "PASS: SSH key saving and PIN lock in settings, 5-minute PIN cache bypass and checkbox, profile SSH key selection, optional credentials, and Keystore encryption.\n")
                 finish(0, results)
                 return
             }
@@ -98,6 +120,18 @@ class RdpResizeInstrumentation : Instrumentation() {
             audioMode?.let {
                 RdpAudioVerification(this).run(it, audioProbe)
                 results.putString("stream", "PASS: RDP audio $it.\n")
+                finish(0, results)
+                return
+            }
+            cameraMode?.let {
+                RdpCameraVerification(this).run(it, cameraTarget)
+                results.putString("stream", "PASS: RDP camera $it.\n")
+                finish(0, results)
+                return
+            }
+            storageMode?.let {
+                RdpStorageVerification(this).run(it)
+                results.putString("stream", "PASS: RDP storage $it.\n")
                 finish(0, results)
                 return
             }

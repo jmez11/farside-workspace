@@ -50,6 +50,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -113,6 +114,7 @@ class MainActivity : ComponentActivity() {
                         },
                         onConnectProfile = { profileId ->
                             SessionWindowLauncher.launch(this@MainActivity, profileId)
+                            finish()
                         },
                         profileManager = profileManager
                     )
@@ -122,14 +124,204 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-fun SshSessionScreen(session: ConnectionProfile, onClose: () -> Unit) {
-    Box(modifier = Modifier.fillMaxSize()) {
+fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, onClose: () -> Unit) {
+    val context = LocalContext.current
+    val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    var showSoftKeyboard by remember { mutableStateOf(false) }
+    val imeVisible = WindowInsets.isImeVisible
+    var panelImeVisible by remember { mutableStateOf(false) }
+    val keyboardVisible = imeVisible || panelImeVisible
+    var extraKeysExpanded by remember { mutableStateOf(false) }
+    val keyboardPanelState = metavrx.layout.window.compose.state.rememberWindowState()
+    var keyboardInteraction by remember { mutableStateOf(0L) }
+    var panelKeyboardActivation by remember { mutableStateOf(0L) }
+    var desktopKeyboardActivation by remember { mutableStateOf(0L) }
+    SideEffect { (context as? SessionActivity)?.keyboardPanelState = keyboardPanelState }
+    var keyboardWasVisible by remember { mutableStateOf(false) }
+
+    LaunchedEffect(keyboardVisible, showSoftKeyboard, keyboardInteraction) {
+        if (showSoftKeyboard && keyboardVisible) keyboardWasVisible = true
+        if (showSoftKeyboard && keyboardWasVisible && !keyboardVisible) {
+            delay(600)
+            showSoftKeyboard = false
+            focusRequester.requestFocus()
+        }
+        if (!showSoftKeyboard) {
+            keyboardWasVisible = false
+            extraKeysExpanded = false
+            keyboardInteraction = 0L
+            desktopKeyboardActivation = 0L
+            panelKeyboardActivation = 0L
+        }
+    }
+
+    var ctrlLatched by remember { mutableStateOf(false) }
+    var altLatched by remember { mutableStateOf(false) }
+    var shiftLatched by remember { mutableStateOf(false) }
+
+    LaunchedEffect(showSoftKeyboard) {
+        if (!showSoftKeyboard) {
+            ctrlLatched = false
+            altLatched = false
+            shiftLatched = false
+        }
+    }
+
+    val defaultFontSize = 14
+    var fontSize by remember { mutableStateOf(defaultFontSize) }
+    var showZoomSlider by remember { mutableStateOf(false) }
+
+    var terminalViewRef by remember { mutableStateOf<com.termux.view.TerminalView?>(null) }
+    var sshSessionRef by remember { mutableStateOf<com.termux.terminal.SshTerminalSession?>(null) }
+
+    SideEffect {
+        (context as? SessionActivity)?.setZoom = { factor ->
+            val size = (defaultFontSize * factor).roundToInt().coerceIn(8, 36)
+            fontSize = size
+            terminalViewRef?.setTextSize(size)
+        }
+    }
+
+    var offsetX by remember { mutableStateOf(0f) }
+    var offsetY by remember { mutableStateOf(0f) }
+    var isOverlayVisible by remember { mutableStateOf(true) }
+    var toolbarPinned by remember { mutableStateOf(false) }
+    var toolbarActivity by remember { mutableStateOf(0L) }
+    var toolbarBounds by remember { mutableStateOf(Rect.Zero) }
+
+    val revealToolbar = {
+        isOverlayVisible = true
+        toolbarActivity += 1L
+    }
+
+    LaunchedEffect(windowInteraction, fontSize) { revealToolbar() }
+    LaunchedEffect(isOverlayVisible, toolbarPinned, toolbarActivity, offsetX, offsetY) {
+        if (isOverlayVisible && !toolbarPinned) {
+            delay(3000)
+            isOverlayVisible = false
+        }
+    }
+
+    val animatedAlpha by animateFloatAsState(
+        targetValue = if (isOverlayVisible) 1f else 0f,
+        animationSpec = tween(durationMillis = 500)
+    )
+
+    DisposableEffect(Unit) {
+        onDispose {
+            sshSessionRef?.finishIfRunning()
+        }
+    }
+
+    fun handleSshUnicode(char: Int, down: Boolean) {
+        if (!down) return
+        var code = char
+        if (ctrlLatched) {
+            code = when {
+                code in 'a'.code..'z'.code -> code - 'a'.code + 1
+                code in 'A'.code..'Z'.code -> code - 'A'.code + 1
+                code == '@'.code || code == ' '.code -> 0
+                code == '['.code -> 27
+                code == '\\'.code -> 28
+                code == ']'.code -> 29
+                code == '^'.code -> 30
+                code == '_'.code -> 31
+                code == '?'.code -> 127
+                else -> code
+            }
+        } else if (shiftLatched) {
+            if (code in 'a'.code..'z'.code) {
+                code = Character.toUpperCase(code)
+            }
+        }
+        sshSessionRef?.writeCodePoint(altLatched, code)
+    }
+
+    fun handleSshKey(code: Int, down: Boolean) {
+        when (code) {
+            0x1D -> { ctrlLatched = down } // CTRL
+            0x38, 0x138 -> { altLatched = down } // ALT / AltGr
+            0x2A -> { shiftLatched = down } // SHIFT
+            0x15B -> {} // WIN
+            else -> {
+                if (down) {
+                    val escapeSeq = when (code) {
+                        0x01 -> "\u001b" // ESC
+                        0x0F -> "\t"     // TAB
+                        0x0E -> "\u007f" // Backspace
+                        0x1C, 0x11C -> "\r" // Enter, Keypad Enter
+                        0x153 -> "\u001b[3~" // Delete
+                        0x152 -> "\u001b[2~" // Insert
+                        0x147 -> "\u001b[H"  // Home
+                        0x14F -> "\u001b[F"  // End
+                        0x149 -> "\u001b[5~" // PgUp
+                        0x151 -> "\u001b[6~" // PgDn
+                        0x148 -> "\u001b[A"  // Up
+                        0x150 -> "\u001b[B"  // Down
+                        0x14D -> "\u001b[C"  // Right
+                        0x14B -> "\u001b[D"  // Left
+                        // Function keys F1-F12
+                        0x3B -> "\u001bOP"
+                        0x3C -> "\u001bOQ"
+                        0x3D -> "\u001bOR"
+                        0x3E -> "\u001bOS"
+                        0x3F -> "\u001b[15~"
+                        0x40 -> "\u001b[17~"
+                        0x41 -> "\u001b[18~"
+                        0x42 -> "\u001b[19~"
+                        0x43 -> "\u001b[20~"
+                        0x44 -> "\u001b[21~"
+                        0x57 -> "\u001b[23~"
+                        0x58 -> "\u001b[24~"
+                        // Numeric and arithmetic keys
+                        0x08 -> "7"
+                        0x09 -> "8"
+                        0x0A -> "9"
+                        0x05 -> "4"
+                        0x06 -> "5"
+                        0x07 -> "6"
+                        0x02 -> "1"
+                        0x03 -> "2"
+                        0x04 -> "3"
+                        0x0B -> "0"
+                        0x34 -> "."
+                        0x135 -> "/"
+                        0x37 -> "*"
+                        0x4A -> "-"
+                        0x4E -> "+"
+                        else -> null
+                    }
+                    if (escapeSeq != null) {
+                        sshSessionRef?.write(escapeSeq)
+                    }
+                }
+            }
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        if (event.type == PointerEventType.Press) {
+                            revealToolbar()
+                        }
+                    }
+                }
+            }
+    ) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { viewContext ->
                 val terminalView = com.termux.view.TerminalView(viewContext, null)
-                
+                terminalView.setTextSize(fontSize)
+
                 val sessionClient = object : com.termux.terminal.TerminalSessionClient {
                     override fun onTextChanged(changedSession: com.termux.terminal.TerminalSession) {
                         terminalView.onScreenUpdated()
@@ -156,7 +348,9 @@ fun SshSessionScreen(session: ConnectionProfile, onClose: () -> Unit) {
 
                 val viewClient = object : com.termux.view.TerminalViewClient {
                     override fun onScale(scale: Float): Float = 1.0f
-                    override fun onSingleTapUp(e: android.view.MotionEvent) {}
+                    override fun onSingleTapUp(e: android.view.MotionEvent) {
+                        revealToolbar()
+                    }
                     override fun shouldBackButtonBeMappedToEscape(): Boolean = false
                     override fun shouldEnforceCharBasedInput(): Boolean = false
                     override fun shouldUseCtrlSpaceWorkaround(): Boolean = false
@@ -165,9 +359,9 @@ fun SshSessionScreen(session: ConnectionProfile, onClose: () -> Unit) {
                     override fun onKeyDown(keyCode: Int, e: android.view.KeyEvent, session: com.termux.terminal.TerminalSession): Boolean = false
                     override fun onKeyUp(keyCode: Int, e: android.view.KeyEvent): Boolean = false
                     override fun onLongPress(event: android.view.MotionEvent): Boolean = false
-                    override fun readControlKey(): Boolean = false
-                    override fun readAltKey(): Boolean = false
-                    override fun readShiftKey(): Boolean = false
+                    override fun readControlKey(): Boolean = ctrlLatched
+                    override fun readAltKey(): Boolean = altLatched
+                    override fun readShiftKey(): Boolean = shiftLatched
                     override fun readFnKey(): Boolean = false
                     override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: com.termux.terminal.TerminalSession): Boolean = false
                     override fun onEmulatorSet() {}
@@ -181,13 +375,142 @@ fun SshSessionScreen(session: ConnectionProfile, onClose: () -> Unit) {
                 }
 
                 terminalView.setTerminalViewClient(viewClient)
-                
-                val sshTerm = com.termux.terminal.SshTerminalSession(session, sessionClient)
+
+                val sshTerm = com.termux.terminal.SshTerminalSession(session, sessionClient, viewContext)
                 terminalView.attachSession(sshTerm)
-                
+
+                terminalViewRef = terminalView
+                sshSessionRef = sshTerm
+
                 terminalView
             }
         )
+
+        // Floating Movable Disappearing Menu Bar
+        if (isOverlayVisible || animatedAlpha > 0f) {
+            Surface(
+                modifier = Modifier
+                    .align(androidx.compose.ui.Alignment.TopCenter)
+                    .offset { IntOffset(offsetX.roundToInt(), offsetY.roundToInt()) }
+                    .alpha(animatedAlpha)
+                    .onGloballyPositioned { toolbarBounds = it.boundsInRoot() }
+                    .pointerInput(Unit) {
+                        detectDragGestures { change, dragAmount ->
+                            change.consume()
+                            offsetX += dragAmount.x
+                            offsetY += dragAmount.y
+                            revealToolbar()
+                        }
+                    },
+                shape = RoundedCornerShape(24.dp),
+                color = Color.Black.copy(alpha = 0.7f)
+            ) {
+                Column(
+                    modifier = Modifier.padding(8.dp),
+                    horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
+                ) {
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Column(Modifier.widthIn(max = 240.dp).padding(horizontal = 12.dp)) {
+                            Text(session.name, color = Color.White, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                            Text(session.host, color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        }
+                        IconButton(onClick = { toolbarPinned = !toolbarPinned; revealToolbar() }) {
+                            Icon(
+                                Icons.Default.PushPin,
+                                if (toolbarPinned) "Unpin toolbar" else "Keep toolbar visible",
+                                tint = if (toolbarPinned) MaterialTheme.colorScheme.primary else Color.White
+                            )
+                        }
+                        IconButton(onClick = { showZoomSlider = !showZoomSlider; revealToolbar() }) {
+                            Icon(Icons.Default.Search, "Zoom", tint = Color.White)
+                        }
+                        if (fontSize != defaultFontSize) {
+                            IconButton(onClick = {
+                                fontSize = defaultFontSize
+                                terminalViewRef?.setTextSize(defaultFontSize)
+                                revealToolbar()
+                            }) {
+                                Icon(Icons.Default.FullscreenExit, "Reset Zoom", tint = Color.White)
+                            }
+                        }
+                        IconButton(onClick = {
+                            revealToolbar()
+                            showSoftKeyboard = !showSoftKeyboard
+                            if (!showSoftKeyboard) { keyboardController?.hide() }
+                        }) {
+                            Icon(Icons.Default.Keyboard, "Keyboard", tint = if (showSoftKeyboard) MaterialTheme.colorScheme.primary else Color.White)
+                        }
+                    }
+
+                    if (showZoomSlider) {
+                        Text("${fontSize}sp", color = Color.White, modifier = Modifier.padding(bottom = 4.dp))
+                        Slider(
+                            value = fontSize.toFloat(),
+                            onValueChange = { newSize ->
+                                val rounded = newSize.roundToInt()
+                                if (rounded != fontSize) {
+                                    fontSize = rounded
+                                    terminalViewRef?.setTextSize(rounded)
+                                }
+                                revealToolbar()
+                            },
+                            valueRange = 8f..32f,
+                            modifier = Modifier.width(150.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        // Soft Keyboard Input Handlers
+        if (showSoftKeyboard) {
+            RemoteImeEditor(
+                label = "SSH keyboard input",
+                activation = desktopKeyboardActivation,
+                showInitially = true,
+                keyboardVisible = keyboardVisible,
+                onActions = { (context as? SessionActivity)?.keyboardEditorActions = it },
+                onFocus = { (context as? SessionActivity)?.keyboardEditorHasFocus = it },
+                onView = { (context as? SessionActivity)?.keyboardEditorView = it },
+                sendUnicode = { code, down -> handleSshUnicode(code, down) },
+                sendKey = { code, down -> handleSshKey(code, down) }
+            )
+        }
+
+        // Extra Keys Panel (anchored to bottom, expands to 314.dp and contracts to 76.dp)
+        RemoteKeyboardPanel(
+            visible = showSoftKeyboard,
+            expanded = extraKeysExpanded,
+            state = keyboardPanelState,
+            onInteraction = {
+                panelKeyboardActivation = SystemClock.uptimeMillis()
+                keyboardInteraction = panelKeyboardActivation
+            }
+        ) {
+            if (showSoftKeyboard) {
+                RemoteImeEditor(
+                    label = "SSH key panel input",
+                    activation = panelKeyboardActivation,
+                    showInitially = false,
+                    keyboardVisible = keyboardVisible,
+                    onActions = { (context as? SessionActivity)?.keyboardPanelEditorActions = it },
+                    onImeVisibility = { panelImeVisible = it },
+                    onFocus = { (context as? SessionActivity)?.keyboardPanelEditorHasFocus = it },
+                    onView = { (context as? SessionActivity)?.keyboardPanelEditorView = it },
+                    sendUnicode = { code, down -> handleSshUnicode(code, down) },
+                    sendKey = { code, down -> handleSshKey(code, down) }
+                )
+            }
+            RemoteExtraKeys(
+                modifier = Modifier.fillMaxSize(),
+                enabled = showSoftKeyboard,
+                expanded = extraKeysExpanded,
+                onExpandedChange = { extraKeysExpanded = it },
+                sendKey = { code, down -> handleSshKey(code, down) },
+                rightClick = { }
+            )
+        }
     }
 }
 
@@ -229,12 +552,56 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
     LaunchedEffect(session.id) {
         if (!microphoneReady) microphonePermission.launch(android.Manifest.permission.RECORD_AUDIO)
     }
-    if (!microphoneReady) {
-        Text("Waiting for microphone permission?", color = Color.White)
+
+    var cameraReady by remember(session.id) {
+        mutableStateOf(!session.enableCamera || hasCameraPermission(permissionContext))
+    }
+    var cameraAllowed by remember(session.id) {
+        mutableStateOf(session.enableCamera && hasCameraPermission(permissionContext))
+    }
+    val cameraPermission = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
+    ) { _ ->
+        cameraAllowed = hasCameraPermission(permissionContext)
+        cameraReady = true
+    }
+    LaunchedEffect(session.id) {
+        if (!cameraReady) cameraPermission.launch(REQUIRED_CAMERA_PERMISSIONS)
+    }
+
+    var storageReady by remember(session.id) {
+        mutableStateOf(!session.redirectStorage || hasStoragePermission(permissionContext))
+    }
+    var storageAllowed by remember(session.id) {
+        mutableStateOf(session.redirectStorage && hasStoragePermission(permissionContext))
+    }
+    val storagePermission = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) {
+        storageAllowed = session.redirectStorage && hasStoragePermission(permissionContext)
+        storageReady = true
+    }
+    LaunchedEffect(session.id) {
+        if (!storageReady) {
+            requestStoragePermission(permissionContext) { intent -> storagePermission.launch(intent) }
+        }
+    }
+
+    if (!microphoneReady || !cameraReady || !storageReady) {
+        val statusText = when {
+            !microphoneReady -> "Waiting for microphone permission…"
+            !cameraReady -> "Waiting for camera permission…"
+            else -> "Waiting for storage permission…"
+        }
+        Text(statusText, color = Color.White)
         return
     }
-    val effectiveSession = remember(session, microphoneAllowed) {
-        session.copy(redirectMicrophone = microphoneAllowed && hasMicrophonePermission(permissionContext))
+    val effectiveSession = remember(session, microphoneAllowed, cameraAllowed, storageAllowed) {
+        session.copy(
+            redirectMicrophone = microphoneAllowed && hasMicrophonePermission(permissionContext),
+            enableCamera = cameraAllowed && hasCameraPermission(permissionContext),
+            redirectStorage = storageAllowed && hasStoragePermission(permissionContext)
+        )
     }
     val rdpBridge = remember { FreeRDPBridge() }
     var rdpInstance by remember { mutableStateOf(0L) }
@@ -340,6 +707,26 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
             micRecording = rdpBridge.isMicrophoneRecording(rdpInstance)
             // Actual capture overrides older host evidence, even after recording stops.
             if (micRecording) micHostUnsupported = false
+            delay(100)
+        }
+    }
+
+    var cameraMuted by remember { mutableStateOf(false) }
+    var cameraRecording by remember { mutableStateOf(false) }
+    var cameraHostUnsupported by remember(session.host) {
+        mutableStateOf(hostCapabilities.cameraUnsupported(session.host))
+    }
+    LaunchedEffect(rdpInstance, cameraMuted) {
+        if (rdpInstance != 0L) rdpBridge.setCameraMuted(rdpInstance, cameraMuted)
+    }
+    LaunchedEffect(rdpInstance) {
+        while (rdpInstance != 0L) {
+            cameraRecording = rdpBridge.isCameraRecording(rdpInstance)
+            if (cameraRecording) {
+                cameraHostUnsupported = false
+            } else if (rdpBridge.isCameraUnsupported(rdpInstance)) {
+                cameraHostUnsupported = true
+            }
             delay(100)
         }
     }
@@ -658,6 +1045,15 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                             recording = micRecording,
                             hostUnsupported = micHostUnsupported,
                             onToggleMute = { micMuted = !micMuted },
+                            onInteraction = revealToolbar,
+                        )
+                    }
+                    if (effectiveSession.enableCamera) {
+                        RdpCameraControl(
+                            muted = cameraMuted,
+                            recording = cameraRecording,
+                            hostUnsupported = cameraHostUnsupported,
+                            onToggleMute = { cameraMuted = !cameraMuted },
                             onInteraction = revealToolbar,
                         )
                     }

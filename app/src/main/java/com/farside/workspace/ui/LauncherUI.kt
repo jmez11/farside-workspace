@@ -73,8 +73,8 @@ fun LauncherScreen(
                 },
                 profileManager = profileManager,
                 credentialRevision = credentialRevision,
-                onNavigateToSettings = {
-                    settingsInitialTab = 1
+                onNavigateToSettings = { tab ->
+                    settingsInitialTab = tab
                     isSettingsOpen = true
                 }
             )
@@ -209,7 +209,10 @@ fun SettingsTextField(
     visualTransformation: androidx.compose.ui.text.input.VisualTransformation = androidx.compose.ui.text.input.VisualTransformation.None,
     keyboardOptions: androidx.compose.foundation.text.KeyboardOptions = androidx.compose.foundation.text.KeyboardOptions.Default,
     isError: Boolean = false,
-    accessibleLabel: String? = null
+    accessibleLabel: String? = null,
+    singleLine: Boolean = true,
+    minLines: Int = 1,
+    maxLines: Int = if (singleLine) 1 else Int.MAX_VALUE
 ) {
     TextField(
         value = value,
@@ -232,7 +235,9 @@ fun SettingsTextField(
                 if (keyboardOptions.keyboardType == androidx.compose.ui.text.input.KeyboardType.NumberPassword)
                     androidx.compose.ui.text.input.KeyboardType.NumberPassword else androidx.compose.ui.text.input.KeyboardType.Password)
         else keyboardOptions,
-        singleLine = true,
+        singleLine = singleLine,
+        minLines = minLines,
+        maxLines = maxLines,
         isError = isError
     )
 }
@@ -261,6 +266,39 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
     var savingCredential by remember { mutableStateOf(false) }
     var pendingPinDisable by remember { mutableStateOf(false) }
     val credentialScope = rememberCoroutineScope()
+
+    var sshKeys by remember { mutableStateOf(profileManager.getSshKeys()) }
+    var newKeyName by rememberSaveable { mutableStateOf("") }
+    var newKeyPrivate by remember { mutableStateOf("") }
+    var newKeyPassphrase by remember { mutableStateOf("") }
+    var editingSshKeyId by remember { mutableStateOf<String?>(null) }
+    var keyRequirePin by remember { mutableStateOf(false) }
+    var keyPinError by remember { mutableStateOf<String?>(null) }
+    var savingSshKey by remember { mutableStateOf(false) }
+    var pendingKeyPinDisable by remember { mutableStateOf(false) }
+    val sshKeyScope = rememberCoroutineScope()
+
+    fun sshKeyAction(key: com.farside.workspace.data.SavedSshKey, action: String) {
+        if (action == "edit") {
+            editingSshKeyId = key.id
+            newKeyName = key.name
+            newKeyPrivate = key.privateKey
+            newKeyPassphrase = ""
+            keyRequirePin = key.requirePin
+        } else {
+            profileManager.deleteSshKey(key.id)
+            sshKeys = profileManager.getSshKeys()
+            if (editingSshKeyId == key.id) {
+                editingSshKeyId = null
+                newKeyName = ""
+                newKeyPrivate = ""
+                newKeyPassphrase = ""
+                keyRequirePin = false
+            }
+        }
+        keyPinError = null
+    }
+
     fun credentialAction(cred: com.farside.workspace.data.SavedCredential, action: String) {
         if (action == "edit") {
             editingCredentialId = cred.id
@@ -280,6 +318,18 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
             }
         }
         pinError = null
+    }
+    if (pendingKeyPinDisable) {
+        CredentialPinDialog(
+            title = "Remove PIN requirement",
+            message = "Enter the App PIN to remove PIN requirement.",
+            onUnlocked = {
+                keyRequirePin = false
+                keyPinError = null
+                pendingKeyPinDisable = false
+            },
+            onCancel = { pendingKeyPinDisable = false }
+        )
     }
     if (pendingPinDisable) {
         CredentialPinDialog(
@@ -331,7 +381,7 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
         ) {
             Button(
                 onClick = onClose,
-                enabled = !savingCredential,
+                enabled = !savingCredential && !savingSshKey,
                 modifier = Modifier.heightIn(min = 56.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E88E5), contentColor = Color.White)
             ) {
@@ -360,7 +410,8 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                 ) {
                     Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Tunnels & Global") })
                     Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Credentials") })
-                    Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("About") })
+                    Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("SSH Keys") })
+                    Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }, text = { Text("About") })
                 }
                 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -515,6 +566,102 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                         }
                     }
                     2 -> {
+                        SettingsHeader("SSH Key Management")
+                        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                            sshKeys.forEach { key ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text(key.name, color = Color.White, fontWeight = FontWeight.Bold)
+                                        if (key.requirePin) Text("PIN required", color = Color.Gray, fontSize = 12.sp)
+                                    }
+                                    Row {
+                                        TextButton(enabled = !savingSshKey, onClick = {
+                                            sshKeyAction(key, "edit")
+                                        }) { Text("Edit", color = Color(0xFF1E88E5)) }
+                                        TextButton(enabled = !savingSshKey, onClick = {
+                                            sshKeyAction(key, "delete")
+                                        }) { Text("Delete", color = Color.Red) }
+                                    }
+                                }
+                            }
+                            
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(if (editingSshKeyId == null) "Add New SSH Key" else "Edit SSH Key", color = Color(0xFF1E88E5), fontSize = 14.sp)
+                            SettingsTextField(newKeyName, { newKeyName = it }, "Key Display Name")
+                            SettingsTextField(
+                                value = newKeyPrivate,
+                                onValueChange = { newKeyPrivate = it },
+                                placeholder = "-----BEGIN OPENSSH PRIVATE KEY-----\n...",
+                                accessibleLabel = "Private Key",
+                                singleLine = false,
+                                minLines = 3,
+                                maxLines = 6
+                            )
+                            SettingsTextField(newKeyPassphrase, { newKeyPassphrase = it }, "Passphrase (Optional)", visualTransformation = PasswordVisualTransformation())
+                            if (editingSshKeyId != null) Text("Leave passphrase blank to keep the saved passphrase.", color = Color.Gray, fontSize = 12.sp)
+                            SettingsSwitchRow("Require PIN", keyRequirePin, { enabled ->
+                                val previous = sshKeys.find { it.id == editingSshKeyId }
+                                if (!enabled && previous?.requirePin == true) {
+                                    pendingKeyPinDisable = true
+                                } else if (enabled) {
+                                    if (appPinVerifier == null) {
+                                        keyPinError = "Set an App PIN in Tunnels & Global settings first."
+                                    } else {
+                                        keyRequirePin = true
+                                        keyPinError = null
+                                    }
+                                } else {
+                                    keyRequirePin = false
+                                    keyPinError = null
+                                }
+                            })
+                            keyPinError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                            TextButton(enabled = !savingSshKey && !pendingKeyPinDisable, onClick = {
+                                if (newKeyName.isNotBlank() && newKeyPrivate.isNotBlank()) {
+                                    val keyToSave = com.farside.workspace.data.SavedSshKey(
+                                        id = editingSshKeyId ?: java.util.UUID.randomUUID().toString(),
+                                        name = newKeyName,
+                                        privateKey = newKeyPrivate,
+                                        passphrase = if (editingSshKeyId != null && newKeyPassphrase.isEmpty())
+                                            sshKeys.first { it.id == editingSshKeyId }.passphrase else newKeyPassphrase,
+                                        requirePin = keyRequirePin
+                                    )
+                                    val editing = editingSshKeyId != null
+                                    savingSshKey = true
+                                    sshKeyScope.launch {
+                                        try {
+                                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                                                if (editing) profileManager.updateSshKey(keyToSave) else profileManager.addSshKey(keyToSave)
+                                            }
+                                            sshKeys = profileManager.getSshKeys()
+                                            editingSshKeyId = null
+                                            newKeyName = ""
+                                            newKeyPrivate = ""
+                                            newKeyPassphrase = ""
+                                            keyRequirePin = false
+                                        } finally { savingSshKey = false }
+                                    }
+                                }
+                            }, modifier = Modifier.align(Alignment.End)) {
+                                Text(if (editingSshKeyId == null) "Save SSH Key" else "Save Changes", color = Color(0xFF1E88E5))
+                            }
+                            if (editingSshKeyId != null) {
+                                TextButton(enabled = !savingSshKey && !pendingKeyPinDisable, onClick = {
+                                    editingSshKeyId = null
+                                    newKeyName = ""
+                                    newKeyPrivate = ""
+                                    newKeyPassphrase = ""
+                                    keyRequirePin = false
+                                    keyPinError = null
+                                }, modifier = Modifier.align(Alignment.End)) { Text("Cancel Edit") }
+                            }
+                        }
+                    }
+                    3 -> {
                         SettingsHeader("About & Open Source Licenses")
                         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                             Text("Farside Workspace", color = Color.White, style = MaterialTheme.typography.titleMedium)
@@ -631,71 +778,6 @@ fun ProxyTypeSelector(selectedType: com.farside.workspace.data.ProxyType, onType
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun CameraSelector(selectedCameraId: String?, onCameraSelected: (String) -> Unit) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
-    val context = LocalContext.current
-    val cameraManager = remember { context.getSystemService(Context.CAMERA_SERVICE) as CameraManager }
-    val cameraList = remember { 
-        try {
-            cameraManager.cameraIdList.map { id ->
-                val chars = cameraManager.getCameraCharacteristics(id)
-                val facing = chars.get(CameraCharacteristics.LENS_FACING)
-                val facingStr = when(facing) {
-                    CameraCharacteristics.LENS_FACING_FRONT -> "Front"
-                    CameraCharacteristics.LENS_FACING_BACK -> "Back"
-                    CameraCharacteristics.LENS_FACING_EXTERNAL -> "External"
-                    else -> "Unknown"
-                }
-                id to "Camera $id ($facingStr)"
-            }
-        } catch (e: Exception) {
-            emptyList<Pair<String, String>>()
-        }
-    }
-    
-    val displayValue = cameraList.find { it.first == selectedCameraId }?.second ?: (selectedCameraId ?: "Select Camera...")
-
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = !expanded },
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
-    ) {
-        TextField(
-            value = displayValue,
-            onValueChange = {},
-            readOnly = true,
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            colors = ExposedDropdownMenuDefaults.textFieldColors(
-                focusedContainerColor = Color(0xFF1C1C1E),
-                unfocusedContainerColor = Color(0xFF1C1C1E),
-                focusedIndicatorColor = Color(0xFF1E88E5),
-                unfocusedIndicatorColor = Color.DarkGray,
-                focusedTextColor = Color.White,
-                unfocusedTextColor = Color.White
-            ),
-            modifier = Modifier.menuAnchor().fillMaxWidth()
-        )
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            cameraList.forEach { (id, desc) ->
-                DropdownMenuItem(
-                    text = { Text(desc) },
-                    onClick = {
-                        onCameraSelected(id)
-                        expanded = false
-                    }
-                )
-            }
-            if (cameraList.isEmpty()) {
-                DropdownMenuItem(text = { Text("No cameras detected") }, onClick = { expanded = false })
-            }
-        }
-    }
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -750,7 +832,7 @@ fun AddProfileForm(
     onSave: (ConnectionProfile) -> Unit, 
     onCancel: () -> Unit, 
     profileManager: com.farside.workspace.data.ProfileManager,
-    onNavigateToSettings: () -> Unit,
+    onNavigateToSettings: (Int) -> Unit = {},
     credentialRevision: Int = 0
 ) {
     var name by rememberSaveable { mutableStateOf(initialProfile?.name ?: "") }
@@ -760,15 +842,15 @@ fun AddProfileForm(
     var user by rememberSaveable { mutableStateOf(initialProfile?.user ?: "") }
     var pass by remember { mutableStateOf(initialProfile?.pass ?: "") }
     val creds = remember(profileManager, credentialRevision) { profileManager.getCredentials() }
+    val sshKeys = remember(profileManager, credentialRevision) { profileManager.getSshKeys() }
     var savedCredId by rememberSaveable {
         mutableStateOf(initialProfile?.credentialId ?: initialProfile?.let { prof ->
             creds.singleOrNull { it.user == prof.user && it.pass == prof.pass }?.id
         } ?: "")
     }
+    var savedSshKeyId by rememberSaveable { mutableStateOf(initialProfile?.sshKeyId ?: "") }
     
     var remoteApp by rememberSaveable { mutableStateOf(initialProfile?.remoteApp ?: "") }
-    var enableCamera by rememberSaveable { mutableStateOf(initialProfile?.enableCamera ?: true) }
-    var cameraId by rememberSaveable { mutableStateOf(initialProfile?.cameraId ?: "") }
     
     var discoveredHosts by remember { mutableStateOf<List<com.farside.workspace.utils.DiscoveredHost>>(emptyList()) }
     var isScanning by remember { mutableStateOf(false) }
@@ -794,7 +876,20 @@ fun AddProfileForm(
     val microphonePermission = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
     ) { granted -> redirectMicrophone = granted && com.farside.workspace.hasMicrophonePermission(context) }
-    var redirectStorage by rememberSaveable { mutableStateOf(initialProfile?.redirectStorage ?: true) }
+    var enableCamera by rememberSaveable {
+        mutableStateOf((initialProfile?.enableCamera ?: false) && com.farside.workspace.hasCameraPermission(context))
+    }
+    val cameraPermission = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
+    ) { _ -> enableCamera = com.farside.workspace.hasCameraPermission(context) }
+    var redirectStorage by rememberSaveable {
+        mutableStateOf((initialProfile?.redirectStorage ?: false) && com.farside.workspace.hasStoragePermission(context))
+    }
+    val storagePermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) {
+        redirectStorage = com.farside.workspace.hasStoragePermission(context)
+    }
     var redirectClipboard by rememberSaveable { mutableStateOf(initialProfile?.redirectClipboard ?: true) }
     var redirectLocation by rememberSaveable { mutableStateOf(initialProfile?.redirectLocation ?: true) }
 
@@ -827,7 +922,7 @@ fun AddProfileForm(
                     }
                     val creds = profileManager.getCredentials()
                     val selectedCred = creds.find { it.id == savedCredId }
-                    val credSelected = selectedCred != null || (user.isNotBlank())
+                    val credSelected = (type == ConnectionType.SSH) || (selectedCred != null) || (user.isNotBlank())
                     if (host.isBlank() || !credSelected) {
                         showValidationErrors = true
                         return@TextButton
@@ -851,10 +946,11 @@ fun AddProfileForm(
                         user = selectedCred?.user ?: user,
                         pass = selectedCred?.pass ?: pass,
                         credentialId = selectedCred?.id,
+                        sshKeyId = if (type == ConnectionType.SSH) savedSshKeyId.takeIf { it.isNotBlank() } else null,
                         remoteApp = remoteApp.takeIf { it.isNotBlank() },
                         useCloudflare = false,
                         enableCamera = enableCamera,
-                        cameraId = cameraId.takeIf { it.isNotBlank() },
+                        cameraId = null,
                         proxyType = proxyType,
                         proxyHost = proxyHost.takeIf { it.isNotBlank() },
                         proxyPort = proxyPort.toIntOrNull(),
@@ -961,7 +1057,7 @@ fun AddProfileForm(
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
                 )
 
-                SettingsHeader("User Account")
+                SettingsHeader(if (type == ConnectionType.SSH) "User Account (Optional for SSH)" else "User Account")
                 var expandedCreds by rememberSaveable { mutableStateOf(false) }
                 
                 ExposedDropdownMenuBox(
@@ -970,7 +1066,7 @@ fun AddProfileForm(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
                 ) {
                     TextField(
-                        value = creds.find { it.id == savedCredId }?.name ?: "Select Saved Credential",
+                        value = creds.find { it.id == savedCredId }?.name ?: if (type == ConnectionType.SSH && savedCredId.isBlank()) "None (Interactive / Key auth)" else "Select Saved Credential",
                         onValueChange = {},
                         readOnly = true,
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedCreds) },
@@ -980,9 +1076,20 @@ fun AddProfileForm(
                             focusedTextColor = Color.White, unfocusedTextColor = Color.White
                         ),
                         modifier = Modifier.menuAnchor().fillMaxWidth(),
-                        isError = showValidationErrors && savedCredId.isBlank()
+                        isError = showValidationErrors && type == ConnectionType.RDP && savedCredId.isBlank()
                     )
                     ExposedDropdownMenu(expanded = expandedCreds, onDismissRequest = { expandedCreds = false }) {
+                        if (type == ConnectionType.SSH) {
+                            DropdownMenuItem(
+                                text = { Text("None (Interactive / Key auth)") },
+                                onClick = {
+                                    savedCredId = ""
+                                    user = ""
+                                    pass = ""
+                                    expandedCreds = false
+                                }
+                            )
+                        }
                         creds.forEach { cred ->
                             DropdownMenuItem(
                                 text = { Text(cred.name) },
@@ -998,9 +1105,61 @@ fun AddProfileForm(
                             text = { Text("+ Add New Credential", color = MaterialTheme.colorScheme.primary) },
                             onClick = {
                                 expandedCreds = false
-                                onNavigateToSettings()
+                                onNavigateToSettings(1)
                             }
                         )
+                    }
+                }
+
+                if (type == ConnectionType.SSH && savedCredId.isBlank()) {
+                    SettingsTextField(user, { user = it }, "Username (Optional)")
+                }
+
+                if (type == ConnectionType.SSH) {
+                    SettingsHeader("SSH Key")
+                    var expandedSshKeys by rememberSaveable { mutableStateOf(false) }
+                    ExposedDropdownMenuBox(
+                        expanded = expandedSshKeys,
+                        onExpandedChange = { expandedSshKeys = !expandedSshKeys },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+                    ) {
+                        TextField(
+                            value = sshKeys.find { it.id == savedSshKeyId }?.name ?: "None (Password / Interactive)",
+                            onValueChange = {},
+                            readOnly = true,
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedSshKeys) },
+                            colors = ExposedDropdownMenuDefaults.textFieldColors(
+                                focusedContainerColor = Color(0xFF1C1C1E), unfocusedContainerColor = Color(0xFF1C1C1E),
+                                focusedIndicatorColor = Color(0xFF1E88E5), unfocusedIndicatorColor = Color.DarkGray,
+                                focusedTextColor = Color.White, unfocusedTextColor = Color.White
+                            ),
+                            modifier = Modifier.menuAnchor().fillMaxWidth()
+                        )
+                        ExposedDropdownMenu(expanded = expandedSshKeys, onDismissRequest = { expandedSshKeys = false }) {
+                            DropdownMenuItem(
+                                text = { Text("None (Password / Interactive)") },
+                                onClick = {
+                                    savedSshKeyId = ""
+                                    expandedSshKeys = false
+                                }
+                            )
+                            sshKeys.forEach { key ->
+                                DropdownMenuItem(
+                                    text = { Text(key.name) },
+                                    onClick = {
+                                        savedSshKeyId = key.id
+                                        expandedSshKeys = false
+                                    }
+                                )
+                            }
+                            DropdownMenuItem(
+                                text = { Text("+ Add New SSH Key", color = MaterialTheme.colorScheme.primary) },
+                                onClick = {
+                                    expandedSshKeys = false
+                                    onNavigateToSettings(2)
+                                }
+                            )
+                        }
                     }
                 }
                 
@@ -1041,11 +1200,16 @@ fun AddProfileForm(
                         else if (com.farside.workspace.hasMicrophonePermission(context)) redirectMicrophone = true
                         else microphonePermission.launch(android.Manifest.permission.RECORD_AUDIO)
                     })
-                    SettingsSwitchRow("Redirect Camera", enableCamera, { enableCamera = it })
-                    if (enableCamera) {
-                        CameraSelector(selectedCameraId = cameraId.takeIf { it.isNotBlank() }, onCameraSelected = { cameraId = it })
-                    }
-                    SettingsSwitchRow("Redirect Storage", redirectStorage, { redirectStorage = it })
+                    SettingsSwitchRow("Redirect Camera", enableCamera, { enabled ->
+                        if (!enabled) enableCamera = false
+                        else if (com.farside.workspace.hasCameraPermission(context)) enableCamera = true
+                        else cameraPermission.launch(com.farside.workspace.REQUIRED_CAMERA_PERMISSIONS)
+                    })
+                    SettingsSwitchRow("Redirect Storage", redirectStorage, { enabled ->
+                        if (!enabled) redirectStorage = false
+                        else if (com.farside.workspace.hasStoragePermission(context)) redirectStorage = true
+                        else com.farside.workspace.requestStoragePermission(context) { intent -> storagePermissionLauncher.launch(intent) }
+                    })
                     SettingsSwitchRow("Redirect Clipboard", redirectClipboard, { redirectClipboard = it })
                     SettingsSwitchRow("Redirect Location", redirectLocation, { redirectLocation = it })
                     

@@ -86,7 +86,7 @@ internal class RdpSessionConnection(
                 }
                 if (closed.get() || ended.get()) { next.release(); return@execute }
                 instance = bridge.connect(host, port, profile.user, profile.pass, profile.remoteApp,
-                    profile.enableCamera, profile.cameraId, profile.redirectMicrophone && hasMicrophonePermission(context), next, profile.host.removeSurrounding("[", "]"), certificates)
+                    profile.enableCamera && hasCameraPermission(context), profile.redirectMicrophone && hasMicrophonePermission(context), profile.redirectStorage && hasStoragePermission(context), next, profile.host.removeSurrounding("[", "]"), certificates)
                 val connected = instance
                 this.connected.set(connected != 0L)
                 if (connected == 0L) tunnel?.close()

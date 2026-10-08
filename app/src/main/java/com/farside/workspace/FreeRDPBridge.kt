@@ -10,10 +10,15 @@ class FreeRDPBridge {
         disconnectListener?.invoke(reason, established)
     }
 
-    external fun connect(hostname: String, port: Int, username: String, password: String, remoteApp: String?, enableCamera: Boolean, cameraId: String?, enableMicrophone: Boolean, surface: Surface, certificateHost: String, certificateVerifier: RdpCertificateVerifier): Long
+    external fun connect(hostname: String, port: Int, username: String, password: String, remoteApp: String?, enableCamera: Boolean, enableMicrophone: Boolean, enableStorage: Boolean, surface: Surface, certificateHost: String, certificateVerifier: RdpCertificateVerifier): Long
     external fun certificateMatchesHost(pem: ByteArray, host: String): Boolean
     external fun setAudioMuted(instance: Long, speakerMuted: Boolean, micMuted: Boolean)
     external fun isMicrophoneRecording(instance: Long): Boolean
+    external fun setCameraMuted(instance: Long, muted: Boolean)
+    external fun isCameraRecording(instance: Long): Boolean
+    external fun isCameraMuted(instance: Long): Boolean
+    external fun isCameraUnsupported(instance: Long): Boolean
+    external fun isStorageConnected(instance: Long): Boolean
     // Playback/capture frames, then nonzero playback/capture samples (verification; no audio content).
     external fun getAudioFrameCounts(instance: Long): LongArray
     external fun disconnect(instance: Long)

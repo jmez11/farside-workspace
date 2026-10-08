@@ -12,13 +12,34 @@
 - **Keyboard Extra Keys**: Separate attached spatial window (76dp/314dp), unshifted desktop surface with `adjustNothing`, synchronized compositor compaction/reveal (`KeyboardPanelResize.kt`), dual `RemoteImeEditor` native focus handoff.
 - **Display Resize Height Parity**: Masked height to even with `& ~1` in `Java_com_farside_workspace_FreeRDPBridge_updateDisplay` matching width, ensuring MediaCodec I420 chroma subsampling requirements are met and preventing decode failure on odd-height resizes.
 
+- **SSH Session Floating Toolbar, Zoom & Extra Keys**: Added movable, auto-disappearing floating toolbar matching RDP design with connection name/host, pin toggle, zoom button with font size slider (8sp-32sp) and Reset Zoom button, and keyboard toggle button. Added soft keyboard IME integration with dual `RemoteImeEditor` instances without shifting main content window (`adjustNothing`). Integrated `RemoteKeyboardPanel` bottom-anchored companion spatial window (76dp collapsed, 314dp expanded via `123`/`ABC` toggle) with full extra keys bank (`RemoteExtraKeys` with Ctrl, Alt, Shift latches, arrows, Home/End, PgUp/PgDn, Ins/Del, F1-F12, keypad, arithmetic, and number swap), dynamically sending VT codes and Unicode points to `sshTerm` and resizing PTY window dimensions via `Session.Shell.changeWindowDimensions`.
+- **SSH Keys, PIN Protection & 5-Minute Cache**: Added "SSH Keys" tab in Settings to create, edit, and delete saved SSH keys (`SavedSshKey.kt`). Both private key and optional passphrase are encrypted with randomized AES-GCM via non-exportable Android Keystore key; zero plaintext in SharedPreferences or disk XML. Keys support "Require PIN" toggle gated by the App PIN (disabling requires entering current App PIN; enabling requires App PIN configured). In connection profile setup, SSH profiles allow choosing saved SSH keys from a dropdown, and credentials are fully optional (host is sufficient; user, pass, and key are optional). When credentials are omitted, `SshTerminalSession` falls back to interactive terminal login (`login as: ` and password prompt). All PIN unlock dialogs include an initially unchecked "Don't reprompt for 5 minutes" checkbox; upon successful unlock, PIN is held in a thread-safe in-memory `CharArray` cache in `CredentialPin.kt` with automatic memory zeroization upon 5-minute expiry or manual invalidation, bypassing unlock prompts during that window.
+- **RDP Camera Redirection (`rdpecam`)**: Dynamic virtual channel camera redirection enabled with Quest Camera2 NDK HAL backend. Connections default to camera disabled (`enableCamera = false`); enabling camera redirection requests `android.permission.CAMERA`, `horizonos.permission.HEADSET_CAMERA`, and `horizonos.permission.AVATAR_CAMERA` via system permission prompt. Removed connection setup camera dropdown, redirecting all enumerated backward-compatible cameras with descriptive names: front lens-facing camera `1` is registered as `"Virtual Camera"`, and back lens-facing camera `50` as `"Passthrough Camera"`.
+  - Prioritized framerate over resolution by capping advertised NV12 media types to max 640x480 (640x480, 640x360, 320x240) and setting AE target FPS range `[30, 30]`, eliminating high uncompressed stream bandwidth bottlenecks over RDP dynamic virtual channels.
+  - Fixed Quest passthrough room camera (`50` / `"Passthrough Camera"`) by configuring capture requests with `TEMPLATE_RECORD` instead of `TEMPLATE_PREVIEW`, matching Quest Camera2 HAL driver requirements.
+  - Closed launcher `MainActivity` upon launching session window (`SessionWindowLauncher.launch(...)`), ensuring Horizon OS anchors the avatar virtual camera viewport directly to the active session window.
+  - Floating menubar webcam icon (`RdpCameraControl`): turns red when remote applications are capturing frames, supports muting (blackout NV12 frames), and displays a red circle-slash prohibition symbol when camera redirection is unsupported on host (e.g. Windows Home/Core on `LAPTOP-BBJV33M6`), with a non-dismissible explanation dialog.
+- **RDP Remote Storage Redirection (`rdpdr` + `drive`)**: Static virtual channel client drive redirection implemented using FreeRDP's `rdpdr` and static `drive-client` extension. Connections default to storage disabled (`redirectStorage = false`). Toggling "Redirect Storage" in connection profile setup or launching a storage-enabled session checks `hasStoragePermission(context)` (`Environment.isExternalStorageManager()`) and prompts the user for All Files Access via `Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION`. External storage root (`/sdcard`) is announced and mounted under share name `"Quest"`. Storage runs headless in the background of active RDP sessions and is explicitly excluded from the floating menubar (preserving menubar space for mic and camera controls). FreeRDP JNI bridge maps `drive_DeviceServiceEntry`, adds filesystem device to settings collection in `client_pre_connect`, tracks `rdpdr` connected/disconnected state via PubSub, and exposes `isStorageConnected`.
+
 ## Verification Evidence
-- Build: `./gradlew :app:assembleDebug :app:assembleDebugAndroidTest`
-- Install: `adb install -r app/build/outputs/apk/debug/app-debug.apk` and `adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk`
-- On-device test passes on Quest (`172.16.0.106:34001`):
-  - `zoomTest`: PASS across 1.0x, 1.25x, 1.42x, 1.5x, 2.0x, 3.0x.
-  - `inputOnly`: PASS (pointer gestures, double-tap tolerance, 4-direction controller scroll, zoomed mapping).
+- Build: `./gradlew :app:assembleDebug :app:assembleDebugAndroidTest` (BUILD SUCCESSFUL, native arm64 CMake build with `CHANNEL_RDPDR`, `CHANNEL_DRIVE`, and updated `camera_android.c`).
+- Install & On-Device Suite: `adb install -r app-debug.apk` and `adb install -r app-debug-androidTest.apk` on Quest (`172.16.0.106:37137`):
+  - `cameraMode live-nucbox` (`cameraTarget passthrough`): PASS (Navigated to `webcamtests.com` on `nucbox` (`172.16.0.32:3389`), refreshed with F5, selected `"Passthrough Camera (redirected)"` from dropdown, clicked "Test my cam", host requested `StartStreamsRequest (0x0F)`, Quest Camera2 record stream started at 640x480 30fps with `TEMPLATE_RECORD`, delivered 90+ frames smoothly to remote browser, captured `passthrough-streaming.png`).
+  - `cameraMode live-nucbox` (`cameraTarget virtual`): PASS (Selected `"Virtual Camera (redirected)"`, streamed at 640x480 30fps with `cam_android_deliver_frame` 30fps delivery).
+  - `cameraMode capabilities`: PASS (Camera permission sets, AVATAR_CAMERA and HEADSET_CAMERA present, default `enableCamera = false` on new profiles).
+  - `cameraMode recording-ui`: PASS (Red recording icon color verification via PixelCopy ARGB_8888 check).
+  - `cameraMode muted-ui`: PASS (Muted camera state, click toggles mute).
+  - `cameraMode blocked-ui`: PASS (Unsupported camera dialog display, prohibition overlay, blocked click does not toggle mute).
+  - `storageMode capabilities`: PASS (Validates `ConnectionProfile` default `redirectStorage = false`, `createManageAllFilesIntent` resolution, JSON serialization round-trip, and `ProfileManager` persistence).
+  - `storageMode ui`: PASS (Validates permission check launcher callback and verifies menubar floating toolbar excludes storage icon).
+  - `storageMode live-nucbox`: PASS (Validates live RDP session on `nucbox` (`172.16.0.32:3389`) establishes `rdpdr` channel and advertises `"Quest"` drive within 10s, disconnecting cleanly).
+  - `storageMode live-laptop`: PASS (Validates live RDP session on `LAPTOP-BBJV33M6` (`172.16.0.54:3389`)).
+- Historical on-device test passes on Quest:
+  - `cameraMode live-laptop`: PASS (Connected to `LAPTOP-BBJV33M6` (`172.16.0.54`), verified `cameraUnsupported = true`, camera icon displayed prohibition circle-slash, blocked camera dialog verified).
+  - `cameraMode hardware-probe`: PASS (Camera 1 Avatar/Virtual and Camera 50 Passthrough/Headset enumerated with supported YUV resolutions).
+  - `sshKeysOnly`: PASS (In-memory PIN cache verification, SavedSshKey Keystore encryption, ConnectionProfile SSH key association & optional credentials, PIN unlock & 5-minute cache population, SSH Key Require PIN toggle & update, 5-minute PIN cache bypass, PIN cache invalidation re-prompt, Profile editor SSH key selection & optional credentials UI).
   - `credentialsOnly`: PASS (App PIN setup, confirmation, gate, backoff, requirePin toggle, unprotected direct connection).
+  - `sshOnly`: PASS (SSH session floating toolbar with connection name, host, pin toggle, zoom font scaling/reset, keyboard toggle, unshifted main content bounds with `adjustNothing`, 123 expansion to 314dp, ABC contraction to 76dp, extra keys modifier latches and VT codes).
   - `toolbarOnly`: PASS (toolbar offset/fade/movement/pin, keyboard companion, native focus handoff, desktop click/drag focus).
   - `proxiesOnly`: PASS (proxy choices, legacy decoding, unsupported proxy rejection).
   - Default resize suite: PASS (5 resolutions: 1280x800 -> 1000x600 -> 1600x900 -> 800x1000 -> 1280x800, nonblank captures, session close).
@@ -29,8 +50,10 @@
 - Spatial audio: 3D audio source correctly localized to each session's own window in space.
 - RDP desktop display, zoom/pan controls, mouse input, modifier controls, and soft keyboard.
 - App-wide PIN security with per-credential Require PIN gating and unlock verification before removal.
+- RDP camera redirection (`rdpecam`) with Avatar `"Virtual Camera"` and Passthrough `"Passthrough Camera"`, high-framerate 640x480 capped streaming, live streaming verified on `webcamtests.com`, recording indicator, mute control, and unsupported host prohibition overlay.
+- RDP drive/storage redirection (`rdpdr` + `drive`): `"Quest"` share mounted from `/sdcard` with All Files Access permission handling and headless in-session operation.
 
 ## Stubbed / Backlog
 - Local PC discovery: DNS-SD/SMB scanning remains stubbed.
 - Cloudflared: persistent settings/service validation and SSH forwarding remain incomplete; saved RDP per-session implementation is present above.
-- Phase 2: multiple sessions/mirroring; then RemoteApp, camera redirection, SSH and other proxies.
+- Phase 2: multiple sessions/mirroring; then RemoteApp, SSH and other proxies.
