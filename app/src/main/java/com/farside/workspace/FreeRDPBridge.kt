@@ -18,6 +18,7 @@ class FreeRDPBridge {
     external fun isCameraRecording(instance: Long): Boolean
     external fun isCameraMuted(instance: Long): Boolean
     external fun isCameraUnsupported(instance: Long): Boolean
+    external fun setCameraMaxDimension(maxDim: Int)
     external fun isStorageConnected(instance: Long): Boolean
     // Playback/capture frames, then nonzero playback/capture samples (verification; no audio content).
     external fun getAudioFrameCounts(instance: Long): LongArray

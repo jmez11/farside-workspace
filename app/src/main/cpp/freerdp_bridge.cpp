@@ -215,6 +215,7 @@ extern "C" BOOL cam_android_is_recording(void);
 extern "C" void cam_android_set_muted(BOOL muted);
 extern "C" BOOL cam_android_is_muted(void);
 extern "C" UINT cam_android_get_camera_count(void);
+extern "C" void cam_android_set_max_dimension(int maxDim);
 
 QuestAudioState* quest_audio_state(rdpContext* context) { return ((RdpContext*)context)->audio; }
 extern "C" BOOL VCAPITYPE drdynvc_VirtualChannelEntryEx(PVOID pInitHandle, PVOID pContext);
@@ -945,6 +946,11 @@ Java_com_farside_workspace_FreeRDPBridge_isCameraRecording(JNIEnv*, jobject, jlo
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_farside_workspace_FreeRDPBridge_isCameraMuted(JNIEnv*, jobject, jlong) {
     return cam_android_is_muted() ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_farside_workspace_FreeRDPBridge_setCameraMaxDimension(JNIEnv*, jobject, jint maxDim) {
+    cam_android_set_max_dimension(maxDim);
 }
 
 extern "C" JNIEXPORT jboolean JNICALL

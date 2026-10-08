@@ -50,12 +50,15 @@ static const CAM_MEDIA_FORMAT_INFO* getSupportedFormats(size_t* pCount)
 		                                   CAM_MEDIA_FORMAT_RGB32 };
 
 	static CAM_MEDIA_FORMAT_INFO
-	    formats[ARRAYSIZE(available) * ARRAYSIZE(available)]; /* Max possible formats */
+	    formats[ARRAYSIZE(available) * ARRAYSIZE(available) + 2]; /* Max possible formats */
 	static size_t count = 0;
 	static BOOL initialized = FALSE;
 
 	if (!initialized)
 	{
+		/* Hardware NV12 -> H.264 encode via Android AMediaCodec */
+		formats[count++] = (CAM_MEDIA_FORMAT_INFO){ CAM_MEDIA_FORMAT_NV12, CAM_MEDIA_FORMAT_H264 };
+
 		for (size_t dst = 0; dst < ARRAYSIZE(available); dst++)
 		{
 			const CAM_MEDIA_FORMAT dstFormat = available[dst];
@@ -63,6 +66,9 @@ static const CAM_MEDIA_FORMAT_INFO* getSupportedFormats(size_t* pCount)
 			for (size_t src = 0; src < ARRAYSIZE(available); src++)
 			{
 				const CAM_MEDIA_FORMAT srcFormat = available[src];
+				if (srcFormat == CAM_MEDIA_FORMAT_NV12 && dstFormat == CAM_MEDIA_FORMAT_H264)
+					continue; /* Already added as primary above */
+
 				if (freerdp_video_conversion_supported(ecamToVideoFormat(srcFormat),
 				                                       ecamToVideoFormat(dstFormat)))
 				{
@@ -647,14 +653,26 @@ static UINT ecam_dev_process_media_type_list_request(CameraDevice* dev,
 
 	if (stream->currMediaType.Format == 0)
 	{
-		/* prefer 640x480 as default media type if available, else 1st */
+		/* Choose the default media type: pick the best resolution that matches
+		 * the target camera dimension (or highest available / first). */
+		extern int cam_android_get_max_dimension(void);
+		int targetDim = cam_android_get_max_dimension();
 		size_t defaultIndex = 0;
-		for (size_t i = 0; i < nMediaTypes; i++)
+		if (targetDim > 0 && nMediaTypes > 0)
 		{
-			if (mediaTypes[i].Width == 640 && mediaTypes[i].Height == 480)
+			UINT32 bestArea = 0;
+			for (size_t i = 0; i < nMediaTypes; i++)
 			{
-				defaultIndex = i;
-				break;
+				/* Prefer 16:9 or matching height <= targetDim */
+				if ((int)mediaTypes[i].Height <= targetDim)
+				{
+					UINT32 area = mediaTypes[i].Width * mediaTypes[i].Height;
+					if (area > bestArea)
+					{
+						bestArea = area;
+						defaultIndex = i;
+					}
+				}
 			}
 		}
 		stream->currMediaType = mediaTypes[defaultIndex];

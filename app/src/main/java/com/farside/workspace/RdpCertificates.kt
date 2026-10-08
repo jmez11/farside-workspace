@@ -31,6 +31,8 @@ internal class RdpCertificateStore(context: Context) {
 
     fun save(host: String, port: Int, certificate: JSONObject): Boolean =
         prefs.edit().putString(key(host, port), certificate.toString()).commit()
+
+    fun clearAll(): Boolean = prefs.edit().clear().commit()
 }
 
 internal data class RdpCertificateRequest(

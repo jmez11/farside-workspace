@@ -15,6 +15,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.graphics.Color
+import com.farside.workspace.data.CameraResolution
 import com.farside.workspace.data.ConnectionProfile
 import com.farside.workspace.data.ConnectionType
 import com.farside.workspace.data.ProfileManager
@@ -63,7 +64,7 @@ internal class RdpCameraVerification(private val test: RdpResizeInstrumentation)
         checkNotNull(target) { "No clickable ancestor for '$text'" }.performAction(AccessibilityNodeInfo.ACTION_CLICK)
     }
 
-    fun run(mode: String, target: String? = null) {
+    fun run(mode: String, target: String? = null, resolutionOverride: String? = null) {
         val service = automation.serviceInfo
         service.flags = service.flags or
             android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
@@ -76,7 +77,7 @@ internal class RdpCameraVerification(private val test: RdpResizeInstrumentation)
             "muted-ui" -> verifyMutedUi()
             "capabilities" -> verifyCapabilities()
             "live-laptop" -> verifyLiveLaptop()
-            "live-nucbox" -> verifyLiveNucbox(target ?: "virtual")
+            "live-nucbox" -> verifyLiveNucbox(target ?: "virtual", resolutionOverride)
             "hardware-probe" -> verifyHardwareProbe()
             else -> error("Unknown cameraMode: $mode")
         }
@@ -244,6 +245,11 @@ internal class RdpCameraVerification(private val test: RdpResizeInstrumentation)
         check(REQUIRED_CAMERA_PERMISSIONS.contains("horizonos.permission.AVATAR_CAMERA")) { "Missing AVATAR_CAMERA permission" }
         val defaultProfile = ConnectionProfile("temp", "temp", ConnectionType.RDP, "host", 3389, "u", "p")
         check(!defaultProfile.enableCamera) { "New profiles must default to camera disabled" }
+        check(defaultProfile.cameraResolution == CameraResolution.HD_720) { "Default cameraResolution should be HD_720" }
+        val customProfile = defaultProfile.copy(cameraResolution = CameraResolution.FHD_1080)
+        val json = customProfile.toJson()
+        val restored = ConnectionProfile.fromJson(json)
+        check(restored.cameraResolution == CameraResolution.FHD_1080) { "cameraResolution must round-trip via JSON" }
     }
 
     private fun verifyLiveLaptop() {
@@ -276,10 +282,16 @@ internal class RdpCameraVerification(private val test: RdpResizeInstrumentation)
         }
     }
 
-    private fun verifyLiveNucbox(targetCamera: String = "virtual") {
-        val profiles = ProfileManager(test.targetContext).getProfiles()
-        val nucbox = checkNotNull(profiles.firstOrNull { it.host.contains("172.16.0.32") || it.name.contains("nucbox", ignoreCase = true) }) {
+    private fun verifyLiveNucbox(targetCamera: String = "virtual", resolutionOverride: String? = null) {
+        val profileManager = ProfileManager(test.targetContext)
+        val profiles = profileManager.getProfiles()
+        var nucbox = checkNotNull(profiles.firstOrNull { it.host.contains("172.16.0.32") || it.name.contains("nucbox", ignoreCase = true) }) {
             "nucbox profile not found in saved profiles"
+        }
+        if (resolutionOverride != null) {
+            val resEnum = try { CameraResolution.valueOf(resolutionOverride) } catch (e: Exception) { CameraResolution.HD_720 }
+            nucbox = nucbox.copy(cameraResolution = resEnum)
+            profileManager.updateProfile(nucbox)
         }
         val activity = test.startActivitySync(Intent(test.targetContext, SessionActivity::class.java).apply {
             putExtra("profileId", nucbox.id)
@@ -375,26 +387,30 @@ internal class RdpCameraVerification(private val test: RdpResizeInstrumentation)
                 return Pair(632, 448)
             }
 
-            // Ensure browser is on https://webcamtests.com by navigating directly via address bar
-            android.util.Log.i("RdpCameraVerification", "Navigating to https://webcamtests.com via address bar...")
-            bridge.sendMouseEvent(activity.rdpInstance, 300, 80, FreeRDPBridge.PTR_FLAGS_MOVE)
+            // Ensure browser is open and focused on https://webcamtests.com via Win+R run dialog
+            android.util.Log.i("RdpCameraVerification", "Launching Edge to https://webcamtests.com via Win+R...")
+            // Win key (0x15B) + R (0x13)
+            bridge.sendKeyEvent(activity.rdpInstance, 0x15B, true)
             Thread.sleep(50)
-            bridge.sendMouseEvent(activity.rdpInstance, 300, 80, FreeRDPBridge.PTR_FLAGS_BUTTON1 or FreeRDPBridge.PTR_FLAGS_DOWN)
-            bridge.sendMouseEvent(activity.rdpInstance, 300, 80, FreeRDPBridge.PTR_FLAGS_BUTTON1)
-            Thread.sleep(200)
+            bridge.sendKeyEvent(activity.rdpInstance, 0x13, true)
+            Thread.sleep(50)
+            bridge.sendKeyEvent(activity.rdpInstance, 0x13, false)
+            Thread.sleep(50)
+            bridge.sendKeyEvent(activity.rdpInstance, 0x15B, false)
+            Thread.sleep(1200)
 
-            val url = "https://webcamtests.com"
-            for (ch in url) {
+            val runCmd = "msedge https://webcamtests.com"
+            for (ch in runCmd) {
                 bridge.sendUnicodeKeyEvent(activity.rdpInstance, ch.code, true)
                 Thread.sleep(20)
                 bridge.sendUnicodeKeyEvent(activity.rdpInstance, ch.code, false)
                 Thread.sleep(20)
             }
             Thread.sleep(100)
-            bridge.sendKeyEvent(activity.rdpInstance, 0x1C, true)
+            bridge.sendKeyEvent(activity.rdpInstance, 0x1C, true) // Enter
             Thread.sleep(50)
             bridge.sendKeyEvent(activity.rdpInstance, 0x1C, false)
-            Thread.sleep(3000) // Wait for page load
+            Thread.sleep(4000) // Wait for Edge to load page
 
             // Focus page content area and refresh page with F5 (scancode 0x3F) as requested
             android.util.Log.i("RdpCameraVerification", "Refreshing page with F5...")

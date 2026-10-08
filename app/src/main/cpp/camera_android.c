@@ -45,6 +45,7 @@ static volatile BOOL g_camera_recording = FALSE;
 static volatile int g_camera_active_streams = 0;
 static volatile BOOL g_camera_muted = FALSE;
 static volatile UINT g_camera_count = 0;
+static volatile int g_camera_max_dimension = 720; /* Default 720p */
 
 BOOL cam_android_is_recording(void)
 {
@@ -64,6 +65,20 @@ BOOL cam_android_is_muted(void)
 UINT cam_android_get_camera_count(void)
 {
 	return g_camera_count;
+}
+
+void cam_android_set_max_dimension(int maxDim)
+{
+	if (maxDim <= 0)
+		g_camera_max_dimension = 720;
+	else
+		g_camera_max_dimension = maxDim;
+	LOGI("cam_android_set_max_dimension: set to %d", g_camera_max_dimension);
+}
+
+int cam_android_get_max_dimension(void)
+{
+	return g_camera_max_dimension;
 }
 
 typedef struct
@@ -235,6 +250,9 @@ static void cam_android_deliver_frame(CamAndroidStream* stream, AImage* image)
 		BYTE* tmp = (BYTE*)realloc(stream->nv12Buffer, nv12Size);
 		if (!tmp)
 			return;
+		/* Initialize extra memory to neutral black: Y=0, UV=128 */
+		memset(tmp, 0, ySize);
+		memset(tmp + ySize, 128, ySize / 2);
 		stream->nv12Buffer = tmp;
 		stream->nv12BufferSize = nv12Size;
 	}
@@ -648,14 +666,26 @@ static INT16 cam_android_get_media_type_descriptions(ICamHal* ihal, const char* 
 	if (!cameraId)
 		return -1;
 
-	/* Find the NV12 format index. */
+	/* Find preferred format: first try NV12 -> H264, then fallback to uncompressed NV12 -> NV12 */
 	INT16 formatIndex = -1;
 	for (size_t i = 0; i < nSupportedFormats; i++)
 	{
-		if (supportedFormats[i].inputFormat == CAM_MEDIA_FORMAT_NV12)
+		if (supportedFormats[i].inputFormat == CAM_MEDIA_FORMAT_NV12 &&
+		    supportedFormats[i].outputFormat == CAM_MEDIA_FORMAT_H264)
 		{
 			formatIndex = (INT16)i;
 			break;
+		}
+	}
+	if (formatIndex < 0)
+	{
+		for (size_t i = 0; i < nSupportedFormats; i++)
+		{
+			if (supportedFormats[i].inputFormat == CAM_MEDIA_FORMAT_NV12)
+			{
+				formatIndex = (INT16)i;
+				break;
+			}
 		}
 	}
 	if (formatIndex < 0)
@@ -678,6 +708,8 @@ static INT16 cam_android_get_media_type_descriptions(ICamHal* ihal, const char* 
 		return -1;
 	}
 
+	const BOOL isH264 = (supportedFormats[formatIndex].outputFormat == CAM_MEDIA_FORMAT_H264);
+
 	size_t nTypes = 0;
 	for (uint32_t i = 0; i + 3 < entry.count; i += 4)
 	{
@@ -690,10 +722,20 @@ static INT16 cam_android_get_media_type_descriptions(ICamHal* ihal, const char* 
 			continue;
 		if (fmt != AIMAGE_FORMAT_YUV_420_888)
 			continue;
-		/* Prioritize high framerate over resolution: cap to 640x480 (or smaller, e.g. 640x360, 320x240)
-		 * to prevent uncompressed NV12 over RDP virtual channels from degrading FPS. */
-		if (w > 640 || h > 480)
-			continue;
+		/* Cap resolutions: For H.264 hardware encoding, cap by selected camera max dimension
+		 * (480 for SD, 720 for 720p, 1080 for 1080p).
+		 * For uncompressed NV12, cap to 640x480 to avoid bandwidth saturation. */
+		const int maxDim = g_camera_max_dimension > 0 ? g_camera_max_dimension : 720;
+		if (isH264)
+		{
+			if (h > maxDim || w > (maxDim * 16 / 9 + 64))
+				continue;
+		}
+		else
+		{
+			if (w > 640 || h > 480 || h > maxDim)
+				continue;
+		}
 
 		mediaTypes[nTypes].Format = CAM_MEDIA_FORMAT_NV12;
 		mediaTypes[nTypes].Width = (UINT32)w;
@@ -709,11 +751,28 @@ static INT16 cam_android_get_media_type_descriptions(ICamHal* ihal, const char* 
 			break;
 	}
 
+	/* Sort media types descending by pixel area so the highest resolution (up to maxDim)
+	 * appears first in the advertised list. */
+	for (size_t i = 0; i < nTypes; i++)
+	{
+		for (size_t j = i + 1; j < nTypes; j++)
+		{
+			UINT64 areaI = (UINT64)mediaTypes[i].Width * mediaTypes[i].Height;
+			UINT64 areaJ = (UINT64)mediaTypes[j].Width * mediaTypes[j].Height;
+			if (areaJ > areaI)
+			{
+				CAM_MEDIA_TYPE_DESCRIPTION tmp = mediaTypes[i];
+				mediaTypes[i] = mediaTypes[j];
+				mediaTypes[j] = tmp;
+			}
+		}
+	}
+
 	*nMediaTypes = nTypes;
 	ACameraMetadata_free(characteristics);
 
-	LOGI("cam_android_get_media_type_descriptions: deviceId=%s (cameraId=%s), formatIndex=%d, count=%zu",
-	     deviceId, cameraId ? cameraId : "NULL", formatIndex, nTypes);
+	LOGI("cam_android_get_media_type_descriptions: deviceId=%s (cameraId=%s), formatIndex=%d, count=%zu, maxDim=%d",
+	     deviceId, cameraId ? cameraId : "NULL", formatIndex, nTypes, g_camera_max_dimension);
 
 	if (nTypes == 0)
 	{

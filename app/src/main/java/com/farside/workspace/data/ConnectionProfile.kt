@@ -24,6 +24,12 @@ enum class SoundRedirection {
     PLAY_ON_DEVICE, PLAY_ON_REMOTE, DO_NOT_PLAY
 }
 
+enum class CameraResolution(val displayName: String, val maxDim: Int) {
+    SD("SD (480p)", 480),
+    HD_720("720p", 720),
+    FHD_1080("1080p", 1080)
+}
+
 data class ConnectionProfile(
     val id: String,
     val name: String,
@@ -35,6 +41,7 @@ data class ConnectionProfile(
     val remoteApp: String? = null,
     val useCloudflare: Boolean = false, // Keep for legacy/shortcut
     val enableCamera: Boolean = false,
+    val cameraResolution: CameraResolution = CameraResolution.HD_720,
     val cameraId: String? = null,
     
     // Proxy Settings
@@ -52,7 +59,6 @@ data class ConnectionProfile(
     val redirectMicrophone: Boolean = false,
     val redirectStorage: Boolean = false,
     val redirectClipboard: Boolean = true,
-    val redirectLocation: Boolean = false,
     val customResolution: Boolean = false,
     val matchDevice: Boolean = true,
     val useDefaultResolution: Boolean = false,
@@ -78,6 +84,7 @@ data class ConnectionProfile(
         json.put("remoteApp", remoteApp)
         json.put("useCloudflare", useCloudflare)
         json.put("enableCamera", enableCamera)
+        json.put("cameraResolution", cameraResolution.name)
         json.put("cameraId", cameraId)
         
         json.put("proxyType", proxyType.name)
@@ -94,7 +101,6 @@ data class ConnectionProfile(
         json.put("redirectMicrophone", redirectMicrophone)
         json.put("redirectStorage", redirectStorage)
         json.put("redirectClipboard", redirectClipboard)
-        json.put("redirectLocation", redirectLocation)
         json.put("customResolution", customResolution)
         json.put("matchDevice", matchDevice)
         json.put("useDefaultResolution", useDefaultResolution)
@@ -110,6 +116,7 @@ data class ConnectionProfile(
         fun fromJson(json: JSONObject): ConnectionProfile {
             val pTypeStr = if (json.has("proxyType")) json.getString("proxyType") else ProxyType.NONE.name
             val sRedirectStr = if (json.has("soundRedirection")) json.getString("soundRedirection") else SoundRedirection.PLAY_ON_DEVICE.name
+            val camResStr = if (json.has("cameraResolution")) json.getString("cameraResolution") else CameraResolution.HD_720.name
             return ConnectionProfile(
                 id = json.getString("id"),
                 name = json.getString("name"),
@@ -123,6 +130,7 @@ data class ConnectionProfile(
                 remoteApp = if (json.has("remoteApp") && !json.isNull("remoteApp")) json.getString("remoteApp") else null,
                 useCloudflare = if (json.has("useCloudflare")) json.getBoolean("useCloudflare") else false,
                 enableCamera = if (json.has("enableCamera")) json.getBoolean("enableCamera") else false,
+                cameraResolution = try { CameraResolution.valueOf(camResStr) } catch(e: Exception) { CameraResolution.HD_720 },
                 cameraId = if (json.has("cameraId") && !json.isNull("cameraId")) json.getString("cameraId") else null,
                 
                 proxyType = try { ProxyType.valueOf(pTypeStr) } catch(e: Exception) { ProxyType.NONE },
@@ -139,7 +147,6 @@ data class ConnectionProfile(
                 redirectMicrophone = json.optBoolean("redirectMicrophone", false),
                 redirectStorage = json.optBoolean("redirectStorage", false),
                 redirectClipboard = json.optBoolean("redirectClipboard", true),
-                redirectLocation = json.optBoolean("redirectLocation", false),
                 customResolution = json.optBoolean("customResolution", false),
                 matchDevice = json.optBoolean("matchDevice", true),
                 useDefaultResolution = json.optBoolean("useDefaultResolution", false),

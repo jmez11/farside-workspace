@@ -751,9 +751,10 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
         toolbarActivity += 1L
     }
 
-    LaunchedEffect(windowInteraction, currentWidth, currentHeight) { revealToolbar() }
-    LaunchedEffect(isOverlayVisible, toolbarPinned, toolbarActivity, offsetX, offsetY) {
-        if (isOverlayVisible && !toolbarPinned) {
+    val isMediaRecording = micRecording || cameraRecording
+    LaunchedEffect(windowInteraction, currentWidth, currentHeight, isMediaRecording) { revealToolbar() }
+    LaunchedEffect(isOverlayVisible, toolbarPinned, toolbarActivity, offsetX, offsetY, isMediaRecording) {
+        if (isOverlayVisible && !toolbarPinned && !isMediaRecording) {
             delay(3000)
             isOverlayVisible = false
         }

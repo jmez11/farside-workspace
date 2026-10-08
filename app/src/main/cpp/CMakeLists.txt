@@ -91,11 +91,14 @@ target_include_directories(rdpecam-client-android PRIVATE "${CMAKE_CURRENT_SOURC
 
 get_target_property(quest_rdpecam_sources rdpecam-client SOURCES)
 list(FILTER quest_rdpecam_sources EXCLUDE REGEX "(^|/)camera_device_main\\.c$")
+list(FILTER quest_rdpecam_sources EXCLUDE REGEX "(^|/)encoding\\.c$")
 set_property(TARGET rdpecam-client PROPERTY SOURCES ${quest_rdpecam_sources}
-    "${CMAKE_CURRENT_SOURCE_DIR}/camera_device_main.c")
+    "${CMAKE_CURRENT_SOURCE_DIR}/camera_device_main.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/camera_encoding.c")
 target_include_directories(rdpecam-client PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/freerdp/channels/rdpecam/client"
     "${CMAKE_CURRENT_SOURCE_DIR}/freerdp/channels/rdpecam/common")
+target_link_libraries(rdpecam-client PRIVATE mediandk)
 
 # 6. Build our JNI Bridge
 add_library(freerdp-jni SHARED freerdp_bridge.cpp quest_audio.cpp)

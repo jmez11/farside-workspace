@@ -10,6 +10,8 @@ import net.schmizz.sshj.userauth.method.ChallengeResponseProvider
 import net.schmizz.sshj.userauth.password.Resource
 import com.farside.workspace.data.ConnectionProfile
 import com.farside.workspace.data.ProfileManager
+import com.farside.workspace.data.ProxyType
+import com.farside.workspace.tunnel.CloudflaredTunnel
 import java.io.OutputStream
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
@@ -25,6 +27,7 @@ class SshTerminalSession(
     private var sshClient: SSHClient? = null
     private var sshSession: net.schmizz.sshj.connection.channel.direct.Session? = null
     private var sshShell: net.schmizz.sshj.connection.channel.direct.Session.Shell? = null
+    private var tunnel: CloudflaredTunnel? = null
     @Volatile
     private var isFinished = false
     private val inputQueue = LinkedBlockingQueue<Byte>()
@@ -72,16 +75,33 @@ class SshTerminalSession(
         
         thread {
             try {
+                var targetHost = sshSessionInfo.host
+                var targetPort = sshSessionInfo.port
+
+                val useCloudflared = sshSessionInfo.useCloudflare || sshSessionInfo.proxyType == ProxyType.CLOUDFLARED
+                if (useCloudflared && context != null) {
+                    printToTerminal("[Starting Cloudflare Access SSH tunnel...]\r\n")
+                    val cfTunnel = CloudflaredTunnel(context)
+                    tunnel = cfTunnel
+                    val tunnelPort = cfTunnel.start(
+                        hostInput = sshSessionInfo.host,
+                        parameters = sshSessionInfo.cloudflaredParameters,
+                        onStatus = { status -> printToTerminal("[$status]\r\n") },
+                        onExit = {
+                            if (!isFinished) {
+                                printToTerminal("\r\n[Cloudflared tunnel process exited]\r\n")
+                                finishIfRunning()
+                            }
+                        },
+                        accessSubcommand = "ssh"
+                    )
+                    targetHost = "127.0.0.1"
+                    targetPort = tunnelPort
+                }
+
                 val ssh = SSHClient()
                 sshClient = ssh
                 ssh.addHostKeyVerifier(PromiscuousVerifier())
-                
-                val targetHost = sshSessionInfo.host
-                val targetPort = sshSessionInfo.port
-                
-                if (sshSessionInfo.useCloudflare) {
-                    // Start tunnel logic...
-                }
 
                 ssh.connect(targetHost, targetPort)
 
@@ -225,6 +245,7 @@ class SshTerminalSession(
             try { sshShell?.close() } catch (e: Exception) {}
             try { sshSession?.close() } catch (e: Exception) {}
             try { sshClient?.disconnect() } catch (e: Exception) {}
+            try { tunnel?.close() } catch (e: Exception) {}
         }
     }
 

@@ -480,6 +480,64 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                         SettingsHeader("Cloudflared Tunnel Service")
                         SettingsSwitchRow("Enable Persistent Service", cloudflarePersistent, { cloudflarePersistent = it })
                         SettingsTextField(cloudflareTunnelId, { cloudflareTunnelId = it }, "Tunnel ID (e.g. 1234abcd-...)")
+
+                        val context = LocalContext.current
+                        val isDebuggable = remember {
+                            (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+                        }
+                        if (isDebuggable) {
+                            var debugStatusMessage by remember { mutableStateOf<String?>(null) }
+                            Spacer(modifier = Modifier.height(16.dp))
+                            SettingsHeader("Debug Actions")
+                            Text(
+                                "Options for testing trust store prompts and permission re-requests.",
+                                color = Color.Gray,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Button(
+                                    onClick = {
+                                        com.farside.workspace.RdpCertificateStore(context).clearAll()
+                                        debugStatusMessage = "All saved trusted certificates cleared."
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
+                                ) {
+                                    Text("Clear Trusted Certificates")
+                                }
+                                Button(
+                                    onClick = {
+                                        val runtimePerms = listOf(
+                                            android.Manifest.permission.CAMERA,
+                                            android.Manifest.permission.RECORD_AUDIO,
+                                            "horizonos.permission.HEADSET_CAMERA",
+                                            "horizonos.permission.AVATAR_CAMERA",
+                                            android.Manifest.permission.READ_EXTERNAL_STORAGE
+                                        )
+                                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                                            context.revokeSelfPermissionsOnKill(runtimePerms)
+                                            debugStatusMessage = "Permissions scheduled to revoke when app is closed."
+                                        } else {
+                                            debugStatusMessage = "Permission revocation requires Android 13+."
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE65100))
+                                ) {
+                                    Text("Revoke Granted Permissions")
+                                }
+                            }
+                            debugStatusMessage?.let { msg ->
+                                Text(
+                                    msg,
+                                    color = Color(0xFF81C784),
+                                    fontSize = 13.sp,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
                     }
                     1 -> {
                         SettingsHeader("User Management")
@@ -738,6 +796,48 @@ fun SettingsSegmentedControl(selectedType: ConnectionType, onTypeSelected: (Conn
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+fun CameraResolutionSelector(
+    selectedResolution: com.farside.workspace.data.CameraResolution,
+    enabled: Boolean,
+    onResolutionSelected: (com.farside.workspace.data.CameraResolution) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 2.dp)
+            .background(Color(0xFF1C1C1E))
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            "Camera Resolution",
+            color = if (enabled) Color.White else Color.Gray,
+            style = MaterialTheme.typography.bodyMedium
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            com.farside.workspace.data.CameraResolution.values().forEach { res ->
+                FilterChip(
+                    selected = selectedResolution == res,
+                    onClick = { if (enabled) onResolutionSelected(res) },
+                    enabled = enabled,
+                    label = { Text(res.displayName) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = Color(0xFF1E88E5),
+                        selectedLabelColor = Color.White,
+                        containerColor = Color(0xFF2C2C2E),
+                        labelColor = Color.LightGray,
+                        disabledContainerColor = Color(0xFF2C2C2E).copy(alpha = 0.35f),
+                        disabledLabelColor = Color.Gray.copy(alpha = 0.35f)
+                    )
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
 fun ProxyTypeSelector(selectedType: com.farside.workspace.data.ProxyType, onTypeSelected: (com.farside.workspace.data.ProxyType) -> Unit) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     
@@ -879,6 +979,9 @@ fun AddProfileForm(
     var enableCamera by rememberSaveable {
         mutableStateOf((initialProfile?.enableCamera ?: false) && com.farside.workspace.hasCameraPermission(context))
     }
+    var cameraResolution by rememberSaveable {
+        mutableStateOf(initialProfile?.cameraResolution ?: com.farside.workspace.data.CameraResolution.HD_720)
+    }
     val cameraPermission = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
     ) { _ -> enableCamera = com.farside.workspace.hasCameraPermission(context) }
@@ -891,7 +994,6 @@ fun AddProfileForm(
         redirectStorage = com.farside.workspace.hasStoragePermission(context)
     }
     var redirectClipboard by rememberSaveable { mutableStateOf(initialProfile?.redirectClipboard ?: true) }
-    var redirectLocation by rememberSaveable { mutableStateOf(initialProfile?.redirectLocation ?: true) }
 
     var swapMouseButtons by rememberSaveable { mutableStateOf(initialProfile?.swapMouseButtons ?: false) }
     var adminMode by rememberSaveable { mutableStateOf(initialProfile?.adminMode ?: false) }
@@ -929,7 +1031,6 @@ fun AddProfileForm(
                     }
                     if (proxyType == com.farside.workspace.data.ProxyType.CLOUDFLARED) {
                         cloudflaredError = runCatching {
-                            require(type == ConnectionType.RDP) { "Cloudflared is currently supported for RDP connections." }
                             com.farside.workspace.tunnel.CloudflaredOptions.hostname(host)
                             com.farside.workspace.tunnel.CloudflaredOptions.parse(cloudflaredParameters)
                         }.exceptionOrNull()?.message
@@ -950,6 +1051,7 @@ fun AddProfileForm(
                         remoteApp = remoteApp.takeIf { it.isNotBlank() },
                         useCloudflare = false,
                         enableCamera = enableCamera,
+                        cameraResolution = cameraResolution,
                         cameraId = null,
                         proxyType = proxyType,
                         proxyHost = proxyHost.takeIf { it.isNotBlank() },
@@ -963,7 +1065,6 @@ fun AddProfileForm(
                         redirectMicrophone = redirectMicrophone && com.farside.workspace.hasMicrophonePermission(context),
                         redirectStorage = redirectStorage,
                         redirectClipboard = redirectClipboard,
-                        redirectLocation = redirectLocation,
                         customResolution = initialProfile?.customResolution ?: false,
                         matchDevice = initialProfile?.matchDevice ?: true,
                         useDefaultResolution = initialProfile?.useDefaultResolution ?: false,
@@ -1002,49 +1103,51 @@ fun AddProfileForm(
                 SettingsTextField(name, { name = it }, "Enter display name")
 
                 SettingsHeader("Host / Server")
-                Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = {
-                        isScanning = true
-                        coroutineScope.launch {
-                            discoveredHosts = com.farside.workspace.utils.NetworkScanner.scanLocalNetworkForRdp(context)
-                            isScanning = false
+                if (type == ConnectionType.RDP) {
+                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = {
+                            isScanning = true
+                            coroutineScope.launch {
+                                discoveredHosts = com.farside.workspace.utils.NetworkScanner.scanLocalNetworkForRdp(context)
+                                isScanning = false
+                            }
+                        }) {
+                            Text(if (isScanning) "Scanning subnet for RDP..." else "Click here to Find Local PCs", color = Color(0xFF1E88E5))
                         }
-                    }) {
-                        Text(if (isScanning) "Scanning subnet for RDP..." else "Click here to Find Local PCs", color = Color(0xFF1E88E5))
                     }
-                }
-                if (discoveredHosts.isNotEmpty()) {
-                    var expanded by rememberSaveable { mutableStateOf(false) }
-                    ExposedDropdownMenuBox(
-                        expanded = expanded,
-                        onExpandedChange = { expanded = !expanded },
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
-                    ) {
-                        TextField(
-                            value = "Select Discovered PC",
-                            onValueChange = {},
-                            readOnly = true,
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                            colors = ExposedDropdownMenuDefaults.textFieldColors(
-                                focusedContainerColor = Color(0xFF1C1C1E), unfocusedContainerColor = Color(0xFF1C1C1E),
-                                focusedIndicatorColor = Color(0xFF1E88E5), unfocusedIndicatorColor = Color.DarkGray,
-                                focusedTextColor = Color.White, unfocusedTextColor = Color.White
-                            ),
-                            modifier = Modifier.menuAnchor().fillMaxWidth()
-                        )
-                        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                            discoveredHosts.forEach { foundHost ->
-                                DropdownMenuItem(
-                                    text = { Text(foundHost.name) },
-                                    onClick = {
-                                        if (name.isEmpty() || name == "New Profile" || name == host) {
-                                            name = foundHost.name
+                    if (discoveredHosts.isNotEmpty()) {
+                        var expanded by rememberSaveable { mutableStateOf(false) }
+                        ExposedDropdownMenuBox(
+                            expanded = expanded,
+                            onExpandedChange = { expanded = !expanded },
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+                        ) {
+                            TextField(
+                                value = "Select Discovered PC",
+                                onValueChange = {},
+                                readOnly = true,
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                                colors = ExposedDropdownMenuDefaults.textFieldColors(
+                                    focusedContainerColor = Color(0xFF1C1C1E), unfocusedContainerColor = Color(0xFF1C1C1E),
+                                    focusedIndicatorColor = Color(0xFF1E88E5), unfocusedIndicatorColor = Color.DarkGray,
+                                    focusedTextColor = Color.White, unfocusedTextColor = Color.White
+                                ),
+                                modifier = Modifier.menuAnchor().fillMaxWidth()
+                            )
+                            ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                                discoveredHosts.forEach { foundHost ->
+                                    DropdownMenuItem(
+                                        text = { Text(foundHost.name) },
+                                        onClick = {
+                                            if (name.isEmpty() || name == "New Profile" || name == host) {
+                                                name = foundHost.name
+                                            }
+                                            host = foundHost.ip
+                                            port = "3389"
+                                            expanded = false
                                         }
-                                        host = foundHost.ip
-                                        port = "3389"
-                                        expanded = false
-                                    }
-                                )
+                                    )
+                                }
                             }
                         }
                     }
@@ -1175,7 +1278,7 @@ fun AddProfileForm(
                     Text("Select None, Cloudflared, SOCKS5 or HTTP before saving.", color = Color.Red, modifier = Modifier.padding(16.dp))
                 }
                 if (proxyType == com.farside.workspace.data.ProxyType.CLOUDFLARED) {
-                    Text("Uses the connection hostname with cloudflared access rdp. Browser sign-in opens when needed; tokens stay in private app storage.", color = Color.Gray, modifier = Modifier.padding(16.dp))
+                    Text("Uses the connection hostname with cloudflared access (ssh/rdp). Browser sign-in opens when needed; tokens stay in private app storage.", color = Color.Gray, modifier = Modifier.padding(16.dp))
                     SettingsTextField(cloudflaredParameters, { cloudflaredParameters = it; cloudflaredError = null }, "Extra parameters (optional)",
                         visualTransformation = if (showCloudflaredParameters) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
                         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(autoCorrect = false, keyboardType = androidx.compose.ui.text.input.KeyboardType.Password))
@@ -1205,13 +1308,17 @@ fun AddProfileForm(
                         else if (com.farside.workspace.hasCameraPermission(context)) enableCamera = true
                         else cameraPermission.launch(com.farside.workspace.REQUIRED_CAMERA_PERMISSIONS)
                     })
+                    CameraResolutionSelector(
+                        selectedResolution = cameraResolution,
+                        enabled = enableCamera,
+                        onResolutionSelected = { cameraResolution = it }
+                    )
                     SettingsSwitchRow("Redirect Storage", redirectStorage, { enabled ->
                         if (!enabled) redirectStorage = false
                         else if (com.farside.workspace.hasStoragePermission(context)) redirectStorage = true
                         else com.farside.workspace.requestStoragePermission(context) { intent -> storagePermissionLauncher.launch(intent) }
                     })
                     SettingsSwitchRow("Redirect Clipboard", redirectClipboard, { redirectClipboard = it })
-                    SettingsSwitchRow("Redirect Location", redirectLocation, { redirectLocation = it })
                     
                     // Display settings removed
                 }

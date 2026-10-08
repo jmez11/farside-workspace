@@ -85,6 +85,7 @@ internal class RdpSessionConnection(
                     return@execute
                 }
                 if (closed.get() || ended.get()) { next.release(); return@execute }
+                bridge.setCameraMaxDimension(profile.cameraResolution.maxDim)
                 instance = bridge.connect(host, port, profile.user, profile.pass, profile.remoteApp,
                     profile.enableCamera && hasCameraPermission(context), profile.redirectMicrophone && hasMicrophonePermission(context), profile.redirectStorage && hasStoragePermission(context), next, profile.host.removeSurrounding("[", "]"), certificates)
                 val connected = instance

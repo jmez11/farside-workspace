@@ -27,7 +27,7 @@ class CloudflaredTunnel(private val context: Context) : AutoCloseable {
     val home: File get() = File(context.noBackupFilesDir, "cloudflared")
     private val executable: File get() = File(context.applicationInfo.nativeLibraryDir, "libcloudflared.so")
 
-    fun start(hostInput: String, parameters: String, onStatus: (String) -> Unit, onExit: () -> Unit, listenPort: Int = 0): Int {
+    fun start(hostInput: String, parameters: String, onStatus: (String) -> Unit, onExit: () -> Unit, listenPort: Int = 0, accessSubcommand: String = "rdp"): Int {
         val host = CloudflaredOptions.hostname(hostInput)
         val args = CloudflaredOptions.parse(parameters)
         check(executable.canExecute()) { "The bundled Cloudflared executable is unavailable." }
@@ -83,7 +83,7 @@ class CloudflaredTunnel(private val context: Context) : AutoCloseable {
         val port = ServerSocket(listenPort, 0, InetAddress.getByName("127.0.0.1")).use { it.localPort }
         val ready = CountDownLatch(1)
         onStatus("Starting Cloudflared…")
-        val process = launch(listOf("access", "rdp", "--hostname", host, "--url", "127.0.0.1:$port") + if (userAuth.get()) emptyList() else args)
+        val process = launch(listOf("access", accessSubcommand, "--hostname", host, "--url", "127.0.0.1:$port") + if (userAuth.get()) emptyList() else args)
         drain(process, host, browserFailure) { line ->
             if (line == "FARSIDE_LISTENER_READY 127.0.0.1:$port") ready.countDown()
         }

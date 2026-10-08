@@ -22,6 +22,7 @@ class RdpResizeInstrumentation : Instrumentation() {
     private var audioMode: String? = null
     private var cameraMode: String? = null
     private var cameraTarget: String? = null
+    private var cameraResolutionArg: String? = null
     private var storageMode: String? = null
     private var inputOnly = false
     private var credentialsOnly = false
@@ -41,6 +42,7 @@ class RdpResizeInstrumentation : Instrumentation() {
         audioMode = arguments?.getString("audioMode")
         cameraMode = arguments?.getString("cameraMode")
         cameraTarget = arguments?.getString("cameraTarget")
+        cameraResolutionArg = arguments?.getString("cameraResolution")
         storageMode = arguments?.getString("storageMode")
         inputOnly = arguments?.getString("inputOnly") == "true"
         credentialsOnly = arguments?.getString("credentialsOnly") == "true"
@@ -124,7 +126,7 @@ class RdpResizeInstrumentation : Instrumentation() {
                 return
             }
             cameraMode?.let {
-                RdpCameraVerification(this).run(it, cameraTarget)
+                RdpCameraVerification(this).run(it, cameraTarget, cameraResolutionArg)
                 results.putString("stream", "PASS: RDP camera $it.\n")
                 finish(0, results)
                 return
