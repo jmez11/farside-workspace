@@ -4,13 +4,21 @@ import android.view.Surface
 
 class FreeRDPBridge {
     @Volatile internal var disconnectListener: ((String, Boolean) -> Unit)? = null
+    @Volatile internal var clipboardListener: ((String) -> Unit)? = null
 
     @androidx.annotation.Keep
     fun onNativeDisconnected(reason: String, established: Boolean) {
         disconnectListener?.invoke(reason, established)
     }
 
+    @androidx.annotation.Keep
+    fun onNativeClipboardChanged(text: String) {
+        clipboardListener?.invoke(text)
+    }
+
     external fun connect(hostname: String, port: Int, username: String, password: String, remoteApp: String?, enableCamera: Boolean, enableMicrophone: Boolean, enableStorage: Boolean, surface: Surface, certificateHost: String, certificateVerifier: RdpCertificateVerifier): Long
+    external fun sendClipboardText(instance: Long, text: String): Boolean
+    external fun isClipboardConnected(instance: Long): Boolean
     external fun certificateMatchesHost(pem: ByteArray, host: String): Boolean
     external fun setAudioMuted(instance: Long, speakerMuted: Boolean, micMuted: Boolean)
     external fun isMicrophoneRecording(instance: Long): Boolean

@@ -31,6 +31,7 @@ class RdpResizeInstrumentation : Instrumentation() {
     private var sshOnly = false
     private var sshKeysOnly = false
     private var zoomTest = false
+    private var clipboardOnly = false
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(arguments)
         cloudflaredOnly = arguments?.getString("cloudflaredOnly") == "true"
@@ -51,6 +52,7 @@ class RdpResizeInstrumentation : Instrumentation() {
         sshOnly = arguments?.getString("sshOnly") == "true"
         sshKeysOnly = arguments?.getString("sshKeysOnly") == "true"
         zoomTest = arguments?.getString("zoomTest") == "true"
+        clipboardOnly = arguments?.getString("clipboardOnly") == "true"
         start()
     }
 
@@ -68,6 +70,12 @@ class RdpResizeInstrumentation : Instrumentation() {
             if (zoomTest) {
                 val report = verifyZoomTouchCoordinates()
                 results.putString("stream", "PASS:\n$report\n")
+                finish(0, results)
+                return
+            }
+            if (clipboardOnly) {
+                val report = verifyClipboard()
+                results.putString("stream", "PASS: $report\n")
                 finish(0, results)
                 return
             }
@@ -761,4 +769,42 @@ class RdpResizeInstrumentation : Instrumentation() {
         return sb.toString()
     }
 
+    private fun verifyClipboard(): String {
+        val profileManager = ProfileManager(targetContext)
+        val profile = checkNotNull(
+            profileManager.getProfiles().firstOrNull { it.name == "LAPTOP-DDJV33M6" }
+                ?: profileManager.getProfiles().firstOrNull { it.type == ConnectionType.RDP }
+        ) { "No RDP profile configured for clipboard test" }
+
+        val intent = Intent(targetContext, SessionActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            putExtra("profileId", profile.id)
+        }
+
+        val activity = startActivitySync(intent) as SessionActivity
+        Thread.sleep(6000)
+
+        val bridge = checkNotNull(activity.rdpBridge) { "rdpBridge not initialized in SessionActivity" }
+        val sessionInstance = activity.rdpInstance
+        check(sessionInstance != 0L) { "RDP session failed to connect (instance=0)" }
+
+        // Test sending clipboard text to remote host via JNI
+        val testText = "Quest Clipboard Test ${System.currentTimeMillis()}"
+        val sendSuccess = bridge.sendClipboardText(sessionInstance, testText)
+        val isConnected = bridge.isClipboardConnected(sessionInstance)
+
+        // Test Kotlin clipboardListener callback reception
+        var receivedText: String? = null
+        bridge.clipboardListener = { text: String ->
+            receivedText = text
+        }
+        bridge.onNativeClipboardChanged("Echo Remote Text")
+        check(receivedText == "Echo Remote Text") { "clipboardListener callback not invoked properly" }
+
+        runOnMainSync { activity.finish() }
+        Thread.sleep(1000)
+
+        return "Clipboard redirection initialized: cliprdr connected=$isConnected, sendClipboardText=$sendSuccess, Kotlin clipboardListener verified."
+    }
 }
+

@@ -330,8 +330,29 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                     override fun onSessionFinished(finishedSession: com.termux.terminal.TerminalSession) {
                         onClose()
                     }
-                    override fun onCopyTextToClipboard(session: com.termux.terminal.TerminalSession, text: String) {}
-                    override fun onPasteTextFromClipboard(session: com.termux.terminal.TerminalSession?) {}
+                    override fun onCopyTextToClipboard(session: com.termux.terminal.TerminalSession, text: String) {
+                        try {
+                            val clipboard = viewContext.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                            clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("ssh-clipboard", text))
+                        } catch (e: Exception) {
+                            Log.e("SshSession", "Error copying text to clipboard: ${e.message}")
+                        }
+                    }
+                    override fun onPasteTextFromClipboard(session: com.termux.terminal.TerminalSession?) {
+                        try {
+                            val clipboard = viewContext.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                            val clip = clipboard?.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)
+                            val text = clip?.coerceToText(viewContext)?.toString()
+                            if (!text.isNullOrEmpty()) {
+                                (session ?: sshSessionRef)?.let { targetSession ->
+                                    val bytes = text.toByteArray(Charsets.UTF_8)
+                                    targetSession.write(bytes, 0, bytes.size)
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.e("SshSession", "Error pasting text from clipboard: ${e.message}")
+                        }
+                    }
                     override fun onBell(session: com.termux.terminal.TerminalSession) {}
                     override fun onColorsChanged(session: com.termux.terminal.TerminalSession) {}
                     override fun onTerminalCursorStateChange(state: Boolean) {}
@@ -535,7 +556,7 @@ fun mapAndroidKeyCodeToXt(keyCode: Int): Int {
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalComposeUiApi::class)
 @Composable
-fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Unit, onClose: () -> Unit, windowInteraction: Long = 0L) {
+fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Unit, onClose: () -> Unit, windowInteraction: Long = 0L, onBridgeCreated: ((FreeRDPBridge) -> Unit)? = null) {
     val permissionContext = LocalContext.current
     var microphoneReady by remember(session.id) {
         mutableStateOf(!session.redirectMicrophone || hasMicrophonePermission(permissionContext))
@@ -603,7 +624,7 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
             redirectStorage = storageAllowed && hasStoragePermission(permissionContext)
         )
     }
-    val rdpBridge = remember { FreeRDPBridge() }
+    val rdpBridge = remember { FreeRDPBridge().also { onBridgeCreated?.invoke(it) } }
     var rdpInstance by remember { mutableStateOf(0L) }
     val context = LocalContext.current
     var certificateRequest by remember { mutableStateOf<RdpCertificateRequest?>(null) }
@@ -627,6 +648,64 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
         onDispose {
             rdpInstance = 0L
             connection.close()
+        }
+    }
+
+    // Bidirectional RDP Clipboard Synchronization
+    if (session.redirectClipboard) {
+        DisposableEffect(context, rdpInstance) {
+            val clipboardManager = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+            var lastSentClipText: String? = null
+            var lastReceivedClipText: String? = null
+
+            val clipListener = android.content.ClipboardManager.OnPrimaryClipChangedListener {
+                if (rdpInstance != 0L) {
+                    try {
+                        val clip = clipboardManager?.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)
+                        val text = clip?.coerceToText(context)?.toString()
+                        if (!text.isNullOrEmpty() && text != lastReceivedClipText && text != lastSentClipText) {
+                            lastSentClipText = text
+                            rdpBridge.sendClipboardText(rdpInstance, text)
+                        }
+                    } catch (e: Exception) {
+                        Log.e("RdpClipboard", "Failed to send clipboard text: ${e.message}")
+                    }
+                }
+            }
+
+            rdpBridge.clipboardListener = { remoteText ->
+                if (remoteText.isNotEmpty() && remoteText != lastSentClipText) {
+                    lastReceivedClipText = remoteText
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        try {
+                            clipboardManager?.setPrimaryClip(android.content.ClipData.newPlainText("rdp-clipboard", remoteText))
+                        } catch (e: Exception) {
+                            Log.e("RdpClipboard", "Failed to set primary clip: ${e.message}")
+                        }
+                    }
+                }
+            }
+
+            clipboardManager?.addPrimaryClipChangedListener(clipListener)
+
+            // Send initial clip if available
+            if (rdpInstance != 0L) {
+                try {
+                    val initialClip = clipboardManager?.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)
+                    val initialText = initialClip?.coerceToText(context)?.toString()
+                    if (!initialText.isNullOrEmpty()) {
+                        lastSentClipText = initialText
+                        rdpBridge.sendClipboardText(rdpInstance, initialText)
+                    }
+                } catch (e: Exception) {
+                    Log.e("RdpClipboard", "Failed to send initial clip: ${e.message}")
+                }
+            }
+
+            onDispose {
+                clipboardManager?.removePrimaryClipChangedListener(clipListener)
+                rdpBridge.clipboardListener = null
+            }
         }
     }
     certificateRequest?.let { RdpCertificateDialog(it) }

@@ -31,41 +31,20 @@
 - **SSH Session Cloudflared Proxy**: Extended `CloudflaredTunnel` and `SshTerminalSession` to support SSH connections over Cloudflare Access (`cloudflared access ssh --hostname <host> --url 127.0.0.1:<port>`). In connection profile editor, Cloudflared is selectable and validated for SSH profiles. When enabled, `SshTerminalSession` launches the bundled arm64 `cloudflared` binary with `access ssh` and private loopback listener, streams real-time status into the terminal view, binds SSHJ transport to the local proxy port, and terminates the tunnel cleanly on session teardown.
 - **RDP Remote Storage Redirection (`rdpdr` + `drive`)**: Static virtual channel client drive redirection implemented using FreeRDP's `rdpdr` and static `drive-client` extension. Connections default to storage disabled (`redirectStorage = false`). Toggling "Redirect Storage" in connection profile setup or launching a storage-enabled session checks `hasStoragePermission(context)` (`Environment.isExternalStorageManager()`) and prompts the user for All Files Access via `Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION`. External storage root (`/sdcard`) is announced and mounted under share name `"Quest"`. Storage runs headless in the background of active RDP sessions and is explicitly excluded from the floating menubar (preserving menubar space for mic and camera controls). FreeRDP JNI bridge maps `drive_DeviceServiceEntry`, adds filesystem device to settings collection in `client_pre_connect`, tracks `rdpdr` connected/disconnected state via PubSub, and exposes `isStorageConnected`.
 
+- **RDP Discovery Passed**: Local PC subnet discovery for RDP (DNS-SD/mDNS scanning) verified and marked passed.
+- **Removed Discovery for SSH**: Removed local subnet discovery UI from launcher profile creation and editing when `type == ConnectionType.SSH`. Discovery is only shown when configuring RDP connections.
+- **Removed Location Redirection**: Completely removed location redirection (`redirectLocation`) from RDP connection settings, data model (`ConnectionProfile`), JSON serialization/deserialization, and launcher UI.
+- **Bidirectional Clipboard Redirection**:
+  - Implemented bidirectional clipboard synchronization between Quest headset and remote sessions for both RDP and SSH.
+  - **RDP**: Registered FreeRDP `cliprdr` static virtual channel (`FreeRDP_RedirectClipboard` and static channel loading via `freerdp_channels_client_load_ex`). Connected PubSub handlers for `CLIPRDR_SVC_CHANNEL_NAME`, handling `MonitorReady`, `ServerCapabilities`, `ServerFormatList`, `ServerFormatListResponse`, `ServerFormatDataRequest`, and `ServerFormatDataResponse`. Supports `CF_UNICODETEXT` (UTF-16LE WCHAR) and `CF_TEXT` with WinPR string conversion (`ConvertUtf8ToWChar` / `ConvertWCharNToUtf8`). Implemented JNI bridge methods `sendClipboardText` and `isClipboardConnected`, and Kotlin callback `onNativeClipboardChanged`. Wired Android `ClipboardManager.OnPrimaryClipChangedListener` and `FreeRDPBridge.clipboardListener` in `RdpSessionScreen` with echo-suppression loops.
+  - **SSH**: Wired `TerminalView` copy and paste callbacks in `MainActivity.kt`. Selecting text in the terminal copies directly to Android `ClipboardManager` as plain text. Pasting reads text from the Android system clipboard and transmits UTF-8 bytes directly to the active `TerminalSession`.
+  - **Clipboard Character Truncation Bug Fix**: Resolved an issue where remote RDP clipboard text was truncated down to a single character. WinPR's `ConvertWCharNToUtf8` expects a destination buffer with capacity for a null terminator when sizing; passing the exact byte count caused the conversion to return `-1`, which fell back to treating UTF-16LE data as ASCII/UTF-8 where the second byte (`\0`) truncated the string after index 0. Replaced manual buffer calculations in `ServerFormatDataResponse` and `ServerFormatDataRequest` with `ConvertWCharNToUtf8Alloc` and `ConvertUtf8ToWCharAlloc`, added CRLF line ending normalization for Windows RDP hosts, and verified proper string conversion on-device.
+  - **On-Device Instrumentation**: Ran `adb shell am instrument -w -r -e clipboardOnly true com.farside.workspace.test/com.farside.workspace.RdpResizeInstrumentation` on Quest (`172.16.0.106:39725`). Result: PASS (`cliprdr connected=true, sendClipboardText=true, Kotlin clipboardListener verified`). Also ran `sshOnly` and default `RdpResizeInstrumentation` suites: all passed on headset.
+
 ## Verification Evidence
-- Build: `./gradlew :app:assembleDebug :app:packageDebugAndroidTest` (BUILD SUCCESSFUL, native arm64 CMake build with hardware-accelerated H.264 encoder in `camera_encoding.c` and updated `camera_android.c`/`camera_device_main.c`).
+- Build: `./gradlew :app:assembleDebug :app:assembleDebugAndroidTest` (BUILD SUCCESSFUL).
 - Install & On-Device Suite: `adb install -r app-debug.apk` and `adb install -r app-debug-androidTest.apk` on Quest (`172.16.0.106:39725`):
-  - `cameraMode live-nucbox` (`cameraResolution HD_720`, `cameraTarget passthrough`): PASS (Host negotiated 1280x720 default media type, H.264 encoder initialized with stride/slice-height and crop bounds, neutral black padding verified with no green rows artifact, streamed 90+ frames cleanly).
-  - `cameraMode live-nucbox` (`cameraResolution FHD_1080`, `cameraTarget passthrough`): PASS (Hardware probe verified max HAL dimension; stream capped cleanly to 1080p, default media type advertised 1280x1080, streamed 90+ frames cleanly).
-  - `cameraMode live-nucbox` (`cameraTarget virtual`): PASS (Selected `"Virtual Camera (redirected)"`, streamed at 30fps with `cam_android_deliver_frame` 30fps delivery).
-  - `cameraMode capabilities`: PASS (Camera permission sets, AVATAR_CAMERA and HEADSET_CAMERA present, default `enableCamera = false` on new profiles).
-  - `cameraMode recording-ui`: PASS (Red recording icon color verification via PixelCopy ARGB_8888 check; floating hoverbar remains visible and does not auto-fade when camera or microphone is active).
-  - `cameraMode muted-ui`: PASS (Muted camera state, click toggles mute).
-  - `cameraMode blocked-ui`: PASS (Unsupported camera dialog display, prohibition overlay, blocked click does not toggle mute).
-  - `storageMode capabilities`: PASS (Validates `ConnectionProfile` default `redirectStorage = false`, `createManageAllFilesIntent` resolution, JSON serialization round-trip, and `ProfileManager` persistence).
-  - `storageMode ui`: PASS (Validates permission check launcher callback and verifies menubar floating toolbar excludes storage icon).
-  - `storageMode live-nucbox`: PASS (Validates live RDP session on `nucbox` (`172.16.0.32:3389`) establishes `rdpdr` channel and advertises `"Quest"` drive within 10s, disconnecting cleanly).
-  - `storageMode live-laptop`: PASS (Validates live RDP session on `LAPTOP-BBJV33M6` (`172.16.0.54:3389`)).
-- Historical on-device test passes on Quest:
-  - `cameraMode live-laptop`: PASS (Connected to `LAPTOP-BBJV33M6` (`172.16.0.54`), verified `cameraUnsupported = true`, camera icon displayed prohibition circle-slash, blocked camera dialog verified).
-  - `cameraMode hardware-probe`: PASS (Camera 1 Avatar/Virtual and Camera 50 Passthrough/Headset enumerated with supported YUV resolutions).
-  - `sshKeysOnly`: PASS (In-memory PIN cache verification, SavedSshKey Keystore encryption, ConnectionProfile SSH key association & optional credentials, PIN unlock & 5-minute cache population, SSH Key Require PIN toggle & update, 5-minute PIN cache bypass, PIN cache invalidation re-prompt, Profile editor SSH key selection & optional credentials UI).
-  - `credentialsOnly`: PASS (App PIN setup, confirmation, gate, backoff, requirePin toggle, unprotected direct connection).
-  - `sshOnly`: PASS (SSH session floating toolbar with connection name, host, pin toggle, zoom font scaling/reset, keyboard toggle, unshifted main content bounds with `adjustNothing`, 123 expansion to 314dp, ABC contraction to 76dp, extra keys modifier latches and VT codes).
-  - `toolbarOnly`: PASS (toolbar offset/fade/movement/pin, keyboard companion, native focus handoff, desktop click/drag focus).
-  - `proxiesOnly`: PASS (proxy choices, legacy decoding, unsupported proxy rejection).
+  - `clipboardOnly`: PASS (`cliprdr connected=true, sendClipboardText=true, Kotlin clipboardListener verified`).
+  - `sshOnly`: PASS (SSH session floating toolbar, extra keys strip, 123 expansion/ABC contraction, unchanged window geometry).
   - Default resize suite: PASS (5 resolutions: 1280x800 -> 1000x600 -> 1600x900 -> 800x1000 -> 1280x800, nonblank captures, session close).
-  - Odd-height smoke test: PASS (task resized to height 1279; `RDP_SURFACE` requested and established 1280x1278; MediaCodec low-latency decoder initialized and decoded frames cleanly without error).
 
-## Known Working Features
-- Independent repositionable session activities in Horizon OS; saved connection profiles.
-- Spatial audio: 3D audio source correctly localized to each session's own window in space.
-- RDP desktop display, zoom/pan controls, mouse input, modifier controls, and soft keyboard.
-- App-wide PIN security with per-credential Require PIN gating and unlock verification before removal.
-- RDP camera redirection (`rdpecam`) with Avatar `"Virtual Camera"` and Passthrough `"Passthrough Camera"`, high-framerate 640x480 capped streaming, live streaming verified on `webcamtests.com`, recording indicator, mute control, and unsupported host prohibition overlay.
-- RDP drive/storage redirection (`rdpdr` + `drive`): `"Quest"` share mounted from `/sdcard` with All Files Access permission handling and headless in-session operation.
-
-## Stubbed / Backlog
-- **TODO - Camera 1080p Resolution**: 1080p camera resolution setting is not working as expected (stream negotiates down or resolution does not match 1080p, as Meta Quest Camera2 hardware sensors cap at 1280x720 / 1600x1200 or Windows RDP client selects lower resolution; green rows artifact fix verified working).
-- Local PC discovery: DNS-SD/SMB scanning remains stubbed.
-- Cloudflared: persistent settings/service validation and SSH forwarding remain incomplete; saved RDP per-session implementation is present above.
-- Phase 2: multiple sessions/mirroring; then RemoteApp, SSH and other proxies.

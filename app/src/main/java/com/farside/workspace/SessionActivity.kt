@@ -36,8 +36,10 @@ class SessionActivity : ComponentActivity() {
         controllerScroll.stop()
         super.onPause()
     }
+    internal var rdpBridge: FreeRDPBridge? = null
+        internal set
     internal var rdpInstance = 0L
-        private set
+        internal set
     private val windowInteraction = androidx.compose.runtime.mutableStateOf(0L)
     private var placement: SessionWindowPlacement? = null
     private var placementProfile: String? = null
@@ -129,6 +131,7 @@ class SessionActivity : ComponentActivity() {
                             session = profile,
                             windowInteraction = windowInteraction.value,
                             onInstanceCreated = { rdpInstance = it },
+                            onBridgeCreated = { rdpBridge = it },
                             onClose = { finish() }
                         )
                         }

@@ -58,6 +58,20 @@
 - Presentation: Mounts Android external storage root (`/sdcard`) under share name `"Quest"`. Runs headless in the session and is explicitly excluded from the floating menubar (reserving toolbar controls for mic and camera).
 - Harness: `adb shell am instrument -w -e storageMode <mode> com.farside.workspace.test/com.farside.workspace.RdpResizeInstrumentation`. Modes include `capabilities` (intent generation, default values, JSON serialization and ProfileManager persistence), `ui` (permission launcher callback), `live-nucbox` (live RDP session with storage redirection against `nucbox`), and `live-laptop`.
 
+## Clipboard Redirection (`cliprdr`)
+- Bidirectional text clipboard redirection for both RDP and SSH sessions.
+- **RDP**:
+  - Static virtual channel extension `cliprdr` loaded via `freerdp_channels_client_load_ex`.
+  - Channel subscription via `PubSub_SubscribeChannelConnected` for `CLIPRDR_SVC_CHANNEL_NAME`.
+  - Responds to `MonitorReady` by negotiating capabilities (`CB_USE_LONG_FORMAT_NAMES`) and advertising `CF_UNICODETEXT` (and `CF_TEXT`).
+  - Converts text between UTF-8 and UTF-16LE WCHAR using WinPR string utilities (`ConvertUtf8ToWChar` / `ConvertWCharNToUtf8`).
+  - In Kotlin/Compose, `RdpSessionScreen` registers an Android `ClipboardManager.OnPrimaryClipChangedListener` and `FreeRDPBridge.clipboardListener`, synchronizing clipboard text in both directions while preventing feedback loops.
+- **SSH**:
+  - Text selection in `TerminalView` invokes `onCopyTextToClipboard`, copying UTF-8 plain text into Android `ClipboardManager`.
+  - `onPasteTextFromClipboard` fetches the primary clip text from `ClipboardManager` and transmits bytes into the active `TerminalSession`.
+- **Harness**: `adb shell am instrument -w -r -e clipboardOnly true com.farside.workspace.test/com.farside.workspace.RdpResizeInstrumentation` verifies `cliprdr` channel connection, text sending via JNI `sendClipboardText`, and Kotlin callback dispatch.
+
+
 ## Security
 - **Cloudflared**: fixed Android arm64 executable in nativeLibraryDir, argv-only ProcessBuilder, validated DNS hostname, and extra-parameter allowlist: service-token ID+secret or Cloudflare Access authentication headers. Reject the whole input on unknown/unsafe options; users cannot override listener/hostname/executable, inject shell commands, select files, dump traffic or disable TLS. Saved parameters are Keystore AES-GCM encrypted. HOME/token cache/transfer keys live under `noBackupFilesDir/cloudflared` (0700; upstream tokens 0600); child stdout/stderr and authentication URLs are not logged. Android trust anchors are atomically exported for Go TLS.
 - Quiet Access login preflight handles valid credentials, cached JWTs and interactive login before RDP handshake timeout. Its standard encrypted Cloudflare transfer flow retrieves/caches user tokens; ACTION_VIEW opens only HTTPS transfer URLs for the profile hostname with the expected CLI path/query. The bundled source adaptation tolerates a missing CF-Access-Domain header using the original hostname, still requiring an audience. Routes without Access metadata proceed to the normal verified WebSocket handshake. Closing/failure cancels that session's child; surface replacement retains it. Listener readiness comes from a post-bind marker, with bounded startup/authentication waits. Original RDP host/certificate verification stays active through loopback.

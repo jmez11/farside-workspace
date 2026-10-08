@@ -14,9 +14,11 @@
 #include <freerdp/gdi/gfx.h>
 #include <freerdp/client/cmdline.h>
 #include <freerdp/client/disp.h>
+#include <freerdp/client/cliprdr.h>
 #include <freerdp/event.h>
 #include <freerdp/channels/channels.h>
 #include <freerdp/channels/rdpdr.h>
+#include <winpr/string.h>
 
 #define LOG_TAG "FreeRDP-JNI"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -46,9 +48,9 @@ static const char* gfx_codec_name(UINT32 codecId) {
         case RDPGFX_CODECID_CAVIDEO: return "RemoteFX(CAVIDEO)";
         case RDPGFX_CODECID_CLEARCODEC: return "ClearCodec";
         case RDPGFX_CODECID_PLANAR: return "Planar";
+        case RDPGFX_CODECID_AVC444: return "AVC444(H.264)";
         case RDPGFX_CODECID_AVC420: return "AVC420(H.264)";
         case RDPGFX_CODECID_ALPHA: return "Alpha";
-        case RDPGFX_CODECID_AVC444: return "AVC444(H.264)";
         case RDPGFX_CODECID_AVC444v2: return "AVC444v2(H.264)";
         case RDPGFX_CODECID_CAPROGRESSIVE: return "Progressive";
         case RDPGFX_CODECID_CAPROGRESSIVE_V2: return "ProgressiveV2";
@@ -64,6 +66,7 @@ struct RdpContext {
     jmethodID verifyCertificates;
     jobject eventReceiver;
     jmethodID disconnectedMethod;
+    jmethodID clipboardMethod;
     std::string certificateHost;
     pcRdpgfxSurfaceCommand origSurfaceCommand;
     std::atomic<uint32_t> codecCounts[16];
@@ -84,6 +87,10 @@ struct RdpContext {
     std::atomic<bool> storageRequested;
     std::atomic<bool> storageConnected;
     std::string storagePath;
+    CliprdrClientContext* cliprdr;
+    std::mutex clipMutex;
+    std::string clientClipText;
+    std::atomic<bool> clipConnected;
     std::chrono::steady_clock::time_point connectTime;
 };
 
@@ -210,6 +217,7 @@ extern "C" UINT VCAPITYPE rdpecam_DVCPluginEntry(PVOID pEntryPoints);
 extern "C" UINT VCAPITYPE android_freerdp_rdpecam_client_subsystem_entry(PVOID pEntryPoints);
 extern "C" BOOL VCAPITYPE rdpsnd_VirtualChannelEntryEx(PVOID, PVOID);
 extern "C" BOOL VCAPITYPE rdpdr_VirtualChannelEntryEx(PVOID, PVOID);
+extern "C" BOOL VCAPITYPE cliprdr_VirtualChannelEntryEx(PVOID, PVOID);
 extern "C" UINT VCAPITYPE drive_DeviceServiceEntry(PDEVICE_SERVICE_ENTRY_POINTS);
 extern "C" BOOL cam_android_is_recording(void);
 extern "C" void cam_android_set_muted(BOOL muted);
@@ -236,6 +244,7 @@ static PVOID my_addin_provider(LPCSTR pszName, LPCSTR pszSubsystem, LPCSTR pszTy
     }
     if (pszName && strcmp(pszName, "audin") == 0) return (PVOID)audin_DVCPluginEntry;
     if (pszName && strcmp(pszName, "rdpsnd") == 0) return (PVOID)rdpsnd_VirtualChannelEntryEx;
+    if (pszName && strcmp(pszName, "cliprdr") == 0) return (PVOID)cliprdr_VirtualChannelEntryEx;
     if (pszName && strcmp(pszName, "drdynvc") == 0) return (PVOID)drdynvc_VirtualChannelEntryEx;
     if (pszName && strcmp(pszName, "rdpgfx") == 0) return (PVOID)rdpgfx_DVCPluginEntry;
     if (pszName && strcmp(pszName, "disp") == 0) return (PVOID)disp_DVCPluginEntry;
@@ -262,9 +271,14 @@ static BOOL client_load_channels(freerdp* instance) {
     if (res != 0) return FALSE;
     if (freerdp_channels_client_load_ex(instance->context->channels, instance->context->settings,
         (PVIRTUALCHANNELENTRYEX)rdpdr_VirtualChannelEntryEx, instance->context->settings) != 0) return FALSE;
+    const auto* clipSettings = freerdp_static_channel_collection_find(instance->context->settings, "cliprdr");
+    if (clipSettings) {
+        if (freerdp_channels_client_load_ex(instance->context->channels, instance->context->settings,
+            (PVIRTUALCHANNELENTRYEX)cliprdr_VirtualChannelEntryEx, (void*)clipSettings) != 0) return FALSE;
+    }
     return freerdp_channels_client_load_ex(instance->context->channels, instance->context->settings,
         (PVIRTUALCHANNELENTRYEX)rdpsnd_VirtualChannelEntryEx,
-        freerdp_static_channel_collection_find(instance->context->settings, "rdpsnd")) == 0;
+        (void*)freerdp_static_channel_collection_find(instance->context->settings, "rdpsnd")) == 0;
 }
 
 static BOOL client_pre_connect(freerdp* instance) {
@@ -479,6 +493,10 @@ static void destroy_client(freerdp* instance, bool connected) {
     ctx->cameraConnected.~atomic();
     ctx->storageRequested.~atomic();
     ctx->storageConnected.~atomic();
+    ctx->cliprdr = nullptr;
+    ctx->clipConnected.~atomic();
+    ctx->clipMutex.~mutex();
+    ctx->clientClipText.~basic_string();
     for (auto& count : ctx->codecCounts) count.~atomic();
     auto* audio = ctx->audio;
     ctx->render_thread.~thread();
@@ -541,6 +559,7 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
     ctx->eventReceiver = env->NewGlobalRef(bridge);
     jclass bridgeClass = env->GetObjectClass(bridge);
     ctx->disconnectedMethod = env->GetMethodID(bridgeClass, "onNativeDisconnected", "(Ljava/lang/String;Z)V");
+    ctx->clipboardMethod = env->GetMethodID(bridgeClass, "onNativeClipboardChanged", "(Ljava/lang/String;)V");
     env->DeleteLocalRef(bridgeClass);
     ctx->verifyCertificates = nullptr;
     if (certificateVerifier) {
@@ -572,6 +591,10 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
     new (&ctx->storageRequested) std::atomic<bool>(enableStorage == JNI_TRUE);
     new (&ctx->storageConnected) std::atomic<bool>(false);
     new (&ctx->storagePath) std::string("/sdcard");
+    ctx->cliprdr = nullptr;
+    new (&ctx->clipMutex) std::mutex();
+    new (&ctx->clientClipText) std::string();
+    new (&ctx->clipConnected) std::atomic<bool>(false);
     ctx->connectTime = std::chrono::steady_clock::now();
     
     if (surface) {
@@ -619,6 +642,11 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
     freerdp_client_settings_parse_command_line(instance->context->settings, 9, (char**)opt_args, FALSE);
     
     freerdp_settings_set_bool(instance->context->settings, FreeRDP_DeviceRedirection, TRUE);
+    freerdp_settings_set_bool(instance->context->settings, FreeRDP_RedirectClipboard, TRUE);
+    const char* clipArgs[] = { "cliprdr" };
+    freerdp_client_add_static_channel(instance->context->settings, 1, clipArgs);
+    LOGI("RDP_CLIPBOARD: FreeRDP_RedirectClipboard set and cliprdr static channel registered");
+
     freerdp_settings_set_bool(instance->context->settings, FreeRDP_AudioPlayback, TRUE);
     freerdp_settings_set_bool(instance->context->settings, FreeRDP_RemoteConsoleAudio, FALSE);
     freerdp_settings_set_bool(instance->context->settings, FreeRDP_AudioCapture, enableMicrophone);
@@ -677,6 +705,211 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
         } else if (strcmp(e->name, "rdpdr") == 0) {
             LOGI("RDP_STORAGE: rdpdr channel connected");
             ctx->storageConnected = true;
+        } else if (strcmp(e->name, CLIPRDR_SVC_CHANNEL_NAME) == 0) {
+            LOGI("RDP_CLIPBOARD: cliprdr channel connected");
+            auto* clip = (CliprdrClientContext*)e->pInterface;
+            ctx->cliprdr = clip;
+            clip->custom = ctx;
+            ctx->clipConnected = true;
+
+            clip->MonitorReady = [](CliprdrClientContext* clip, const CLIPRDR_MONITOR_READY*) -> UINT {
+                LOGI("RDP_CLIPBOARD: MonitorReady received");
+                CLIPRDR_CAPABILITIES caps = {};
+                CLIPRDR_GENERAL_CAPABILITY_SET gen = {};
+                caps.cCapabilitiesSets = 1;
+                caps.capabilitySets = (CLIPRDR_CAPABILITY_SET*)&gen;
+                gen.capabilitySetType = CB_CAPSTYPE_GENERAL;
+                gen.capabilitySetLength = CB_CAPSTYPE_GENERAL_LEN;
+                gen.version = CB_CAPS_VERSION_2;
+                gen.generalFlags = CB_USE_LONG_FORMAT_NAMES;
+                UINT res = clip->ClientCapabilities ? clip->ClientCapabilities(clip, &caps) : CHANNEL_RC_OK;
+                LOGI("RDP_CLIPBOARD: ClientCapabilities sent res=%u", res);
+
+                auto* ctx = (RdpContext*)clip->custom;
+                CLIPRDR_FORMAT formats[2] = {};
+                formats[0].formatId = CF_UNICODETEXT;
+                formats[0].formatName = nullptr;
+                formats[1].formatId = CF_TEXT;
+                formats[1].formatName = nullptr;
+                CLIPRDR_FORMAT_LIST formatList = {};
+                formatList.common.msgType = CB_FORMAT_LIST;
+                formatList.numFormats = 2;
+                formatList.formats = formats;
+                res = clip->ClientFormatList ? clip->ClientFormatList(clip, &formatList) : CHANNEL_RC_OK;
+                LOGI("RDP_CLIPBOARD: Initial ClientFormatList sent res=%u", res);
+                return CHANNEL_RC_OK;
+            };
+
+            clip->ServerFormatList = [](CliprdrClientContext* clip, const CLIPRDR_FORMAT_LIST* formatList) -> UINT {
+                LOGI("RDP_CLIPBOARD: ServerFormatList received with %u formats", formatList ? formatList->numFormats : 0);
+                CLIPRDR_FORMAT_LIST_RESPONSE response = {};
+                response.common.msgType = CB_FORMAT_LIST_RESPONSE;
+                response.common.msgFlags = CB_RESPONSE_OK;
+                if (clip->ClientFormatListResponse) {
+                    clip->ClientFormatListResponse(clip, &response);
+                }
+                if (!formatList) return CHANNEL_RC_OK;
+
+                bool requested = false;
+                for (UINT32 i = 0; i < formatList->numFormats; ++i) {
+                    if (formatList->formats[i].formatId == CF_UNICODETEXT) {
+                        LOGI("RDP_CLIPBOARD: Requesting CF_UNICODETEXT from server");
+                        CLIPRDR_FORMAT_DATA_REQUEST req = {};
+                        req.common.msgType = CB_FORMAT_DATA_REQUEST;
+                        req.requestedFormatId = CF_UNICODETEXT;
+                        if (clip->ClientFormatDataRequest) clip->ClientFormatDataRequest(clip, &req);
+                        requested = true;
+                        break;
+                    }
+                }
+                if (!requested) {
+                    for (UINT32 i = 0; i < formatList->numFormats; ++i) {
+                        if (formatList->formats[i].formatId == CF_TEXT) {
+                            LOGI("RDP_CLIPBOARD: Requesting CF_TEXT from server");
+                            CLIPRDR_FORMAT_DATA_REQUEST req = {};
+                            req.common.msgType = CB_FORMAT_DATA_REQUEST;
+                            req.requestedFormatId = CF_TEXT;
+                            if (clip->ClientFormatDataRequest) clip->ClientFormatDataRequest(clip, &req);
+                            break;
+                        }
+                    }
+                }
+                return CHANNEL_RC_OK;
+            };
+
+            clip->ServerFormatListResponse = [](CliprdrClientContext*, const CLIPRDR_FORMAT_LIST_RESPONSE* resp) -> UINT {
+                LOGI("RDP_CLIPBOARD: ServerFormatListResponse flags=0x%04x", resp ? resp->common.msgFlags : 0);
+                return CHANNEL_RC_OK;
+            };
+
+            clip->ServerFormatDataRequest = [](CliprdrClientContext* clip, const CLIPRDR_FORMAT_DATA_REQUEST* req) -> UINT {
+                auto* ctx = (RdpContext*)clip->custom;
+                LOGI("RDP_CLIPBOARD: ServerFormatDataRequest for format 0x%08x", req ? req->requestedFormatId : 0);
+                if (!req || !clip->ClientFormatDataResponse) return CHANNEL_RC_OK;
+
+                CLIPRDR_FORMAT_DATA_RESPONSE resp = {};
+                resp.common.msgType = CB_FORMAT_DATA_RESPONSE;
+
+                if (req->requestedFormatId == CF_UNICODETEXT) {
+                    std::string text;
+                    if (ctx) {
+                        std::lock_guard<std::mutex> lock(ctx->clipMutex);
+                        text = ctx->clientClipText;
+                    }
+                    // Normalize line endings to Windows CRLF for remote host
+                    std::string crlfText;
+                    crlfText.reserve(text.size() + 16);
+                    for (size_t i = 0; i < text.size(); ++i) {
+                        if (text[i] == '\n' && (i == 0 || text[i - 1] != '\r')) {
+                            crlfText.push_back('\r');
+                        }
+                        crlfText.push_back(text[i]);
+                    }
+                    size_t wlen = 0;
+                    WCHAR* wstr = ConvertUtf8ToWCharAlloc(crlfText.c_str(), &wlen);
+                    if (wstr) {
+                        resp.common.msgFlags = CB_RESPONSE_OK;
+                        resp.common.dataLen = static_cast<UINT32>((wlen + 1) * sizeof(WCHAR));
+                        resp.requestedFormatData = reinterpret_cast<const BYTE*>(wstr);
+                        clip->ClientFormatDataResponse(clip, &resp);
+                        free(wstr);
+                    } else {
+                        static const WCHAR nullTerm = 0;
+                        resp.common.msgFlags = CB_RESPONSE_OK;
+                        resp.common.dataLen = sizeof(WCHAR);
+                        resp.requestedFormatData = reinterpret_cast<const BYTE*>(&nullTerm);
+                        clip->ClientFormatDataResponse(clip, &resp);
+                    }
+                } else if (req->requestedFormatId == CF_TEXT) {
+                    std::string text;
+                    if (ctx) {
+                        std::lock_guard<std::mutex> lock(ctx->clipMutex);
+                        text = ctx->clientClipText;
+                    }
+                    std::string crlfText;
+                    crlfText.reserve(text.size() + 16);
+                    for (size_t i = 0; i < text.size(); ++i) {
+                        if (text[i] == '\n' && (i == 0 || text[i - 1] != '\r')) {
+                            crlfText.push_back('\r');
+                        }
+                        crlfText.push_back(text[i]);
+                    }
+                    crlfText.push_back('\0');
+                    resp.common.msgFlags = CB_RESPONSE_OK;
+                    resp.common.dataLen = static_cast<UINT32>(crlfText.size());
+                    resp.requestedFormatData = reinterpret_cast<const BYTE*>(crlfText.data());
+                    clip->ClientFormatDataResponse(clip, &resp);
+                } else {
+                    resp.common.msgFlags = CB_RESPONSE_FAIL;
+                    resp.common.dataLen = 0;
+                    resp.requestedFormatData = nullptr;
+                    clip->ClientFormatDataResponse(clip, &resp);
+                }
+                return CHANNEL_RC_OK;
+            };
+
+            clip->ServerFormatDataResponse = [](CliprdrClientContext* clip, const CLIPRDR_FORMAT_DATA_RESPONSE* resp) -> UINT {
+                auto* ctx = (RdpContext*)clip->custom;
+                if (!resp || !ctx) return CHANNEL_RC_OK;
+                LOGI("RDP_CLIPBOARD: ServerFormatDataResponse flags=0x%04x len=%u", resp->common.msgFlags, resp->common.dataLen);
+                if ((resp->common.msgFlags & CB_RESPONSE_OK) && resp->requestedFormatData && resp->common.dataLen > 0) {
+                    std::string utf8Text;
+                    const BYTE* data = resp->requestedFormatData;
+                    const UINT32 len = resp->common.dataLen;
+
+                    // If it was UNICODETEXT:
+                    if (len >= sizeof(WCHAR)) {
+                        const WCHAR* wstr = reinterpret_cast<const WCHAR*>(data);
+                        size_t wlen = len / sizeof(WCHAR);
+                        size_t utf8Len = 0;
+                        char* converted = ConvertWCharNToUtf8Alloc(wstr, wlen, &utf8Len);
+                        if (converted) {
+                            utf8Text.assign(converted, utf8Len);
+                            free(converted);
+                            while (!utf8Text.empty() && utf8Text.back() == '\0') {
+                                utf8Text.pop_back();
+                            }
+                        }
+                    }
+                    if (utf8Text.empty() && len > 0) {
+                        // Fallback as raw ascii/utf8
+                        utf8Text.assign(reinterpret_cast<const char*>(data), len);
+                        while (!utf8Text.empty() && utf8Text.back() == '\0') {
+                            utf8Text.pop_back();
+                        }
+                    }
+
+                    if (!utf8Text.empty()) {
+                        LOGI("RDP_CLIPBOARD: Converted remote clipboard text len=%zu: '%s'", utf8Text.size(), utf8Text.substr(0, 50).c_str());
+                        {
+                            std::lock_guard<std::mutex> lock(ctx->clipMutex);
+                            ctx->clientClipText = utf8Text;
+                        }
+                        if (ctx->javaVm && ctx->eventReceiver && ctx->clipboardMethod) {
+                            JNIEnv* env = nullptr;
+                            bool attached = false;
+                            if (ctx->javaVm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) {
+                                if (ctx->javaVm->AttachCurrentThread(&env, nullptr) == JNI_OK) {
+                                    attached = true;
+                                }
+                            }
+                            if (env) {
+                                jstring jtext = env->NewStringUTF(utf8Text.c_str());
+                                if (jtext) {
+                                    env->CallVoidMethod(ctx->eventReceiver, ctx->clipboardMethod, jtext);
+                                    env->DeleteLocalRef(jtext);
+                                }
+                                if (env->ExceptionCheck()) {
+                                    env->ExceptionClear();
+                                    LOGE("RDP_CLIPBOARD: Exception calling onNativeClipboardChanged");
+                                }
+                                if (attached) ctx->javaVm->DetachCurrentThread();
+                            }
+                        }
+                    }
+                }
+                return CHANNEL_RC_OK;
+            };
         }
     });
 
@@ -697,6 +930,10 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
         } else if (strcmp(e->name, "rdpdr") == 0) {
             LOGI("RDP_STORAGE: rdpdr channel disconnected");
             ctx->storageConnected = false;
+        } else if (strcmp(e->name, CLIPRDR_SVC_CHANNEL_NAME) == 0) {
+            LOGI("RDP_CLIPBOARD: cliprdr channel disconnected");
+            ctx->clipConnected = false;
+            ctx->cliprdr = nullptr;
         }
     });
     
@@ -973,3 +1210,44 @@ Java_com_farside_workspace_FreeRDPBridge_isStorageConnected(JNIEnv*, jobject, jl
     if (!ctx || !ctx->storageRequested.load()) return JNI_FALSE;
     return ctx->storageConnected.load() ? JNI_TRUE : JNI_FALSE;
 }
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_farside_workspace_FreeRDPBridge_isClipboardConnected(JNIEnv*, jobject, jlong instance) {
+    if (!instance) return JNI_FALSE;
+    auto* ctx = reinterpret_cast<RdpContext*>(((freerdp*)instance)->context);
+    return (ctx && ctx->clipConnected.load()) ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_farside_workspace_FreeRDPBridge_sendClipboardText(JNIEnv* env, jobject, jlong instance, jstring text) {
+    if (!instance || !text) return JNI_FALSE;
+    auto* ctx = reinterpret_cast<RdpContext*>(((freerdp*)instance)->context);
+    if (!ctx) return JNI_FALSE;
+
+    const char* utf8Chars = env->GetStringUTFChars(text, nullptr);
+    if (!utf8Chars) return JNI_FALSE;
+    {
+        std::lock_guard<std::mutex> lock(ctx->clipMutex);
+        ctx->clientClipText = utf8Chars;
+    }
+    env->ReleaseStringUTFChars(text, utf8Chars);
+
+    if (ctx->cliprdr && ctx->clipConnected.load() && ctx->cliprdr->ClientFormatList) {
+        CLIPRDR_FORMAT formats[2] = {};
+        formats[0].formatId = CF_UNICODETEXT;
+        formats[0].formatName = nullptr;
+        formats[1].formatId = CF_TEXT;
+        formats[1].formatName = nullptr;
+
+        CLIPRDR_FORMAT_LIST formatList = {};
+        formatList.common.msgType = CB_FORMAT_LIST;
+        formatList.numFormats = 2;
+        formatList.formats = formats;
+
+        UINT res = ctx->cliprdr->ClientFormatList(ctx->cliprdr, &formatList);
+        LOGI("RDP_CLIPBOARD: sendClipboardText sent ClientFormatList res=%u", res);
+        return res == CHANNEL_RC_OK ? JNI_TRUE : JNI_FALSE;
+    }
+    return JNI_FALSE;
+}
+
