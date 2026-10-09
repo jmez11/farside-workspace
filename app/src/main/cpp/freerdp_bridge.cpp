@@ -35,6 +35,7 @@
 
 #include <atomic>
 #include "quest_audio.h"
+#include "quest_camera.h"
 #include <freerdp/client/rdpgfx.h>
 #include <freerdp/codec/h264.h>
 
@@ -61,6 +62,7 @@ static const char* gfx_codec_name(UINT32 codecId) {
 struct RdpContext {
     rdpContext _p;
     QuestAudioState* audio;
+    QuestCameraState camera;
     JavaVM* javaVm;
     jobject certificateVerifier;
     jmethodID verifyCertificates;
@@ -213,21 +215,27 @@ static UINT logging_surface_command(RdpgfxClientContext* context, const RDPGFX_S
 extern "C" UINT VCAPITYPE rdpgfx_DVCPluginEntry(PVOID pEntryPoints);
 extern "C" UINT VCAPITYPE disp_DVCPluginEntry(PVOID pEntryPoints);
 extern "C" UINT VCAPITYPE audin_DVCPluginEntry(PVOID pEntryPoints);
-extern "C" UINT VCAPITYPE rdpecam_DVCPluginEntry(PVOID pEntryPoints);
 extern "C" UINT VCAPITYPE android_freerdp_rdpecam_client_subsystem_entry(PVOID pEntryPoints);
 extern "C" BOOL VCAPITYPE rdpsnd_VirtualChannelEntryEx(PVOID, PVOID);
 extern "C" BOOL VCAPITYPE rdpdr_VirtualChannelEntryEx(PVOID, PVOID);
 extern "C" BOOL VCAPITYPE cliprdr_VirtualChannelEntryEx(PVOID, PVOID);
 extern "C" UINT VCAPITYPE drive_DeviceServiceEntry(PDEVICE_SERVICE_ENTRY_POINTS);
-extern "C" BOOL cam_android_is_recording(void);
-extern "C" void cam_android_set_muted(BOOL muted);
-extern "C" BOOL cam_android_is_muted(void);
 extern "C" UINT cam_android_get_camera_count(void);
 extern "C" void cam_android_set_max_dimension(int maxDim);
 extern "C" BOOL cam_android_set_verification_pattern(BOOL enabled);
+#ifndef NDEBUG
+extern "C" BOOL cam_android_verify_isolation(QuestCameraState*, QuestCameraState*);
+#endif
 extern "C" BOOL quest_camera_encoder_register(JNIEnv* env);
 
 QuestAudioState* quest_audio_state(rdpContext* context) { return ((RdpContext*)context)->audio; }
+extern "C" QuestCameraState* quest_camera_state(rdpContext* context) { return &((RdpContext*)context)->camera; }
+extern "C" UINT VCAPITYPE quest_rdpecam_entry(IDRDYNVC_ENTRY_POINTS* entry) {
+    if (!entry || !entry->GetRdpContext) return CHANNEL_RC_INITIALIZATION_ERROR;
+    auto* context = entry->GetRdpContext(entry);
+    if (!context) return CHANNEL_RC_INITIALIZATION_ERROR;
+    return quest_rdpecam_entry_with_state(entry, quest_camera_state(context));
+}
 extern "C" BOOL VCAPITYPE drdynvc_VirtualChannelEntryEx(PVOID pInitHandle, PVOID pContext);
 
 // Channels are compiled statically (BUILD_SHARED_LIBS OFF), so dlopen-based addin
@@ -242,7 +250,7 @@ static PVOID my_addin_provider(LPCSTR pszName, LPCSTR pszSubsystem, LPCSTR pszTy
     if (pszName && strcmp(pszName, "rdpecam") == 0) {
         if (pszSubsystem && strcmp(pszSubsystem, "android") == 0)
             return (PVOID)android_freerdp_rdpecam_client_subsystem_entry;
-        return (PVOID)rdpecam_DVCPluginEntry;
+        return (PVOID)quest_rdpecam_entry;
     }
     if (pszName && strcmp(pszName, "audin") == 0) return (PVOID)audin_DVCPluginEntry;
     if (pszName && strcmp(pszName, "rdpsnd") == 0) return (PVOID)rdpsnd_VirtualChannelEntryEx;
@@ -589,6 +597,7 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
     new (&ctx->desktopHeight) std::atomic<int>(1080);
     ctx->displayReady = false;
     ctx->disp = nullptr;
+    ctx->camera = {};
     new (&ctx->cameraRequested) std::atomic<bool>(enableCamera == JNI_TRUE);
     new (&ctx->cameraConnected) std::atomic<bool>(false);
     new (&ctx->storageRequested) std::atomic<bool>(enableStorage == JNI_TRUE);
@@ -1174,18 +1183,40 @@ Java_com_farside_workspace_FreeRDPBridge_getAudioFrameCounts(JNIEnv* env, jobjec
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_farside_workspace_FreeRDPBridge_setCameraMuted(JNIEnv*, jobject, jlong, jboolean muted) {
-    cam_android_set_muted(muted == JNI_TRUE);
+Java_com_farside_workspace_FreeRDPBridge_setCameraMuted(JNIEnv*, jobject, jlong instance, jboolean muted) {
+    if (instance) InterlockedExchange(&quest_camera_state(((freerdp*)instance)->context)->muted, muted == JNI_TRUE);
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_com_farside_workspace_FreeRDPBridge_isCameraRecording(JNIEnv*, jobject, jlong) {
-    return cam_android_is_recording() ? JNI_TRUE : JNI_FALSE;
+Java_com_farside_workspace_FreeRDPBridge_isCameraRecording(JNIEnv*, jobject, jlong instance) {
+    return instance && quest_camera_is_recording(quest_camera_state(((freerdp*)instance)->context));
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_com_farside_workspace_FreeRDPBridge_isCameraMuted(JNIEnv*, jobject, jlong) {
-    return cam_android_is_muted() ? JNI_TRUE : JNI_FALSE;
+Java_com_farside_workspace_FreeRDPBridge_isCameraMuted(JNIEnv*, jobject, jlong instance) {
+    return instance && quest_camera_is_muted(quest_camera_state(((freerdp*)instance)->context));
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_farside_workspace_QuestCameraVerification_verifySessionIsolation(JNIEnv* env, jclass) {
+#ifndef NDEBUG
+    RdpContext firstContext{}, secondContext{};
+    freerdp first{}, second{};
+    first.context = &firstContext._p;
+    second.context = &secondContext._p;
+    const jlong firstId = reinterpret_cast<jlong>(&first);
+    const jlong secondId = reinterpret_cast<jlong>(&second);
+    Java_com_farside_workspace_FreeRDPBridge_setCameraMuted(env, nullptr, firstId, JNI_TRUE);
+    if (!Java_com_farside_workspace_FreeRDPBridge_isCameraMuted(env, nullptr, firstId) ||
+        Java_com_farside_workspace_FreeRDPBridge_isCameraMuted(env, nullptr, secondId)) return JNI_FALSE;
+    const BOOL result = cam_android_verify_isolation(&firstContext.camera, &secondContext.camera);
+    Java_com_farside_workspace_FreeRDPBridge_setCameraMuted(env, nullptr, secondId, JNI_TRUE);
+    Java_com_farside_workspace_FreeRDPBridge_setCameraMuted(env, nullptr, firstId, JNI_FALSE);
+    return result && !Java_com_farside_workspace_FreeRDPBridge_isCameraMuted(env, nullptr, firstId) &&
+        Java_com_farside_workspace_FreeRDPBridge_isCameraMuted(env, nullptr, secondId);
+#else
+    return JNI_FALSE;
+#endif
 }
 
 extern "C" JNIEXPORT void JNICALL

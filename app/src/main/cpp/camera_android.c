@@ -29,6 +29,7 @@
 #include <media/NdkImageReader.h>
 
 #include "camera.h"
+#include "quest_camera.h"
 
 #define TAG CHANNELS_TAG("rdpecam-android.client")
 #define LOG_TAG "rdpecam-farside"
@@ -41,9 +42,20 @@
 
 #define CAM_ANDROID_FPS 30
 
-static volatile BOOL g_camera_recording = FALSE;
-static volatile int g_camera_active_streams = 0;
-static volatile BOOL g_camera_muted = FALSE;
+/* FreeRDP loads the HAL synchronously inside its DVC entry. Bind that HAL to
+ * the calling session without sharing mutable state across registration threads. */
+static _Thread_local QuestCameraState* registrationState;
+extern UINT VCAPITYPE rdpecam_DVCPluginEntry(IDRDYNVC_ENTRY_POINTS* entry);
+
+UINT VCAPITYPE quest_rdpecam_entry_with_state(IDRDYNVC_ENTRY_POINTS* entry, QuestCameraState* state)
+{
+    if (!entry || !state) return CHANNEL_RC_INITIALIZATION_ERROR;
+    QuestCameraState* previous = registrationState;
+    registrationState = state;
+    const UINT result = rdpecam_DVCPluginEntry(entry);
+    registrationState = previous;
+    return result;
+}
 static volatile UINT g_camera_count = 0;
 static volatile int g_camera_max_dimension = 720; /* Default 720p */
 
@@ -60,21 +72,6 @@ BOOL cam_android_set_verification_pattern(BOOL enabled)
 	WINPR_UNUSED(enabled);
 	return FALSE;
 #endif
-}
-
-BOOL cam_android_is_recording(void)
-{
-	return g_camera_recording;
-}
-
-void cam_android_set_muted(BOOL muted)
-{
-	g_camera_muted = muted;
-}
-
-BOOL cam_android_is_muted(void)
-{
-	return g_camera_muted;
 }
 
 UINT cam_android_get_camera_count(void)
@@ -101,6 +98,7 @@ int cam_android_get_max_dimension(void)
 typedef struct
 {
 	ICamHal iHal;
+	QuestCameraState* state;
 	ACameraManager* manager;
 	wHashTable* streams; /* key: deviceId, value: CamAndroidStream */
 } CamAndroidHal;
@@ -108,6 +106,8 @@ typedef struct
 typedef struct
 {
 	size_t streamIndex;
+	QuestCameraState* state;
+	BOOL recording;
 
 	ACameraDevice* device;
 	ACameraCaptureSession* session;
@@ -127,6 +127,15 @@ typedef struct
 	BYTE* nv12Buffer;
 	size_t nv12BufferSize;
 } CamAndroidStream;
+
+static void cam_android_apply_mute(QuestCameraState* state, BYTE* nv12, size_t ySize)
+{
+    if (quest_camera_is_muted(state))
+    {
+        memset(nv12, 0, ySize);
+        memset(nv12 + ySize, 128, ySize / 2);
+    }
+}
 
 static const char* cam_android_extract_camera_id(const char* deviceId)
 {
@@ -322,11 +331,7 @@ static void cam_android_deliver_frame(CamAndroidStream* stream, AImage* image)
 	}
 #endif
 
-	if (g_camera_muted)
-	{
-		memset(stream->nv12Buffer, 0, ySize);
-		memset(stream->nv12Buffer + ySize, 128, ySize / 2);
-	}
+	cam_android_apply_mute(stream->state, stream->nv12Buffer, ySize);
 
 	static uint32_t frameCount = 0;
 	if ((++frameCount % 30) == 1)
@@ -513,13 +518,11 @@ static void cam_android_close_device(CamAndroidStream* stream)
 	WINPR_ASSERT(stream);
 
 	EnterCriticalSection(&stream->lock);
-	if (stream->streaming)
+	stream->streaming = FALSE;
+	if (stream->recording)
 	{
-		stream->streaming = FALSE;
-		if (g_camera_active_streams > 0)
-			g_camera_active_streams--;
-		if (g_camera_active_streams == 0)
-			g_camera_recording = FALSE;
+		stream->recording = FALSE;
+		InterlockedDecrement(&stream->state->activeStreams);
 	}
 	LeaveCriticalSection(&stream->lock);
 
@@ -588,6 +591,7 @@ static CamAndroidStream* cam_android_get_or_create_stream(CamAndroidHal* hal, co
 		*errorCode = CAM_ERROR_CODE_OutOfMemory;
 		return NULL;
 	}
+	stream->state = hal->state;
 	if (!InitializeCriticalSectionEx(&stream->lock, 0, 0))
 	{
 		free(stream);
@@ -919,8 +923,11 @@ static CAM_ERROR_CODE cam_android_start_stream(ICamHal* ihal, CameraDevice* dev,
 
 	EnterCriticalSection(&stream->lock);
 	stream->streaming = TRUE;
-	g_camera_active_streams++;
-	g_camera_recording = TRUE;
+	if (!stream->recording)
+	{
+		stream->recording = TRUE;
+		InterlockedIncrement(&stream->state->activeStreams);
+	}
 	LeaveCriticalSection(&stream->lock);
 
 	LOGI("Camera stream successfully started: %s %dx%d", deviceId, width, height);
@@ -972,9 +979,6 @@ static CAM_ERROR_CODE cam_android_free(ICamHal* ihal)
 	if (hal->manager)
 		ACameraManager_delete(hal->manager);
 	free(hal);
-	g_camera_recording = FALSE;
-	g_camera_active_streams = 0;
-	g_camera_muted = FALSE;
 	return CAM_ERROR_CODE_None;
 }
 
@@ -982,11 +986,13 @@ FREERDP_ENTRY_POINT(UINT VCAPITYPE android_freerdp_rdpecam_client_subsystem_entr
     PFREERDP_CAMERA_HAL_ENTRY_POINTS pEntryPoints))
 {
 	WINPR_ASSERT(pEntryPoints);
+	if (!registrationState) return CHANNEL_RC_INITIALIZATION_ERROR;
 
 	CamAndroidHal* hal = (CamAndroidHal*)calloc(1, sizeof(CamAndroidHal));
 	if (!hal)
 		return CHANNEL_RC_NO_MEMORY;
 
+	hal->state = registrationState;
 	hal->manager = ACameraManager_create();
 	if (!hal->manager)
 	{
@@ -1026,3 +1032,55 @@ error:
 	cam_android_free(&hal->iHal);
 	return ERROR_INTERNAL_ERROR;
 }
+
+#ifndef NDEBUG
+static UINT cam_test_register(IWTSPlugin* plugin, ICamHal* hal)
+{
+    ((CameraPlugin*)plugin)->ihal = hal;
+    return CHANNEL_RC_OK;
+}
+
+/* Exercises real HAL registration, frame masking and teardown with synthetic
+ * streams. No Camera2 capture or host is implied by this fixture. */
+BOOL cam_android_verify_isolation(QuestCameraState* first, QuestCameraState* second)
+{
+    CameraPlugin plugins[2] = {0};
+    QuestCameraState* states[2] = {first, second};
+    BOOL success = FALSE;
+    QuestCameraState* previous = registrationState;
+    for (size_t i = 0; i < 2; i++)
+    {
+        registrationState = states[i];
+        FREERDP_CAMERA_HAL_ENTRY_POINTS entry = {0};
+        entry.plugin = &plugins[i].iface;
+        entry.pRegisterCameraHal = cam_test_register;
+        if (android_freerdp_rdpecam_client_subsystem_entry(&entry) != CHANNEL_RC_OK)
+            goto cleanup;
+        CamAndroidHal* hal = (CamAndroidHal*)plugins[i].ihal;
+        if (hal->state != states[i]) goto cleanup;
+        CAM_ERROR_CODE error;
+        CamAndroidStream* stream = cam_android_get_or_create_stream(hal, "test-camera", &error);
+        if (!stream) goto cleanup;
+        stream->recording = TRUE;
+        stream->streaming = TRUE;
+        InterlockedIncrement(&states[i]->activeStreams);
+    }
+    BYTE frames[2][24];
+    memset(frames, 85, sizeof(frames));
+    cam_android_apply_mute(first, frames[0], 16);
+    cam_android_apply_mute(second, frames[1], 16);
+    for (size_t i = 0; i < 24; i++)
+        if (frames[0][i] != (i < 16 ? 0 : 128) || frames[1][i] != 85) goto cleanup;
+    if (!quest_camera_is_recording(first) || !quest_camera_is_recording(second)) goto cleanup;
+    plugins[1].ihal->Free(plugins[1].ihal);
+    plugins[1].ihal = NULL;
+    if (!quest_camera_is_muted(first) || !quest_camera_is_recording(first) ||
+        quest_camera_is_recording(second)) goto cleanup;
+    success = TRUE;
+cleanup:
+    for (size_t i = 0; i < 2; i++)
+        if (plugins[i].ihal) plugins[i].ihal->Free(plugins[i].ihal);
+    registrationState = previous;
+    return success && !quest_camera_is_recording(first);
+}
+#endif

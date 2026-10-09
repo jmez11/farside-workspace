@@ -51,6 +51,8 @@ try {
     $report.rowStride = $stride
     # Drop packets without decoding or changing bytes: one native sample per 30 frames.
     $raw = Join-Path $OutputDir 'capture.yuy2'
+    [IO.File]::WriteAllText((Join-Path $destination 'capture-started.json'),
+        (@{ utc = [DateTime]::UtcNow.ToString('o'); camera = $Camera } | ConvertTo-Json))
     $captureCode = Invoke-Probe 'capture-packets' ('-hide_banner -dump -y -f dshow -pixel_format yuyv422 -video_size ' + $Size + ' -i video="' + $device + '" -t 60 -c:v copy -bsf:v "noise=amount=0:drop=''mod(n,30)''" -f rawvideo "' + $raw + '"')
     if ($captureCode -ne 0) { throw "DirectShow packet capture failed" }
     $packetSizes = [regex]::Matches((Get-Content (Join-Path $OutputDir 'capture-packets.log') -Raw), '(?m)^\s*size=(\d+)\s*$')

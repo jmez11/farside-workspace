@@ -81,8 +81,17 @@ internal class RdpCameraVerification(private val test: RdpResizeInstrumentation)
                 for (camera in target?.let { listOf(it) } ?: listOf("virtual", "passthrough"))
                     verifyLiveNucbox(camera, resolutionOverride, mode == "live-chart")
             }
+            "live-session-isolation" -> verifyLiveNucbox(target ?: "virtual",
+                resolutionOverride ?: "HD_720", pattern = true, isolation = true)
             "frame-checker" -> verifyFrameChecker()
             "plane-copy" -> verifyPlaneCopy()
+            "session-isolation" -> {
+                FreeRDPBridge()
+                check(QuestCameraVerification.verifySessionIsolation()) {
+                    "Native session mute, frame masking or HAL teardown crossed session boundaries"
+                }
+            }
+            "encoder" -> verifyEncoders()
             "hardware-probe" -> verifyHardwareProbe()
             else -> error("Unknown cameraMode: $mode")
         }
@@ -290,7 +299,8 @@ internal class RdpCameraVerification(private val test: RdpResizeInstrumentation)
         }
     }
 
-    private fun verifyLiveNucbox(targetCamera: String, resolutionOverride: String?, pattern: Boolean) {
+    private fun verifyLiveNucbox(targetCamera: String, resolutionOverride: String?, pattern: Boolean,
+        isolation: Boolean = false) {
         require(targetCamera in listOf("virtual", "passthrough"))
         val manager = ProfileManager(test.targetContext)
         // Recover only profiles owned by this harness after an interrupted run.
@@ -307,7 +317,7 @@ internal class RdpCameraVerification(private val test: RdpResizeInstrumentation)
                 name = "FFmpeg camera verification", enableCamera = true,
                 redirectStorage = true, redirectMicrophone = false, cameraResolution = resolution)
             val output = File(test.targetContext.getExternalFilesDir(null),
-                "camera-ffmpeg/${if (pattern) "chart" else "live"}-$targetCamera-${resolution.name}-${System.currentTimeMillis()}")
+                "camera-ffmpeg/${if (isolation) "isolation" else if (pattern) "chart" else "live"}-$targetCamera-${resolution.name}-${System.currentTimeMillis()}")
             check(output.mkdirs())
             val script = test.context.assets.open("camera/ffmpeg-probe.ps1").bufferedReader().use { it.readText() }
             File(output, "ffmpeg-probe.ps1").writeText(script)
@@ -327,6 +337,9 @@ internal class RdpCameraVerification(private val test: RdpResizeInstrumentation)
             val command = "& '$remoteDir\\ffmpeg-probe.ps1' -OutputDir '$remoteDir' -Camera '$camera' -Size '$size'"
             manager.addProfile(profile)
             var activity: SessionActivity? = null
+            var secondary = 0L
+            var secondarySurface: android.view.Surface? = null
+            var secondaryTexture: android.graphics.SurfaceTexture? = null
             val bridge = FreeRDPBridge()
             try {
                 QuestCameraEncoder.diagnosticDirectory = if (pattern) output.absolutePath else null
@@ -339,6 +352,21 @@ internal class RdpCameraVerification(private val test: RdpResizeInstrumentation)
                 val deadline = SystemClock.uptimeMillis() + 20000
                 while (session.rdpInstance == 0L && SystemClock.uptimeMillis() < deadline) Thread.sleep(200)
                 check(session.rdpInstance != 0L) { "Failed to connect to nucbox" }
+                if (isolation) {
+                    // The saved laptop supports an independent desktop connection, but no camera.
+                    // Muting/closing it must not affect nucbox's actual camera capture.
+                    val laptop = checkNotNull(manager.getProfiles().firstOrNull {
+                        it.host.contains("172.16.0.54") || it.name.contains("LAPTOP", ignoreCase = true)
+                    }) { "LAPTOP profile not found" }
+                    secondaryTexture = android.graphics.SurfaceTexture(0)
+                    secondarySurface = android.view.Surface(secondaryTexture)
+                    secondary = bridge.connect(laptop.host, laptop.port, laptop.user, laptop.pass, null,
+                        enableCamera = true, enableMicrophone = false, enableStorage = false,
+                        surface = secondarySurface, certificateHost = laptop.host,
+                        certificateVerifier = RdpCertificateVerifier(test.targetContext, laptop.host, laptop.port,
+                            { request -> request?.respond(true) }))
+                    check(secondary != 0L) { "Secondary laptop connection failed" }
+                }
                 Thread.sleep(5000)
                 bridge.sendKeyEvent(session.rdpInstance, 0x15B, true)
                 Thread.sleep(150)
@@ -370,9 +398,34 @@ internal class RdpCameraVerification(private val test: RdpResizeInstrumentation)
                 bridge.sendKeyEvent(session.rdpInstance, 0x1C, true)
                 bridge.sendKeyEvent(session.rdpInstance, 0x1C, false)
                 val result = File(output, "result.json")
+                val captureStarted = File(output, "capture-started.json")
+                var captureStart = 0L
+                var isolationStage = 0
+                val timeline = org.json.JSONArray()
                 val finishDeadline = SystemClock.uptimeMillis() + 300000
                 while (!result.exists() && SystemClock.uptimeMillis() < finishDeadline) {
                     Thread.sleep(1000)
+                    if (isolation && captureStarted.exists()) {
+                        if (captureStart == 0L) captureStart = SystemClock.uptimeMillis()
+                        val elapsed = SystemClock.uptimeMillis() - captureStart
+                        val threshold = listOf(15000L, 25000L, 35000L, 43000L).getOrNull(isolationStage)
+                        if (threshold != null && elapsed >= threshold) {
+                            check(bridge.isCameraRecording(session.rdpInstance)) { "Nucbox capture stopped at stage $isolationStage" }
+                            when (isolationStage) {
+                                0 -> {
+                                    check(!bridge.isCameraRecording(secondary)) { "Idle laptop reports nucbox capture" }
+                                    bridge.setCameraMuted(secondary, true)
+                                    check(bridge.isCameraMuted(secondary) && !bridge.isCameraMuted(session.rdpInstance))
+                                }
+                                1 -> { bridge.disconnect(secondary); secondary = 0L }
+                                2 -> { bridge.setCameraMuted(session.rdpInstance, true); check(bridge.isCameraMuted(session.rdpInstance)) }
+                                3 -> { bridge.setCameraMuted(session.rdpInstance, false); check(!bridge.isCameraMuted(session.rdpInstance)) }
+                            }
+                            timeline.put(org.json.JSONObject().put("stage", isolationStage).put("elapsedMs", elapsed))
+                            isolationStage++
+                            File(output, "isolation-timeline.json").writeText(timeline.toString(2))
+                        }
+                    }
                     test.runOnMainSync {
                         fun texture(view: android.view.View): android.view.TextureView? {
                             if (view is android.view.TextureView) return view
@@ -393,24 +446,34 @@ internal class RdpCameraVerification(private val test: RdpResizeInstrumentation)
                 android.util.Log.i("RdpCameraVerification", "FFmpeg $targetCamera $resolution: $report; artifacts=$output")
                 check(report.optBoolean("success")) { "FFmpeg $targetCamera $resolution failed: $report; artifacts=$output" }
                 check(report.getString("actualSize") == size)
+                if (isolation) check(isolationStage == 4) { "Capture ended before all live isolation checks" }
                 if (pattern) {
                     val frames = checkNotNull(output.listFiles()) { "Missing frame directory" }
                         .filter { it.name.matches(Regex("frame-\\d+\\.png")) }.sortedBy { it.name }
                     check(frames.size >= 55)
                     val scores = org.json.JSONArray()
                     var failures = 0
-                    for (frame in frames) {
+                    var blackFrames = 0
+                    for ((index, frame) in frames.withIndex()) {
                         val bitmap = checkNotNull(android.graphics.BitmapFactory.decodeFile(frame.absolutePath))
                         val score = chartErrors(bitmap)
+                        val black = isolation && isBlackFrame(bitmap)
                         bitmap.recycle()
-                        scores.put(org.json.JSONObject().put("frame", frame.name).put("badSamples", score))
-                        if (score > 0) failures++
+                        scores.put(org.json.JSONObject().put("frame", frame.name).put("badSamples", score).put("black", black))
+                        if (black) blackFrames++
+                        // Secondary mute/teardown happens before 30 seconds; own mute is 35-43.
+                        if ((score > 0 && !black) || (black && index !in 31..45)) failures++
                     }
                     File(output, "chart-scores.json").writeText(scores.toString(2))
                     check(failures == 0) { "Camera color/geometry corrupted in $failures/${frames.size} frames: $output" }
+                    if (isolation) check(blackFrames in 6..10) { "Own mute produced $blackFrames blackout frames, expected about eight" }
                 }
                 check(!bridge.isCameraUnsupported(session.rdpInstance))
             } finally {
+                if (secondary != 0L) bridge.disconnect(secondary)
+                secondarySurface?.release()
+                secondaryTexture?.release()
+                activity?.rdpInstance?.takeIf { it != 0L }?.let { bridge.setCameraMuted(it, false) }
                 QuestCameraEncoder.diagnosticDirectory = null
                 bridge.setCameraVerificationPattern(false)
                 activity?.let { session -> test.runOnMainSync { session.finish() } }
@@ -451,6 +514,14 @@ internal class RdpCameraVerification(private val test: RdpResizeInstrumentation)
         return errors
     }
 
+    private fun isBlackFrame(bitmap: Bitmap): Boolean {
+        for (row in 1..8) for (col in 1..8) {
+            val pixel = bitmap.getPixel(col * bitmap.width / 9, row * bitmap.height / 9)
+            if (maxOf(AndroidColor.red(pixel), AndroidColor.green(pixel), AndroidColor.blue(pixel)) > 20) return false
+        }
+        return true
+    }
+
     private fun verifyFrameChecker() {
         val good = Bitmap.createBitmap(854, 480, Bitmap.Config.ARGB_8888)
         for (y in 0 until good.height) for (x in 0 until good.width)
@@ -476,6 +547,114 @@ internal class RdpCameraVerification(private val test: RdpResizeInstrumentation)
             check(chartErrors(scrambled) > 0) { "Checker misses scrambled rows" }
         } finally {
             good.recycle(); displaced.recycle(); scrambled.recycle()
+        }
+    }
+
+    private fun verifyEncoders() {
+        FreeRDPBridge()
+        val output = File(test.targetContext.getExternalFilesDir(null), "camera-encoder")
+        output.mkdirs()
+        val report = org.json.JSONArray()
+        for (sizes in listOf(listOf(320 to 240, 320 to 240), listOf(320 to 240, 640 to 240),
+            listOf(1280 to 720, 1600 to 1200), listOf(320 to 240, 1280 to 1280))) {
+            val widths = sizes.map { it.first }
+            val heights = sizes.map { it.second }
+            val colors = listOf(intArrayOf(81, 90, 240), intArrayOf(145, 54, 34))
+            val encoders = sizes.map { (width, height) ->
+                QuestCameraEncoder(width, height, 30, if (height >= 720) 2700000 else 700000)
+            }
+            try {
+                val inputs = widths.mapIndexed { index, width ->
+                    java.nio.ByteBuffer.allocateDirect(width * heights[index] * 3 / 2).apply {
+                        repeat(width * heights[index]) { put(colors[index][0].toByte()) }
+                        repeat(width * heights[index] / 4) {
+                            put(colors[index][1].toByte()); put(colors[index][2].toByte())
+                        }
+                        flip()
+                    }
+                }
+                // Deliberately leave multiple outputs pending on both hardware codecs.
+                repeat(3) { frame ->
+                    encoders.forEachIndexed { index, encoder ->
+                        check(encoder.queueInput(inputs[index], (frame + 1L) * 33333))
+                    }
+                }
+                Thread.sleep(300)
+                encoders.forEachIndexed { index, encoder ->
+                    val count = encoder.drainOutput(10000)
+                    check(count == 3) { "Batched drain returned $count of 3 access units" }
+                    val packets = List(3) {
+                        checkNotNull(encoder.encode(inputs[index], 999999))
+                    }
+                    val file = File(output, "${sizes[1].first}x${sizes[1].second}-stream-$index.h264")
+                    file.outputStream().use { stream -> packets.forEach { stream.write(it) } }
+                    // SPS profile_idc must be baseline (66); this verifies the hardware setting.
+                    val first = packets.first()
+                    val sps = (0 until first.size - 5).firstOrNull { offset ->
+                        first[offset] == 0.toByte() && first[offset + 1] == 0.toByte() &&
+                            first[offset + 2] == 0.toByte() && first[offset + 3] == 1.toByte() &&
+                            first[offset + 4].toInt() and 31 == 7
+                    }
+                    check(sps != null && first[sps + 5].toInt() and 255 == 66) {
+                        "Hardware encoder did not produce baseline SPS"
+                    }
+                    verifyDecodedColors(packets, widths[index], heights[index], colors[index])
+                    report.put(org.json.JSONObject().put("width", widths[index])
+                        .put("height", heights[index]).put("stream", index).put("batchDrained", count).put("decodedFrames", 3))
+                }
+            } finally {
+                encoders.forEach { it.close() }
+            }
+        }
+        File(output, "result.json").writeText(report.toString(2))
+    }
+
+    private fun verifyDecodedColors(packets: List<ByteArray>, width: Int, height: Int, color: IntArray) {
+        val decoder = android.media.MediaCodec.createDecoderByType("video/avc")
+        try {
+            val format = android.media.MediaFormat.createVideoFormat("video/avc", width, height)
+            format.setInteger(android.media.MediaFormat.KEY_COLOR_FORMAT,
+                android.media.MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible)
+            decoder.configure(format, null, null, 0)
+            decoder.start()
+            packets.forEachIndexed { index, bytes ->
+                val input = decoder.dequeueInputBuffer(100000)
+                check(input >= 0)
+                checkNotNull(decoder.getInputBuffer(input)).put(bytes)
+                decoder.queueInputBuffer(input, 0, bytes.size, (index + 1L) * 33333, 0)
+            }
+            val info = android.media.MediaCodec.BufferInfo()
+            var decoded = 0
+            val deadline = SystemClock.uptimeMillis() + 5000
+            while (decoded < packets.size && SystemClock.uptimeMillis() < deadline) {
+                val buffer = decoder.dequeueOutputBuffer(info, 10000)
+                if (buffer < 0) continue
+                try {
+                    check(info.presentationTimeUs == (decoded + 1L) * 33333) { "Frame order changed" }
+                    checkNotNull(decoder.getOutputImage(buffer)).use { image ->
+                        check(image.width == width && image.height == height)
+                        image.planes.forEachIndexed { planeIndex, plane ->
+                            // Interior samples on every row catch mixed frames and stride corruption.
+                            val rows = if (planeIndex == 0) height else height / 2
+                            val cols = if (planeIndex == 0) width else width / 2
+                            for (row in 1 until rows - 1) {
+                                val offset = row * plane.rowStride + (cols / 2) * plane.pixelStride
+                                val actual = plane.buffer.get(plane.buffer.position() + offset).toInt() and 255
+                                check(kotlin.math.abs(actual - color[planeIndex]) <= 12) {
+                                    "Stream color corrupted: plane=$planeIndex row=$row actual=$actual"
+                                }
+                            }
+                        }
+                    }
+                    decoded++
+                } finally {
+                    decoder.releaseOutputBuffer(buffer, false)
+                }
+            }
+            check(decoded == packets.size) { "Decoded $decoded of ${packets.size} retained frames" }
+            decoder.stop()
+        } finally {
+            decoder.release()
         }
     }
 
