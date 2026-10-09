@@ -55,6 +55,10 @@ class SshVerification(private val test: Instrumentation) {
             pass = "secret",
             type = ConnectionType.SSH
         )
+        check(testProfile.autoCopySelection) { "Default autoCopySelection must be true" }
+        val testJson = testProfile.toJson()
+        check(testJson.optBoolean("autoCopySelection", false)) { "toJson missing autoCopySelection" }
+        check(ConnectionProfile.fromJson(testJson).autoCopySelection) { "fromJson did not preserve autoCopySelection" }
         profileManager.addProfile(testProfile)
 
         Log.i("SshVerification", "Launching SessionActivity")
@@ -76,6 +80,7 @@ class SshVerification(private val test: Instrumentation) {
             checkNotNull(find("127.0.0.1")) { "Missing connection host in floating toolbar" }
             checkNotNull(find("Keep toolbar visible")) { "Missing pin button in toolbar" }
             checkNotNull(find("Zoom")) { "Missing zoom button in toolbar" }
+            checkNotNull(find("Transparency")) { "Missing transparency button in toolbar" }
             checkNotNull(find("Keyboard")) { "Missing keyboard toggle in toolbar" }
 
             // 2. Verify Zoom (Font Size) slider and Reset Zoom button
@@ -92,6 +97,12 @@ class SshVerification(private val test: Instrumentation) {
             Thread.sleep(300)
             checkNotNull(find("14sp")) { "Font size was not reset to 14sp" }
             click("Zoom") // Close zoom slider
+
+            // 2b. Verify Transparency slider
+            Log.i("SshVerification", "Step 2b: Testing Transparency")
+            click("Transparency")
+            checkNotNull(find("100%")) { "Missing 100% default transparency indicator" }
+            click("Transparency") // Close transparency slider
 
             // 3. Verify Pinning toolbar and disappearing behavior
             Log.i("SshVerification", "Step 3: Testing Pinning")

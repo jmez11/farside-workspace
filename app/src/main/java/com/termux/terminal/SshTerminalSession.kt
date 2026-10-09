@@ -12,7 +12,9 @@ import com.farside.workspace.data.ConnectionProfile
 import com.farside.workspace.data.ProfileManager
 import com.farside.workspace.data.ProxyType
 import com.farside.workspace.tunnel.CloudflaredTunnel
+import org.bouncycastle.jce.provider.BouncyCastleProvider
 import java.io.OutputStream
+import java.security.Security
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
@@ -23,6 +25,21 @@ class SshTerminalSession(
     val context: Context? = null
 ) : TerminalSession("dummy", "/", emptyArray(), emptyArray(), 2000, client) {
 
+    companion object {
+        init {
+            ensureBouncyCastleProvider()
+        }
+
+        fun ensureBouncyCastleProvider() {
+            try {
+                Security.removeProvider(BouncyCastleProvider.PROVIDER_NAME)
+                Security.insertProviderAt(BouncyCastleProvider(), 1)
+            } catch (e: Exception) {
+                android.util.Log.w("SshTerminalSession", "Failed to register BouncyCastleProvider: ${e.message}")
+            }
+        }
+    }
+
     private var sshOut: OutputStream? = null
     private var sshClient: SSHClient? = null
     private var sshSession: net.schmizz.sshj.connection.channel.direct.Session? = null
@@ -31,6 +48,14 @@ class SshTerminalSession(
     @Volatile
     private var isFinished = false
     private val inputQueue = LinkedBlockingQueue<Byte>()
+
+    init {
+        mShellPid = -1
+    }
+
+    override fun isRunning(): Boolean {
+        return !isFinished
+    }
 
     private fun printToTerminal(text: String) {
         val bytes = text.toByteArray()
@@ -106,6 +131,9 @@ class SshTerminalSession(
                 ssh.connect(targetHost, targetPort)
 
                 var user = sshSessionInfo.user.trim()
+                if (user.isEmpty() && sshSessionInfo.host.contains("@")) {
+                    user = sshSessionInfo.host.substringBefore("@").trim()
+                }
                 if (user.isEmpty()) {
                     printToTerminal("login as: ")
                     user = readInteractiveLine(echo = true)?.trim() ?: return@thread
@@ -122,17 +150,35 @@ class SshTerminalSession(
                     context?.let { ctx -> ProfileManager(ctx).getSshKeys().find { it.id == keyId } }
                 }
                 if (savedKey != null && savedKey.privateKey.isNotBlank()) {
+                    printToTerminal("[Offering SSH key '${savedKey.name}' for user '$user'...]\r\n")
                     try {
-                        val keyProvider = if (savedKey.passphrase.isNotEmpty()) {
-                            ssh.loadKeys(savedKey.privateKey, savedKey.passphrase)
-                        } else {
-                            ssh.loadKeys(savedKey.privateKey, null as String?)
-                        }
+                        ensureBouncyCastleProvider()
+                        val passwordFinder = if (savedKey.passphrase.isNotEmpty()) {
+                            net.schmizz.sshj.userauth.password.PasswordUtils.createOneOff(savedKey.passphrase.toCharArray())
+                        } else null
+                        val cleanKey = savedKey.privateKey.trim().replace("\r\n", "\n")
+                        val keyProvider = ssh.loadKeys(cleanKey, null as String?, passwordFinder)
                         ssh.authPublickey(user, keyProvider)
                         authenticated = ssh.isAuthenticated
+                        if (authenticated) {
+                            printToTerminal("[SSH key '${savedKey.name}' accepted by server]\r\n")
+                        } else {
+                            val allowed = try { ssh.userAuth.allowedMethods } catch (e: Exception) { null }
+                            printToTerminal("[Server refused key '${savedKey.name}'${if (allowed != null) " (allowed methods: $allowed)" else ""}]\r\n")
+                        }
                     } catch (e: Exception) {
-                        printToTerminal("\r\n[Public key authentication failed: ${e.message}]\r\n")
+                        val allowed = try { ssh.userAuth.allowedMethods } catch (ex: Exception) { null }
+                        val reason = if (e is net.schmizz.sshj.userauth.UserAuthException) {
+                            "Key refused by server${if (allowed != null) " (allowed methods: $allowed)" else ""}"
+                        } else {
+                            e.message ?: "Authentication failed"
+                        }
+                        printToTerminal("[Server refused SSH key '${savedKey.name}': $reason]\r\n")
                     }
+                } else if (savedKey != null && savedKey.privateKey.isBlank()) {
+                    printToTerminal("[Notice: SSH key '${savedKey.name}' has no private key data]\r\n")
+                } else if (!sshSessionInfo.sshKeyId.isNullOrBlank()) {
+                    printToTerminal("[Notice: Configured SSH key not found in saved keys]\r\n")
                 }
 
                 // 2. Try password authentication if password was provided and not yet authenticated
@@ -237,8 +283,9 @@ class SshTerminalSession(
     }
 
     override fun finishIfRunning() {
-        super.finishIfRunning()
+        if (isFinished) return
         isFinished = true
+        mShellPid = -1
         inputQueue.offer(3.toByte())
         thread {
             try { sshOut?.close() } catch (e: Exception) {}

@@ -8,7 +8,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.material3.Icon
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Mouse
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
@@ -46,7 +45,7 @@ private val extraKeys = listOf(
 /** IME companion strip. Disposal releases latched keys on keyboard/session closure. */
 @Composable
 internal fun RemoteExtraKeys(modifier: Modifier = Modifier, enabled: Boolean, expanded: Boolean, onExpandedChange: (Boolean) -> Unit,
-    sendKey: (Int, Boolean) -> Unit, rightClick: () -> Unit) {
+    sendKey: (Int, Boolean) -> Unit) {
     val held = remember { mutableStateMapOf<Int, Boolean>() }
     val currentSendKey by rememberUpdatedState(sendKey)
     var numbers by remember { mutableStateOf(false) }
@@ -110,7 +109,7 @@ internal fun RemoteExtraKeys(modifier: Modifier = Modifier, enabled: Boolean, ex
                 }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Keycap("Right click", Modifier.weight(1f), icon = Icons.Default.Mouse, onClick = rightClick)
+                        Spacer(Modifier.weight(1f))
                         Keycap("Backspace", Modifier.weight(1f), display = "\u232B") { press(0x0E) }
                         Keycap("/", Modifier.weight(1f)) { press(0x135) }
                     }

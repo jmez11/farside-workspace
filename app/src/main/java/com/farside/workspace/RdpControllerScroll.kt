@@ -11,16 +11,38 @@ internal class RdpControllerScroll(private val send: (Int) -> Unit) {
     private val handler = Handler(Looper.getMainLooper())
     private var x = 0f
     private var y = 0f
+    private var hScrollAccum = 0f
+    private var vScrollAccum = 0f
     private val repeat = object : Runnable {
         override fun run() {
             emit(x, y)
-            handler.postDelayed(this, 100)
+            val magnitude = kotlin.math.hypot(x.toDouble(), y.toDouble()).toFloat().coerceIn(0f, 1f)
+            val defl = ((magnitude - 0.2f) / 0.8f).coerceIn(0f, 1f)
+            val delay = (800f - (725f * defl)).toLong().coerceIn(75L, 800L)
+            handler.postDelayed(this, delay)
         }
     }
 
     fun onMotion(event: MotionEvent): Boolean {
         if (event.actionMasked == MotionEvent.ACTION_SCROLL) {
-            emit(event.getAxisValue(MotionEvent.AXIS_HSCROLL), event.getAxisValue(MotionEvent.AXIS_VSCROLL))
+            val h = event.getAxisValue(MotionEvent.AXIS_HSCROLL)
+            val v = event.getAxisValue(MotionEvent.AXIS_VSCROLL)
+            if (h.isFinite() && h != 0f) {
+                hScrollAccum += h
+                while (abs(hScrollAccum) >= 1.0f) {
+                    val dir = if (hScrollAccum > 0) 1 else -1
+                    send(FreeRDPBridge.PTR_FLAGS_HWHEEL or ((if (dir > 0) 120 else -120) and 0x01ff))
+                    hScrollAccum -= dir
+                }
+            }
+            if (v.isFinite() && v != 0f) {
+                vScrollAccum += v
+                while (abs(vScrollAccum) >= 1.0f) {
+                    val dir = if (vScrollAccum > 0) 1 else -1
+                    send(FreeRDPBridge.PTR_FLAGS_WHEEL or ((if (dir > 0) 120 else -120) and 0x01ff))
+                    vScrollAccum -= dir
+                }
+            }
             return true
         }
         if (!event.isFromSource(InputDevice.SOURCE_JOYSTICK) || event.actionMasked != MotionEvent.ACTION_MOVE) return false
@@ -51,6 +73,8 @@ internal class RdpControllerScroll(private val send: (Int) -> Unit) {
     fun stop() {
         x = 0f
         y = 0f
+        hScrollAccum = 0f
+        vScrollAccum = 0f
         handler.removeCallbacks(repeat)
     }
 }

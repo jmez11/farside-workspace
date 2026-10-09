@@ -20,7 +20,7 @@ class SshKeyAndPinVerification(private val instrumentation: Instrumentation) {
             node.getChild(index)?.let(::descendants).orEmpty()
         }
 
-    private fun find(label: String, editable: Boolean = false, retries: Int = 40): AccessibilityNodeInfo {
+    private fun find(label: String, editable: Boolean = false, retries: Int = 60): AccessibilityNodeInfo {
         val appPackage = instrumentation.targetContext.packageName
         repeat(retries) {
             automation.clearCache()
@@ -28,8 +28,7 @@ class SshKeyAndPinVerification(private val instrumentation: Instrumentation) {
             val nodes = (0 until displays.size()).flatMap { index ->
                 displays.valueAt(index).flatMap { it.root?.let(::descendants).orEmpty() }
             }
-            val appNodes = nodes.filter { it.packageName == appPackage }
-            val matches = appNodes.filter {
+            val matches = nodes.filter {
                 it.text?.toString().equals(label, ignoreCase = true) ||
                 it.hintText?.toString().equals(label, ignoreCase = true) ||
                 it.contentDescription?.toString().equals(label, ignoreCase = true) ||
@@ -45,17 +44,29 @@ class SshKeyAndPinVerification(private val instrumentation: Instrumentation) {
                 candidate?.let { return it }
             }
             if (it > 0 && it % 5 == 0) {
-                val action = if (it % 20 < 10) AccessibilityNodeInfo.ACTION_SCROLL_FORWARD else AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
-                appNodes.firstOrNull { it.isScrollable }?.performAction(action)
+                val action = if (it % 30 < 20) AccessibilityNodeInfo.ACTION_SCROLL_FORWARD else AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
+                nodes.filter { node -> node.isScrollable && (node.packageName == appPackage || node.packageName == "android") }
+                    .forEach { node -> node.performAction(action) }
             }
             Thread.sleep(200)
+        }
+        val lastNodes = (0 until automation.windowsOnAllDisplays.size()).flatMap { index ->
+            automation.windowsOnAllDisplays.valueAt(index).flatMap { it.root?.let(::descendants).orEmpty() }
+        }
+        Log.e("SshKeyAndPinVerification", "Missing control: $label. Total nodes on screen: ${lastNodes.size}")
+        lastNodes.forEach { n ->
+            if (n.text != null || n.contentDescription != null) {
+                Log.e("SshKeyAndPinVerification", "  node text='${n.text}' desc='${n.contentDescription}' click=${n.isClickable}")
+            }
         }
         error("Missing UI control: $label")
     }
 
     private fun click(label: String) {
         var node = find(label)
+        Log.i("SshKeyAndPinVerification", "click($label): found node text='${node.text}' desc='${node.contentDescription}' clickable=${node.isClickable}")
         while (!node.isClickable) node = checkNotNull(node.parent) { "Not clickable: $label" }
+        Log.i("SshKeyAndPinVerification", "click($label): clicking node text='${node.text}' desc='${node.contentDescription}' clickable=${node.isClickable}")
         check(node.performAction(AccessibilityNodeInfo.ACTION_CLICK))
         Thread.sleep(300)
     }
@@ -168,7 +179,9 @@ class SshKeyAndPinVerification(private val instrumentation: Instrumentation) {
             find("PIN required")
 
             // Edit key and toggle "Require PIN" off -> triggers PIN dialog
-            click("Edit")
+            click("Edit ${originalKey.name}")
+            Thread.sleep(400)
+            find("Edit SSH Key")
             click("Require PIN")
             find("Remove PIN requirement")
 
@@ -200,14 +213,14 @@ class SshKeyAndPinVerification(private val instrumentation: Instrumentation) {
             instrumentation.sendStatus(0, Bundle().apply { putString("stream", "SSH Key Require PIN toggle and update passed.\n") })
 
             // Test 5-minute cache bypass: re-enable Require PIN and toggle off again
-            click("Edit")
+            click("Edit ${originalKey.name}")
             click("Require PIN")
             click("Save Changes")
             awaitCheck { manager.getSshKeys().first { it.id == originalKey.id }.requirePin }
             Thread.sleep(500)
 
             // With PIN cached, removing PIN requirement bypasses prompt immediately
-            click("Edit")
+            click("Edit ${originalKey.name}")
             click("Require PIN")
             // Because PIN is cached in memory, CredentialPinDialog automatically unlocks!
             // Wait for Require PIN to be disabled without prompt
@@ -220,13 +233,13 @@ class SshKeyAndPinVerification(private val instrumentation: Instrumentation) {
             // Test clearCache re-enables PIN prompt
             CredentialPin.clearCache()
             check(!CredentialPin.hasValidCachedPin(verifier))
-            click("Edit")
+            click("Edit ${originalKey.name}")
             click("Require PIN")
             click("Save Changes")
             awaitCheck { manager.getSshKeys().first { it.id == originalKey.id }.requirePin }
             Thread.sleep(500)
 
-            click("Edit")
+            click("Edit ${originalKey.name}")
             click("Require PIN")
             find("Remove PIN requirement")
             click("Cancel")

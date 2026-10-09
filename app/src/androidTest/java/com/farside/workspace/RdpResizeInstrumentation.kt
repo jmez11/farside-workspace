@@ -468,8 +468,6 @@ class RdpResizeInstrumentation : Instrumentation() {
             for (n in 1..12) if (n == 1) touchKey("F$n") else click("F$n")
             for (label in listOf("Home", "Up", "PgUp", "Left", "Right", "End", "Down", "PgDn",
                 "Insert", "Delete", "Enter", "Backspace", "Keypad Enter", "/", "*", "-", "+", "Print Screen")) click(label)
-            click("Right click")
-            click("ESC") // Close any resulting remote context menu.
             touchKey("Number Keys")
             check(find("F1") == null && find("Function Keys") != null) { "Function bank did not switch to numbers" }
             for (label in listOf("7", "8", "9", "4", "5", "6", "1", "2", "3", "0", ".")) click(label)
@@ -591,7 +589,17 @@ class RdpResizeInstrumentation : Instrumentation() {
             motion(1f, 1f, android.view.InputDevice.SOURCE_TOUCHSCREEN)
         }
         Thread.sleep(200)
-        runOnMainSync { check(sent.size == stoppedCount) { "Scroll continued after stop" } }
+        runOnMainSync {
+            check(sent.size == stoppedCount) { "Scroll continued after stop" }
+            sent.clear()
+            motion(0.3f, 0f) // Small deflection (0.3): delay is ~709ms
+            check(sent.size == 1) { "Initial small deflection event missing" }
+        }
+        Thread.sleep(250)
+        runOnMainSync {
+            check(sent.size == 1) { "Small stick deflection repeated too fast: expected 1, got ${sent.size}" }
+            scroll.stop()
+        }
     }
 
     private fun verifyDoubleTapTolerance() {

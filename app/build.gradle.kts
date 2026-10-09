@@ -45,7 +45,10 @@ android {
     }
     
     ndkVersion = "26.1.10909125"
-    packaging { jniLibs { useLegacyPackaging = true; keepDebugSymbols += "**/libcloudflared.so" } }
+    packaging {
+        jniLibs { useLegacyPackaging = true; keepDebugSymbols += "**/libcloudflared.so" }
+        resources.excludes += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
+    }
 }
 
 dependencies {
@@ -72,4 +75,5 @@ dependencies {
 
     // SSHJ
     implementation("com.hierynomus:sshj:0.38.0")
+    implementation("org.bouncycastle:bcprov-jdk18on:1.75")
 }

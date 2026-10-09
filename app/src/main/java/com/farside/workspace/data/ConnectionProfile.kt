@@ -66,6 +66,7 @@ data class ConnectionProfile(
     val resolutionHeight: Int = 1080,
     val resolutionScaling: Int = 100,
     val swapMouseButtons: Boolean = false,
+    val autoCopySelection: Boolean = true,
     val adminMode: Boolean = false,
     val credentialId: String? = null,
     val sshKeyId: String? = null
@@ -108,6 +109,7 @@ data class ConnectionProfile(
         json.put("resolutionHeight", resolutionHeight)
         json.put("resolutionScaling", resolutionScaling)
         json.put("swapMouseButtons", swapMouseButtons)
+        json.put("autoCopySelection", autoCopySelection)
         json.put("adminMode", adminMode)
         return json
     }
@@ -155,6 +157,7 @@ data class ConnectionProfile(
                 resolutionHeight = json.optInt("resolutionHeight", 1080),
                 resolutionScaling = json.optInt("resolutionScaling", 100),
                 swapMouseButtons = json.optBoolean("swapMouseButtons", false),
+                autoCopySelection = json.optBoolean("autoCopySelection", true),
                 adminMode = json.optBoolean("adminMode", false)
             )
         }

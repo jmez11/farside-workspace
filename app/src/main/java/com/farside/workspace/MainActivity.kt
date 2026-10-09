@@ -40,6 +40,8 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.InvertColors
+import androidx.compose.material.icons.filled.Opacity
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Keyboard
 import kotlinx.coroutines.Dispatchers
@@ -114,7 +116,7 @@ class MainActivity : ComponentActivity() {
                         },
                         onConnectProfile = { profileId ->
                             SessionWindowLauncher.launch(this@MainActivity, profileId)
-                            finish()
+                            moveTaskToBack(true)
                         },
                         profileManager = profileManager
                     )
@@ -173,6 +175,8 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
     val defaultFontSize = 14
     var fontSize by remember { mutableStateOf(defaultFontSize) }
     var showZoomSlider by remember { mutableStateOf(false) }
+    var terminalAlpha by remember { mutableStateOf(1.0f) }
+    var showTransparencySlider by remember { mutableStateOf(false) }
 
     var terminalViewRef by remember { mutableStateOf<com.termux.view.TerminalView?>(null) }
     var sshSessionRef by remember { mutableStateOf<com.termux.terminal.SshTerminalSession?>(null) }
@@ -305,6 +309,7 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .background(Color.Black.copy(alpha = terminalAlpha))
             .pointerInput(Unit) {
                 awaitPointerEventScope {
                     while (true) {
@@ -317,10 +322,22 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
             }
     ) {
         AndroidView(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 14.dp, vertical = 10.dp)
+                .alpha(terminalAlpha),
             factory = { viewContext ->
                 val terminalView = com.termux.view.TerminalView(viewContext, null)
                 terminalView.setTextSize(fontSize)
+
+                val copyTextToClipboard: (String) -> Unit = { text ->
+                    try {
+                        val clipboard = viewContext.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                        clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("ssh-clipboard", text))
+                    } catch (e: Exception) {
+                        Log.e("SshSession", "Error copying text to clipboard: ${e.message}")
+                    }
+                }
 
                 val sessionClient = object : com.termux.terminal.TerminalSessionClient {
                     override fun onTextChanged(changedSession: com.termux.terminal.TerminalSession) {
@@ -331,12 +348,7 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                         onClose()
                     }
                     override fun onCopyTextToClipboard(session: com.termux.terminal.TerminalSession, text: String) {
-                        try {
-                            val clipboard = viewContext.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-                            clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("ssh-clipboard", text))
-                        } catch (e: Exception) {
-                            Log.e("SshSession", "Error copying text to clipboard: ${e.message}")
-                        }
+                        copyTextToClipboard(text)
                     }
                     override fun onPasteTextFromClipboard(session: com.termux.terminal.TerminalSession?) {
                         try {
@@ -376,7 +388,19 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                     override fun shouldEnforceCharBasedInput(): Boolean = false
                     override fun shouldUseCtrlSpaceWorkaround(): Boolean = false
                     override fun isTerminalViewSelected(): Boolean = true
-                    override fun copyModeChanged(copyMode: Boolean) {}
+                    override fun copyModeChanged(copyMode: Boolean) {
+                        if (session.autoCopySelection && copyMode) {
+                            val text = terminalView.selectedText
+                            if (!text.isNullOrEmpty()) {
+                                copyTextToClipboard(text)
+                            }
+                        }
+                    }
+                    override fun onSelectedTextChanged(text: String?) {
+                        if (session.autoCopySelection && !text.isNullOrEmpty()) {
+                            copyTextToClipboard(text)
+                        }
+                    }
                     override fun onKeyDown(keyCode: Int, e: android.view.KeyEvent, session: com.termux.terminal.TerminalSession): Boolean = false
                     override fun onKeyUp(keyCode: Int, e: android.view.KeyEvent): Boolean = false
                     override fun onLongPress(event: android.view.MotionEvent): Boolean = false
@@ -443,7 +467,11 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                                 tint = if (toolbarPinned) MaterialTheme.colorScheme.primary else Color.White
                             )
                         }
-                        IconButton(onClick = { showZoomSlider = !showZoomSlider; revealToolbar() }) {
+                        IconButton(onClick = {
+                            showZoomSlider = !showZoomSlider
+                            if (showZoomSlider) showTransparencySlider = false
+                            revealToolbar()
+                        }) {
                             Icon(Icons.Default.Search, "Zoom", tint = Color.White)
                         }
                         if (fontSize != defaultFontSize) {
@@ -454,6 +482,17 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                             }) {
                                 Icon(Icons.Default.FullscreenExit, "Reset Zoom", tint = Color.White)
                             }
+                        }
+                        IconButton(onClick = {
+                            showTransparencySlider = !showTransparencySlider
+                            if (showTransparencySlider) showZoomSlider = false
+                            revealToolbar()
+                        }) {
+                            Icon(
+                                Icons.Default.Opacity,
+                                "Transparency",
+                                tint = if (terminalAlpha < 1.0f) MaterialTheme.colorScheme.primary else Color.White
+                            )
                         }
                         IconButton(onClick = {
                             revealToolbar()
@@ -477,6 +516,19 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                                 revealToolbar()
                             },
                             valueRange = 8f..32f,
+                            modifier = Modifier.width(150.dp)
+                        )
+                    }
+
+                    if (showTransparencySlider) {
+                        Text("${(terminalAlpha * 100).roundToInt()}%", color = Color.White, modifier = Modifier.padding(bottom = 4.dp))
+                        Slider(
+                            value = terminalAlpha,
+                            onValueChange = { newAlpha ->
+                                terminalAlpha = newAlpha.coerceIn(0.2f, 1.0f)
+                                revealToolbar()
+                            },
+                            valueRange = 0.2f..1.0f,
                             modifier = Modifier.width(150.dp)
                         )
                     }
@@ -528,8 +580,7 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                 enabled = showSoftKeyboard,
                 expanded = extraKeysExpanded,
                 onExpandedChange = { extraKeysExpanded = it },
-                sendKey = { code, down -> handleSshKey(code, down) },
-                rightClick = { }
+                sendKey = { code, down -> handleSshKey(code, down) }
             )
         }
     }
@@ -1219,14 +1270,6 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
             onExpandedChange = { extraKeysExpanded = it },
             sendKey = { code, down ->
                 if (rdpInstance != 0L) rdpBridge.sendKeyEvent(rdpInstance, code, down)
-            },
-            rightClick = {
-                if (rdpInstance != 0L) {
-                    val x = remotePointer[0].coerceIn(0, actualWidth - 1)
-                    val y = remotePointer[1].coerceIn(0, actualHeight - 1)
-                    rdpBridge.sendMouseEvent(rdpInstance, x, y, FreeRDPBridge.PTR_FLAGS_BUTTON2 or FreeRDPBridge.PTR_FLAGS_DOWN)
-                    rdpBridge.sendMouseEvent(rdpInstance, x, y, FreeRDPBridge.PTR_FLAGS_BUTTON2)
-                }
             }
         )
         }

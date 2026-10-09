@@ -637,12 +637,20 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                                         if (key.requirePin) Text("PIN required", color = Color.Gray, fontSize = 12.sp)
                                     }
                                     Row {
-                                        TextButton(enabled = !savingSshKey, onClick = {
-                                            sshKeyAction(key, "edit")
-                                        }) { Text("Edit", color = Color(0xFF1E88E5)) }
-                                        TextButton(enabled = !savingSshKey, onClick = {
-                                            sshKeyAction(key, "delete")
-                                        }) { Text("Delete", color = Color.Red) }
+                                        TextButton(
+                                            modifier = Modifier.semantics { contentDescription = "Edit ${key.name}" },
+                                            enabled = !savingSshKey,
+                                            onClick = {
+                                                sshKeyAction(key, "edit")
+                                            }
+                                        ) { Text("Edit", color = Color(0xFF1E88E5)) }
+                                        TextButton(
+                                            modifier = Modifier.semantics { contentDescription = "Delete ${key.name}" },
+                                            enabled = !savingSshKey,
+                                            onClick = {
+                                                sshKeyAction(key, "delete")
+                                            }
+                                        ) { Text("Delete", color = Color.Red) }
                                     }
                                 }
                             }
@@ -745,6 +753,7 @@ fun SettingsSwitchRow(label: String, checked: Boolean, onCheckedChange: (Boolean
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 2.dp)
             .background(Color(0xFF1C1C1E))
+            .clickable { onCheckedChange(!checked) }
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
@@ -996,6 +1005,7 @@ fun AddProfileForm(
     var redirectClipboard by rememberSaveable { mutableStateOf(initialProfile?.redirectClipboard ?: true) }
 
     var swapMouseButtons by rememberSaveable { mutableStateOf(initialProfile?.swapMouseButtons ?: false) }
+    var autoCopySelection by rememberSaveable { mutableStateOf(initialProfile?.autoCopySelection ?: true) }
     var adminMode by rememberSaveable { mutableStateOf(initialProfile?.adminMode ?: false) }
 
     var showValidationErrors by rememberSaveable { mutableStateOf(false) }
@@ -1072,6 +1082,7 @@ fun AddProfileForm(
                         resolutionHeight = initialProfile?.resolutionHeight ?: 1080,
                         resolutionScaling = initialProfile?.resolutionScaling ?: 100,
                         swapMouseButtons = swapMouseButtons,
+                        autoCopySelection = autoCopySelection,
                         adminMode = adminMode
                     )
                 )
@@ -1270,6 +1281,9 @@ fun AddProfileForm(
                     SettingsHeader("General")
                     SettingsSwitchRow("Admin mode", adminMode, { adminMode = it })
                     SettingsSwitchRow("Swap mouse buttons", swapMouseButtons, { swapMouseButtons = it })
+                } else if (type == ConnectionType.SSH) {
+                    SettingsHeader("Terminal & Clipboard")
+                    SettingsSwitchRow("Auto-copy selection to clipboard", autoCopySelection, { autoCopySelection = it })
                 }
                 
                 SettingsHeader("Proxy Settings")
