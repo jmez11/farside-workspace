@@ -53,9 +53,14 @@
   - Fixed emoji crash: replaced UTF-16 `Char` iteration with `codePointAt` / `charCount` in `RemoteImeEditor.kt`. In `MainActivity.kt`, guarded `handleSshUnicode` against raw surrogate code units before passing to `TerminalSession.writeCodePoint`, and added `sendRdpUnicode` to split supplementary code points (> 0xFFFF) into UTF-16 surrogate pairs for FreeRDP `sendUnicodeKeyEvent`.
   - Added on-device test suite `ImeVerification.kt` covering alternative keys (`/`, `\`, `;`, `:`, `?`, `!`, `@`, `#`, `$`, `%`, `^`, `&`, `*`, `(`, `)`, `_`, `+`, `=`, `é`), standard typing, space, empty-buffer backspace, 200ms enter debouncing, multi-char replacements, and supplementary emojis.
 
+- **TextureView Dead Listener Cleanup**:
+  - Removed unreachable `setOnTouchListener` and `setOnHoverListener` blocks inside `RdpSessionScreen`'s `TextureView` factory in `MainActivity.kt`. Pointer input and hover events are fully captured and dispatched by the overlay `Box` (`pointerInteropFilter`), which handles unscaled coordinate mapping, hover throttling, toolbar reveals, and focus management.
+  - Rebuilt, deployed to Quest, and executed `zoomTest`: PASS across all 6 zoom levels (1.0x to 3.0x).
+
 ## Verification Evidence
 - Build: `./gradlew assembleDebug :app:assembleDebugAndroidTest` (BUILD SUCCESSFUL).
 - Install & On-Device Suite: `adb install -r app-debug.apk` and `adb install -r app-debug-androidTest.apk` on Quest (`172.16.0.106:44381`):
+  - `zoomTest`: PASS (`Screen coordinates unscaled (800, 500) and delivered properly across all 6 zoom levels 1.0x to 3.0x`).
   - `imeOnly`: PASS (`All IME input scenarios verified: alternative keys, standard typing, space, empty backspace, enter debouncing, multi-char replacements, and emojis`).
   - `inputOnly`: PASS (`Pointer gestures, double-tap position tolerance, four-direction controller wheel/deadzone/repeat/stop, and zoomed pointer coordinate mapping`).
   - `sshOnly`: PASS (`SSH session floating toolbar, extra keys strip, 123 expansion to 314dp, ABC contraction to 76dp, and unchanged main content window geometry`).

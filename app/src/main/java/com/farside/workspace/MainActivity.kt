@@ -1028,34 +1028,6 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                     layoutParams = android.view.ViewGroup.LayoutParams(
                         android.view.ViewGroup.LayoutParams.MATCH_PARENT,
                         android.view.ViewGroup.LayoutParams.MATCH_PARENT)
-                    var lastMouseEventTime = 0L
-
-                    setOnTouchListener { _, event ->
-                        // Keep the IME text editor focused while clicking/dragging the remote desktop.
-                        if (!showSoftKeyboard) focusRequester.requestFocus()
-                        else if (event.actionMasked == MotionEvent.ACTION_DOWN) {
-                            desktopKeyboardActivation = SystemClock.uptimeMillis()
-                            keyboardInteraction = desktopKeyboardActivation
-                        }
-                        input.onTouch(event)
-                        true
-                    }
-
-                    setOnHoverListener { view, event ->
-                        val now = System.currentTimeMillis()
-                        if (now - lastMouseEventTime < 16) return@setOnHoverListener true
-                        lastMouseEventTime = now
-
-                        val (rdpX, rdpY) = desktopPoint(event.x, event.y)
-
-                        if (rdpInstance != 0L) {
-                            remotePointer[0] = rdpX
-                            remotePointer[1] = rdpY
-                            rdpBridge.sendMouseEvent(rdpInstance, rdpX, rdpY, FreeRDPBridge.PTR_FLAGS_MOVE)
-                        }
-                        true
-                    }
-                    
                     surfaceTextureListener = object : TextureView.SurfaceTextureListener {
                         override fun onSurfaceTextureAvailable(texture: SurfaceTexture, width: Int, height: Int) {
                             currentWidth = width
