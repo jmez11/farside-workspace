@@ -164,7 +164,7 @@ class SshTerminalSession(
                             printToTerminal("[SSH key '${savedKey.name}' accepted by server]\r\n")
                         } else {
                             val allowed = try { ssh.userAuth.allowedMethods } catch (e: Exception) { null }
-                            printToTerminal("[Server refused key '${savedKey.name}'${if (allowed != null) " (allowed methods: $allowed)" else ""}]\r\n")
+                            printToTerminal("[Server refused key '${savedKey.name}' for user '$user'${if (allowed != null) " (allowed methods: $allowed)" else ""}]\r\n")
                         }
                     } catch (e: Exception) {
                         val allowed = try { ssh.userAuth.allowedMethods } catch (ex: Exception) { null }
@@ -173,7 +173,7 @@ class SshTerminalSession(
                         } else {
                             e.message ?: "Authentication failed"
                         }
-                        printToTerminal("[Server refused SSH key '${savedKey.name}': $reason]\r\n")
+                        printToTerminal("[Server refused SSH key '${savedKey.name}' for user '$user': $reason]\r\n")
                     }
                 } else if (savedKey != null && savedKey.privateKey.isBlank()) {
                     printToTerminal("[Notice: SSH key '${savedKey.name}' has no private key data]\r\n")

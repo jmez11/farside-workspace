@@ -1226,7 +1226,7 @@ fun AddProfileForm(
                 }
 
                 if (type == ConnectionType.SSH && savedCredId.isBlank()) {
-                    SettingsTextField(user, { user = it }, "Username (Optional)")
+                    SettingsTextField(user, { user = it }, "Username (or blank to prompt on connect)")
                 }
 
                 if (type == ConnectionType.SSH) {

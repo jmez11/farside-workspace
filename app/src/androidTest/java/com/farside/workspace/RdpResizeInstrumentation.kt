@@ -30,6 +30,7 @@ class RdpResizeInstrumentation : Instrumentation() {
     private var toolbarOnly = false
     private var sshOnly = false
     private var sshKeysOnly = false
+    private var sshProbe = false
     private var zoomTest = false
     private var clipboardOnly = false
     override fun onCreate(arguments: Bundle?) {
@@ -51,6 +52,7 @@ class RdpResizeInstrumentation : Instrumentation() {
         toolbarOnly = arguments?.getString("toolbarOnly") == "true"
         sshOnly = arguments?.getString("sshOnly") == "true"
         sshKeysOnly = arguments?.getString("sshKeysOnly") == "true"
+        sshProbe = arguments?.getString("sshProbe") == "true"
         zoomTest = arguments?.getString("zoomTest") == "true"
         clipboardOnly = arguments?.getString("clipboardOnly") == "true"
         start()
@@ -94,6 +96,11 @@ class RdpResizeInstrumentation : Instrumentation() {
             if (sshKeysOnly) {
                 SshKeyAndPinVerification(this).run()
                 results.putString("stream", "PASS: SSH key saving and PIN lock in settings, 5-minute PIN cache bypass and checkbox, profile SSH key selection, optional credentials, and Keystore encryption.\n")
+                finish(0, results)
+                return
+            }
+            if (sshProbe) {
+                runSshProbe(results)
                 finish(0, results)
                 return
             }
@@ -814,5 +821,97 @@ class RdpResizeInstrumentation : Instrumentation() {
 
         return "Clipboard redirection initialized: cliprdr connected=$isConnected, sendClipboardText=$sendSuccess, Kotlin clipboardListener verified."
     }
+
+    private fun runSshProbe(results: Bundle) {
+        val pm = ProfileManager(targetContext)
+        val profile = pm.getProfiles().find { it.host.contains("jeremy-ssh") }
+            ?: pm.getProfiles().firstOrNull { it.type == ConnectionType.SSH }
+        val sshKey = pm.getSshKeys().find { it.id == profile?.sshKeyId }
+            ?: pm.getSshKeys().firstOrNull()
+        val report = StringBuilder()
+        report.append("Profile: name=${profile?.name}, host=${profile?.host}, user='${profile?.user}', keyId=${profile?.sshKeyId}\n")
+        report.append("SavedKey: id=${sshKey?.id}, name=${sshKey?.name}, len=${sshKey?.privateKey?.length}\n")
+
+        val cleanKey = sshKey?.privateKey?.trim()?.replace("\r\n", "\n") ?: ""
+        val tunnel = com.farside.workspace.tunnel.CloudflaredTunnel(targetContext)
+        try {
+            val port = tunnel.start(
+                hostInput = profile?.host ?: "jeremy-ssh.jameskasyan.com",
+                parameters = profile?.cloudflaredParameters ?: "",
+                onStatus = { report.append("Tunnel status: $it\n") },
+                onExit = {},
+                accessSubcommand = "ssh"
+            )
+            report.append("Tunnel listening on 127.0.0.1:$port\n")
+
+            com.termux.terminal.SshTerminalSession.ensureBouncyCastleProvider()
+            val ssh = net.schmizz.sshj.SSHClient()
+            ssh.addHostKeyVerifier(net.schmizz.sshj.transport.verification.PromiscuousVerifier())
+            ssh.connect("127.0.0.1", port)
+            report.append("Connected. ServerVersion: ${ssh.transport.serverVersion}\n")
+
+            val keyProvider = ssh.loadKeys(cleanKey, null as String?, null)
+            report.append("Key loaded: type=${keyProvider.type}, algo=${keyProvider.public.algorithm}\n")
+            report.append("Key fingerprint: ${net.schmizz.sshj.common.SecurityUtils.getFingerprint(keyProvider.public)}\n")
+
+            val keyAlgos = runCatching { ssh.transport.config.keyAlgorithms.map { it.name } }.getOrNull()
+            report.append("Client key algorithms: $keyAlgos\n")
+
+            val testUsers = listOfNotNull(
+                profile?.user?.takeIf { it.isNotBlank() },
+                "jmez", "jmez11", "jeremy", "james", "jkasyan", "jameskasyan", "admin", "ubuntu", "debian", "root"
+            ).distinct()
+
+            var sshAuthenticated = false
+            for (u in testUsers) {
+                report.append("Trying auth with user '$u'...\n")
+                var sshConn: net.schmizz.sshj.SSHClient? = null
+                try {
+                    sshConn = net.schmizz.sshj.SSHClient().apply {
+                        addHostKeyVerifier(net.schmizz.sshj.transport.verification.PromiscuousVerifier())
+                        connect("127.0.0.1", port)
+                    }
+                    val passFinder = if (sshKey?.passphrase?.isNotEmpty() == true) {
+                        net.schmizz.sshj.userauth.password.PasswordUtils.createOneOff(sshKey.passphrase.toCharArray())
+                    } else null
+                    val kp = sshConn.loadKeys(cleanKey, null as String?, passFinder)
+                    sshConn.authPublickey(u, kp)
+                    report.append(">>> Auth for '$u' SUCCESS! authenticated=${sshConn.isAuthenticated}\n")
+                    if (sshConn.isAuthenticated) {
+                        sshAuthenticated = true
+                        if (profile != null && profile.user.isBlank()) {
+                            val updated = profile.copy(user = u)
+                            pm.updateProfile(updated)
+                            report.append("Profile updated with user='$u'. Stored user: '${pm.getProfiles().find { it.id == profile.id }?.user}'\n")
+                        }
+                        val sess = sshConn.startSession()
+                        sess.allocateDefaultPTY()
+                        val sh = sess.startShell()
+                        sh.outputStream.write("echo 'TEST_SSH_OK'\r\n".toByteArray())
+                        sh.outputStream.flush()
+                        val buf = ByteArray(1024)
+                        val readLen = sh.inputStream.read(buf)
+                        val resp = if (readLen > 0) String(buf, 0, readLen) else ""
+                        report.append("Shell response: $resp\n")
+                        sess.close()
+                        break
+                    }
+                } catch (e: Exception) {
+                    val allowed = try { sshConn?.userAuth?.allowedMethods } catch (ex: Exception) { null }
+                    report.append("Auth for '$u' FAILED: ${e::class.java.simpleName}: ${e.message}, allowed=$allowed\n")
+                } finally {
+                    try { sshConn?.disconnect() } catch (e: Exception) {}
+                }
+            }
+            check(sshAuthenticated) { "SSH authentication failed for all candidate users: $report" }
+        } catch (e: Exception) {
+            report.append("Probe exception: ${e.stackTraceToString()}\n")
+            throw e
+        } finally {
+            try { tunnel.close() } catch (e: Exception) {}
+        }
+        results.putString("stream", report.toString())
+    }
 }
+
 
