@@ -33,6 +33,7 @@ class RdpResizeInstrumentation : Instrumentation() {
     private var sshProbe = false
     private var zoomTest = false
     private var clipboardOnly = false
+    private var imeOnly = false
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(arguments)
         cloudflaredOnly = arguments?.getString("cloudflaredOnly") == "true"
@@ -55,6 +56,7 @@ class RdpResizeInstrumentation : Instrumentation() {
         sshProbe = arguments?.getString("sshProbe") == "true"
         zoomTest = arguments?.getString("zoomTest") == "true"
         clipboardOnly = arguments?.getString("clipboardOnly") == "true"
+        imeOnly = arguments?.getString("imeOnly") == "true"
         start()
     }
 
@@ -69,6 +71,12 @@ class RdpResizeInstrumentation : Instrumentation() {
     override fun onStart() {
         val results = Bundle()
         try {
+            if (imeOnly) {
+                val report = ImeVerification(this).run()
+                results.putString("stream", "PASS: $report\n")
+                finish(0, results)
+                return
+            }
             if (zoomTest) {
                 val report = verifyZoomTouchCoordinates()
                 results.putString("stream", "PASS:\n$report\n")

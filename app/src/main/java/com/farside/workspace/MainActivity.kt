@@ -241,7 +241,9 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                 code = Character.toUpperCase(code)
             }
         }
-        sshSessionRef?.writeCodePoint(altLatched, code)
+        if (Character.isValidCodePoint(code) && (code < Character.MIN_SURROGATE.code || code > Character.MAX_SURROGATE.code)) {
+            sshSessionRef?.writeCodePoint(altLatched, code)
+        }
     }
 
     fun handleSshKey(code: Int, down: Boolean) {
@@ -1242,12 +1244,24 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                 }
             }
         }
+        fun sendRdpUnicode(code: Int, down: Boolean) {
+            if (rdpInstance == 0L) return
+            if (code > 0xFFFF) {
+                val high = Character.highSurrogate(code).code
+                val low = Character.lowSurrogate(code).code
+                rdpBridge.sendUnicodeKeyEvent(rdpInstance, high, down)
+                rdpBridge.sendUnicodeKeyEvent(rdpInstance, low, down)
+            } else {
+                rdpBridge.sendUnicodeKeyEvent(rdpInstance, code, down)
+            }
+        }
+
         if (showSoftKeyboard) RemoteImeEditor(
             label = "Remote keyboard input", activation = desktopKeyboardActivation, showInitially = true,
             keyboardVisible = keyboardVisible, onActions = { (context as? SessionActivity)?.keyboardEditorActions = it },
             onFocus = { (context as? SessionActivity)?.keyboardEditorHasFocus = it },
             onView = { (context as? SessionActivity)?.keyboardEditorView = it },
-            sendUnicode = { code, down -> if (rdpInstance != 0L) rdpBridge.sendUnicodeKeyEvent(rdpInstance, code, down) },
+            sendUnicode = { code, down -> sendRdpUnicode(code, down) },
             sendKey = { code, down -> if (rdpInstance != 0L) rdpBridge.sendKeyEvent(rdpInstance, code, down) })
 
         RemoteKeyboardPanel(visible = showSoftKeyboard, expanded = extraKeysExpanded,
@@ -1261,7 +1275,7 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
             onImeVisibility = { panelImeVisible = it },
             onFocus = { (context as? SessionActivity)?.keyboardPanelEditorHasFocus = it },
             onView = { (context as? SessionActivity)?.keyboardPanelEditorView = it },
-            sendUnicode = { code, down -> if (rdpInstance != 0L) rdpBridge.sendUnicodeKeyEvent(rdpInstance, code, down) },
+            sendUnicode = { code, down -> sendRdpUnicode(code, down) },
             sendKey = { code, down -> if (rdpInstance != 0L) rdpBridge.sendKeyEvent(rdpInstance, code, down) })
         RemoteExtraKeys(
             modifier = Modifier.fillMaxSize(),

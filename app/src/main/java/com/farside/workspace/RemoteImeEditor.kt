@@ -35,6 +35,45 @@ internal class ImeEditorActions {
     var showRequests = 0
 }
 
+internal fun processImeChange(
+    next: TextFieldValue,
+    lastEnterTime: Long,
+    now: Long = android.os.SystemClock.uptimeMillis(),
+    sendUnicode: (Int, Boolean) -> Unit,
+    sendKey: (Int, Boolean) -> Unit
+): Long {
+    var newLastEnterTime = lastEnterTime
+    if (next.text.isEmpty()) {
+        sendKey(0x0E, true)
+        sendKey(0x0E, false)
+    } else {
+        val isReplacement = !next.text.startsWith(" ")
+        if (isReplacement) {
+            // Horizon OS popup selection replaced the previously committed character.
+            // Erase the previously sent character on the remote session before sending replacement.
+            sendKey(0x0E, true)
+            sendKey(0x0E, false)
+        }
+        val newChars = if (next.text.startsWith(" ")) next.text.substring(1) else next.text
+        var i = 0
+        while (i < newChars.length) {
+            val codePoint = newChars.codePointAt(i)
+            i += Character.charCount(codePoint)
+            if (codePoint == '\n'.code) {
+                if (now - lastEnterTime > 200) {
+                    newLastEnterTime = now
+                    sendKey(0x1C, true)
+                    sendKey(0x1C, false)
+                }
+            } else {
+                sendUnicode(codePoint, true)
+                sendUnicode(codePoint, false)
+            }
+        }
+    }
+    return newLastEnterTime
+}
+
 /** Each focusable session surface needs its own real InputConnection for Horizon's IME. */
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
@@ -60,23 +99,12 @@ internal fun RemoteImeEditor(label: String, activation: Long, showInitially: Boo
 
     var lastEnterTime by remember { mutableStateOf(0L) }
     BasicTextField(value = text, onValueChange = { next ->
-        if (next.text.length > text.text.length) {
-            val char = next.text.last()
-            if (char == '\n') {
-                val now = android.os.SystemClock.uptimeMillis()
-                if (now - lastEnterTime > 200) {
-                    lastEnterTime = now
-                    sendKey(0x1C, true)
-                    sendKey(0x1C, false)
-                }
-            } else {
-                sendUnicode(char.code, true)
-                sendUnicode(char.code, false)
-            }
-        } else if (next.text.length < text.text.length) {
-            sendKey(0x0E, true)
-            sendKey(0x0E, false)
-        }
+        lastEnterTime = processImeChange(
+            next = next,
+            lastEnterTime = lastEnterTime,
+            sendUnicode = sendUnicode,
+            sendKey = sendKey
+        )
         text = TextFieldValue(" ", selection = TextRange(1))
     }, keyboardOptions = KeyboardOptions(imeAction = ImeAction.None),
         modifier = Modifier.size(1.dp).alpha(0f).focusRequester(focus)
