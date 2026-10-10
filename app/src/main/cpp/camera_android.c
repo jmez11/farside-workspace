@@ -19,6 +19,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 #include <android/log.h>
 
 #include <camera/NdkCameraDevice.h>
@@ -41,6 +42,7 @@
 #define ANDROID_CAMERA_PREFIX_LEN (sizeof(ANDROID_CAMERA_PREFIX) - 1)
 
 #define CAM_ANDROID_FPS 30
+#define DISPLAY_DEVICE_ID "display-0"
 
 /* FreeRDP loads the HAL synchronously inside its DVC entry. Bind that HAL to
  * the calling session without sharing mutable state across registration threads. */
@@ -103,11 +105,24 @@ typedef struct
 	wHashTable* streams; /* key: deviceId, value: CamAndroidStream */
 } CamAndroidHal;
 
-typedef struct
+typedef struct CamAndroidStream
 {
 	size_t streamIndex;
+    struct CamAndroidStream* source;
+    struct CamAndroidStream* subscribers;
+    struct CamAndroidStream* nextSubscriber;
+    BOOL producer;
+    int width, height;
 	QuestCameraState* state;
 	BOOL recording;
+    BOOL display;
+    int64_t lastFrameTime;
+    UINT displayCallbacks;
+    BOOL displayRgba;
+    HANDLE displayImageReady;
+    volatile LONG displayReaderStatus;
+    BYTE* planarBuffer;
+    size_t planarBufferSize;
 
 	ACameraDevice* device;
 	ACameraCaptureSession* session;
@@ -127,6 +142,10 @@ typedef struct
 	BYTE* nv12Buffer;
 	size_t nv12BufferSize;
 } CamAndroidStream;
+
+/* One physical Camera2 producer; session mute/encoding remain on subscribers. */
+static pthread_mutex_t cameraBrokerLock = PTHREAD_MUTEX_INITIALIZER;
+static CamAndroidHal cameraBroker;
 
 static void cam_android_apply_mute(QuestCameraState* state, BYTE* nv12, size_t ySize)
 {
@@ -257,10 +276,70 @@ static void cam_android_yuv420_888_to_nv12(BYTE* dst, int width, int height, con
 	}
 }
 
+/* BT.601 limited range, matching QuestCameraEncoder; alpha and row padding are ignored. */
+static void cam_android_rgba_to_yuv420(const BYTE* rgba, int width, int height, int stride,
+                                     BYTE* planar)
+{
+    const size_t ySize = (size_t)width * height;
+    BYTE* u = planar + ySize;
+    BYTE* v = u + ySize / 4;
+    for (int row = 0; row < height; row += 2)
+        for (int col = 0; col < width; col += 2)
+        {
+            int sumR = 0, sumG = 0, sumB = 0;
+            for (int dy = 0; dy < 2; dy++)
+                for (int dx = 0; dx < 2; dx++)
+                {
+                    const BYTE* pixel = rgba + (size_t)(row + dy) * stride + (col + dx) * 4;
+                    sumR += pixel[0]; sumG += pixel[1]; sumB += pixel[2];
+                    planar[(size_t)(row + dy) * width + col + dx] =
+                        (BYTE)(((66 * pixel[0] + 129 * pixel[1] + 25 * pixel[2] + 128) >> 8) + 16);
+                }
+            const size_t uv = (size_t)(row / 2) * (width / 2) + col / 2;
+            u[uv] = (BYTE)(((-38 * sumR - 74 * sumG + 112 * sumB + 512) >> 10) + 128);
+            v[uv] = (BYTE)(((112 * sumR - 94 * sumG - 18 * sumB + 512) >> 10) + 128);
+        }
+}
+
+BOOL cam_android_verify_display_conversion(void)
+{
+#ifndef NDEBUG
+    BYTE rgba[4 * 20], planar[24], nv12[24];
+    memset(rgba, 0xCD, sizeof(rgba));
+    const BYTE colors[4][3] = { {255, 0, 0}, {0, 255, 0}, {0, 0, 255}, {255, 255, 255} };
+    const BYTE expected[4][3] = { {81, 90, 240}, {145, 54, 34}, {41, 240, 110}, {235, 128, 128} };
+    for (int row = 0; row < 4; row++)
+        for (int col = 0; col < 4; col++)
+            memcpy(rgba + row * 20 + col * 4, colors[(row / 2) * 2 + col / 2], 3);
+    cam_android_rgba_to_yuv420(rgba, 4, 4, 20, planar);
+    cam_android_yuv420_888_to_nv12(nv12, 4, 4, planar, 4, planar + 16, 2, 1, planar + 20, 2, 1);
+    for (int row = 0; row < 4; row++)
+        for (int col = 0; col < 4; col++)
+            if (abs(nv12[row * 4 + col] - expected[(row / 2) * 2 + col / 2][0]) > 1) return FALSE;
+    for (int index = 0; index < 4; index++)
+        if (abs(nv12[16 + index * 2] - expected[index][1]) > 1 ||
+            abs(nv12[17 + index * 2] - expected[index][2]) > 1) return FALSE;
+    return TRUE;
+#else
+    return FALSE;
+#endif
+}
+
 static void cam_android_deliver_frame(CamAndroidStream* stream, AImage* image)
 {
 	WINPR_ASSERT(stream);
 	WINPR_ASSERT(image);
+    if (stream->display)
+    {
+        int64_t timestamp = 0;
+        if (AImage_getTimestamp(image, &timestamp) != AMEDIA_OK) return;
+        /* Track the next deadline, rather than spacing every accepted frame by 33ms:
+         * a 36Hz compositor would otherwise be quantized down to 18fps. */
+        if (stream->lastFrameTime && timestamp < stream->lastFrameTime) return;
+        if (!stream->lastFrameTime || timestamp - stream->lastFrameTime > 66666666)
+            stream->lastFrameTime = timestamp;
+        stream->lastFrameTime += 33333333;
+    }
 
 	int32_t width = 0;
 	int32_t height = 0;
@@ -283,12 +362,36 @@ static void cam_android_deliver_frame(CamAndroidStream* stream, AImage* image)
 		stream->nv12BufferSize = nv12Size;
 	}
 
-	/* Fetch the planes; the length out-param is required but unused. */
+	/* Horizon's compositor writes RGBA even when the consumer requests YUV. */
 	int dataLength = 0;
 	uint8_t* yData = NULL;
 	uint8_t* uData = NULL;
 	uint8_t* vData = NULL;
-	if (AImage_getPlaneData(image, 0, &yData, &dataLength) != AMEDIA_OK ||
+    int32_t format = 0;
+    AImage_getFormat(image, &format);
+    if (stream->display && format == AIMAGE_FORMAT_RGBA_8888)
+    {
+        uint8_t* rgba = NULL;
+        int rowStride = 0;
+        if (AImage_getPlaneData(image, 0, &rgba, &dataLength) != AMEDIA_OK ||
+            AImage_getPlaneRowStride(image, 0, &rowStride) != AMEDIA_OK || rowStride < width * 4 ||
+            (size_t)dataLength < (size_t)(height - 1) * rowStride + (size_t)width * 4)
+            return;
+        if (stream->planarBufferSize < nv12Size)
+        {
+            BYTE* planar = realloc(stream->planarBuffer, nv12Size);
+            if (!planar) return;
+            stream->planarBuffer = planar;
+            stream->planarBufferSize = nv12Size;
+        }
+        BYTE* planes[3] = { stream->planarBuffer, stream->planarBuffer + ySize,
+                            stream->planarBuffer + ySize + ySize / 4 };
+        cam_android_rgba_to_yuv420(rgba, width, height, rowStride, stream->planarBuffer);
+        cam_android_yuv420_888_to_nv12(stream->nv12Buffer, width, height, planes[0], width,
+                                        planes[1], width / 2, 1, planes[2], width / 2, 1);
+        goto packed;
+    }
+    if (AImage_getPlaneData(image, 0, &yData, &dataLength) != AMEDIA_OK ||
 	    AImage_getPlaneData(image, 1, &uData, &dataLength) != AMEDIA_OK ||
 	    AImage_getPlaneData(image, 2, &vData, &dataLength) != AMEDIA_OK)
 		return;
@@ -306,6 +409,7 @@ static void cam_android_deliver_frame(CamAndroidStream* stream, AImage* image)
 
 	cam_android_yuv420_888_to_nv12(stream->nv12Buffer, width, height, yData, yRowStride, uData,
 	                               uRowStride, uPixelStride, vData, vRowStride, vPixelStride);
+packed:
 
 #ifndef NDEBUG
 	if (g_verification_pattern)
@@ -331,6 +435,52 @@ static void cam_android_deliver_frame(CamAndroidStream* stream, AImage* image)
 	}
 #endif
 
+    if (stream->producer)
+    {
+        for (CamAndroidStream* peer = stream->subscribers; peer; peer = peer->nextSubscriber)
+        {
+            const size_t peerY = (size_t)peer->width * peer->height;
+            const size_t peerSize = peerY * 3 / 2;
+            if (peer->nv12BufferSize < peerSize)
+            {
+                BYTE* buffer = realloc(peer->nv12Buffer, peerSize);
+                if (!buffer) continue;
+                peer->nv12Buffer = buffer;
+                peer->nv12BufferSize = peerSize;
+            }
+            if (width == peer->width && height == peer->height)
+                memcpy(peer->nv12Buffer, stream->nv12Buffer, peerSize);
+            else
+            {
+                /* Center crop to the requested native aspect ratio, then downsample. */
+                int cropWidth = width, cropHeight = height;
+                if ((int64_t)width * peer->height > (int64_t)height * peer->width)
+                    cropWidth = (height * peer->width / peer->height) & ~1;
+                else cropHeight = (width * peer->height / peer->width) & ~1;
+#ifndef NDEBUG
+                /* The transport chart covers the entire output at every negotiated size. */
+                if (g_verification_pattern) { cropWidth = width; cropHeight = height; }
+#endif
+                const int cropX = ((width - cropWidth) / 2) & ~1;
+                const int cropY = ((height - cropHeight) / 2) & ~1;
+                for (int y = 0; y < peer->height; y++)
+                    for (int x = 0; x < peer->width; x++)
+                        peer->nv12Buffer[(size_t)y * peer->width + x] =
+                            stream->nv12Buffer[(size_t)(cropY + y * cropHeight / peer->height) * width + cropX + x * cropWidth / peer->width];
+                for (int y = 0; y < peer->height / 2; y++)
+                    for (int x = 0; x < peer->width / 2; x++)
+                    {
+                        const size_t input = ySize + (size_t)(cropY / 2 + y * cropHeight / peer->height) * width + cropX + (x * cropWidth / peer->width) * 2;
+                        const size_t output = peerY + (size_t)y * peer->width + x * 2;
+                        peer->nv12Buffer[output] = stream->nv12Buffer[input];
+                        peer->nv12Buffer[output + 1] = stream->nv12Buffer[input + 1];
+                    }
+            }
+            cam_android_apply_mute(peer->state, peer->nv12Buffer, peerY);
+            peer->sampleCallback(peer->dev, peer->streamIndex, peer->nv12Buffer, peerSize);
+        }
+        return;
+    }
 	cam_android_apply_mute(stream->state, stream->nv12Buffer, ySize);
 
 	static uint32_t frameCount = 0;
@@ -338,6 +488,7 @@ static void cam_android_deliver_frame(CamAndroidStream* stream, AImage* image)
 	{
 		LOGI("cam_android_deliver_frame: delivered frame #%u (%dx%d, size=%zu)",
 		     frameCount, width, height, nv12Size);
+        if (format == AIMAGE_FORMAT_YUV_420_888)
 		LOGI("Camera2 plane layout: Y stride=%d U stride=%d pixel=%d V stride=%d pixel=%d",
 		     yRowStride, uRowStride, uPixelStride, vRowStride, vPixelStride);
 	}
@@ -359,11 +510,48 @@ static void cam_android_on_image_available(void* context, AImageReader* reader)
 		return;
 
 	AImage* image = NULL;
-	if (AImageReader_acquireLatestImage(reader, &image) == AMEDIA_OK && image)
+    const media_status_t imageStatus = AImageReader_acquireLatestImage(reader, &image);
+    if (stream->display && stream->displayImageReady)
+    {
+        if (imageStatus == AMEDIA_OK && image)
+        {
+            InterlockedExchange(&stream->displayReaderStatus, 1);
+            SetEvent(stream->displayImageReady);
+        }
+        else if (imageStatus == AMEDIA_ERROR_UNKNOWN)
+        {
+            InterlockedExchange(&stream->displayReaderStatus, -1);
+            SetEvent(stream->displayImageReady);
+        }
+    }
+    if (stream->display && stream->displayCallbacks++ < 3)
+    {
+        int32_t format = 0, planes = 0;
+        if (image) { AImage_getFormat(image, &format); AImage_getNumberOfPlanes(image, &planes); }
+        LOGI("Display ImageReader: status=%d format=%d planes=%d", imageStatus, format, planes);
+    }
+	if (imageStatus == AMEDIA_OK && image)
 	{
-		cam_android_deliver_frame(stream, image);
+        /* Stop/reconfigure may wait for ImageReader callbacks. Drop rather than
+         * wait on the broker while it closes the reader. */
+        if (!stream->producer || pthread_mutex_trylock(&cameraBrokerLock) == 0)
+        {
+            cam_android_deliver_frame(stream, image);
+            if (stream->producer) pthread_mutex_unlock(&cameraBrokerLock);
+        }
 		AImage_delete(image);
 	}
+}
+
+static BOOL cam_android_create_reader(CamAndroidStream* stream, int width, int height, int format)
+{
+    if (AImageReader_new(width, height, format, 6, &stream->imageReader) != AMEDIA_OK)
+        return FALSE;
+    const AImageReader_ImageListener listener = {
+        .context = stream, .onImageAvailable = cam_android_on_image_available
+    };
+    AImageReader_setImageListener(stream->imageReader, &listener);
+    return AImageReader_getWindow(stream->imageReader, &stream->window) == AMEDIA_OK;
 }
 
 /* Mark the device broken so it is reopened on next use. */
@@ -438,10 +626,12 @@ static UINT cam_android_enumerate(ICamHal* ihal, ICamHalEnumCallback callback, C
 	WINPR_ASSERT(hal);
 
 	UINT count = 0;
+    IFCALL(callback, ecam, hchannel, DISPLAY_DEVICE_ID, "Headset Display");
+    count++;
 
 	ACameraIdList* idList = NULL;
 	if (ACameraManager_getCameraIdList(hal->manager, &idList) != ACAMERA_OK || !idList)
-		return 0;
+        return g_camera_count = count;
 
 	/* Offer only the primary camera per facing direction: auxiliary back cameras (ultrawide/tele/
 	 * macro/depth) advertise resolutions but fail to configure a YUV session and freeze the
@@ -529,6 +719,25 @@ static void cam_android_close_device(CamAndroidStream* stream)
 	if (stream->imageReader)
 		AImageReader_setImageListener(stream->imageReader, NULL);
 
+    if (stream->display && stream->imageReader)
+        quest_display_stop(stream->state);
+
+    if (stream->source)
+    {
+        pthread_mutex_lock(&cameraBrokerLock);
+        CamAndroidStream* source = stream->source;
+        CamAndroidStream** link = &source->subscribers;
+        while (*link && *link != stream) link = &(*link)->nextSubscriber;
+        if (*link) *link = stream->nextSubscriber;
+        stream->source = NULL;
+        stream->nextSubscriber = NULL;
+        if (source->display) quest_display_stop(stream->state);
+        if (!source->subscribers) {
+            cam_android_close_device(source);
+            if (source->display) source->state = NULL;
+        } else if (source->display) source->state = source->subscribers->state;
+        pthread_mutex_unlock(&cameraBrokerLock);
+    }
 	cam_android_close_session(stream);
 
 	if (stream->device)
@@ -546,32 +755,15 @@ static void cam_android_close_device(CamAndroidStream* stream)
 	free(stream->nv12Buffer);
 	stream->nv12Buffer = NULL;
 	stream->nv12BufferSize = 0;
+    free(stream->planarBuffer);
+    stream->planarBuffer = NULL;
+    stream->planarBufferSize = 0;
+    if (stream->displayImageReady) CloseHandle(stream->displayImageReady);
+    stream->displayImageReady = NULL;
+    InterlockedExchange(&stream->displayReaderStatus, 0);
 	stream->deviceError = FALSE;
-}
-
-/* Close every open camera except keepDeviceId. Phones share camera hardware, so holding more than
- * one open makes the next openCamera fail with CAMERA_DISCONNECTED and freeze the channel. */
-static void cam_android_close_other_devices(CamAndroidHal* hal, const char* keepDeviceId)
-{
-	WINPR_ASSERT(hal);
-	WINPR_ASSERT(keepDeviceId);
-
-	ULONG_PTR* keys = NULL;
-	const size_t count = HashTable_GetKeys(hal->streams, &keys);
-	for (size_t i = 0; i < count; i++)
-	{
-		const char* id = (const char*)keys[i];
-		if (strcmp(id, keepDeviceId) == 0)
-			continue;
-
-		CamAndroidStream* other = (CamAndroidStream*)HashTable_GetItemValue(hal->streams, id);
-		if (!other || !other->device)
-			continue;
-
-		WLog_DBG(TAG, "Closing camera %s to free resources for %s", id, keepDeviceId);
-		cam_android_close_device(other);
-	}
-	free(keys);
+    stream->lastFrameTime = 0;
+    stream->displayCallbacks = 0;
 }
 
 static CamAndroidStream* cam_android_get_or_create_stream(CamAndroidHal* hal, const char* deviceId,
@@ -608,8 +800,7 @@ static CamAndroidStream* cam_android_get_or_create_stream(CamAndroidHal* hal, co
 	return stream;
 }
 
-/* Open the camera, closing any other open one first (phones keep only one open). Deferred from
- * Activate to StartStream so media-type probing doesn't thrash the hardware. */
+/* Open a broker-owned camera lazily so probing never takes over another stream. */
 static BOOL cam_android_open_device(CamAndroidHal* hal, CamAndroidStream* stream,
                                     const char* deviceId, const char* cameraId,
                                     CAM_ERROR_CODE* errorCode)
@@ -630,7 +821,7 @@ static BOOL cam_android_open_device(CamAndroidHal* hal, CamAndroidStream* stream
 	if (stream->device)
 		return TRUE; /* already open */
 
-	cam_android_close_other_devices(hal, deviceId);
+	/* Existing producers must survive another session opening a camera. */
 
 	ACameraDevice_StateCallbacks deviceCallbacks = {
 		.context = stream,
@@ -664,7 +855,7 @@ static BOOL cam_android_activate(ICamHal* ihal, const char* deviceId, CAM_ERROR_
 
 	const char* cameraId = cam_android_extract_camera_id(deviceId);
 	LOGI("cam_android_activate called for deviceId=%s (cameraId=%s)", deviceId, cameraId ? cameraId : "NULL");
-	if (!cameraId)
+	if (!cameraId && strcmp(deviceId, DISPLAY_DEVICE_ID) != 0)
 	{
 		*errorCode = CAM_ERROR_CODE_InvalidRequest;
 		return FALSE;
@@ -684,7 +875,7 @@ static BOOL cam_android_deactivate(ICamHal* ihal, const char* deviceId, CAM_ERRO
 	*errorCode = CAM_ERROR_CODE_None;
 
 	CamAndroidStream* stream = (CamAndroidStream*)HashTable_GetItemValue(hal->streams, deviceId);
-	if (!stream || !stream->device)
+	if (!stream)
 		return TRUE;
 
 	cam_android_close_device(stream);
@@ -710,7 +901,7 @@ static INT16 cam_android_get_media_type_descriptions(ICamHal* ihal, const char* 
 	*nMediaTypes = 0;
 
 	const char* cameraId = cam_android_extract_camera_id(deviceId);
-	if (!cameraId)
+	if (!cameraId && strcmp(deviceId, DISPLAY_DEVICE_ID) != 0)
 		return -1;
 
 	/* Find preferred format: first try NV12 -> H264, then fallback to uncompressed NV12 -> NV12 */
@@ -740,6 +931,19 @@ static INT16 cam_android_get_media_type_descriptions(ICamHal* ihal, const char* 
 		WLog_WARN(TAG, "Server does not offer NV12 format");
 		return -1;
 	}
+
+    if (strcmp(deviceId, DISPLAY_DEVICE_ID) == 0)
+    {
+        if (maxMediaTypes == 0 || supportedFormats[formatIndex].outputFormat != CAM_MEDIA_FORMAT_H264)
+            return -1;
+        mediaTypes[0] = (CAM_MEDIA_TYPE_DESCRIPTION){
+            .Format = CAM_MEDIA_FORMAT_NV12, .Width = 1280, .Height = 720,
+            .FrameRateNumerator = CAM_ANDROID_FPS, .FrameRateDenominator = 1,
+            .PixelAspectRatioNumerator = 1, .PixelAspectRatioDenominator = 1
+        };
+        *nMediaTypes = 1;
+        return formatIndex;
+    }
 
 	ACameraMetadata* characteristics = NULL;
 	if (ACameraManager_getCameraCharacteristics(hal->manager, cameraId, &characteristics) !=
@@ -831,7 +1035,7 @@ static INT16 cam_android_get_media_type_descriptions(ICamHal* ihal, const char* 
 	return formatIndex;
 }
 
-static CAM_ERROR_CODE cam_android_start_stream(ICamHal* ihal, CameraDevice* dev, size_t streamIndex,
+static CAM_ERROR_CODE cam_android_start_capture(ICamHal* ihal, CameraDevice* dev, size_t streamIndex,
                                                const CAM_MEDIA_TYPE_DESCRIPTION* mediaType,
                                                ICamHalSampleCapturedCallback callback)
 {
@@ -842,9 +1046,10 @@ static CAM_ERROR_CODE cam_android_start_stream(ICamHal* ihal, CameraDevice* dev,
 	WINPR_ASSERT(callback);
 
 	const char* deviceId = dev->deviceId;
+    const BOOL display = strcmp(deviceId, DISPLAY_DEVICE_ID) == 0;
 
 	const char* cameraId = cam_android_extract_camera_id(deviceId);
-	if (!cameraId)
+	if (!cameraId && !display)
 		return CAM_ERROR_CODE_InvalidRequest;
 
 	const int32_t width = (int32_t)mediaType->Width;
@@ -857,14 +1062,18 @@ static CAM_ERROR_CODE cam_android_start_stream(ICamHal* ihal, CameraDevice* dev,
 	if (!stream)
 		return errorCode;
 
-	if (!cam_android_open_device(hal, stream, deviceId, cameraId, &errorCode))
+    if (display && (width != 1280 || height != 720 || stream->imageReader))
+        return CAM_ERROR_CODE_InvalidRequest;
+    stream->display = display;
+
+	if (!display && !cam_android_open_device(hal, stream, deviceId, cameraId, &errorCode))
 		return errorCode;
 
 	stream->dev = dev;
 	stream->streamIndex = streamIndex;
 	stream->sampleCallback = callback;
 
-	if (AImageReader_new(width, height, AIMAGE_FORMAT_YUV_420_888, 6, &stream->imageReader) !=
+	if (AImageReader_new(width, height, display && stream->displayRgba ? AIMAGE_FORMAT_RGBA_8888 : AIMAGE_FORMAT_YUV_420_888, 6, &stream->imageReader) !=
 	    AMEDIA_OK)
 	{
 		LOGE("AImageReader_new failed for %s (%dx%d)", deviceId, width, height);
@@ -884,6 +1093,43 @@ static CAM_ERROR_CODE cam_android_start_stream(ICamHal* ihal, CameraDevice* dev,
 		WLog_ERR(TAG, "AImageReader_getWindow failed");
 		goto error;
 	}
+
+    if (display)
+    {
+        stream->displayImageReady = CreateEvent(NULL, TRUE, FALSE, NULL);
+        if (!stream->displayImageReady) goto error;
+        EnterCriticalSection(&stream->lock);
+        stream->streaming = TRUE;
+        LeaveCriticalSection(&stream->lock);
+        if (!quest_display_start(stream->state, stream->window))
+            goto error;
+        if (WaitForSingleObject(stream->displayImageReady, 2500) != WAIT_OBJECT_0) goto error;
+        if (InterlockedCompareExchange(&stream->displayReaderStatus, 0, 0) == -1)
+        {
+            LOGW("Display producer overrides YUV format; attaching an RGBA reader to the same projection");
+            stream->displayRgba = TRUE;
+            quest_display_stop(stream->state);
+            EnterCriticalSection(&stream->lock);
+            stream->streaming = FALSE;
+            LeaveCriticalSection(&stream->lock);
+            AImageReader_setImageListener(stream->imageReader, NULL);
+            AImageReader_delete(stream->imageReader);
+            stream->imageReader = NULL;
+            stream->window = NULL;
+            stream->lastFrameTime = 0;
+            stream->displayCallbacks = 0;
+            InterlockedExchange(&stream->displayReaderStatus, 0);
+            ResetEvent(stream->displayImageReady);
+            if (!cam_android_create_reader(stream, width, height, AIMAGE_FORMAT_RGBA_8888)) goto error;
+            EnterCriticalSection(&stream->lock);
+            stream->streaming = TRUE;
+            LeaveCriticalSection(&stream->lock);
+            if (!quest_display_start(stream->state, stream->window)) goto error;
+            if (WaitForSingleObject(stream->displayImageReady, 2500) != WAIT_OBJECT_0 ||
+                InterlockedCompareExchange(&stream->displayReaderStatus, 0, 0) != 1) goto error;
+        }
+        goto started;
+    }
 
 	ACaptureSessionOutput_create(stream->window, &stream->sessionOutput);
 	ACaptureSessionOutputContainer_create(&stream->outputContainer);
@@ -921,9 +1167,10 @@ static CAM_ERROR_CODE cam_android_start_stream(ICamHal* ihal, CameraDevice* dev,
 		goto error;
 	}
 
+started:
 	EnterCriticalSection(&stream->lock);
 	stream->streaming = TRUE;
-	if (!stream->recording)
+	if (!stream->producer && stream->state && !stream->recording)
 	{
 		stream->recording = TRUE;
 		InterlockedIncrement(&stream->state->activeStreams);
@@ -937,6 +1184,75 @@ static CAM_ERROR_CODE cam_android_start_stream(ICamHal* ihal, CameraDevice* dev,
 error:
 	cam_android_close_device(stream);
 	return CAM_ERROR_CODE_UnexpectedError;
+}
+
+static CAM_ERROR_CODE cam_android_start_stream(ICamHal* ihal, CameraDevice* dev, size_t streamIndex,
+                                               const CAM_MEDIA_TYPE_DESCRIPTION* mediaType,
+                                               ICamHalSampleCapturedCallback callback)
+{
+    const BOOL display = strcmp(dev->deviceId, DISPLAY_DEVICE_ID) == 0;
+    CamAndroidHal* hal = (CamAndroidHal*)ihal;
+    CAM_ERROR_CODE error = CAM_ERROR_CODE_None;
+    CamAndroidStream* peer = cam_android_get_or_create_stream(hal, dev->deviceId, &error);
+    if (!peer) return error;
+    pthread_mutex_lock(&cameraBrokerLock);
+    const BOOL alreadyStreaming = peer->source != NULL;
+    pthread_mutex_unlock(&cameraBrokerLock);
+    if (alreadyStreaming) return CAM_ERROR_CODE_InvalidRequest;
+    /* A null surface requests only this session's once-only consent. Waiting must
+     * not hold the producer lock or pause another session's capture. */
+    if (display && !quest_display_start(peer->state, NULL)) return CAM_ERROR_CODE_InvalidRequest;
+    pthread_mutex_lock(&cameraBrokerLock);
+    if (peer->source) { error = CAM_ERROR_CODE_InvalidRequest; goto done; }
+    if (!cameraBroker.manager)
+    {
+        cameraBroker.manager = ACameraManager_create();
+        cameraBroker.streams = HashTable_New(FALSE);
+        if (!cameraBroker.streams || !HashTable_SetupForStringData(cameraBroker.streams, FALSE))
+        {
+            error = CAM_ERROR_CODE_OutOfMemory;
+            goto done;
+        }
+    }
+    CamAndroidStream* source = cam_android_get_or_create_stream(&cameraBroker, dev->deviceId, &error);
+    if (!source) goto done;
+    source->producer = TRUE;
+    if (!source->device && !source->imageReader)
+    {
+        if (display) source->state = peer->state;
+        CAM_MEDIA_TYPE_DESCRIPTION capture = *mediaType;
+        /* Capture the largest native mode once, then pack to subscriber sizes. */
+        ACameraMetadata* metadata = NULL;
+        const char* cameraId = cam_android_extract_camera_id(dev->deviceId);
+        if (!display && ACameraManager_getCameraCharacteristics(cameraBroker.manager, cameraId, &metadata) == ACAMERA_OK)
+        {
+            ACameraMetadata_const_entry entry;
+            if (ACameraMetadata_getConstEntry(metadata, ACAMERA_SCALER_AVAILABLE_STREAM_CONFIGURATIONS, &entry) == ACAMERA_OK)
+                for (uint32_t i = 0; i + 3 < entry.count; i += 4)
+                    if (entry.data.i32[i] == AIMAGE_FORMAT_YUV_420_888 && entry.data.i32[i + 3] == 0 &&
+                        (int64_t)entry.data.i32[i + 1] * entry.data.i32[i + 2] > (int64_t)capture.Width * capture.Height)
+                    { capture.Width = entry.data.i32[i + 1]; capture.Height = entry.data.i32[i + 2]; }
+            ACameraMetadata_free(metadata);
+        }
+        error = cam_android_start_capture(&cameraBroker.iHal, dev, streamIndex, &capture, callback);
+        if (error) goto done;
+    }
+    peer->width = mediaType->Width;
+    peer->height = mediaType->Height;
+    peer->dev = dev;
+    peer->streamIndex = streamIndex;
+    peer->sampleCallback = callback;
+    peer->source = source;
+    peer->nextSubscriber = source->subscribers;
+    source->subscribers = peer;
+    peer->streaming = TRUE;
+    peer->recording = TRUE;
+    InterlockedIncrement(&peer->state->activeStreams);
+    LOGI("Shared camera subscriber: %s %dx%d", dev->deviceId, peer->width, peer->height);
+done:
+    pthread_mutex_unlock(&cameraBrokerLock);
+    if (error && display && !peer->source) quest_display_stop(peer->state);
+    return error;
 }
 
 static CAM_ERROR_CODE cam_android_stop_stream(ICamHal* ihal, const char* deviceId,
@@ -1064,6 +1380,17 @@ BOOL cam_android_verify_isolation(QuestCameraState* first, QuestCameraState* sec
         stream->recording = TRUE;
         stream->streaming = TRUE;
         InterlockedIncrement(&states[i]->activeStreams);
+        /* A second stream on the same HAL device must fail before consent or
+         * hardware mutation, without re-linking the existing subscriber. */
+        CameraDevice duplicate = {0};
+        memcpy(duplicate.deviceId, "test-camera", sizeof("test-camera"));
+        CAM_MEDIA_TYPE_DESCRIPTION mediaType = {0};
+        stream->source = stream;
+        const CAM_ERROR_CODE duplicateError =
+            hal->iHal.StartStream(&hal->iHal, &duplicate, 1, &mediaType, NULL);
+        stream->source = NULL;
+        if (duplicateError != CAM_ERROR_CODE_InvalidRequest || !quest_camera_is_recording(states[i]))
+            goto cleanup;
     }
     BYTE frames[2][24];
     memset(frames, 85, sizeof(frames));

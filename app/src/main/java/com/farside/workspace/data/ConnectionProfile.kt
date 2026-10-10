@@ -78,8 +78,10 @@ data class ConnectionProfile(
         json.put("type", type.name)
         json.put("host", host)
         json.put("port", port)
-        json.put("user", user)
-        com.farside.workspace.CredentialManager.writePassword(json, "pass", pass)
+        if (credentialId == null) {
+            json.put("user", user)
+            com.farside.workspace.CredentialManager.writePassword(json, "pass", pass)
+        }
         json.put("credentialId", credentialId)
         json.put("sshKeyId", sshKeyId)
         json.put("remoteApp", remoteApp)
@@ -125,7 +127,7 @@ data class ConnectionProfile(
                 type = ConnectionType.valueOf(json.getString("type")),
                 host = json.getString("host"),
                 port = json.getInt("port"),
-                user = json.getString("user"),
+                user = json.optString("user", ""),
                 pass = com.farside.workspace.CredentialManager.readPassword(json, "pass") ?: "",
                 credentialId = if (json.has("credentialId") && !json.isNull("credentialId")) json.getString("credentialId") else null,
                 sshKeyId = if (json.has("sshKeyId") && !json.isNull("sshKeyId")) json.getString("sshKeyId") else null,

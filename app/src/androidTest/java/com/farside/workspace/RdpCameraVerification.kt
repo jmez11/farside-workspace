@@ -24,7 +24,8 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
-internal class RdpCameraVerification(private val test: RdpResizeInstrumentation) {
+internal class RdpCameraVerification(private val test: RdpResizeInstrumentation, private val profileName: String? = null,
+    private val ffmpegPath: String? = null) {
     private val automation: UiAutomation = test.uiAutomation
 
     private fun find(text: String): AccessibilityNodeInfo? {
@@ -81,8 +82,18 @@ internal class RdpCameraVerification(private val test: RdpResizeInstrumentation)
                 for (camera in target?.let { listOf(it) } ?: listOf("virtual", "passthrough"))
                     verifyLiveNucbox(camera, resolutionOverride, mode == "live-chart")
             }
+            "live-simultaneous" -> verifySimultaneous(target ?: "virtual")
+            "live-simultaneous-creator-close" -> verifySimultaneous(target ?: "display", true)
             "live-session-isolation" -> verifyLiveNucbox(target ?: "virtual",
                 resolutionOverride ?: "HD_720", pattern = true, isolation = true)
+            "display-deny" -> verifyLiveNucbox("display", "HD_720", false, denyDisplay = true)
+            "display-timeout" -> verifyLiveNucbox("display", "HD_720", false, denyDisplay = true, timeoutDisplay = true)
+            "live-browser" -> verifyLiveNucbox(target ?: "virtual", resolutionOverride ?: "HD_720", false, browser = true)
+            "live-browser-window" -> verifyLiveNucbox(target ?: "virtual", resolutionOverride ?: "HD_720", false, browser = true, browserWindow = true)
+            "display-conversion" -> {
+                FreeRDPBridge()
+                check(QuestDisplayVerification.verifyConversion()) { "RGBA channel order, pitch or BT.601 range is incorrect" }
+            }
             "frame-checker" -> verifyFrameChecker()
             "plane-copy" -> verifyPlaneCopy()
             "session-isolation" -> {
@@ -300,18 +311,20 @@ internal class RdpCameraVerification(private val test: RdpResizeInstrumentation)
     }
 
     private fun verifyLiveNucbox(targetCamera: String, resolutionOverride: String?, pattern: Boolean,
-        isolation: Boolean = false) {
-        require(targetCamera in listOf("virtual", "passthrough"))
+        isolation: Boolean = false, denyDisplay: Boolean = false, timeoutDisplay: Boolean = false, browser: Boolean = false, browserWindow: Boolean = false) {
+        require(targetCamera in listOf("virtual", "passthrough", "display"))
         val manager = ProfileManager(test.targetContext)
         // Recover only profiles owned by this harness after an interrupted run.
         manager.getProfiles().filter {
             it.name == "FFmpeg camera verification" && it.enableCamera && it.redirectStorage
         }.forEach { removeCameraTestProfile(manager, it.id) }
         val original = checkNotNull(manager.getProfiles().firstOrNull {
-            it.name.contains("nucbox", ignoreCase = true) || it.host == "172.16.0.32"
+            if (profileName != null) it.name.equals(profileName, ignoreCase = true)
+            else it.name.contains("nucbox", ignoreCase = true) || it.host == "172.16.0.32"
         }) { "nucbox profile not found" }
         val resolutions = resolutionOverride?.let { listOf(CameraResolution.valueOf(it)) }
-            ?: listOf(CameraResolution.SD, CameraResolution.HD_720, CameraResolution.NATIVE_MAX)
+            ?: if (targetCamera == "display") listOf(CameraResolution.HD_720)
+            else listOf(CameraResolution.SD, CameraResolution.HD_720, CameraResolution.NATIVE_MAX)
         for (resolution in resolutions) {
             val profile = original.copy(id = java.util.UUID.randomUUID().toString(),
                 name = "FFmpeg camera verification", enableCamera = true,
@@ -319,22 +332,29 @@ internal class RdpCameraVerification(private val test: RdpResizeInstrumentation)
             val output = File(test.targetContext.getExternalFilesDir(null),
                 "camera-ffmpeg/${if (isolation) "isolation" else if (pattern) "chart" else "live"}-$targetCamera-${resolution.name}-${System.currentTimeMillis()}")
             check(output.mkdirs())
-            val script = test.context.assets.open("camera/ffmpeg-probe.ps1").bufferedReader().use { it.readText() }
-            File(output, "ffmpeg-probe.ps1").writeText(script)
+            val scriptName = if (browser) "browser-probe.ps1" else "ffmpeg-probe.ps1"
+            val script = test.context.assets.open("camera/$scriptName").bufferedReader().use { it.readText() }
+            File(output, scriptName).writeText(script)
             val remoteDir = "\\\\tsclient\\Quest" + output.absolutePath.removePrefix("/sdcard")
                 .removePrefix("/storage/emulated/0").replace('/', '\\')
             val cameras = test.targetContext.getSystemService(android.content.Context.CAMERA_SERVICE)
                 as android.hardware.camera2.CameraManager
-            val id = if (targetCamera == "virtual") "1" else "50"
-            val map = cameras.getCameraCharacteristics(id).get(
+            val id = when (targetCamera) { "virtual" -> "1"; "display" -> "display-0"; else -> "50" }
+            val map = if (id == "display-0") null else cameras.getCameraCharacteristics(id).get(
                 android.hardware.camera2.CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
-            val largest = checkNotNull(map?.getOutputSizes(android.graphics.ImageFormat.YUV_420_888)
+            val largest = if (id == "display-0") android.util.Size(1280, 720) else checkNotNull(map?.getOutputSizes(android.graphics.ImageFormat.YUV_420_888)
                 ?.filter { resolution == CameraResolution.NATIVE_MAX ||
                     (it.height <= resolution.maxDim && it.width <= resolution.maxDim * 16 / 9 + 64) }
                 ?.maxByOrNull { it.width.toLong() * it.height })
             val size = "${largest.width}x${largest.height}"
-            val camera = if (targetCamera == "virtual") "Virtual Camera" else "Passthrough Camera"
-            val command = "& '$remoteDir\\ffmpeg-probe.ps1' -OutputDir '$remoteDir' -Camera '$camera' -Size '$size'"
+            val camera = when (targetCamera) { "virtual" -> "Virtual Camera"; "display" -> "Headset Display"; else -> "Passthrough Camera" }
+            val tool = File(test.targetContext.getExternalFilesDir(null), "camera-tools/ffmpeg.exe")
+            val remoteTool = "\\\\tsclient\\Quest" + tool.absolutePath.removePrefix("/sdcard")
+                .removePrefix("/storage/emulated/0").replace('/', '\\')
+            val executable = ffmpegPath ?: remoteTool.takeIf { tool.exists() }
+            val command = "& '$remoteDir\\$scriptName' -OutputDir '$remoteDir' -Camera '$camera' -Size '$size'" +
+                (if (!browser && executable != null) " -FfmpegPath '${executable.replace("'", "''")}'" else "") +
+                (if (denyDisplay) " -ExpectDenied" else "") + (if (browserWindow) " -Windowed" else "")
             manager.addProfile(profile)
             var activity: SessionActivity? = null
             var secondary = 0L
@@ -342,7 +362,7 @@ internal class RdpCameraVerification(private val test: RdpResizeInstrumentation)
             var secondaryTexture: android.graphics.SurfaceTexture? = null
             val bridge = FreeRDPBridge()
             try {
-                QuestCameraEncoder.diagnosticDirectory = if (pattern) output.absolutePath else null
+                QuestCameraEncoder.diagnosticDirectory = if (pattern || browser) output.absolutePath else null
                 check(bridge.setCameraVerificationPattern(pattern)) { "Camera chart requires a debug native build" }
                 activity = test.startActivitySync(Intent(test.targetContext, SessionActivity::class.java).apply {
                     putExtra("profileId", profile.id)
@@ -405,6 +425,7 @@ internal class RdpCameraVerification(private val test: RdpResizeInstrumentation)
                 val finishDeadline = SystemClock.uptimeMillis() + 300000
                 while (!result.exists() && SystemClock.uptimeMillis() < finishDeadline) {
                     Thread.sleep(1000)
+                    if (targetCamera == "display") respondToDisplayConsent(output, denyDisplay, !timeoutDisplay)
                     if (isolation && captureStarted.exists()) {
                         if (captureStart == 0L) captureStart = SystemClock.uptimeMillis()
                         val elapsed = SystemClock.uptimeMillis() - captureStart
@@ -445,7 +466,44 @@ internal class RdpCameraVerification(private val test: RdpResizeInstrumentation)
                 val report = org.json.JSONObject(result.readText().removePrefix("\uFEFF"))
                 android.util.Log.i("RdpCameraVerification", "FFmpeg $targetCamera $resolution: $report; artifacts=$output")
                 check(report.optBoolean("success")) { "FFmpeg $targetCamera $resolution failed: $report; artifacts=$output" }
-                check(report.getString("actualSize") == size)
+                if (denyDisplay) {
+                    check(report.optBoolean("denied") && report.getJSONArray("attempts").length() == 2)
+                    check(session.displayCapture.consentRequests == 1) { "Display consent re-prompted" }
+                    check(session.displayCapture.streamRequests.get() >= 2) { "Host did not send two actual stream starts" }
+                    check(File(output, "consent.png").exists()) { "No actual consent dialog observed" }
+                    check(!bridge.isCameraRecording(session.rdpInstance))
+                    if (timeoutDisplay) check((0 until report.getJSONArray("attempts").length()).any {
+                        report.getJSONArray("attempts").getJSONObject(it).getLong("elapsedMs") in 30000..40000
+                    }) { "Consent did not time out at 30 seconds" }
+                    File(output, "consent-result.json").writeText(org.json.JSONObject()
+                        .put("consentRequests", session.displayCapture.consentRequests)
+                        .put("streamRequests", session.displayCapture.streamRequests.get())
+                        .put("timeout", timeoutDisplay).toString(2))
+                    if (timeoutDisplay) respondToDisplayConsent(output, true)
+                } else if (browser) {
+                    check(report.getInt("frames") >= 55 && report.getString("actualSize") == size)
+                    check(report.getString("backend") == "MediaFoundation") { "Browser fell back to DirectShow" }
+                    if (targetCamera == "display") {
+                        check(session.displayCapture.consentRequests == 1 && session.displayCapture.displayCreations == 1)
+                        check(session.displayCapture.streamRequests.get() >= 2)
+                        File(output, "consent-result.json").writeText(org.json.JSONObject()
+                            .put("consentRequests", session.displayCapture.consentRequests)
+                            .put("displayCreations", session.displayCapture.displayCreations)
+                            .put("streamRequests", session.displayCapture.streamRequests.get()).toString(2))
+                    }
+                } else {
+                    check(report.getString("actualSize") == size && report.getInt("frames") >= 55)
+                    if (targetCamera == "display") {
+                        check(session.displayCapture.consentRequests == 1 && session.displayCapture.displayCreations == 1) {
+                            "Display restart consumed another consent or virtual display"
+                        }
+                        check(session.displayCapture.streamRequests.get() >= 2) { "Display did not restart after the sample probe" }
+                        File(output, "consent-result.json").writeText(org.json.JSONObject()
+                            .put("consentRequests", session.displayCapture.consentRequests)
+                            .put("displayCreations", session.displayCapture.displayCreations)
+                            .put("streamRequests", session.displayCapture.streamRequests.get()).toString(2))
+                    }
+                }
                 if (isolation) check(isolationStage == 4) { "Capture ended before all live isolation checks" }
                 if (pattern) {
                     val frames = checkNotNull(output.listFiles()) { "Missing frame directory" }
@@ -481,6 +539,161 @@ internal class RdpCameraVerification(private val test: RdpResizeInstrumentation)
                 removeCameraTestProfile(manager, profile.id)
             }
             Thread.sleep(1500)
+        }
+    }
+
+    private fun verifySimultaneous(target: String, closeCreator: Boolean = false) {
+        require(target in listOf("virtual", "passthrough", "display"))
+        val manager = ProfileManager(test.targetContext)
+        val originals = listOf("NUCBOX", "NUCBOX 2").map { name ->
+            checkNotNull(manager.getProfiles().firstOrNull { it.name.equals(name, true) }) { "$name not saved" }
+        }
+        val root = File(test.targetContext.getExternalFilesDir(null), "camera-simultaneous/$target-${System.currentTimeMillis()}")
+        check(root.mkdirs())
+        val activities = mutableListOf<SessionActivity>()
+        val profiles = mutableListOf<com.farside.workspace.data.ConnectionProfile>()
+        val bridge = FreeRDPBridge()
+        val closing = if(closeCreator) 0 else 1
+        val surviving = 1-closing
+        fun launch(index: Int): File {
+            val profile = originals[index].copy(id = java.util.UUID.randomUUID().toString(),
+                name = "FFmpeg camera verification", enableCamera = true, redirectStorage = true,
+                redirectMicrophone = false, cameraResolution = CameraResolution.HD_720)
+            profiles.add(profile); manager.addProfile(profile)
+            val output = File(root, "session-$index").apply { mkdirs() }
+            File(output, "browser-probe.ps1").writeText(test.context.assets.open("camera/browser-probe.ps1").bufferedReader().use { it.readText() })
+            val session = test.startActivitySync(Intent(test.targetContext, SessionActivity::class.java).apply {
+                putExtra("profileId", profile.id); addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
+            }) as SessionActivity
+            activities.add(session)
+            val deadline = SystemClock.uptimeMillis() + 20000
+            while (session.rdpInstance == 0L && SystemClock.uptimeMillis() < deadline) Thread.sleep(200)
+            check(session.rdpInstance != 0L)
+            Thread.sleep(3000)
+            bridge.sendKeyEvent(session.rdpInstance, 0x15B, true)
+            Thread.sleep(150)
+            bridge.sendKeyEvent(session.rdpInstance, 0x13, true)
+            Thread.sleep(100)
+            bridge.sendKeyEvent(session.rdpInstance, 0x13, false)
+            bridge.sendKeyEvent(session.rdpInstance, 0x15B, false)
+            Thread.sleep(800)
+            for (char in "powershell.exe -NoProfile -ExecutionPolicy Bypass") {
+                bridge.sendUnicodeKeyEvent(session.rdpInstance, char.code, true)
+                bridge.sendUnicodeKeyEvent(session.rdpInstance, char.code, false)
+                Thread.sleep(10)
+            }
+            bridge.sendKeyEvent(session.rdpInstance, 0x1C, true); bridge.sendKeyEvent(session.rdpInstance, 0x1C, false)
+            Thread.sleep(2000)
+            val remote = "\\\\tsclient\\Quest" + output.absolutePath.removePrefix("/sdcard").removePrefix("/storage/emulated/0").replace('/', '\\')
+            val camera = when(target) { "virtual" -> "Virtual Camera"; "display" -> "Headset Display"; else -> "Passthrough Camera" }
+            val duration = if(closeCreator) { if(index == 0) 35 else 60 } else { if(index == 0) 60 else 20 }
+            val command = "& '$remote\\browser-probe.ps1' -OutputDir '$remote' -Camera '$camera' -Size '1280x720' -CaptureSeconds $duration -Attempts 1; exit"
+            check(bridge.sendClipboardText(session.rdpInstance, command)); Thread.sleep(500)
+            bridge.sendKeyEvent(session.rdpInstance, 0x1D, true); bridge.sendKeyEvent(session.rdpInstance, 0x2F, true)
+            bridge.sendKeyEvent(session.rdpInstance, 0x2F, false); bridge.sendKeyEvent(session.rdpInstance, 0x1D, false)
+            Thread.sleep(750)
+            bridge.sendKeyEvent(session.rdpInstance, 0x1C, true); bridge.sendKeyEvent(session.rdpInstance, 0x1C, false)
+            val ready = File(output, "browser-started.json")
+            val readyDeadline = SystemClock.uptimeMillis()+45000
+            while (!ready.exists() && SystemClock.uptimeMillis()<readyDeadline) {
+                if(target == "display") respondToDisplayConsent(output, false)
+                check(!File(output, "result.json").exists()) { "Capture failed: ${File(output, "result.json").readText()}" }
+                Thread.sleep(200)
+            }
+            test.runOnMainSync {
+                fun texture(view: android.view.View): android.view.TextureView? {
+                    if(view is android.view.TextureView) return view
+                    if(view is android.view.ViewGroup) for(i in 0 until view.childCount) texture(view.getChildAt(i))?.let { return it }
+                    return null
+                }
+                texture(session.window.decorView)?.bitmap?.let { bitmap ->
+                    File(output,"desktop.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it) }
+                    bitmap.recycle()
+                }
+            }
+            check(ready.exists()) { "No browser stream started: $output" }
+            return output
+        }
+        try {
+            check(bridge.setCameraVerificationPattern(true))
+            val first = launch(0)
+            val second = launch(1)
+            check(activities.all { bridge.isCameraRecording(it.rdpInstance) }) { "One session stopped when the second camera opened" }
+            Thread.sleep(3000)
+            bridge.setCameraMuted(activities[closing].rdpInstance, true)
+            check(!bridge.isCameraMuted(activities[surviving].rdpInstance))
+            Thread.sleep(4000)
+            bridge.setCameraMuted(activities[closing].rdpInstance, false)
+            val secondResult = File(if(closeCreator) first else second, "result.json")
+            val deadline = SystemClock.uptimeMillis()+90000
+            while(!secondResult.exists() && SystemClock.uptimeMillis()<deadline) Thread.sleep(300)
+            check(secondResult.exists())
+            test.runOnMainSync { activities[closing].finish() }; test.waitForIdleSync()
+            check(bridge.isCameraRecording(activities[surviving].rdpInstance)) { "Closing the other session stopped the camera" }
+            bridge.setCameraMuted(activities[surviving].rdpInstance, true); Thread.sleep(4000)
+            bridge.setCameraMuted(activities[surviving].rdpInstance, false)
+            val firstResult = File(if(closeCreator) second else first, "result.json")
+            while(!firstResult.exists() && SystemClock.uptimeMillis()<deadline) Thread.sleep(300)
+            for (file in listOf(firstResult, secondResult)) {
+                check(file.exists())
+                val report = org.json.JSONObject(file.readText().removePrefix("\uFEFF"))
+                check(report.getBoolean("success")) { report.toString() }
+                val samples = report.getJSONArray("attempts").getJSONObject(0).getJSONArray("samples")
+                var black = 0
+                for(i in 1 until samples.length()-1) {
+                    val sample = samples.getJSONObject(i)
+                    check(sample.getInt("frames") > 0) { "Frozen camera: $file, $sample" }
+                    if(sample.getBoolean("black")) black++
+                }
+                check(black in 3..6) { "Incorrect session mute ($black seconds): $file" }
+                check(!samples.getJSONObject(samples.length()-1).getBoolean("black")) { "Camera did not resume after unmute: $file" }
+                val capture = report.getJSONArray("attempts").getJSONObject(0)
+                check(capture.getInt("frames") * 1000.0 / samples.getJSONObject(samples.length()-1).getDouble("elapsedMs") >= 15) { "Capture below 15fps: $file" }
+            }
+            File(root, "summary.json").writeText(org.json.JSONObject().put("success",true).put("target",target)
+                .put("simultaneous",true).put("independentMute",true).put("survivesOtherSessionClose",true).toString(2))
+        } finally {
+            activities.forEach { session -> test.runOnMainSync { session.finish() } }
+            test.waitForIdleSync()
+            profiles.forEach { removeCameraTestProfile(manager,it.id) }
+            bridge.setCameraVerificationPattern(false)
+        }
+    }
+
+    private fun respondToDisplayConsent(output: File, deny: Boolean, respond: Boolean = true) {
+        for (window in automation.windows) {
+            val root = window.root ?: continue
+            val queue = ArrayDeque<AccessibilityNodeInfo>()
+            val nodes = mutableListOf<AccessibilityNodeInfo>()
+            queue.add(root)
+            while (queue.isNotEmpty()) {
+                val node = queue.removeFirst()
+                nodes.add(node)
+                for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+            }
+            val description = nodes.joinToString("\n") { "${it.packageName} ${it.viewIdResourceName} ${it.text}" }
+            if (!description.contains("com.meta.systemui") && !description.contains("com.android.systemui")) continue
+            if (!description.contains("share", true) && !description.contains("screen", true) &&
+                !description.contains("recording", true)) continue
+            if (!deny) {
+                val entireView = nodes.firstOrNull { it.contentDescription?.toString() == "Entire view" }
+                if (entireView != null && !entireView.isSelected) {
+                    entireView.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                }
+            }
+            val button = nodes.firstOrNull {
+                val label = it.text?.toString().orEmpty().lowercase()
+                val id = it.viewIdResourceName.orEmpty()
+                it.isClickable && it.isEnabled && if (deny) label in listOf("cancel", "deny", "don't allow") || id == "android:id/button2"
+                else label in listOf("start now", "start", "allow", "share") || id == "android:id/button1"
+            } ?: continue
+            File(output, "consent-nodes.txt").writeText(description)
+            automation.takeScreenshot()?.let { screenshot ->
+                File(output, "consent.png").outputStream().use { screenshot.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                screenshot.recycle()
+            }
+            if (respond) check(button.performAction(AccessibilityNodeInfo.ACTION_CLICK)) { "Cannot respond to display consent" }
+            return
         }
     }
 
@@ -597,6 +810,9 @@ internal class RdpCameraVerification(private val test: RdpResizeInstrumentation)
                     }
                     check(sps != null && first[sps + 5].toInt() and 255 == 66) {
                         "Hardware encoder did not produce baseline SPS"
+                    }
+                    check(first[sps + 6].toInt() and 0xC0 == 0xC0) {
+                        "Hardware encoder did not emit Constrained Baseline flags"
                     }
                     verifyDecodedColors(packets, widths[index], heights[index], colors[index])
                     report.put(org.json.JSONObject().put("width", widths[index])

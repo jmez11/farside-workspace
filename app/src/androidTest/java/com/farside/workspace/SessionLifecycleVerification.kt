@@ -30,12 +30,11 @@ internal class SessionLifecycleVerification(private val test: Instrumentation) {
     private val activities = mutableListOf<SessionActivity>()
     private fun restore(backup: JSONObject) {
         val profiles = backup.getJSONArray("profiles")
-        ProfileManager(context).saveProfiles((0 until profiles.length()).map { ConnectionProfile.fromJson(profiles.getJSONObject(it)) })
-        val prefs = context.getSharedPreferences("session_window_positions", Context.MODE_PRIVATE)
-        val edit = prefs.edit().clear()
-        val saved = backup.getJSONObject("positions")
-        saved.keys().forEach { key -> edit.putString(key, saved.getString(key)) }
-        check(edit.commit())
+        val restored = JSONArray((0 until profiles.length()).map { ConnectionProfile.fromJson(profiles.getJSONObject(it)).toJson() })
+        // Instrumentation exits the process immediately; apply() can lose fixture cleanup.
+        check(context.getSharedPreferences("farside_profiles", Context.MODE_PRIVATE).edit()
+            .putString("profiles", restored.toString()).commit())
+
     }
 
     fun run(mode: String) {
@@ -43,9 +42,7 @@ internal class SessionLifecycleVerification(private val test: Instrumentation) {
         val backupFile = File(context.cacheDir, "lifecycle-verification-backup.json")
         if (backupFile.exists()) { restore(JSONObject(backupFile.readText())); backupFile.delete() }
         val profiles = ProfileManager(context).getProfiles()
-        val prefs = context.getSharedPreferences("session_window_positions", Context.MODE_PRIVATE)
         val backup = JSONObject().put("profiles", JSONArray(profiles.map { it.toJson() }))
-            .put("positions", JSONObject(prefs.all))
         backupFile.writeText(backup.toString())
         val info = test.uiAutomation.serviceInfo
         info.flags = info.flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
@@ -54,6 +51,8 @@ internal class SessionLifecycleVerification(private val test: Instrumentation) {
             when (mode) {
                 "disconnect" -> disconnect(profiles.first { it.type == ConnectionType.RDP })
                 "placement" -> placement(profiles.first { it.type == ConnectionType.RDP })
+                "launch" -> launchPlacement()
+                "manipulation" -> manipulation()
                 else -> error("Unknown lifecycle mode $mode")
             }
         } finally {
@@ -67,8 +66,7 @@ internal class SessionLifecycleVerification(private val test: Instrumentation) {
 
     private fun launch(profile: String, slot: Int? = null): SessionActivity {
         val ordinal = slot ?: SessionWindowSlots.reserve(context, profile)
-        val activity = test.startActivitySync(SessionWindowLauncher.intent(context, profile, ordinal).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
-            SessionWindowLauncher.options(SessionWindowPositionStore(context).load(profile, ordinal))) as SessionActivity
+        val activity = test.startActivitySync(SessionWindowLauncher.intent(context, profile, ordinal).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) as SessionActivity
         activities += activity
         return activity
     }
@@ -226,16 +224,242 @@ internal class SessionLifecycleVerification(private val test: Instrumentation) {
     private fun near(actual: SavedWindowPose, expected: SavedWindowPose): Boolean =
         kotlin.math.abs(actual.x - expected.x) < 0.02f && kotlin.math.abs(actual.y - expected.y) < 0.02f && kotlin.math.abs(actual.z - expected.z) < 0.02f
 
+    private fun launchPlacement() {
+        val profile = ConnectionProfile("verification-launch", "Launch verification", ConnectionType.RDP,
+            "127.0.0.1", 1, "", "")
+        val manager = ProfileManager(context)
+        manager.addProfile(profile)
+        val legacy = context.getSharedPreferences("session_window_positions", Context.MODE_PRIVATE)
+        val unsafe = SavedWindowPose(50f, -20f, 50f, 0f, 1f, 0f, 0f)
+        check(legacy.edit().putString("${profile.id}/0", unsafe.encode()).commit())
+        val launcher = test.startActivitySync(android.content.Intent(context, MainActivity::class.java)
+            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
+        val created = java.util.concurrent.LinkedBlockingQueue<SessionActivity>()
+        val callbacks = object : android.app.Application.ActivityLifecycleCallbacks {
+            override fun onActivityCreated(activity: Activity, state: android.os.Bundle?) {
+                if (activity is SessionActivity && activity.intent.getStringExtra("profileId") == profile.id) created.add(activity)
+            }
+            override fun onActivityStarted(activity: Activity) {}
+            override fun onActivityResumed(activity: Activity) {}
+            override fun onActivityPaused(activity: Activity) {}
+            override fun onActivityStopped(activity: Activity) {}
+            override fun onActivitySaveInstanceState(activity: Activity, state: android.os.Bundle) {}
+            override fun onActivityDestroyed(activity: Activity) {}
+        }
+        launcher.application.registerActivityLifecycleCallbacks(callbacks)
+        try {
+            repeat(12) {
+                if (find(profile.name) == null) {
+                    node { it.isScrollable }?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+                    Thread.sleep(250)
+                }
+            }
+            await(profile.name)
+            click(profile.name)
+            val opened = checkNotNull(created.poll(10, TimeUnit.SECONDS)) { "Click did not launch" }
+            activities += opened
+            Thread.sleep(1800)
+            val actual = readPose(opened)
+            check(!near(actual, unsafe)) { "Unsafe saved pose was restored" }
+            check(kotlin.math.abs(actual.x) < 20 && kotlin.math.abs(actual.y) < 20 && kotlin.math.abs(actual.z) < 20)
+            check(context.getSharedPreferences("session_window_positions", Context.MODE_PRIVATE).all.isEmpty()) { "Obsolete saved positions were not removed" }
+            val sessionWidth = opened.window.decorView.width
+            val sessionHeight = opened.window.decorView.height
+            val firstSlot = opened.sessionSlot
+            close(opened)
+            val resumedLauncher = launcher
+            test.runOnMainSync { launcher.startActivity(android.content.Intent(context, MainActivity::class.java)
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)) }
+            await("Click to open, or drag into space to place a window.")
+            check(find("Click to open") == null && find("Drag to place") == null) { "Separate launch-mode controls remain" }
+
+            lateinit var clip: android.content.ClipData
+            lateinit var pending: android.app.PendingIntent
+            test.runOnMainSync {
+                val payload = ConnectionSpatialDrag.payload(resumedLauncher.window.decorView, profile)
+                clip = payload.first
+                pending = payload.second
+            }
+            check(clip.description.hasMimeType(ConnectionSpatialDrag.MIME_ACTIVITY))
+            check(clip.itemCount == 1 && clip.getItemAt(0).intent.getParcelableExtra(
+                ConnectionSpatialDrag.EXTRA_PENDING_INTENT, android.app.PendingIntent::class.java) == pending)
+            check(pending.isImmutable && pending.isActivity)
+            val shadowSize = android.graphics.Point()
+            val shadowTouch = android.graphics.Point()
+            lateinit var shadow: android.view.View.DragShadowBuilder
+            test.runOnMainSync {
+                shadow = ConnectionSpatialDrag.shadow(resumedLauncher.window.decorView, profile.name)
+                shadow.onProvideShadowMetrics(shadowSize, shadowTouch)
+            }
+            check(shadowSize.x == sessionWidth && shadowSize.y == sessionHeight) {
+                "Preview ${shadowSize.x}x${shadowSize.y} does not match opened window ${sessionWidth}x${sessionHeight}"
+            }
+            check(shadowTouch.x == shadowSize.x / 2 && shadowTouch.y == shadowSize.y / 2)
+            val preview = Bitmap.createBitmap(shadowSize.x, shadowSize.y, Bitmap.Config.ARGB_8888)
+            test.runOnMainSync { shadow.onDrawShadow(android.graphics.Canvas(preview)) }
+            File(context.cacheDir, "window-drag-preview.png").outputStream().use {
+                preview.compress(Bitmap.CompressFormat.PNG, 100, it)
+            }
+            preview.recycle()
+            // Canceled placement must not occupy a session ordinal or create a window.
+            pending.cancel()
+            check(runCatching { pending.send() }.exceptionOrNull() is android.app.PendingIntent.CanceledException)
+            val available = SessionWindowSlots.reserve(context, profile.id)
+            check(available == firstSlot)
+            SessionWindowSlots.release(profile.id, available)
+
+            // Exercise the actual OS drag API as an ordinary app. No shell permission is adopted.
+            var dragStarted = false
+            android.os.ParcelFileDescriptor.AutoCloseInputStream(test.uiAutomation.executeShellCommand(
+                "am task focus ${resumedLauncher.taskId}")).use { it.readBytes() }
+            Thread.sleep(400)
+            val nativeTouch = android.graphics.Rect()
+            checkNotNull(find(profile.name)).getBoundsInScreen(nativeTouch)
+            val touchTime = android.os.SystemClock.uptimeMillis()
+            val down = android.view.MotionEvent.obtain(touchTime, touchTime, android.view.MotionEvent.ACTION_DOWN,
+                nativeTouch.exactCenterX(), nativeTouch.exactCenterY(), 0).apply {
+                source = android.view.InputDevice.SOURCE_TOUCHSCREEN
+            }
+            check(test.uiAutomation.injectInputEvent(down, true))
+            down.recycle()
+            test.runOnMainSync {
+                val root = resumedLauncher.window.decorView
+                dragStarted = ConnectionSpatialDrag.start(root, profile)
+                if (dragStarted) root.cancelDragAndDrop()
+            }
+            val up = android.view.MotionEvent.obtain(touchTime, android.os.SystemClock.uptimeMillis(), android.view.MotionEvent.ACTION_UP,
+                nativeTouch.exactCenterX(), nativeTouch.exactCenterY(), 0).apply {
+                source = android.view.InputDevice.SOURCE_TOUCHSCREEN
+            }
+            test.uiAutomation.injectInputEvent(up, true) // Cancellation may already have released the touch focus.
+            up.recycle()
+            check(dragStarted) { "Home rejected the native activity drag" }
+            Thread.sleep(600)
+            check(created.isEmpty()) { "Canceled native drag opened a session" }
+
+            fun dragStarts(): Int = android.os.ParcelFileDescriptor.AutoCloseInputStream(test.uiAutomation.executeShellCommand(
+                "logcat -d --pid=${android.os.Process.myPid()} -s SessionWindow")).bufferedReader().use {
+                it.readLines().count { line -> line.contains("Native connection placement drag started") }
+            }
+            val beforeGesture = dragStarts()
+            val bounds = android.graphics.Rect()
+            checkNotNull(find(profile.name)).getBoundsInScreen(bounds)
+            check(!bounds.isEmpty)
+            val gestureTime = android.os.SystemClock.uptimeMillis()
+            fun pointer(action: Int, x: Float) {
+                val event = android.view.MotionEvent.obtain(gestureTime, android.os.SystemClock.uptimeMillis(), action,
+                    x, bounds.exactCenterY(), 0).apply { source = android.view.InputDevice.SOURCE_TOUCHSCREEN }
+                try { test.uiAutomation.injectInputEvent(event, true) } finally { event.recycle() }
+            }
+            pointer(android.view.MotionEvent.ACTION_DOWN, bounds.exactCenterX())
+            Thread.sleep(60)
+            pointer(android.view.MotionEvent.ACTION_MOVE, bounds.exactCenterX() + 70)
+            Thread.sleep(300)
+            check(dragStarts() == beforeGesture + 1) { "Dragging the actual Compose connection card did not start placement" }
+            test.runOnMainSync { resumedLauncher.window.decorView.cancelDragAndDrop() }
+            pointer(android.view.MotionEvent.ACTION_UP, bounds.exactCenterX() + 70)
+            Thread.sleep(600)
+            check(created.isEmpty())
+
+            val capture = Bitmap.createBitmap(resumedLauncher.window.decorView.width, resumedLauncher.window.decorView.height, Bitmap.Config.ARGB_8888)
+            val captured = CountDownLatch(1)
+            var captureResult = -1
+            test.runOnMainSync { android.view.PixelCopy.request(resumedLauncher.window, capture,
+                { captureResult = it; captured.countDown() }, Handler(Looper.getMainLooper())) }
+            check(captured.await(5, TimeUnit.SECONDS) && captureResult == android.view.PixelCopy.SUCCESS)
+            File(context.cacheDir, "window-launch-card-gestures.png").outputStream().use { capture.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            capture.recycle()
+
+            // Emulate Home's PendingIntent send with a chosen pose; surrounding lifecycle is real.
+            // This verifies no delayed restore overwrites drop options, not physical ray/drop tracking.
+            val nativePose = readPose(resumedLauncher).copy(x = actual.x + 0.25f, y = actual.y, z = actual.z)
+            val options = android.app.ActivityOptions.makeBasic()
+            val value = nativePose.platformPose("horizonos")
+            Class.forName("horizonos.app.ActivityOptionsExt").getMethod("setPose", android.app.ActivityOptions::class.java, value.javaClass)
+                .invoke(null, options, value)
+            test.runOnMainSync {
+                val payload = ConnectionSpatialDrag.payload(resumedLauncher.window.decorView, profile)
+                pending = payload.second
+            }
+            pending.send(context, 0, null, null, null, null, options.toBundle())
+            val dropped = checkNotNull(created.poll(10, TimeUnit.SECONDS)) { "Synthetic Home drop did not create an Activity" }
+            activities += dropped
+            Thread.sleep(2000)
+            val dropActual = readPose(dropped)
+            check(dropped.sessionSlot == firstSlot)
+            check(!near(dropActual, unsafe))
+            check(context.getSharedPreferences("session_window_positions", Context.MODE_PRIVATE).all.isEmpty()) { "Session movement/closure started saving positions again" }
+            check(runCatching { pending.send() }.exceptionOrNull() is android.app.PendingIntent.CanceledException)
+            File(context.cacheDir, "window-launch-results.json").writeText(JSONObject()
+                .put("legacyPositionsRemoved", context.getSharedPreferences("session_window_positions", Context.MODE_PRIVATE).all.isEmpty()).put("clickPose", actual.encode())
+                .put("shadowWidth", shadowSize.x).put("shadowHeight", shadowSize.y)
+                .put("sessionWidth", sessionWidth).put("sessionHeight", sessionHeight)
+                .put("nativeDragStarted", dragStarted).put("syntheticDropRequested", nativePose.encode())
+                .put("composeDragGesture", true)
+                .put("syntheticDropActual", dropActual.encode()).put("homeHonoredDropOptions", near(dropActual, nativePose))
+                .put("slotReused", dropped.sessionSlot == firstSlot).toString(2))
+            test.runOnMainSync { resumedLauncher.finish() }
+        } finally {
+            launcher.application.unregisterActivityLifecycleCallbacks(callbacks)
+            test.runOnMainSync { if (!launcher.isDestroyed) launcher.finish() }
+        }
+    }
+
+    /** Ordinary-app capability check, with no adopted shell permission identity. */
+    private fun manipulation() {
+        val profile = ConnectionProfile("verification-manipulation", "Manipulation verification",
+            ConnectionType.RDP, "127.0.0.1", 1, "", "")
+        ProfileManager(context).addProfile(profile)
+        val window = launch(profile.id)
+        Thread.sleep(1500)
+        val before = readPose(window)
+        val requested = before.copy(x = before.x + 0.1f)
+        val report = JSONObject().put("before", before.encode()).put("requested", requested.encode())
+        val apiClasses = listOf("horizonos.view.WindowExt", "horizonos.view.ViewExt",
+            "horizonos.app.ActivityExt", "horizonos.app.volumetricwindow.VolumetricWindowManager")
+        File(context.cacheDir, "window-manipulation-api.txt").writeText(apiClasses.joinToString("\n\n") { name ->
+            name + "\n" + Class.forName(name).methods.filter { it.declaringClass.name == name }
+                .sortedBy { it.name }.joinToString("\n") { it.toGenericString() }
+        })
+        try {
+            test.runOnMainSync {
+                val managerClass = Class.forName("horizonos.app.volumetricwindow.VolumetricWindowManager")
+                val manager = window.getSystemService(managerClass)
+                val tokenClass = Class.forName("horizonos.view.VolumetricWindowToken")
+                val token = Class.forName("horizonos.app.ActivityExt").getMethod("getVolumetricWindowToken", Activity::class.java)
+                    .invoke(null, window)
+                val value = requested.platformPose("horizonos")
+                val builderClass = Class.forName("horizonos.app.volumetricwindow.VolumetricWindowTransaction\$Builder")
+                val builder = builderClass.getConstructor().newInstance()
+                builderClass.getMethod("setPose", tokenClass, value.javaClass).invoke(builder, token, value)
+                val transaction = builderClass.getMethod("build").invoke(builder)
+                managerClass.getMethod("applyTransaction", transaction.javaClass).invoke(manager, transaction)
+            }
+            report.put("requestReturned", true)
+        } catch (error: Exception) {
+            val cause = (error as? java.lang.reflect.InvocationTargetException)?.targetException ?: error
+            report.put("requestError", cause.toString())
+        }
+        Thread.sleep(1000)
+        val after = readPose(window)
+        report.put("after", after.encode()).put("poseApplied", near(after, requested))
+            .put("shellPermissionAdopted", false)
+        File(context.cacheDir, "window-manipulation-results.json").writeText(report.toString(2))
+        Log.i("LifecycleTest", "Ordinary-app manipulation capability: $report")
+        close(window)
+    }
+
     private fun placement(original: ConnectionProfile) {
         val profile = original.copy(id = "verification-placement", name = "Placement verification",
             host = "127.0.0.1", port = 1, user = "", pass = "", useCloudflare = false, redirectMicrophone = false, enableCamera = false)
         ProfileManager(context).addProfile(profile)
-        val store = SessionWindowPositionStore(context)
+        val legacy = context.getSharedPreferences("session_window_positions", Context.MODE_PRIVATE)
+        check(legacy.edit().putString("${profile.id}/0", "[50,-20,50,0,1,0,0]").commit())
         val first = launch(profile.id)
         Thread.sleep(1500)
         val second = launch(profile.id)
         Thread.sleep(1500)
-        check(first.positionSlot == 0 && second.positionSlot == 1) { "Session slots collided: ${first.positionSlot}/${second.positionSlot}" }
+        check(first.sessionSlot == 0 && second.sessionSlot == 1) { "Session slots collided: ${first.sessionSlot}/${second.sessionSlot}" }
         test.uiAutomation.adoptShellPermissionIdentity("horizonos.permission.MANAGE_VOLUMETRIC_WINDOWS")
         val base = readPose(first)
         val left = base.copy(x = base.x - 0.15f)
@@ -244,27 +468,25 @@ internal class SessionLifecycleVerification(private val test: Instrumentation) {
         move(second, right)
         check(near(readPose(first), left) && near(readPose(second), right))
         test.uiAutomation.dropShellPermissionIdentity()
-        check(store.load(profile.id, 0)?.let { near(it, left) } == true)
-        check(store.load(profile.id, 1)?.let { near(it, right) } == true)
+        check(context.getSharedPreferences("session_window_positions", Context.MODE_PRIVATE).all.isEmpty()) { "Moving windows persisted positions" }
         close(first)
         val reopenedFirst = launch(profile.id)
         Thread.sleep(1800)
-        check(reopenedFirst.positionSlot == 0) { "Closed slot was not reused" }
+        check(reopenedFirst.sessionSlot == 0) { "Closed slot was not reused" }
         val actualFirst = readPose(reopenedFirst)
-        check(store.load(profile.id, 1)?.let { near(it, right) } == true) { "Reopening first overwrote second slot" }
+        check(context.getSharedPreferences("session_window_positions", Context.MODE_PRIVATE).all.isEmpty())
         close(second)
         val reopenedSecond = launch(profile.id)
         Thread.sleep(1800)
-        check(reopenedSecond.positionSlot == 1)
+        check(reopenedSecond.sessionSlot == 1)
         val actualSecond = readPose(reopenedSecond)
-        Log.i("LifecycleTest", "Unprivileged restore: slot0=${near(actualFirst, left)} slot1=${near(actualSecond, right)}; first=$actualFirst expected=$left; second=$actualSecond expected=$right")
+        check(!near(actualFirst, left) && !near(actualSecond, right)) { "Unverified saved coordinates were restored" }
+        Log.i("LifecycleTest", "PASS: independent session slots, no position persistence, fresh placement on reopen: first=$actualFirst; second=$actualSecond")
         File(context.cacheDir, "window-placement-results.json").writeText(JSONObject()
             .put("slot0Restored", near(actualFirst, left)).put("slot1Restored", near(actualSecond, right))
             .put("expected0", left.encode()).put("actual0", actualFirst.encode())
             .put("expected1", right.encode()).put("actual1", actualSecond.encode()).toString(2))
-        // Record OS-denied placement separately from storage/slot correctness.
-        check(SavedWindowPose.decode("[0,0,0,0,0,0,0]") == null)
-        check(SavedWindowPose.decode("bad json") == null)
-        check(SessionWindowPositionStore(context).load("other-profile", 0) == null)
+        check(context.getSharedPreferences("session_window_positions", Context.MODE_PRIVATE).all.isEmpty()) { "Reopening windows persisted positions" }
+
     }
 }

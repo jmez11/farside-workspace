@@ -33,6 +33,7 @@ internal class RdpSessionConnection(
 
     init {
         bridge.disconnectListener = { reason, established ->
+            bridge.displayCapture?.close()
             tunnel?.close()
             if (ended.compareAndSet(false, true)) main.post { if (!closed.get()) onDisconnected(reason, established) }
         }
@@ -85,8 +86,16 @@ internal class RdpSessionConnection(
                     return@execute
                 }
                 if (closed.get() || ended.get()) { next.release(); return@execute }
+                val credential = profile.credentialId?.let { id ->
+                    com.farside.workspace.data.ProfileManager(context).getCredentials().find { it.id == id }
+                }
+                if (profile.credentialId != null && credential == null) {
+                    next.release(); ended.set(true); tunnel?.close()
+                    main.post { if (!closed.get()) onDisconnected("Saved credential was deleted. Choose another credential.", false) }
+                    return@execute
+                }
                 bridge.setCameraMaxDimension(profile.cameraResolution.maxDim)
-                instance = bridge.connect(host, port, profile.user, profile.pass, profile.remoteApp,
+                instance = bridge.connect(host, port, credential?.user ?: profile.user, credential?.pass ?: profile.pass, profile.remoteApp,
                     profile.enableCamera && hasCameraPermission(context), profile.redirectMicrophone && hasMicrophonePermission(context), profile.redirectStorage && hasStoragePermission(context), next, profile.host.removeSurrounding("[", "]"), certificates)
                 val connected = instance
                 this.connected.set(connected != 0L)
@@ -111,6 +120,7 @@ internal class RdpSessionConnection(
 
     fun close() {
         if (!closed.compareAndSet(false, true)) return
+        bridge.displayCapture?.close()
         bridge.disconnectListener = null
         certificates.close() // Unblock certificate confirmation before queuing teardown.
         tunnel?.close() // Cancel browser authentication immediately, before worker teardown.

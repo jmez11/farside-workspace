@@ -92,10 +92,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        SessionWindowLauncher.forgetLegacyPositions(this)
         val profileManager = ProfileManager(this)
+        val arrangementStore = com.farside.workspace.data.LauncherArrangementStore(this)
         
         setContent {
             var profiles by remember { mutableStateOf(profileManager.getProfiles()) }
+            var arrangement by remember { mutableStateOf(arrangementStore.load()) }
 
             val refreshProfiles = { profiles = profileManager.getProfiles() }
 
@@ -105,20 +108,24 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     LauncherScreen(
-                        profiles = profiles,
+                        profiles = arrangement.arrange(profiles),
                         onAddProfile = {
                             profileManager.addProfile(it)
                             refreshProfiles()
                         },
                         onDeleteProfile = {
                             profileManager.deleteProfile(it)
+                            arrangement = arrangementStore.remove(it)
                             refreshProfiles()
                         },
                         onConnectProfile = { profileId ->
                             SessionWindowLauncher.launch(this@MainActivity, profileId)
                             moveTaskToBack(true)
                         },
-                        profileManager = profileManager
+                        profileManager = profileManager,
+                        starredIds = arrangement.starred,
+                        onToggleStar = { arrangement = arrangementStore.toggleStar(it) },
+                        onMoveProfile = { profile, target -> arrangement = arrangementStore.move(profiles, profile, target) }
                     )
                 }
             }

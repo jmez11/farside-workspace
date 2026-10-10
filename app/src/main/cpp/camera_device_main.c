@@ -31,6 +31,18 @@
 #define LOGW(...) __android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
+typedef struct
+{
+    GENERIC_CHANNEL_CALLBACK base;
+    UINT sampleResponses;
+} QuestCameraChannel;
+
+typedef struct
+{
+    CameraDevice base;
+    GENERIC_CHANNEL_CALLBACK* owners[ECAM_DEVICE_MAX_STREAMS];
+} QuestCameraDevice;
+
 /**
  * @brief Get supported format list based on available codecs
  *
@@ -209,6 +221,11 @@ static UINT ecam_dev_send_pending(CameraDevice* dev, size_t streamIndex, CameraD
 
 	stream->samplesRequested--;
 	stream->haveSample = FALSE;
+	QuestCameraChannel* sampleChannel = (QuestCameraChannel*)stream->hSampleReqChannel;
+	if (sampleChannel->sampleResponses++ < 3)
+		LOGI("SampleResponse: dev=%s channel=%u bytes=%zu remaining=%ld", dev->deviceId,
+		     stream->hSampleReqChannel->channel_mgr->GetChannelId(stream->hSampleReqChannel->channel),
+		     Stream_GetPosition(output), (long)stream->samplesRequested);
 
 	/* channel write is protected by critical section in dvcman_write_channel */
 	return ecam_channel_write(dev->ecam, stream->hSampleReqChannel, CAM_MSG_ID_SampleResponse,
@@ -300,9 +317,9 @@ static void ecam_dev_stop_stream(CameraDevice* dev, size_t streamIndex)
 	{
 		stream->streaming = FALSE;
 		dev->ihal->StopStream(dev->ihal, dev->deviceId, 0);
-
-		DeleteCriticalSection(&stream->lock);
 	}
+	((QuestCameraDevice*)dev)->owners[streamIndex] = nullptr;
+	stream->hSampleReqChannel = nullptr;
 
 	Stream_Free(stream->sampleRespBuffer, TRUE);
 	stream->sampleRespBuffer = nullptr;
@@ -325,7 +342,8 @@ static UINT ecam_dev_process_stop_streams_request(CameraDevice* dev,
 	WINPR_UNUSED(s);
 
 	for (size_t i = 0; i < ECAM_DEVICE_MAX_STREAMS; i++)
-		ecam_dev_stop_stream(dev, i);
+		if (((QuestCameraDevice*)dev)->owners[i] == hchannel)
+			ecam_dev_stop_stream(dev, i);
 
 	return ecam_channel_send_generic_msg(dev->ecam, hchannel, CAM_MSG_ID_SuccessResponse);
 }
@@ -373,7 +391,7 @@ static UINT ecam_dev_process_start_streams_request(CameraDevice* dev,
 	{
 		WLog_ERR(TAG, "Streaming already in progress, device %s, streamIndex %u", dev->deviceId,
 		         streamIndex);
-		return CAM_ERROR_CODE_UnexpectedError;
+		return ecam_channel_send_error_response(dev->ecam, hchannel, CAM_ERROR_CODE_UnexpectedError);
 	}
 
 	/* saving  media type description for CurrentMediaTypeRequest,
@@ -403,14 +421,6 @@ static UINT ecam_dev_process_start_streams_request(CameraDevice* dev,
 	stream->samplesRequested = 0;
 	stream->haveSample = FALSE;
 
-	if (!InitializeCriticalSectionEx(&stream->lock, 0, 0))
-	{
-		WLog_ERR(TAG, "InitializeCriticalSectionEx failed");
-		ecam_dev_stop_stream(dev, streamIndex);
-		ecam_channel_send_error_response(dev->ecam, hchannel, CAM_ERROR_CODE_OutOfMemory);
-		return ERROR_INVALID_DATA;
-	}
-
 	stream->pendingSample = Stream_New(nullptr, 4ull * mediaType.Width * mediaType.Height);
 	if (!stream->pendingSample)
 	{
@@ -426,11 +436,12 @@ static UINT ecam_dev_process_start_streams_request(CameraDevice* dev,
 	{
 		WLog_ERR(TAG, "StartStream failure");
 		ecam_dev_stop_stream(dev, streamIndex);
-		ecam_channel_send_error_response(dev->ecam, hchannel, error);
-		return ERROR_INVALID_DATA;
+
+		return ecam_channel_send_error_response(dev->ecam, hchannel, error);
 	}
 
 	stream->streaming = TRUE;
+	((QuestCameraDevice*)dev)->owners[streamIndex] = hchannel;
 	return ecam_channel_send_generic_msg(dev->ecam, hchannel, CAM_MSG_ID_SuccessResponse);
 }
 
@@ -504,6 +515,11 @@ static UINT ecam_dev_process_sample_request(CameraDevice* dev, GENERIC_CHANNEL_C
 	CameraDeviceStream* stream = &dev->streams[streamIndex];
 
 	EnterCriticalSection(&stream->lock);
+	if (!stream->streaming)
+	{
+		LeaveCriticalSection(&stream->lock);
+		return ecam_channel_send_error_response(dev->ecam, hchannel, CAM_ERROR_CODE_NotInitialized);
+	}
 
 	/* need to save channel because responses are asynchronous and coming from capture thread */
 	if (stream->hSampleReqChannel != hchannel)
@@ -762,8 +778,21 @@ static UINT ecam_dev_process_deactivate_device_request(CameraDevice* dev,
 	WINPR_ASSERT(dev);
 	WINPR_UNUSED(s);
 
+	BOOL active = FALSE;
 	for (size_t i = 0; i < ECAM_DEVICE_MAX_STREAMS; i++)
-		ecam_dev_stop_stream(dev, i);
+	{
+		if (((QuestCameraDevice*)dev)->owners[i] == hchannel)
+			ecam_dev_stop_stream(dev, i);
+		active |= dev->streams[i].streaming;
+	}
+	/* Enumeration and capture use separate channels. A delayed enumeration
+	 * teardown must not close hardware belonging to another capture graph. */
+	if (active)
+	{
+		LOGI("Ignoring stale DeactivateDeviceRequest: dev=%s channel=%u", dev->deviceId,
+		     hchannel->channel_mgr->GetChannelId(hchannel->channel));
+		return ecam_channel_send_generic_msg(dev->ecam, hchannel, CAM_MSG_ID_SuccessResponse);
+	}
 
 	CAM_ERROR_CODE errorCode = CAM_ERROR_CODE_None;
 	if (dev->ihal->Deactivate(dev->ihal, dev->deviceId, &errorCode))
@@ -797,7 +826,9 @@ static UINT ecam_dev_on_data_received(IWTSVirtualChannelCallback* pChannelCallba
 
 	Stream_Read_UINT8(data, version);
 	Stream_Read_UINT8(data, messageId);
-	LOGI("ecam_dev_on_data_received: dev=%s messageId=0x%02x version=%d", dev->deviceId, messageId, version);
+	if (messageId != CAM_MSG_ID_SampleRequest)
+		LOGI("ecam_dev_on_data_received: dev=%s channel=%u messageId=0x%02x version=%d", dev->deviceId,
+		     hchannel->channel_mgr->GetChannelId(hchannel->channel), messageId, version);
 	WLog_DBG(TAG, "ChannelId=%" PRIu32 ", MessageId=0x%02" PRIx8 ", Version=%d",
 	         hchannel->channel_mgr->GetChannelId(hchannel->channel), messageId, version);
 
@@ -877,7 +908,9 @@ static UINT ecam_dev_on_close(IWTSVirtualChannelCallback* pChannelCallback)
 	WLog_DBG(TAG, "entered");
 
 	for (size_t i = 0; i < ECAM_DEVICE_MAX_STREAMS; i++)
-		ecam_dev_stop_stream(dev, i);
+		if (((QuestCameraDevice*)dev)->owners[i] == hchannel ||
+		    dev->streams[i].hSampleReqChannel == hchannel)
+			ecam_dev_stop_stream(dev, i);
 
 	/* make sure this channel is not used for sample responses */
 	for (size_t i = 0; i < ECAM_DEVICE_MAX_STREAMS; i++)
@@ -906,7 +939,7 @@ static UINT ecam_dev_on_new_channel_connection(IWTSListenerCallback* pListenerCa
 
 	WLog_DBG(TAG, "entered");
 	GENERIC_CHANNEL_CALLBACK* hchannel =
-	    (GENERIC_CHANNEL_CALLBACK*)calloc(1, sizeof(GENERIC_CHANNEL_CALLBACK));
+	    (GENERIC_CHANNEL_CALLBACK*)calloc(1, sizeof(QuestCameraChannel));
 
 	if (!hchannel)
 	{
@@ -940,7 +973,7 @@ CameraDevice* ecam_dev_create(CameraPlugin* ecam, const char* deviceId,
 
 	WLog_DBG(TAG, "entered for %s", deviceId);
 
-	CameraDevice* dev = (CameraDevice*)calloc(1, sizeof(CameraDevice));
+	CameraDevice* dev = (CameraDevice*)calloc(1, sizeof(QuestCameraDevice));
 
 	if (!dev)
 	{
@@ -972,6 +1005,9 @@ CameraDevice* ecam_dev_create(CameraPlugin* ecam, const char* deviceId,
 		return nullptr;
 	}
 
+	/* Keep sample locks alive across stops, including late SampleRequests. */
+	for (size_t i = 0; i < ECAM_DEVICE_MAX_STREAMS; i++)
+		InitializeCriticalSection(&dev->streams[i].lock);
 	return dev;
 }
 
@@ -998,7 +1034,10 @@ void ecam_dev_destroy(CameraDevice* dev)
 	free(dev->hlistener);
 
 	for (size_t i = 0; i < ECAM_DEVICE_MAX_STREAMS; i++)
+	{
 		ecam_dev_stop_stream(dev, i);
+		DeleteCriticalSection(&dev->streams[i].lock);
+	}
 
 	free(dev);
 }

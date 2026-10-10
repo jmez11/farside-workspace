@@ -50,10 +50,15 @@ class ProfileManager(private val context: Context) {
                     json.put("credentialId", credential.id)
                     migrated = true
                 }
-                profiles.add(if (credential == null) profile else profile.copy(
-                    credentialId = credential.id, user = credential.user, pass = credential.pass))
+                if (profile.credentialId != null || credential != null) {
+                    for (field in listOf("user", "pass", "passEncrypted")) {
+                        if (json.has(field)) { json.remove(field); migrated = true }
+                    }
+                    profiles.add(profile.copy(credentialId = credential?.id ?: profile.credentialId,
+                        user = credential?.user.orEmpty(), pass = credential?.pass.orEmpty()))
+                } else profiles.add(profile)
             }
-            if (migrated) prefs.edit().putString("profiles", jsonArray.toString()).apply()
+            if (migrated) check(prefs.edit().putString("profiles", jsonArray.toString()).commit())
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -133,22 +138,23 @@ class ProfileManager(private val context: Context) {
 
     fun updateCredential(cred: SavedCredential) {
         // Establish legacy links while the old username/password still match.
-        val profiles = getProfiles()
+        getProfiles()
         val creds = getCredentials().toMutableList()
         val index = creds.indexOfFirst { it.id == cred.id }
         require(index >= 0) { "Saved credential no longer exists" }
         creds[index] = cred
         saveCredentials(creds)
-        // Keep the stored snapshot current too, including existing deletion/fallback behavior.
-        saveProfiles(profiles.map { profile ->
-            if (profile.credentialId == cred.id) profile.copy(user = cred.user, pass = cred.pass) else profile
-        })
     }
     
     fun deleteCredential(id: String) {
+        // Establish legacy links before removal, then erase snapshots in the same transaction.
+        val profiles = getProfiles()
         val creds = getCredentials().toMutableList()
         creds.removeAll { it.id == id }
-        saveCredentials(creds)
+        val savedCredentials = JSONArray().apply { creds.forEach { put(it.toJson()) } }
+        val savedProfiles = JSONArray().apply { profiles.forEach { put(it.toJson()) } }
+        check(prefs.edit().putString("credentials", savedCredentials.toString())
+            .putString("profiles", savedProfiles.toString()).commit())
     }
 
     fun getSshKeys(): List<SavedSshKey> {

@@ -47,6 +47,18 @@ internal class RdpAudioVerification(private val test: Instrumentation) {
     }
     @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
     fun run(mode: String, encodedProbe: String? = null) {
+        if (mode == "playback-close") {
+            check(encodedProbe != null) { "playback-close needs a bounded Windows audioProbe" }
+            repeat(3) { run("playback", encodedProbe) }
+            android.util.Log.i("RdpAudioVerification", "PASS playback-close: three live playback/mute/resume/session-close cycles")
+            return
+        }
+        if (mode == "playback-teardown") {
+            FreeRDPBridge()
+            check(QuestAudioVerification.verifyPlaybackTeardown()) { "Concurrent AAudio playback/close/reopen failed" }
+            android.util.Log.i("RdpAudioVerification", "PASS playback-teardown: 30 concurrent close/reopen cycles on real AAudio output")
+            return
+        }
         val service = automation.serviceInfo
         service.flags = service.flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
             android.accessibilityservice.AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
@@ -139,7 +151,13 @@ internal class RdpAudioVerification(private val test: Instrumentation) {
             return
         }
         val original = manager.getProfiles().first { it.type == ConnectionType.RDP }
-        val temporary = original.copy(id = "audio-verification", name = "RDP audio verification", redirectMicrophone = mode != "session-off", enableCamera = false)
+        val avOutput = if (mode.startsWith("av-sync")) java.io.File(test.targetContext.getExternalFilesDir(null), "audio-av/${System.currentTimeMillis()}").apply { mkdirs() } else null
+        val probe = if (avOutput != null) {
+            java.io.File(avOutput,"browser-av-probe.ps1").writeText(test.context.assets.open("audio/browser-av-probe.ps1").bufferedReader().use { it.readText() })
+            val remote = "\\\\tsclient\\Quest" + avOutput.absolutePath.removePrefix("/sdcard").removePrefix("/storage/emulated/0").replace('/', '\\')
+            android.util.Base64.encodeToString("& '$remote\\browser-av-probe.ps1' -OutputDir '$remote'".toByteArray(),android.util.Base64.NO_WRAP)
+        } else encodedProbe
+        val temporary = original.copy(id = "audio-verification", name = "RDP audio verification", redirectMicrophone = mode != "session-off" && avOutput == null, enableCamera = false, redirectStorage = if(avOutput != null) true else original.redirectStorage)
         manager.addProfile(temporary)
         var activity: SessionActivity? = null
         val evidenceFile = java.io.File(test.targetContext.filesDir, "rdp-host-capabilities.json")
@@ -220,9 +238,9 @@ internal class RdpAudioVerification(private val test: Instrumentation) {
                 await("Unmute microphone")
                 click("Unmute microphone")
             }
-            if (mode == "stream" || mode == "playback") {
+            if (mode == "stream" || mode == "playback" || mode == "playback-latency" || avOutput != null) {
                 // Optionally launch the bounded Windows probe through the existing RDP input path.
-                if (encodedProbe != null) {
+                if (probe != null) {
                     val bridge = FreeRDPBridge()
                     val instance = activity.rdpInstance
                     repeat(2) {
@@ -231,7 +249,9 @@ internal class RdpAudioVerification(private val test: Instrumentation) {
                         Thread.sleep(150)
                     }
                     bridge.sendKeyEvent(instance, 0x15b, true)
+                    Thread.sleep(150)
                     bridge.sendKeyEvent(instance, 0x13, true)
+                    Thread.sleep(100)
                     bridge.sendKeyEvent(instance, 0x13, false)
                     bridge.sendKeyEvent(instance, 0x15b, false)
                     Thread.sleep(1000)
@@ -239,12 +259,23 @@ internal class RdpAudioVerification(private val test: Instrumentation) {
                     bridge.sendKeyEvent(instance, 0x1e, true)
                     bridge.sendKeyEvent(instance, 0x1e, false)
                     bridge.sendKeyEvent(instance, 0x1d, false)
-                    val command = String(android.util.Base64.decode(encodedProbe, android.util.Base64.DEFAULT), Charsets.UTF_8)
-                    for (character in command) {
+                    val command = String(android.util.Base64.decode(probe, android.util.Base64.DEFAULT), Charsets.UTF_8)
+                    // Stage long probe commands in the console; Run can truncate them.
+                    for (character in "powershell.exe -NoProfile -ExecutionPolicy Bypass") {
                         bridge.sendUnicodeKeyEvent(instance, character.code, true)
                         bridge.sendUnicodeKeyEvent(instance, character.code, false)
-                        Thread.sleep(2)
+                        Thread.sleep(10)
                     }
+                    bridge.sendKeyEvent(instance, 0x1c, true)
+                    bridge.sendKeyEvent(instance, 0x1c, false)
+                    Thread.sleep(2000)
+                    check(bridge.sendClipboardText(instance, command + "; exit")) { "Remote audio probe clipboard unavailable" }
+                    Thread.sleep(400)
+                    bridge.sendKeyEvent(instance, 0x1d, true)
+                    bridge.sendKeyEvent(instance, 0x2f, true)
+                    bridge.sendKeyEvent(instance, 0x2f, false)
+                    bridge.sendKeyEvent(instance, 0x1d, false)
+                    Thread.sleep(750)
                     bridge.sendKeyEvent(instance, 0x1c, true)
                     bridge.sendKeyEvent(instance, 0x1c, false)
                 }
@@ -258,10 +289,92 @@ internal class RdpAudioVerification(private val test: Instrumentation) {
                     }
                 }
                 val bridge = FreeRDPBridge()
-                if (mode == "playback") {
+                if (avOutput != null) {
+                    val ready = java.io.File(avOutput,"video-started.json")
+                    val result = java.io.File(avOutput,"result.json")
+                    val readyDeadline = android.os.SystemClock.uptimeMillis()+60000
+                    while(!ready.exists() && !result.exists() && android.os.SystemClock.uptimeMillis()<readyDeadline) Thread.sleep(100)
+                    check(ready.exists()) { "Browser video did not start: $avOutput" }
+                    val videoPulses = mutableListOf<Long>()
+                    val outputLatency = org.json.JSONArray()
+                    var brightBefore = false
+                    val deadline = android.os.SystemClock.uptimeMillis()+32000
+                    val stallAt = android.os.SystemClock.uptimeMillis()+10000
+                    var stalled = false
+                    var nextMetrics = 0L
+                    while(android.os.SystemClock.uptimeMillis()<deadline) {
+                        var bright = false
+                        test.runOnMainSync {
+                            texture(activity.window.decorView)?.bitmap?.let { image ->
+                                val pixel = image.getPixel(image.width/2,image.height/2)
+                                bright = android.graphics.Color.red(pixel)>220 && android.graphics.Color.green(pixel)>220 && android.graphics.Color.blue(pixel)>220
+                                if(bright && !brightBefore && videoPulses.size<2) java.io.File(avOutput,"video-flash.png").outputStream().use {
+                                    image.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)
+                                }
+                                if(!bright && videoPulses.size<2) java.io.File(avOutput,"video-dark.png").outputStream().use {
+                                    image.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)
+                                }
+                                image.recycle()
+                            }
+                        }
+                        val now = android.os.SystemClock.uptimeMillis()
+                        if(mode == "av-sync-stall" && !stalled && now>=stallAt) {
+                            bridge.stallAudioForVerification(activity.rdpInstance)
+                            stalled = true
+                        }
+                        if(bright && !brightBefore) videoPulses.add(now)
+                        brightBefore = bright
+                        if(now>=nextMetrics) {
+                            val latency=bridge.getAudioLatencyMetrics(activity.rdpInstance)
+                            outputLatency.put(org.json.JSONObject().put("timeMs",now).put("outputMs",latency[0]).put("maxOutputMs",latency[1]))
+                            nextMetrics=now+1000
+                        }
+                        Thread.sleep(40)
+                    }
+                    // Let audio for the last observed video pulse reach the hardware.
+                    // Otherwise matching the tail would force an incorrect pulse offset.
+                    Thread.sleep(1000)
+                    val audioPulses = bridge.getAudioPulseTimes(activity.rdpInstance).toList()
+                    val comparison = org.json.JSONObject().put("videoMs",org.json.JSONArray(videoPulses))
+                        .put("audioMs",org.json.JSONArray(audioPulses)).put("outputLatency",outputLatency).put("injectedStallMs",if(stalled)1500 else 0)
+                    java.io.File(avOutput,"sync.json").writeText(comparison.toString(2))
+                    check(videoPulses.size>=20 && audioPulses.size>=20) { "Insufficient actual video/audio pulse observations: $comparison" }
+                    // After the deliberate stall, compare only recovered playback. Fit the
+                    // unequal pulse intervals; a whole second of delay cannot alias a match.
+                    val stableVideo = videoPulses.filter { !stalled || it>stallAt+4000 }.takeLast(12)
+                    val candidates = (-audioPulses.size..audioPulses.size).mapNotNull { shift ->
+                        val differences = stableVideo.mapIndexedNotNull { i,v -> audioPulses.getOrNull(i+shift)?.minus(v) }
+                        if(differences.size != stableVideo.size) null else {
+                            val median = differences.sorted()[differences.size/2]
+                            if(kotlin.math.abs(median)>4000) null else Triple(median,
+                                differences.map { kotlin.math.abs(it-median) }.average(),differences)
+                        }
+                    }
+                    val fit = candidates.minBy { it.second }
+                    comparison.put("audioMinusVideoMs",fit.first).put("fitMeanErrorMs",fit.second)
+                        .put("pairedDifferencesMs",org.json.JSONArray(fit.third))
+                    java.io.File(avOutput,"sync.json").writeText(comparison.toString(2))
+                    check(kotlin.math.abs(fit.first)<600 && fit.second<120) { "Audio/video failed to stay synchronized: $comparison" }
+                    val finishDeadline=android.os.SystemClock.uptimeMillis()+30000
+                    while(!result.exists() && android.os.SystemClock.uptimeMillis()<finishDeadline) Thread.sleep(200)
+                    check(result.exists() && org.json.JSONObject(result.readText().removePrefix("\uFEFF")).getBoolean("success"))
+                    android.util.Log.i("RdpAudioVerification","PASS av-sync observations: video=${videoPulses.size}, audio=${audioPulses.size}; artifacts=$avOutput")
+                    return
+                }
+                if (mode == "playback" || mode == "playback-latency") {
                     repeat(200) { if (bridge.getAudioFrameCounts(activity.rdpInstance)[2] == 0L) Thread.sleep(200) }
                     val start = bridge.getAudioFrameCounts(activity.rdpInstance)
                     check(start[0] > 0 && start[2] > 0) { "No audible playback samples from Windows" }
+                    if (mode == "playback-latency") {
+                        val samples = org.json.JSONArray()
+                        repeat(20) {
+                            Thread.sleep(1000)
+                            val latency = bridge.getAudioLatencyMetrics(activity.rdpInstance)
+                            samples.put(org.json.JSONObject().put("second",it+1).put("outputMs",latency[0]).put("maxOutputMs",latency[1]))
+                        }
+                        java.io.File(test.targetContext.cacheDir,"audio-latency.json").writeText(samples.toString(2))
+                        android.util.Log.i("RdpAudioVerification", "Audio output latency: $samples")
+                    }
                     click("Mute speakers")
                     Thread.sleep(400)
                     val mutedStart = bridge.getAudioFrameCounts(activity.rdpInstance)
@@ -297,6 +410,8 @@ internal class RdpAudioVerification(private val test: Instrumentation) {
         } finally {
             activity?.let { test.runOnMainSync { it.finish() } }
             manager.deleteProfile(temporary.id)
+            // Instrumentation exits immediately; drain the asynchronous profile write.
+            check(test.targetContext.getSharedPreferences("farside_profiles", 0).edit().commit())
             if (evidenceBackup != null) evidenceFile.writeText(evidenceBackup)
         }
     }

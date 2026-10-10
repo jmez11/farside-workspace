@@ -14,6 +14,7 @@ import java.io.File
 /** On-device regression check: saved RDP profile, actual task resizes, full-frame captures. */
 class RdpResizeInstrumentation : Instrumentation() {
     private var lifecycleMode: String? = null
+    private var launcherOnly = false
     private var cloudflaredOnly = false
     private var cloudflaredHost: String? = null
     private var cloudflaredCredential: String? = null
@@ -23,9 +24,12 @@ class RdpResizeInstrumentation : Instrumentation() {
     private var cameraMode: String? = null
     private var cameraTarget: String? = null
     private var cameraResolutionArg: String? = null
+    private var cameraProfile: String? = null
+    private var cameraFfmpeg: String? = null
     private var storageMode: String? = null
     private var inputOnly = false
     private var credentialsOnly = false
+    private var credentialDeletionOnly = false
     private var proxiesOnly = false
     private var toolbarOnly = false
     private var sshOnly = false
@@ -40,15 +44,19 @@ class RdpResizeInstrumentation : Instrumentation() {
         cloudflaredHost = arguments?.getString("cloudflaredHost")
         cloudflaredCredential = arguments?.getString("cloudflaredCredential")
         lifecycleMode = arguments?.getString("lifecycleMode")
+        launcherOnly = arguments?.getString("launcherOnly") == "true"
         certificateMode = arguments?.getString("certificateMode")
         audioProbe = arguments?.getString("audioProbe")
         audioMode = arguments?.getString("audioMode")
         cameraMode = arguments?.getString("cameraMode")
         cameraTarget = arguments?.getString("cameraTarget")
         cameraResolutionArg = arguments?.getString("cameraResolution")
+        cameraProfile = arguments?.getString("cameraProfile")
+        cameraFfmpeg = arguments?.getString("cameraFfmpeg")
         storageMode = arguments?.getString("storageMode")
         inputOnly = arguments?.getString("inputOnly") == "true"
         credentialsOnly = arguments?.getString("credentialsOnly") == "true"
+        credentialDeletionOnly = arguments?.getString("credentialDeletionOnly") == "true"
         proxiesOnly = arguments?.getString("proxiesOnly") == "true"
         toolbarOnly = arguments?.getString("toolbarOnly") == "true"
         sshOnly = arguments?.getString("sshOnly") == "true"
@@ -71,6 +79,12 @@ class RdpResizeInstrumentation : Instrumentation() {
     override fun onStart() {
         val results = Bundle()
         try {
+            if (launcherOnly) {
+                val report = LauncherArrangementVerification(this).run()
+                results.putString("stream", "PASS: $report\n")
+                finish(0, results)
+                return
+            }
             if (imeOnly) {
                 val report = ImeVerification(this).run()
                 results.putString("stream", "PASS: $report\n")
@@ -112,6 +126,12 @@ class RdpResizeInstrumentation : Instrumentation() {
                 finish(0, results)
                 return
             }
+            if (credentialDeletionOnly) {
+                CredentialUiVerification(this).verifyLiveDeletion()
+                results.putString("stream", "PASS: credential deletion closed its live RDP session and rejected saved-profile reconnect.\n")
+                finish(0, results)
+                return
+            }
             if (credentialsOnly) {
                 CredentialUiVerification(this).run()
                 results.putString("stream", "PASS: optional credential PIN setup/change/removal, protected edit/delete and session startup, wrong/cancel/correct PIN, persistent backoff, password encryption/IME and stable links.\n")
@@ -149,7 +169,7 @@ class RdpResizeInstrumentation : Instrumentation() {
                 return
             }
             cameraMode?.let {
-                RdpCameraVerification(this).run(it, cameraTarget, cameraResolutionArg)
+                RdpCameraVerification(this, cameraProfile, cameraFfmpeg).run(it, cameraTarget, cameraResolutionArg)
                 results.putString("stream", "PASS: RDP camera $it.\n")
                 finish(0, results)
                 return
@@ -343,7 +363,8 @@ class RdpResizeInstrumentation : Instrumentation() {
                     desktopBridge.getDesktopHeight(sessionActivity.rdpInstance) == remoteHeight) { "Keyboard changed the server desktop resolution" }
                 check(parentPose() == desktopPose) { "Keyboard moved the desktop panel" }
                 val panel = panelView()
-                check(panel.width == desktopWidth) { "Key window width differs from desktop" }
+                val clearance = (96 * activity.resources.displayMetrics.density).toInt()
+                check(kotlin.math.abs(panel.width - (desktopWidth - clearance)) <= 2) { "Key window does not leave corner clearance: ${panel.width}/$desktopWidth" }
                 android.util.Log.i("KeyboardPanelTest", "fixed desktop=${desktop.width}x${desktop.height}, keys=${panel.width}x${panel.height}, pose=$desktopPose")
                 return panel.height
             }
@@ -506,14 +527,17 @@ class RdpResizeInstrumentation : Instrumentation() {
                 val actions = checkNotNull(sessionActivity.keyboardEditorActions)
                 val actionCounts = listOf(actions.focusRequests, actions.focusResets, actions.restarts, actions.showRequests)
                 if (action == android.view.MotionEvent.ACTION_DOWN) nativeFocus(false)
+                var handled = false
                 runOnMainSync {
                     val view = checkNotNull(texture(activity.window.decorView))
+                    val location = IntArray(2).also { view.getLocationInWindow(it) }
                     val event = android.view.MotionEvent.obtain(downTime, eventTime, action,
-                        view.width * 0.5f + dx, view.height * 0.65f, 0)
+                        location[0] + view.width * 0.5f + dx, location[1] + view.height * 0.65f, 0)
                     event.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
-                    try { check(view.dispatchTouchEvent(event)) { "Remote touch not handled" } }
+                    try { handled = activity.dispatchTouchEvent(event) }
                     finally { event.recycle() }
                 }
+                check(handled) { "Remote touch not handled by the screen input overlay" }
                 Thread.sleep(200)
                 keyboardRetainsFocus()
                 check(listOf(actions.focusRequests, actions.focusResets, actions.restarts, actions.showRequests) == actionCounts) {

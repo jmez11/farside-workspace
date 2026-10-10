@@ -1,0 +1,208 @@
+package com.farside.workspace
+
+import android.app.Instrumentation
+import android.content.Context
+import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Rect
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
+import android.view.MotionEvent
+import android.view.PixelCopy
+import android.view.accessibility.AccessibilityNodeInfo
+import androidx.activity.compose.setContent
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.runtime.*
+import com.farside.workspace.data.ConnectionProfile
+import com.farside.workspace.data.ConnectionType
+import com.farside.workspace.data.LauncherArrangementStore
+import com.farside.workspace.data.ProfileManager
+import com.farside.workspace.ui.LauncherScreen
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+
+/** Fixture interactions use no remote sessions, no saved profiles, and a dedicated arrangement preference file. */
+internal class LauncherArrangementVerification(private val test: Instrumentation) {
+    private val context get() = test.targetContext
+    private val preferenceName = "verification_launcher_arrangement"
+    private fun nodes(): List<AccessibilityNodeInfo> {
+        test.uiAutomation.clearCache()
+        fun visit(node: AccessibilityNodeInfo): List<AccessibilityNodeInfo> = listOf(node) +
+            (0 until node.childCount).flatMap { node.getChild(it)?.let(::visit).orEmpty() }
+        val displays = test.uiAutomation.windowsOnAllDisplays
+        return (0 until displays.size()).flatMap { i -> displays.valueAt(i).flatMap { it.root?.let(::visit).orEmpty() } }
+    }
+    private fun find(label: String): AccessibilityNodeInfo {
+        repeat(40) {
+            nodes().firstOrNull { it.text?.toString() == label || it.contentDescription?.toString() == label }?.let { return it }
+            Thread.sleep(100)
+        }
+        error("Missing $label")
+    }
+    private fun click(label: String) {
+        var node = find(label)
+        while (!node.isClickable) node = checkNotNull(node.parent)
+        check(node.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+        Thread.sleep(250)
+    }
+    private fun bounds(label: String): Rect = Rect().also { find(label).getBoundsInScreen(it); check(!it.isEmpty) }
+
+    fun run(): String {
+        val prefs = context.getSharedPreferences(preferenceName, Context.MODE_PRIVATE)
+        check(prefs.edit().clear().commit())
+        val store = LauncherArrangementStore(context, preferenceName)
+        val fixture = ('A'..'F').map { letter -> ConnectionProfile(letter.toString(), "Fixture $letter",
+            if (letter == 'F') ConnectionType.SSH else ConnectionType.RDP, "127.0.0.1", 1, "", "") }
+        fun ids(profiles: List<ConnectionProfile> = fixture) = LauncherArrangementStore(context, preferenceName).load().arrange(profiles).map { it.id }
+        check(ids() == listOf("A", "B", "C", "D", "E", "F"))
+        store.toggleStar("C")
+        store.toggleStar("E")
+        check(ids() == listOf("C", "E", "A", "B", "D", "F"))
+        store.move(fixture, "E", "C")
+        val protectedOrder = ids()
+        store.move(fixture, "F", "C")
+        check(ids() == protectedOrder) { "An ordinary connection crossed the starred group" }
+        store.move(fixture, "missing", "C")
+        check(ids() == protectedOrder)
+        val added = fixture + fixture[0].copy(id = "G", name = "Fixture G")
+        check(store.load().arrange(added).last().id == "G")
+        store.remove("E")
+        check("E" !in store.load().starred && "E" !in store.load().order)
+        check(prefs.edit().clear().commit())
+
+        test.uiAutomation.serviceInfo = test.uiAutomation.serviceInfo.apply {
+            flags = flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+        }
+        val activity = test.startActivitySync(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
+        val opens = CopyOnWriteArrayList<String>()
+        val shown = mutableStateOf(fixture)
+        try {
+            test.runOnMainSync {
+                activity.setContent {
+                    var arrangement by remember { mutableStateOf(store.load()) }
+                    MaterialTheme(colorScheme = darkColorScheme()) {
+                        Surface(color = MaterialTheme.colorScheme.background, contentColor = MaterialTheme.colorScheme.onBackground) {
+                        LauncherScreen(profiles = arrangement.arrange(shown.value), onAddProfile = {}, onDeleteProfile = {},
+                            onConnectProfile = { opens.add(it) }, profileManager = ProfileManager(context),
+                            starredIds = arrangement.starred,
+                            onToggleStar = { arrangement = store.toggleStar(it) },
+                            onMoveProfile = { source, target -> arrangement = store.move(shown.value, source, target) })
+                        }
+                    }
+                }
+            }
+            find("Click to open, or drag into space to place a window.")
+            check(nodes().none { it.text?.toString() in listOf("Click to open", "Drag to place") })
+            click("Star Fixture C")
+            click("Star Fixture E")
+            check(ids().take(2) == listOf("C", "E") && opens.isEmpty())
+            check(bounds("Fixture C").centerY() <= bounds("Fixture A").centerY())
+
+            // Direct touch includes the same pointer recognizers that also handle spatial drags.
+            fun gesture(source: String, target: String? = null, jitter: Boolean = false) {
+                val from = bounds(source)
+                val to = target?.let(::bounds) ?: from
+                val downTime = SystemClock.uptimeMillis()
+                fun event(action: Int, x: Float, y: Float) {
+                    test.runOnMainSync {
+                        val decor = activity.window.decorView
+                        val origin = IntArray(2).also { decor.getLocationOnScreen(it) }
+                        val motion = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), action, x - origin[0], y - origin[1], 0)
+                        try { decor.dispatchTouchEvent(motion) } finally { motion.recycle() }
+                    }
+                    Thread.sleep(80)
+                }
+                event(MotionEvent.ACTION_DOWN, from.exactCenterX(), from.exactCenterY())
+                event(MotionEvent.ACTION_MOVE, to.exactCenterX() + if (jitter) 1 else 0, to.exactCenterY())
+                event(MotionEvent.ACTION_UP, to.exactCenterX(), to.exactCenterY())
+                Thread.sleep(250)
+            }
+            gesture("Fixture A", jitter = true)
+            check(opens.toList() == listOf("A")) { "A small-motion click did not open exactly once" }
+            gesture("Unstar Fixture C")
+            check("C" !in store.load().starred && opens.size == 1) { "Star touch also opened a connection" }
+            click("Star Fixture C")
+            click("Reorder")
+            find("Done reordering")
+            gesture("Fixture A")
+            check(opens.size == 1) { "A card tap in reorder mode opened a connection" }
+            val firstArrow = generateSequence(find("Move Fixture C earlier")) { it.parent }.toList()
+            check(firstArrow.any { !it.isEnabled }) {
+                "First starred arrow has no disabled button ancestor; order=${ids()} nodes=${firstArrow.map { "${it.className}:${it.isEnabled}:${it.isClickable}" }}"
+            }
+            val beforeDisabledTap = ids()
+            gesture("Move Fixture C earlier")
+            check(ids() == beforeDisabledTap)
+            click("Move Fixture E earlier")
+            check(ids().take(2) == listOf("E", "C"))
+            click("Move Fixture A later")
+            check(ids() == listOf("E", "C", "B", "A", "D", "F"))
+            // A single large MOVE must reorder the card pressed at DOWN, not the target card.
+            gesture("Fixture F", "Fixture B")
+            check(ids() == listOf("E", "C", "F", "B", "A", "D")) { "Grid drag did not move the original card" }
+            gesture("Fixture D", "Fixture E")
+            check(ids() == listOf("E", "C", "F", "B", "A", "D"))
+            check(opens.size == 1)
+            check(prefs.edit().commit()) // Flush fixture metadata before inspecting/reloading it.
+
+            val capture = Bitmap.createBitmap(activity.window.decorView.width, activity.window.decorView.height, Bitmap.Config.ARGB_8888)
+            val captured = CountDownLatch(1)
+            var result = -1
+            test.runOnMainSync { PixelCopy.request(activity.window, capture, { result = it; captured.countDown() }, Handler(Looper.getMainLooper())) }
+            check(captured.await(5, TimeUnit.SECONDS) && result == PixelCopy.SUCCESS)
+            File(context.cacheDir, "launcher-reorder.png").outputStream().use { capture.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            capture.recycle()
+            click("Done reordering")
+            gesture("Fixture B")
+            check(opens.toList() == listOf("A", "B"))
+
+            // Hold at the grid edge with many connections; the pointer must remain captured
+            // while rows scroll and keyed items move, without starting a spatial launch.
+            test.runOnMainSync { shown.value = fixture + (0 until 40).map {
+                fixture[0].copy(id = "extra-$it", name = "Offscreen fixture $it")
+            } }
+            click("Reorder")
+            fun lastVisibleExtra(): Int = nodes().mapNotNull {
+                it.text?.toString()?.takeIf { text -> text.startsWith("Offscreen fixture ") }
+                    ?.substringAfterLast(' ')?.toIntOrNull()
+            }.maxOrNull() ?: -1
+            val visibleBefore = lastVisibleExtra()
+            val source = bounds("Fixture F")
+            val edgeY = bounds("Connections").bottom - 8 * activity.resources.displayMetrics.density
+            val edgeTime = SystemClock.uptimeMillis()
+            fun edgeEvent(action: Int, y: Float) {
+                test.runOnMainSync {
+                    val decor = activity.window.decorView
+                    val origin = IntArray(2).also { decor.getLocationOnScreen(it) }
+                    val event = MotionEvent.obtain(edgeTime, SystemClock.uptimeMillis(), action,
+                        source.exactCenterX() - origin[0], y - origin[1], 0)
+                    try { decor.dispatchTouchEvent(event) } finally { event.recycle() }
+                }
+            }
+            edgeEvent(MotionEvent.ACTION_DOWN, source.exactCenterY())
+            Thread.sleep(80)
+            edgeEvent(MotionEvent.ACTION_MOVE, edgeY)
+            Thread.sleep(1500)
+            val visibleAfter = lastVisibleExtra()
+            edgeEvent(MotionEvent.ACTION_UP, edgeY)
+            Thread.sleep(200)
+            check(visibleAfter > visibleBefore) { "Reorder edge drag did not scroll to more connections" }
+            check(ids(shown.value).take(2) == listOf("E", "C") && opens.size == 2)
+            File(context.cacheDir, "launcher-arrangement-results.json").writeText(JSONObject()
+                .put("starred", JSONArray(store.load().starred.toList())).put("order", JSONArray(ids(shown.value)))
+                .put("opens", JSONArray(opens.toList())).put("visibleBeforeEdgeScroll", visibleBefore).put("visibleAfterEdgeScroll", visibleAfter)
+                .put("isolatedArrangementPreferences", true).toString(2))
+            return "click with jitter, star touch without launch, persisted starred-first order, reorder buttons/grid drag, group boundaries, return to normal click and edge scrolling with 46 connections"
+        } finally {
+            test.runOnMainSync { activity.finish() }
+            check(prefs.edit().clear().commit())
+        }
+    }
+}

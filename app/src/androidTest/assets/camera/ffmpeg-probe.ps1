@@ -1,13 +1,36 @@
-param([string]$OutputDir, [string]$Camera, [string]$Size)
+param([string]$OutputDir, [string]$Camera, [string]$Size, [switch]$ExpectDenied, [string]$FfmpegPath)
 $ErrorActionPreference = 'Stop'
 $report = @{ camera = $Camera; requestedSize = $Size; success = $false }
 $destination = $OutputDir
 # Stage on the host so redirected-drive PNG writes cannot stall live capture.
 $OutputDir = Join-Path ([IO.Path]::GetTempPath()) ('farside-camera-' + [guid]::NewGuid().ToString())
 [IO.Directory]::CreateDirectory($OutputDir) | Out-Null
+$ffmpeg = $null
+function Resolve-Ffmpeg {
+    if ($FfmpegPath) {
+        if (!(Test-Path -LiteralPath $FfmpegPath -PathType Leaf -ErrorAction SilentlyContinue)) {
+            throw "Supplied FFmpeg executable is missing or unreadable: $FfmpegPath"
+        }
+        # Copy once from the redirected drive; repeated decoder starts stay host-local.
+        $localTool = Join-Path $OutputDir 'ffmpeg.exe'
+        Copy-Item -LiteralPath $FfmpegPath -Destination $localTool
+        return $localTool
+    }
+    $command = Get-Command ffmpeg.exe -ErrorAction SilentlyContinue
+    if ($command) { return $command.Source }
+    $paths = ([Environment]::GetEnvironmentVariable('Path','Machine') + ';' +
+        [Environment]::GetEnvironmentVariable('Path','User')).Split(';')
+    foreach ($path in $paths) {
+        if (!$path) { continue }
+        $candidate = Join-Path ([Environment]::ExpandEnvironmentVariables($path.Trim('"'))) 'ffmpeg.exe'
+        if (Test-Path -LiteralPath $candidate -PathType Leaf -ErrorAction SilentlyContinue) { return $candidate }
+    }
+    throw 'FFmpeg not found; supply cameraFfmpeg or stage camera-tools/ffmpeg.exe on Quest'
+}
 function Invoke-Probe([string]$Name, [string]$Arguments) {
     $start = New-Object System.Diagnostics.ProcessStartInfo
-    $start.FileName = (Get-Command ffmpeg.exe -ErrorAction Stop).Source
+    if (!$ffmpeg) { throw 'FFmpeg not found in PATH or existing host installation directories' }
+    $start.FileName = $ffmpeg
     $start.Arguments = $Arguments
     $start.UseShellExecute = $false
     $start.CreateNoWindow = $true
@@ -29,6 +52,8 @@ function Invoke-Probe([string]$Name, [string]$Arguments) {
     }
 }
 try {
+    $ffmpeg = Resolve-Ffmpeg
+    $report.ffmpeg = $ffmpeg
     # Listing commands intentionally exit nonzero after reporting DirectShow devices/modes.
     $null = Invoke-Probe 'devices' '-hide_banner -list_devices true -f dshow -i dummy'
     $deviceLog = Get-Content (Join-Path $OutputDir 'devices.log') -Raw
@@ -37,6 +62,21 @@ try {
     $device = $match.Groups[1].Value
     $report.device = $device
     $null = Invoke-Probe 'modes' ('-hide_banner -list_options true -f dshow -i video="' + $device + '"')
+    if ($ExpectDenied) {
+        $report.attempts = @()
+        foreach ($attempt in 1..2) {
+            $timer = [Diagnostics.Stopwatch]::StartNew()
+            $code = Invoke-Probe "denied-$attempt" ('-hide_banner -f dshow -video_size ' + $Size + ' -i video="' + $device + '" -frames:v 1 -f null -')
+            $report.attempts += @{ exitCode = $code; elapsedMs = $timer.ElapsedMilliseconds }
+            # DirectShow can report I/O failure while FFmpeg still exits zero with an empty output.
+            $deniedLog = Get-Content (Join-Path $OutputDir "denied-$attempt.log") -Raw
+            if ($timer.ElapsedMilliseconds -gt 40000 -or $deniedLog -notmatch 'I/O error|Could not run|Could not open' -or
+                $deniedLog -match 'frame=\s*[1-9]') { throw "Denied stream did not fail promptly without frames (attempt $attempt)" }
+        }
+        $report.denied = $true
+        $report.success = $true
+        return
+    }
     # DirectShow samples may contain padded rows. Preserve packets before decoding;
     # otherwise rawvideo can interpret padding as visible pixels and scramble a good image.
     $sample = Join-Path $OutputDir 'sample.yuy2'
@@ -49,6 +89,8 @@ try {
     if ($stride -lt [int]$dimensions[0]*2) { throw "DirectShow sample stride is too small" }
     $report.sampleBytes = $sampleBytes
     $report.rowStride = $stride
+    # Leave a bounded interval between the sample and sustained capture probes.
+    Start-Sleep -Seconds 2
     # Drop packets without decoding or changing bytes: one native sample per 30 frames.
     $raw = Join-Path $OutputDir 'capture.yuy2'
     [IO.File]::WriteAllText((Join-Path $destination 'capture-started.json'),
@@ -81,6 +123,8 @@ try {
 } catch {
     $report.error = $_.Exception.Message
 } finally {
+    $scratchTool = Join-Path $OutputDir 'ffmpeg.exe'
+    if (Test-Path -LiteralPath $scratchTool) { Remove-Item -LiteralPath $scratchTool }
     # Publish the result last; its arrival means all images/logs are available.
     Get-ChildItem -LiteralPath $OutputDir -File | Copy-Item -Destination $destination
     $temporaryResult = Join-Path $destination 'result.tmp'

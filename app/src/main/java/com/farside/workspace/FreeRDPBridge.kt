@@ -5,6 +5,13 @@ import android.view.Surface
 class FreeRDPBridge {
     @Volatile internal var disconnectListener: ((String, Boolean) -> Unit)? = null
     @Volatile internal var clipboardListener: ((String) -> Unit)? = null
+    @Volatile internal var displayCapture: DisplayCapturePermission? = null
+
+    @androidx.annotation.Keep
+    fun onNativeDisplayStart(surface: Surface?): Boolean = displayCapture?.start(surface) ?: false
+
+    @androidx.annotation.Keep
+    fun onNativeDisplayStop() { displayCapture?.stopStream() }
 
     @androidx.annotation.Keep
     fun onNativeDisconnected(reason: String, established: Boolean) {
@@ -32,6 +39,9 @@ class FreeRDPBridge {
     external fun isStorageConnected(instance: Long): Boolean
     // Playback/capture frames, then nonzero playback/capture samples (verification; no audio content).
     external fun getAudioFrameCounts(instance: Long): LongArray
+    external fun getAudioLatencyMetrics(instance: Long): LongArray
+    external fun stallAudioForVerification(instance: Long)
+    external fun getAudioPulseTimes(instance: Long): LongArray
     external fun disconnect(instance: Long)
     external fun setSurface(instance: Long, surface: Surface?)
     external fun sendMouseEvent(instance: Long, x: Int, y: Int, flags: Int)

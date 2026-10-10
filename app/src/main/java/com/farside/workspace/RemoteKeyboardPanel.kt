@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -23,7 +24,7 @@ import metavrx.layout.window.compose.layout.WindowAnchor
 import metavrx.layout.window.compose.layout.WindowModifier
 import metavrx.layout.window.compose.layout.anchor
 import metavrx.layout.window.compose.layout.height
-import metavrx.layout.window.compose.layout.matchParentWidth
+import metavrx.layout.window.compose.layout.width
 import metavrx.layout.window.compose.state.WindowState
 import metavrx.layout.window.compose.state.WindowFallback
 
@@ -53,21 +54,25 @@ internal fun RemoteKeyboardPanel(visible: Boolean, expanded: Boolean, state: Win
     }
     if (emitted) {
         LaunchedEffect(state) { state.lifecycle.collect { Log.i("KeyboardPanel", "placement=$it") } }
-        SpatialWindow(key = "remote-extra-keys", windowState = state, fallbackStrategy = WindowFallback.Drop,
-            modifier = WindowModifier.matchParentWidth().height(if (expandedSize) 314.dp else 76.dp)
-                .anchor(WindowAnchor.Bottom)) {
-            var appeared by remember { mutableStateOf(false) }
-            LaunchedEffect(visible) { appeared = visible }
-            val opacity by animateFloatAsState(if (appeared) 1f else 0f, tween(180), label = "keyboard-panel")
-            Box(Modifier.fillMaxSize().background(Color(0xFF181818)).pointerInput(visible) {
-                awaitPointerEventScope {
-                    while (true) {
-                        val event = awaitPointerEvent(PointerEventPass.Initial)
-                        if (visible && event.type == PointerEventType.Press) interaction()
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            // Leave the main window's Horizon corner grab targets clear on both sides.
+            val panelWidth = (maxWidth - 96.dp).coerceAtLeast(320.dp).coerceAtMost(maxWidth)
+            SpatialWindow(key = "remote-extra-keys", windowState = state, fallbackStrategy = WindowFallback.Drop,
+                modifier = WindowModifier.width(panelWidth).height(if (expandedSize) 314.dp else 76.dp)
+                    .anchor(WindowAnchor.Bottom)) {
+                var appeared by remember { mutableStateOf(false) }
+                LaunchedEffect(visible) { appeared = visible }
+                val opacity by animateFloatAsState(if (appeared) 1f else 0f, tween(180), label = "keyboard-panel")
+                Box(Modifier.fillMaxSize().background(Color(0xFF181818)).pointerInput(visible) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            if (visible && event.type == PointerEventType.Press) interaction()
+                        }
                     }
+                }) {
+                    Box(Modifier.fillMaxSize().alpha(opacity)) { content() }
                 }
-            }) {
-                Box(Modifier.fillMaxSize().alpha(opacity)) { content() }
             }
         }
     }

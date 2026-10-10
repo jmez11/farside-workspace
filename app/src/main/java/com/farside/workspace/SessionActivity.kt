@@ -14,6 +14,7 @@ import com.farside.workspace.data.ProfileManager
 import metavrx.layout.compose.SpatialScene
 
 class SessionActivity : ComponentActivity() {
+    internal val displayCapture = DisplayCapturePermission(this)
     internal var keyboardPanelState: metavrx.layout.window.compose.state.WindowState? = null
     internal var keyboardEditorHasFocus = false
     internal var keyboardPanelEditorHasFocus = false
@@ -41,33 +42,33 @@ class SessionActivity : ComponentActivity() {
     internal var rdpInstance = 0L
         internal set
     private val windowInteraction = androidx.compose.runtime.mutableStateOf(0L)
-    private var placement: SessionWindowPlacement? = null
-    private var placementProfile: String? = null
-    internal var positionSlot = 0
+    private var sessionProfile: String? = null
+    private var sessionCredential: String? = null
+    private var credentialPrefs: android.content.SharedPreferences? = null
+    private val credentialListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == "credentials" && sessionCredential?.let { id ->
+                ProfileManager(this).getCredentials().none { it.id == id }
+            } == true) runOnUiThread { finish() }
+    }
+    internal var sessionSlot = 0
         private set
     private val movementObserver = WindowMovementObserver(this,
-        onMoved = { windowInteraction.value += 1L },
-        onPose = { placement?.observe(it) })
+        onMoved = { windowInteraction.value += 1L })
 
     override fun onPostResume() {
         super.onPostResume()
         window.decorView.post {
             if (!isDestroyed) {
                 movementObserver.start()
-                placement?.restoreOnce()
             }
         }
     }
 
-    override fun onStop() {
-        placement?.saveOnClose()
-        super.onStop()
-    }
-
     override fun onDestroy() {
-        placement?.saveOnClose()
+        credentialPrefs?.unregisterOnSharedPreferenceChangeListener(credentialListener)
+        displayCapture.close()
         movementObserver.close()
-        if (!isChangingConfigurations) placementProfile?.let { SessionWindowSlots.release(it, positionSlot) }
+        if (!isChangingConfigurations) sessionProfile?.let { SessionWindowSlots.release(it, sessionSlot) }
         super.onDestroy()
     }
 
@@ -81,6 +82,7 @@ class SessionActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        SessionWindowLauncher.forgetLegacyPositions(this)
         androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
         window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
         
@@ -97,12 +99,20 @@ class SessionActivity : ComponentActivity() {
             finish()
             return
         }
-        placementProfile = profile.id
-        positionSlot = if (intent.hasExtra(SessionWindowSlots.EXTRA_SLOT)) intent.getIntExtra(SessionWindowSlots.EXTRA_SLOT, 0).coerceAtLeast(0)
+        sessionProfile = profile.id
+        sessionCredential = profile.credentialId
+        if (profile.credentialId != null && profileManager.getCredentials().none { it.id == profile.credentialId }) {
+            android.widget.Toast.makeText(this, "Saved credential was deleted. Choose another credential for this connection.", android.widget.Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
+        credentialPrefs = getSharedPreferences("farside_profiles", MODE_PRIVATE).also {
+            it.registerOnSharedPreferenceChangeListener(credentialListener)
+        }
+        sessionSlot = if (intent.hasExtra(SessionWindowSlots.EXTRA_SLOT)) intent.getIntExtra(SessionWindowSlots.EXTRA_SLOT, 0).coerceAtLeast(0)
             else SessionWindowSlots.reserve(this, profile.id, taskId)
-        intent.putExtra(SessionWindowSlots.EXTRA_SLOT, positionSlot)
-        SessionWindowSlots.claim(profile.id, positionSlot)
-        placement = SessionWindowPlacement(this, profile.id, positionSlot)
+        intent.putExtra(SessionWindowSlots.EXTRA_SLOT, sessionSlot)
+        SessionWindowSlots.claim(profile.id, sessionSlot)
         setTitle(profile.name)
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
             setTaskDescription(android.app.ActivityManager.TaskDescription(profile.name))
@@ -132,7 +142,7 @@ class SessionActivity : ComponentActivity() {
                             session = profile,
                             windowInteraction = windowInteraction.value,
                             onInstanceCreated = { rdpInstance = it },
-                            onBridgeCreated = { rdpBridge = it },
+                            onBridgeCreated = { rdpBridge = it; it.displayCapture = displayCapture },
                             onClose = { finish() }
                         )
                         }

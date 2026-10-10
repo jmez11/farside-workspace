@@ -4,9 +4,6 @@ package com.farside.workspace.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.semantics.semantics
@@ -21,6 +18,11 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
+import androidx.compose.material.icons.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.*
 import androidx.compose.material3.Divider
 import androidx.compose.material3.IconButton
@@ -33,6 +35,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectDragGestures
+import com.farside.workspace.ConnectionSpatialDrag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -50,13 +56,22 @@ fun LauncherScreen(
     onAddProfile: (ConnectionProfile) -> Unit,
     onDeleteProfile: (String) -> Unit,
     onConnectProfile: (String) -> Unit,
-    profileManager: com.farside.workspace.data.ProfileManager
+    profileManager: com.farside.workspace.data.ProfileManager,
+    starredIds: Set<String> = emptySet(),
+    onToggleStar: (String) -> Unit = {},
+    onMoveProfile: (String, String) -> Unit = { _, _ -> }
 ) {
     var isAdding by rememberSaveable { mutableStateOf(false) }
     var editingProfile by remember { mutableStateOf<ConnectionProfile?>(null) }
     var isSettingsOpen by rememberSaveable { mutableStateOf(false) }
     var settingsInitialTab by rememberSaveable { mutableStateOf(0) }
     var credentialRevision by remember { mutableIntStateOf(0) }
+    var reordering by rememberSaveable { mutableStateOf(false) }
+    val dragView = LocalView.current
+    DisposableEffect(dragView) {
+        val detach = ConnectionSpatialDrag.attach(dragView)
+        onDispose { detach() }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         if (isAdding || editingProfile != null) {
@@ -96,21 +111,20 @@ fun LauncherScreen(
                     }
                 }
                 Spacer(modifier = Modifier.height(24.dp))
-                
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(3),
-                    contentPadding = PaddingValues(8.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    items(profiles) { profile ->
-                        ProfileCard(
-                            profile = profile,
-                            onEdit = { editingProfile = profile },
-                            onDelete = { onDeleteProfile(profile.id) },
-                            onConnect = { onConnectProfile(profile.id) }
-                        )
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Text(if (reordering) "Drag to reorder. Starred connections stay first."
+                        else "Click to open, or drag into space to place a window.",
+                        style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                    OutlinedButton(onClick = { reordering = !reordering }, enabled = profiles.size > 1 || reordering) {
+                        Text(if (reordering) "Done reordering" else "Reorder")
                     }
                 }
+                Spacer(Modifier.height(8.dp))
+
+                LauncherConnectionGrid(profiles = profiles, starredIds = starredIds, reordering = reordering,
+                    modifier = Modifier.weight(1f), onEdit = { editingProfile = it }, onDelete = onDeleteProfile,
+                    onConnect = onConnectProfile, onToggleStar = onToggleStar, onMove = onMoveProfile)
 
                 Spacer(modifier = Modifier.height(16.dp))
                 ExtendedFloatingActionButton(
@@ -135,16 +149,31 @@ fun LauncherScreen(
 }
 
 @Composable
-fun ProfileCard(profile: ConnectionProfile, onEdit: () -> Unit, onDelete: () -> Unit, onConnect: () -> Unit) {
+fun ProfileCard(profile: ConnectionProfile, onEdit: () -> Unit, onDelete: () -> Unit, onConnect: () -> Unit,
+    reordering: Boolean = false, starred: Boolean = false, onToggleStar: () -> Unit = {},
+    dragging: Boolean = false, onMoveEarlier: (() -> Unit)? = null, onMoveLater: (() -> Unit)? = null) {
     var menuExpanded by remember { mutableStateOf(false) }
+    val view = LocalView.current
+    val latestProfile by rememberUpdatedState(profile)
+    val launchModifier = if (!reordering) Modifier.clickable { onConnect() }.pointerInput(profile.id, view) {
+        detectDragGestures(
+            onDragStart = {
+                if (!ConnectionSpatialDrag.start(view, latestProfile)) android.widget.Toast.makeText(view.context,
+                    "Couldn't start placement. Try dragging again or click to open.", android.widget.Toast.LENGTH_LONG).show()
+            },
+            onDrag = { change, _ -> change.consume() }
+        )
+    } else Modifier
     
     Card(
-        modifier = Modifier.padding(8.dp).fillMaxWidth().height(140.dp).clickable { onConnect() },
-        shape = RoundedCornerShape(12.dp)
+        modifier = Modifier.padding(8.dp).fillMaxWidth().height(if (reordering) 180.dp else 140.dp).then(launchModifier),
+        shape = RoundedCornerShape(12.dp),
+        border = if (dragging) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             Column(
-                modifier = Modifier.fillMaxSize().padding(16.dp),
+                modifier = Modifier.fillMaxSize().padding(start = 16.dp, top = 16.dp, end = 16.dp,
+                    bottom = if (reordering) 48.dp else 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
@@ -159,6 +188,21 @@ fun ProfileCard(profile: ConnectionProfile, onEdit: () -> Unit, onDelete: () -> 
                 Text("${profile.host}:${profile.port}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             
+            IconButton(onClick = onToggleStar, modifier = Modifier.align(Alignment.TopStart)) {
+                Icon(if (starred) Icons.Default.Star else Icons.Default.StarBorder,
+                    contentDescription = if (starred) "Unstar ${profile.name}" else "Star ${profile.name}",
+                    tint = if (starred) Color(0xFFFFD166) else MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            if (reordering) {
+                Row(modifier = Modifier.align(Alignment.BottomCenter)) {
+                    IconButton(onClick = { onMoveEarlier?.invoke() }, enabled = onMoveEarlier != null) {
+                        Icon(Icons.Default.KeyboardArrowLeft, "Move ${profile.name} earlier")
+                    }
+                    IconButton(onClick = { onMoveLater?.invoke() }, enabled = onMoveLater != null) {
+                        Icon(Icons.Default.KeyboardArrowRight, "Move ${profile.name} later")
+                    }
+                }
+            }
             Box(modifier = Modifier.align(Alignment.TopEnd)) {
                 IconButton(onClick = { menuExpanded = true }) {
                     Icon(Icons.Default.MoreVert, contentDescription = "More options")

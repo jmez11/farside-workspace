@@ -10,6 +10,40 @@ import android.view.accessibility.AccessibilityNodeInfo
 class CredentialUiVerification(private val instrumentation: Instrumentation) {
     private val automation get() = instrumentation.uiAutomation
 
+    fun verifyLiveDeletion() {
+        val manager = com.farside.workspace.data.ProfileManager(instrumentation.targetContext)
+        val original = manager.getProfiles().first { it.type == com.farside.workspace.data.ConnectionType.RDP }
+        val credential = com.farside.workspace.data.SavedCredential(id = java.util.UUID.randomUUID().toString(),
+            name = "Credential deletion verification", user = original.user, pass = original.pass)
+        val profile = original.copy(id = java.util.UUID.randomUUID().toString(), name = "Credential deletion verification",
+            credentialId = credential.id, enableCamera = false, redirectMicrophone = false)
+        var activity: SessionActivity? = null
+        try {
+            manager.addCredential(credential); manager.addProfile(profile)
+            activity = instrumentation.startActivitySync(Intent(instrumentation.targetContext, SessionActivity::class.java).apply {
+                putExtra("profileId", profile.id); addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }) as SessionActivity
+            val deadline = android.os.SystemClock.uptimeMillis()+25000
+            while(activity.rdpInstance == 0L && android.os.SystemClock.uptimeMillis()<deadline) Thread.sleep(200)
+            check(activity.rdpInstance != 0L) { "No live session to invalidate" }
+            manager.deleteCredential(credential.id)
+            while(!activity.isDestroyed && android.os.SystemClock.uptimeMillis()<deadline) Thread.sleep(100)
+            check(activity.isDestroyed) { "Deleting a credential left its live session open" }
+            val invalid = manager.getProfiles().single { it.id == profile.id }
+            check(invalid.credentialId == credential.id && invalid.user.isEmpty() && invalid.pass.isEmpty())
+            val rejected = instrumentation.startActivitySync(Intent(instrumentation.targetContext, SessionActivity::class.java).apply {
+                putExtra("profileId", profile.id); addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }) as SessionActivity
+            Thread.sleep(1000)
+            check(rejected.isFinishing || rejected.isDestroyed)
+            java.io.File(instrumentation.targetContext.cacheDir,"credential-deletion-result.json")
+                .writeText("{\"success\":true,\"liveSessionClosed\":true,\"reconnectRejected\":true}")
+        } finally {
+            activity?.let { current -> instrumentation.runOnMainSync { current.finish() } }
+            manager.deleteProfile(profile.id); manager.deleteCredential(credential.id)
+        }
+    }
+
     private fun descendants(node: AccessibilityNodeInfo): List<AccessibilityNodeInfo> =
         listOf(node) + (0 until node.childCount).flatMap { index ->
             node.getChild(index)?.let(::descendants).orEmpty()
@@ -108,7 +142,9 @@ class CredentialUiVerification(private val instrumentation: Instrumentation) {
             for (i in 0 until array.length()) {
                 val json = array.getJSONObject(i)
                 check(!json.has("pass") && !json.has("proxyPass"))
-                check(json.has("passEncrypted"))
+                if (key == "profiles" && !json.isNull("credentialId") && json.has("credentialId")) {
+                    check(!json.has("user") && !json.has("passEncrypted")) { "Linked profile copied credential data" }
+                } else check(json.has("passEncrypted"))
             }
         }
         // Flush pending writes before inspecting the actual preferences file, not just memory.
@@ -335,6 +371,14 @@ class CredentialUiVerification(private val instrumentation: Instrumentation) {
                 it.credentialId == credential.id && it.user == "final-user" && it.pass == "final-password"
             })
             verifyPin(activity, manager, credential.id, saved.id)
+            manager.deleteCredential(credential.id)
+            val invalidated = manager.getProfiles().filter { it.credentialId == credential.id }
+            check(invalidated.size == 3 && invalidated.all { it.user.isEmpty() && it.pass.isEmpty() })
+            // Saving a stale in-memory profile cannot resurrect a deleted credential.
+            manager.updateProfile(saved)
+            check(manager.getProfiles().single { it.id == saved.id }.let { it.user.isEmpty() && it.pass.isEmpty() })
+            check(manager.getProfiles().single { it.id == "unrelated-test" }.user == "different-user")
+            verifyStorage(prefs)
         } finally {
             activity?.let { current -> instrumentation.runOnMainSync { current.finish() } }
             val editor = prefs.edit()

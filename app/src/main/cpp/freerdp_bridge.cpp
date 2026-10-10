@@ -69,6 +69,8 @@ struct RdpContext {
     jobject eventReceiver;
     jmethodID disconnectedMethod;
     jmethodID clipboardMethod;
+    jmethodID displayStartMethod;
+    jmethodID displayStopMethod;
     std::string certificateHost;
     pcRdpgfxSurfaceCommand origSurfaceCommand;
     std::atomic<uint32_t> codecCounts[16];
@@ -95,6 +97,31 @@ struct RdpContext {
     std::atomic<bool> clipConnected;
     std::chrono::steady_clock::time_point connectTime;
 };
+
+static BOOL display_capture_start(void* owner, ANativeWindow* window) {
+    auto* ctx = static_cast<RdpContext*>(owner);
+    if (!ctx || !ctx->javaVm || !ctx->eventReceiver) return FALSE;
+    JNIEnv* env = nullptr;
+    bool attached = ctx->javaVm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK;
+    if (attached && ctx->javaVm->AttachCurrentThread(&env, nullptr) != JNI_OK) return FALSE;
+    jobject surface = window ? ANativeWindow_toSurface(env, window) : nullptr;
+    jboolean result = (!window || surface) ? env->CallBooleanMethod(ctx->eventReceiver, ctx->displayStartMethod, surface) : JNI_FALSE;
+    if (surface) env->DeleteLocalRef(surface);
+    if (env->ExceptionCheck()) { env->ExceptionClear(); result = JNI_FALSE; LOGE("Display capture start failed"); }
+    if (attached) ctx->javaVm->DetachCurrentThread();
+    return result == JNI_TRUE;
+}
+
+static void display_capture_stop(void* owner) {
+    auto* ctx = static_cast<RdpContext*>(owner);
+    if (!ctx || !ctx->javaVm || !ctx->eventReceiver) return;
+    JNIEnv* env = nullptr;
+    bool attached = ctx->javaVm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK;
+    if (attached && ctx->javaVm->AttachCurrentThread(&env, nullptr) != JNI_OK) return;
+    env->CallVoidMethod(ctx->eventReceiver, ctx->displayStopMethod);
+    if (env->ExceptionCheck()) { env->ExceptionClear(); LOGE("Display capture stop failed"); }
+    if (attached) ctx->javaVm->DetachCurrentThread();
+}
 
 static void report_disconnect(freerdp* instance, bool established, const char* fallback = "") {
     auto* ctx = reinterpret_cast<RdpContext*>(instance->context);
@@ -229,6 +256,11 @@ extern "C" BOOL cam_android_verify_isolation(QuestCameraState*, QuestCameraState
 extern "C" BOOL quest_camera_encoder_register(JNIEnv* env);
 
 QuestAudioState* quest_audio_state(rdpContext* context) { return ((RdpContext*)context)->audio; }
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_farside_workspace_QuestAudioVerification_verifyPlaybackTeardown(JNIEnv*, jclass) {
+    return quest_audio_verify_playback_teardown() ? JNI_TRUE : JNI_FALSE;
+}
 extern "C" QuestCameraState* quest_camera_state(rdpContext* context) { return &((RdpContext*)context)->camera; }
 extern "C" UINT VCAPITYPE quest_rdpecam_entry(IDRDYNVC_ENTRY_POINTS* entry) {
     if (!entry || !entry->GetRdpContext) return CHANNEL_RC_INITIALIZATION_ERROR;
@@ -487,6 +519,7 @@ static void destroy_client(freerdp* instance, bool connected) {
     if (ctx->javaVm && ctx->javaVm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) == JNI_OK && ctx->certificateVerifier)
         env->DeleteGlobalRef(ctx->certificateVerifier);
     if (env && ctx->eventReceiver) env->DeleteGlobalRef(ctx->eventReceiver);
+    ctx->eventReceiver = nullptr;
     ctx->certificateHost.~basic_string();
     ctx->storagePath.~basic_string();
     ctx->windows.~vector();
@@ -571,6 +604,8 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
     jclass bridgeClass = env->GetObjectClass(bridge);
     ctx->disconnectedMethod = env->GetMethodID(bridgeClass, "onNativeDisconnected", "(Ljava/lang/String;Z)V");
     ctx->clipboardMethod = env->GetMethodID(bridgeClass, "onNativeClipboardChanged", "(Ljava/lang/String;)V");
+    ctx->displayStartMethod = env->GetMethodID(bridgeClass, "onNativeDisplayStart", "(Landroid/view/Surface;)Z");
+    ctx->displayStopMethod = env->GetMethodID(bridgeClass, "onNativeDisplayStop", "()V");
     env->DeleteLocalRef(bridgeClass);
     ctx->verifyCertificates = nullptr;
     if (certificateVerifier) {
@@ -598,6 +633,9 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
     ctx->displayReady = false;
     ctx->disp = nullptr;
     ctx->camera = {};
+    ctx->camera.owner = ctx;
+    ctx->camera.displayStart = display_capture_start;
+    ctx->camera.displayStop = display_capture_stop;
     new (&ctx->cameraRequested) std::atomic<bool>(enableCamera == JNI_TRUE);
     new (&ctx->cameraConnected) std::atomic<bool>(false);
     new (&ctx->storageRequested) std::atomic<bool>(enableStorage == JNI_TRUE);
@@ -662,8 +700,9 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
     freerdp_settings_set_bool(instance->context->settings, FreeRDP_AudioPlayback, TRUE);
     freerdp_settings_set_bool(instance->context->settings, FreeRDP_RemoteConsoleAudio, FALSE);
     freerdp_settings_set_bool(instance->context->settings, FreeRDP_AudioCapture, enableMicrophone);
-    const char* soundArgs[] = { "rdpsnd", "sys:quest" };
-    freerdp_client_add_static_channel(instance->context->settings, 2, soundArgs);
+    // Keep stale-block recovery independent of compressed decoder history.
+    const char* soundArgs[] = { "rdpsnd", "sys:quest", "format:1", "quality:dynamic" };
+    freerdp_client_add_static_channel(instance->context->settings, 4, soundArgs);
     if (enableMicrophone) {
         const char* micArgs[] = { "audin", "sys:quest" };
         freerdp_client_add_dynamic_channel(instance->context->settings, 2, micArgs);
@@ -1186,6 +1225,37 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_farside_workspace_FreeRDPBridge_setCameraMuted(JNIEnv*, jobject, jlong instance, jboolean muted) {
     if (instance) InterlockedExchange(&quest_camera_state(((freerdp*)instance)->context)->muted, muted == JNI_TRUE);
 }
+extern "C" JNIEXPORT jlongArray JNICALL
+Java_com_farside_workspace_FreeRDPBridge_getAudioLatencyMetrics(JNIEnv* env, jobject, jlong instance) {
+    jlong metrics[2]{};
+    if (instance) {
+        auto* state = quest_audio_state(((freerdp*)instance)->context);
+        metrics[0] = state->outputLatencyMs; metrics[1] = state->maxOutputLatencyMs;
+    }
+    auto result = env->NewLongArray(2);
+    env->SetLongArrayRegion(result, 0, 2, metrics);
+    return result;
+}
+extern "C" JNIEXPORT void JNICALL
+Java_com_farside_workspace_FreeRDPBridge_stallAudioForVerification(JNIEnv*, jobject, jlong instance) {
+#ifndef NDEBUG
+    if (instance) quest_audio_state(((freerdp*)instance)->context)->stallNextPlaybackMs = 1500;
+#endif
+}
+extern "C" JNIEXPORT jlongArray JNICALL
+Java_com_farside_workspace_FreeRDPBridge_getAudioPulseTimes(JNIEnv* env, jobject, jlong instance) {
+    jlong pulses[128]{};
+    unsigned length = 0;
+    if (instance) {
+        auto* state = quest_audio_state(((freerdp*)instance)->context);
+        const auto count = state->pulseCount.load();
+        length = std::min(count, 128u);
+        for (unsigned i = 0; i < length; ++i) pulses[i] = state->pulseTimesMs[(count - length + i) % 128];
+    }
+    auto result = env->NewLongArray(length);
+    env->SetLongArrayRegion(result, 0, length, pulses);
+    return result;
+}
 
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_farside_workspace_FreeRDPBridge_isCameraRecording(JNIEnv*, jobject, jlong instance) {
@@ -1222,6 +1292,12 @@ Java_com_farside_workspace_QuestCameraVerification_verifySessionIsolation(JNIEnv
 extern "C" JNIEXPORT void JNICALL
 Java_com_farside_workspace_FreeRDPBridge_setCameraMaxDimension(JNIEnv*, jobject, jint maxDim) {
     cam_android_set_max_dimension(maxDim);
+}
+
+extern "C" BOOL cam_android_verify_display_conversion(void);
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_farside_workspace_QuestDisplayVerification_verifyConversion(JNIEnv*, jclass) {
+    return cam_android_verify_display_conversion();
 }
 
 extern "C" JNIEXPORT jboolean JNICALL

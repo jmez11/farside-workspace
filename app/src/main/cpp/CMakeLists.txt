@@ -75,6 +75,50 @@ set(CHANNEL_DRIVE_CLIENT ON CACHE BOOL "RDP drive redirection" FORCE)
 # 5. Build FreeRDP natively
 add_subdirectory(freerdp)
 
+# Drain/join rdpsnd's playback worker before freeing its device/DSP state.
+# Keep these two upstream teardown corrections outside the submodule.
+set(quest_rdpsnd_upstream "${CMAKE_CURRENT_SOURCE_DIR}/freerdp/channels/rdpsnd/client/rdpsnd_main.c")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${quest_rdpsnd_upstream}")
+file(READ "${quest_rdpsnd_upstream}" quest_rdpsnd_source)
+foreach(quest_close_anchor IN ITEMS
+    "\tWINPR_ASSERT(!rdpsnd->dynamic);\n\tif (rdpsnd->OpenHandle != 0)"
+    "\trdpsnd->OnOpenCalled = FALSE;\n\tif (rdpsnd->device)")
+    string(FIND "${quest_rdpsnd_source}" "${quest_close_anchor}" quest_anchor_index)
+    if(quest_anchor_index EQUAL -1)
+        message(FATAL_ERROR "Upstream rdpsnd teardown changed; recheck the worker lifetime fix")
+    endif()
+    string(REPLACE "\n\tif (" "\n\trdpsnd_terminate_thread(rdpsnd);\n\tif (" quest_close_replacement "${quest_close_anchor}")
+    string(REPLACE "${quest_close_anchor}" "${quest_close_replacement}" quest_rdpsnd_source "${quest_rdpsnd_source}")
+endforeach()
+set(quest_queue_anchor "\t\ts = message.wParam;\n\t\terror = rdpsnd_recv_pdu(rdpsnd, s);")
+string(FIND "${quest_rdpsnd_source}" "${quest_queue_anchor}" quest_queue_index)
+if(quest_queue_index EQUAL -1)
+    message(FATAL_ERROR "Upstream rdpsnd queue changed; recheck latency instrumentation")
+endif()
+string(PREPEND quest_rdpsnd_source "#include <android/log.h>\n")
+string(REPLACE "UINT64 wArrivalTime;" "UINT64 wArrivalTime;\n\tUINT64 questQueueAgeMs, questMaxQueueAgeMs, questQueueSamples;" quest_rdpsnd_source "${quest_rdpsnd_source}")
+string(REPLACE "${quest_queue_anchor}" "\t\trdpsnd->questQueueAgeMs = GetTickCount64() - message.time;\n\t\tif (rdpsnd->questQueueAgeMs > rdpsnd->questMaxQueueAgeMs) rdpsnd->questMaxQueueAgeMs = rdpsnd->questQueueAgeMs;\n\t\tif (rdpsnd->questQueueSamples++ % 10 == 0) __android_log_print(ANDROID_LOG_INFO, \"QuestAudioQueue\", \"age=%llu max=%llu\", (unsigned long long)rdpsnd->questQueueAgeMs, (unsigned long long)rdpsnd->questMaxQueueAgeMs);\n${quest_queue_anchor}" quest_rdpsnd_source "${quest_rdpsnd_source}")
+# WaveConfirm must include time spent waiting for the playback worker. AAudio's
+# blocking writes otherwise hide that delay from the server. A stalled worker
+# discards old audio while still parsing/acknowledging each PDU in protocol order.
+set(quest_wave_anchor "if (rdpsnd->device && rdpsnd->attached && !rdpsnd_detect_overrun(rdpsnd, format, size))")
+string(FIND "${quest_rdpsnd_source}" "${quest_wave_anchor}" quest_wave_index)
+if(quest_wave_index EQUAL -1)
+    message(FATAL_ERROR "Upstream rdpsnd wave handling changed; recheck bounded audio playback")
+endif()
+string(REPLACE "${quest_wave_anchor}"
+    "if (rdpsnd->questQueueAgeMs > 250)\n\t\t__android_log_print(ANDROID_LOG_WARN, \"QuestAudioQueue\", \"Discarding stale audio age=%llu ms\", (unsigned long long)rdpsnd->questQueueAgeMs);\n\tif (rdpsnd->device && rdpsnd->attached && rdpsnd->questQueueAgeMs <= 250 && !rdpsnd_detect_overrun(rdpsnd, format, size))"
+    quest_rdpsnd_source "${quest_rdpsnd_source}")
+string(REPLACE "rdpsnd->wArrivalTime = GetTickCount64();"
+    "rdpsnd->wArrivalTime = GetTickCount64() - rdpsnd->questQueueAgeMs;"
+    quest_rdpsnd_source "${quest_rdpsnd_source}")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/quest_rdpsnd_main.c" "${quest_rdpsnd_source}")
+get_target_property(quest_rdpsnd_sources rdpsnd-client SOURCES)
+list(FILTER quest_rdpsnd_sources EXCLUDE REGEX "(^|/)rdpsnd_main\\.c$")
+set_property(TARGET rdpsnd-client PROPERTY SOURCES ${quest_rdpsnd_sources}
+    "${CMAKE_CURRENT_BINARY_DIR}/quest_rdpsnd_main.c")
+target_include_directories(rdpsnd-client PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/freerdp/channels/rdpsnd/client")
+
 # Keep the Quest MediaCodec fixes reviewable outside the upstream submodule.
 # FreeRDP 3.27.1's experimental backend has a compile error and assumes unpadded I420.
 get_target_property(quest_codec_sources freerdp-codecs SOURCES)

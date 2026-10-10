@@ -6,6 +6,7 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="horizonos.permission.HEADSET_CAMERA" />
     <uses-permission android:name="horizonos.permission.AVATAR_CAMERA" />
@@ -53,6 +54,11 @@
             <layout android:defaultWidth="1024dp" android:defaultHeight="640dp" />
             <meta-data android:name="com.oculus.vr.default_display_metrics" android:value="1280x800" />
         </activity>
+
+        <service
+            android:name=".DisplayCaptureService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
 
         <service
             android:name=".tunnel.CloudflaredService"
