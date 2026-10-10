@@ -91,6 +91,11 @@ class AdbTunnelVerification(private val instrumentation: Instrumentation) {
         val context = instrumentation.targetContext
         val state = AdbDiscovery.discover(context)
         check(state.developer && state.wireless && state.port != null) { "Actual wireless ADB endpoint not discovered" }
+        repeat(10) { attempt ->
+            val repeated = AdbDiscovery.discover(context, 3000)
+            check(repeated.port == state.port) { "Discovery lost endpoint on attempt $attempt: $repeated" }
+            Socket("127.0.0.1", checkNotNull(repeated.port)).close()
+        }
         val a = ServerSocket(0, 4, java.net.InetAddress.getByName("127.0.0.1"))
         val b = ServerSocket(0, 4, java.net.InetAddress.getByName("127.0.0.1"))
         val bridgePort = ServerSocket(0).use { it.localPort }
@@ -148,7 +153,7 @@ class AdbTunnelVerification(private val instrumentation: Instrumentation) {
             if (previous == null) settings.delete() else settings.writeBytes(previous)
             if (oldYaml == null) yaml.delete() else yaml.writeBytes(oldYaml)
         }
-        val report = "Ordinary UID ${android.os.Process.myUid()}: actual ADB port ${state.port}; bidirectional relay, port-change client termination, disable/recovery, listener cleanup, input rejection, encrypted settings roundtrip PASS. Port changes/disable use synthetic local endpoints."
+        val report = "Ordinary UID ${android.os.Process.myUid()}: actual ADB port ${state.port}; ten repeated 3s discovery/teardown and loopback checks; bidirectional relay, port-change client termination, disable/recovery, listener cleanup, input rejection, encrypted settings roundtrip PASS. Port changes/disable use synthetic local endpoints."
         File(context.cacheDir, "adb-tunnel-local.txt").writeText(report)
         return report
     }

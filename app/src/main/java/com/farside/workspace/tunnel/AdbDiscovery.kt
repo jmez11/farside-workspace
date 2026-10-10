@@ -29,13 +29,15 @@ object AdbDiscovery {
         val result = AtomicReference<Int?>()
         val complete = CountDownLatch(1)
         val active = java.util.concurrent.atomic.AtomicBoolean(true)
+        val probes = java.util.concurrent.Executors.newSingleThreadExecutor()
         val listener = object : NsdManager.DiscoveryListener {
             override fun onDiscoveryStarted(type: String) {}
             override fun onDiscoveryStopped(type: String) {}
             override fun onStartDiscoveryFailed(type: String, code: Int) { complete.countDown() }
             override fun onStopDiscoveryFailed(type: String, code: Int) {}
-            override fun onServiceLost(info: NsdServiceInfo) { if (info.serviceName == resultName.get()) result.set(null) }
-            val resultName = AtomicReference<String?>()
+            // Discovery is a snapshot: teardown emits lost callbacks too. Only the
+            // loopback probe decides whether an advertised endpoint is usable.
+            override fun onServiceLost(info: NsdServiceInfo) {}
             private val pending = java.util.ArrayDeque<NsdServiceInfo>()
             private var resolving = false
             override fun onServiceFound(info: NsdServiceInfo) {
@@ -55,12 +57,20 @@ object AdbDiscovery {
                         resolveNext()
                     }
                     override fun onServiceResolved(service: NsdServiceInfo) {
-                        synchronized(pending) { resolving = false }
-                        if (active.get() && service.host?.hostAddress in local && service.port in 1..65535) {
-                            resultName.set(service.serviceName)
-                            result.set(service.port)
-                            complete.countDown()
-                        } else resolveNext()
+                        if (!active.get()) return
+                        // Keep probes off NSD's callback thread and keep resolution
+                        // serialized until this candidate has been checked.
+                        runCatching { probes.execute {
+                            val usable = service.host?.hostAddress in local && service.port in 1..65535 &&
+                                runCatching { Socket().use {
+                                    it.connect(InetSocketAddress("127.0.0.1", service.port), 500)
+                                }; true }.getOrDefault(false)
+                            synchronized(pending) { resolving = false }
+                            if (active.get() && usable) {
+                                result.set(service.port)
+                                complete.countDown()
+                            } else resolveNext()
+                        } }
                     }
                 })
             }
@@ -68,11 +78,12 @@ object AdbDiscovery {
         try {
             nsd.discoverServices("_adb-tls-connect._tcp.", NsdManager.PROTOCOL_DNS_SD, listener)
             complete.await(timeoutMs, TimeUnit.MILLISECONDS)
-        } finally { active.set(false); runCatching { nsd.stopServiceDiscovery(listener) } }
-        val port = result.get()?.takeIf { candidate ->
-            runCatching { Socket().use { it.connect(InetSocketAddress("127.0.0.1", candidate), 1000) }; true }.getOrDefault(false)
+        } finally {
+            active.set(false)
+            runCatching { nsd.stopServiceDiscovery(listener) }
+            probes.shutdownNow()
         }
         // Recheck switches after the asynchronous discovery.
-        return flags(context).let { if (it.developer && it.wireless) it.copy(port = port) else it }
+        return flags(context).let { if (it.developer && it.wireless) it.copy(port = result.get()) else it }
     }
 }
