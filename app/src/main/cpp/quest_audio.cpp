@@ -39,8 +39,9 @@ static AAudioStream* open_stream(const AUDIO_FORMAT* f, aaudio_direction_t direc
         AAudioStream_close(stream);
         return nullptr;
     }
-    __android_log_print(ANDROID_LOG_INFO, "QuestAudio", "opened %s %d Hz/%d channels",
-        direction == AAUDIO_DIRECTION_INPUT ? "capture" : "playback", f->nSamplesPerSec, f->nChannels);
+    __android_log_print(ANDROID_LOG_INFO, "QuestAudio", "opened %s %d Hz/%d channels session=%d",
+        direction == AAUDIO_DIRECTION_INPUT ? "capture" : "playback", f->nSamplesPerSec, f->nChannels,
+        AAudioStream_getSessionId(stream));
     return stream;
 }
 struct Speaker {
@@ -160,6 +161,7 @@ bool quest_audio_verify_playback_teardown() {
     format.nChannels = 2;
     format.nSamplesPerSec = 48000;
     if (!d->iface.Open(&d->iface, &format, 0)) { d->iface.Free(&d->iface); return false; }
+    if (AAudioStream_getSessionId(d->stream) <= 0) { d->iface.Free(&d->iface); return false; }
     std::atomic<bool> running{true};
     std::thread writer([&] {
         const int16_t silence[960]{};
@@ -173,6 +175,8 @@ bool quest_audio_verify_playback_teardown() {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
         d->iface.Close(&d->iface);
         if (!d->iface.Open(&d->iface, &format, 0)) { opened = false; break; }
+        std::lock_guard<std::recursive_mutex> guard(d->lock);
+        if (AAudioStream_getSessionId(d->stream) <= 0) { opened = false; break; }
     }
     running = false;
     writer.join();

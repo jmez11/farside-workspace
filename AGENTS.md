@@ -4,7 +4,7 @@
 - **Platform**: Native Android app for Meta Quest (Horizon OS).
 - **Language/UI**: Kotlin, Jetpack Compose, Meta Spatial SDK (0.14+).
 - **Windowing**: Meta VR Layout SDK for Compose "Spatial Windows". Windows must be user-movable/pinnable in Home and passthrough.
-- **RDP Stack**: FreeRDP 3.x (>= 3.27.1) (Apache-2.0) via NDK/JNI. Do NOT implement RDP from scratch. Reference `client/Android` in the FreeRDP repo.
+- **RDP Stack**: FreeRDP 3.x (>= 3.32.1) (Apache-2.0) via NDK/JNI. Do NOT implement RDP from scratch. Reference `client/Android` in the FreeRDP repo.
 - **SSH Stack**: SSHJ (Apache-2.0); Termux terminal-emulator (GPLv3) for VT100/xterm. App remains open-source, including store releases.
 - **Tunneling/Proxy**: Support bundling the `cloudflared` Android arm64 binary. Must support both ephemeral child processes for per-session proxy commands and persistent Android Foreground Services for always-on Cloudflare tunnels.
 - **Build/Release**: arm64-only, signed release CI. Command-line builds only, no Android Studio.

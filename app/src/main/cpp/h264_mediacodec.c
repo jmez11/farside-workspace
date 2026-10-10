@@ -224,6 +224,10 @@ static int mediacodec_decompress(H264_CONTEXT* h264, const BYTE* data, UINT32 si
                     h264->pYUVData[2][y * cw + x] = chroma[y * uvStride + sys->cropLeft + x * 2 + 1];
                 }
         }
+        // FreeRDP 3.32 validates rectangles and reconstructs AVC444 against the
+        // decoded plane geometry. NV12 chroma is copied only for these dimensions.
+        h264->YUVWidth = sys->width;
+        h264->YUVHeight = sys->height;
         const double elapsed = monotonic_ms() - start;
         sys->decodeTotalMs += elapsed;
         if (elapsed > sys->decodeMaxMs)

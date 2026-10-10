@@ -527,6 +527,13 @@ internal class RdpCameraVerification(private val test: RdpResizeInstrumentation,
                     if (isolation) check(blackFrames in 6..10) { "Own mute produced $blackFrames blackout frames, expected about eight" }
                 }
                 check(!bridge.isCameraUnsupported(session.rdpInstance))
+                val stopDeadline = SystemClock.uptimeMillis() + 10000
+                while (bridge.isCameraRecording(session.rdpInstance) && SystemClock.uptimeMillis() < stopDeadline)
+                    Thread.sleep(200)
+                check(!bridge.isCameraRecording(session.rdpInstance)) { "Camera still recording after the remote probe closed capture" }
+                File(output, "stream-lifecycle.json").writeText(org.json.JSONObject()
+                    .put("camera", targetCamera).put("recordingAfterRemoteClose", false)
+                    .put("displayStreamRequests", session.displayCapture.streamRequests.get()).toString(2))
             } finally {
                 if (secondary != 0L) bridge.disconnect(secondary)
                 secondarySurface?.release()
