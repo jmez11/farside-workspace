@@ -13,6 +13,8 @@ import java.io.File
 
 /** On-device regression check: saved RDP profile, actual task resizes, full-frame captures. */
 class RdpResizeInstrumentation : Instrumentation() {
+    private var adbCapabilityOnly = false
+    private var adbTunnelMode: String? = null
     private var lifecycleMode: String? = null
     private var launcherOnly = false
     private var cloudflaredOnly = false
@@ -40,6 +42,8 @@ class RdpResizeInstrumentation : Instrumentation() {
     private var imeOnly = false
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(arguments)
+        adbCapabilityOnly = arguments?.getString("adbCapabilityOnly") == "true"
+        adbTunnelMode = arguments?.getString("adbTunnelMode")
         cloudflaredOnly = arguments?.getString("cloudflaredOnly") == "true"
         cloudflaredHost = arguments?.getString("cloudflaredHost")
         cloudflaredCredential = arguments?.getString("cloudflaredCredential")
@@ -79,6 +83,18 @@ class RdpResizeInstrumentation : Instrumentation() {
     override fun onStart() {
         val results = Bundle()
         try {
+            adbTunnelMode?.let { mode ->
+                val report = AdbTunnelVerification(this).run(mode)
+                results.putString("stream", "PASS: $report\n")
+                finish(0, results)
+                return
+            }
+            if (adbCapabilityOnly) {
+                val report = AdbCapabilityVerification(this).run()
+                results.putString("stream", "$report\n")
+                finish(0, results)
+                return
+            }
             if (launcherOnly) {
                 val report = LauncherArrangementVerification(this).run()
                 results.putString("stream", "PASS: $report\n")

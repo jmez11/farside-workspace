@@ -289,8 +289,6 @@ fun SettingsTextField(
 @Composable
 fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.data.ProfileManager, initialTab: Int = 0) {
     var selectedTab by rememberSaveable(initialTab) { mutableStateOf(initialTab) }
-    var cloudflarePersistent by rememberSaveable { mutableStateOf(false) }
-    var cloudflareTunnelId by rememberSaveable { mutableStateOf("") }
     
     var appPinVerifier by remember { mutableStateOf(profileManager.getAppPinVerifier()) }
     var settingAppPin by remember { mutableStateOf(false) }
@@ -521,9 +519,7 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                         }
 
                         Spacer(modifier = Modifier.height(16.dp))
-                        SettingsHeader("Cloudflared Tunnel Service")
-                        SettingsSwitchRow("Enable Persistent Service", cloudflarePersistent, { cloudflarePersistent = it })
-                        SettingsTextField(cloudflareTunnelId, { cloudflareTunnelId = it }, "Tunnel ID (e.g. 1234abcd-...)")
+                        AdbTunnelSection()
 
                         val context = LocalContext.current
                         val isDebuggable = remember {
