@@ -22,6 +22,7 @@ internal object ConnectionSpatialDrag {
     const val MIME_ACTIVITY = "application/vnd.android.activity"
     const val EXTRA_PENDING_INTENT = "android.intent.extra.PENDING_INTENT"
     private var active: PendingIntent? = null
+    private var request: String? = null
 
     fun attach(view: View): () -> Unit {
         view.setOnDragListener { _, event ->
@@ -32,6 +33,8 @@ internal object ConnectionSpatialDrag {
                     // tokens when the user releases over the launcher or abandons placement.
                     active?.cancel()
                     active = null
+                    if (event.result) WindowLaunchMonitor.watch(request) else WindowLaunchMonitor.complete(request)
+                    request = null
                     true
                 }
                 else -> false
@@ -41,13 +44,16 @@ internal object ConnectionSpatialDrag {
             view.setOnDragListener(null)
             active?.cancel()
             active = null
+            WindowLaunchMonitor.complete(request)
+            request = null
         }
     }
 
-    fun payload(view: View, profile: ConnectionProfile): Pair<ClipData, PendingIntent> {
+    fun payload(view: View, profile: ConnectionProfile, request: String? = null): Pair<ClipData, PendingIntent> {
         val target = Intent(view.context, SessionActivity::class.java).apply {
             data = Uri.parse("farside://session/${profile.id}/drop/${UUID.randomUUID()}")
             putExtra("profileId", profile.id)
+            putExtra(WindowLaunchMonitor.EXTRA_REQUEST, request)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NEW_DOCUMENT or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
         }
         val pending = PendingIntent.getActivity(view.context, 0, target,
@@ -60,7 +66,12 @@ internal object ConnectionSpatialDrag {
 
     fun start(view: View, profile: ConnectionProfile): Boolean {
         if (active != null) return false
-        val (clip, pending) = payload(view, profile)
+        request = WindowLaunchMonitor.prepare(view.context)
+        val (clip, pending) = try { payload(view, profile, request) } catch (error: RuntimeException) {
+            WindowLaunchMonitor.fail(request)
+            request = null
+            return false
+        }
         active = pending
         val started = try {
             view.startDragAndDrop(clip, shadow(view, profile.name), null, View.DRAG_FLAG_GLOBAL)
@@ -71,6 +82,8 @@ internal object ConnectionSpatialDrag {
         if (!started) {
             pending.cancel()
             active = null
+            WindowLaunchMonitor.fail(request)
+            request = null
         }
         if (started) Log.i("SessionWindow", "Native connection placement drag started")
         return started

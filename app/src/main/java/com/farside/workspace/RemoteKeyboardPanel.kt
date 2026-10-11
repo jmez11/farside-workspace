@@ -1,79 +1,65 @@
+@file:Suppress("INVISIBLE_MEMBER", "INVISIBLE_REFERENCE")
 package com.farside.workspace
 
-import android.util.Log
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
+import android.graphics.Point
+import android.view.View
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.PointerEventType
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.platform.LocalDensity
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import metavr.app.volumetricwindow.VolumetricWindowTransaction
+import metavr.app.volumetricwindow.VolumetricWindowLayoutParams
 import metavrx.layout.window.compose.SpatialWindow
-import metavrx.layout.window.compose.layout.WindowAnchor
-import metavrx.layout.window.compose.layout.WindowModifier
-import metavrx.layout.window.compose.layout.anchor
-import metavrx.layout.window.compose.layout.height
-import metavrx.layout.window.compose.layout.width
-import metavrx.layout.window.compose.state.WindowState
-import metavrx.layout.window.compose.state.WindowFallback
+import metavrx.layout.window.compose.layout.*
+import metavrx.layout.window.compose.state.*
 
-/** Bottom-attached keys never consume or resize the desktop's content area. */
+/** Fixed-height opaque keyboard: page changes never resize or crop the native surface. */
 @Composable
-internal fun RemoteKeyboardPanel(visible: Boolean, expanded: Boolean, state: WindowState,
+internal fun RemoteKeyboardPanel(visible: Boolean, state: WindowState,
     onInteraction: () -> Unit, content: @Composable () -> Unit) {
-    var emitted by remember { mutableStateOf(false) }
-    var expandedSize by remember { mutableStateOf(false) }
-    val resizeLock = remember { Mutex() }
-    val compactPixels = with(LocalDensity.current) { 76.dp.roundToPx() }
+    if (!visible) return
+    val currentContent by rememberUpdatedState(content)
     val interaction by rememberUpdatedState(onInteraction)
-    LaunchedEffect(visible) {
-        if (visible) emitted = true
-        else { delay(180); emitted = false; expandedSize = false }
+    val lifecycle by state.lifecycle.collectAsState()
+    val token by state.token.collectAsState()
+    fun place() {
+        val t = token ?: return
+        // Native translationOverride is in dp (not pixels). Negative Y is downward.
+        val params = VolumetricWindowLayoutParams.Builder().setAttachFrom(48L).setAttachTo(80L)
+            .setTranslationOverride(Point(0, -96)).build()
+        state.attachedWindowManager?.applyTransaction(VolumetricWindowTransaction.Builder()
+            .setLayoutParams(t, params).build())
     }
-    LaunchedEffect(expanded, visible) {
-        if (visible) resizeLock.withLock {
-            if (!expanded && expandedSize) {
-                delay(180)
-                // Finish the bank animation before touching spatial geometry. The compositor
-                // must not reuse a large, still-visible buffer at the compact window's pose.
-                repeat(2) { withFrameNanos { } }
-                KeyboardPanelResize.compact(state, compactPixels) { expandedSize = false }
-            } else expandedSize = expanded
+    // The SDK commits/animates initial placement and width changes asynchronously.
+    // Reapply clearance after that commit; paging never enters either placement path.
+    LaunchedEffect(lifecycle, token) {
+        if (lifecycle == WindowLifecycle.Active && token != null) {
+            kotlinx.coroutines.delay(600)
+            place()
         }
     }
-    if (emitted) {
-        LaunchedEffect(state) { state.lifecycle.collect { Log.i("KeyboardPanel", "placement=$it") } }
-        BoxWithConstraints(Modifier.fillMaxSize()) {
-            // Leave the main window's Horizon corner grab targets clear on both sides.
-            val panelWidth = (maxWidth - 96.dp).coerceAtLeast(320.dp).coerceAtMost(maxWidth)
-            SpatialWindow(key = "remote-extra-keys", windowState = state, fallbackStrategy = WindowFallback.Drop,
-                modifier = WindowModifier.width(panelWidth).height(if (expandedSize) 314.dp else 76.dp)
-                    .anchor(WindowAnchor.Bottom)) {
-                var appeared by remember { mutableStateOf(false) }
-                LaunchedEffect(visible) { appeared = visible }
-                val opacity by animateFloatAsState(if (appeared) 1f else 0f, tween(180), label = "keyboard-panel")
-                Box(Modifier.fillMaxSize().background(Color(0xFF181818)).pointerInput(visible) {
-                    awaitPointerEventScope {
-                        while (true) {
-                            val event = awaitPointerEvent(PointerEventPass.Initial)
-                            if (visible && event.type == PointerEventType.Press) interaction()
-                        }
-                    }
-                }) {
-                    Box(Modifier.fillMaxSize().alpha(opacity)) { content() }
-                }
+    DisposableEffect(lifecycle, token) {
+        val view = state.hostedView
+        val placement = Runnable { place() }
+        val listener = View.OnLayoutChangeListener { _, l, t, r, b, oldL, oldT, oldR, oldB ->
+            if (r - l != oldR - oldL || b - t != oldB - oldT) {
+                view?.removeCallbacks(placement)
+                view?.postDelayed(placement, 600)
             }
         }
+        view?.addOnLayoutChangeListener(listener)
+        onDispose { view?.removeCallbacks(placement); view?.removeOnLayoutChangeListener(listener) }
+    }
+    SpatialWindow(key = "remote-shortcuts", windowState = state, fallbackStrategy = WindowFallback.Drop,
+        modifier = WindowModifier.matchParentWidth().height(76.dp).anchor(WindowAnchor.Bottom)) {
+        Box(Modifier.fillMaxSize().background(Color(0xFF181818)).pointerInput(Unit) {
+            awaitPointerEventScope { while (true) {
+                if (awaitPointerEvent(PointerEventPass.Initial).type == PointerEventType.Press) interaction()
+            } }
+        }) { currentContent() }
     }
 }

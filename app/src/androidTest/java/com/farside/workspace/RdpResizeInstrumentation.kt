@@ -33,6 +33,10 @@ class RdpResizeInstrumentation : Instrumentation() {
     private var credentialsOnly = false
     private var credentialDeletionOnly = false
     private var proxiesOnly = false
+    private var keyboardCropOnly = false
+    private var windowCapacityOnly = false
+    private var windowLaunchOnly = false
+    private var keyboardGeometryOnly = false
     private var toolbarOnly = false
     private var sshOnly = false
     private var sshKeysOnly = false
@@ -62,6 +66,10 @@ class RdpResizeInstrumentation : Instrumentation() {
         credentialsOnly = arguments?.getString("credentialsOnly") == "true"
         credentialDeletionOnly = arguments?.getString("credentialDeletionOnly") == "true"
         proxiesOnly = arguments?.getString("proxiesOnly") == "true"
+        keyboardCropOnly = arguments?.getString("keyboardCropOnly") == "true"
+        windowCapacityOnly = arguments?.getString("windowCapacityOnly") == "true"
+        windowLaunchOnly = arguments?.getString("windowLaunchOnly") == "true"
+        keyboardGeometryOnly = arguments?.getString("keyboardGeometryOnly") == "true"
         toolbarOnly = arguments?.getString("toolbarOnly") == "true"
         sshOnly = arguments?.getString("sshOnly") == "true"
         sshKeysOnly = arguments?.getString("sshKeysOnly") == "true"
@@ -83,6 +91,22 @@ class RdpResizeInstrumentation : Instrumentation() {
     override fun onStart() {
         val results = Bundle()
         try {
+            if (windowLaunchOnly) {
+                results.putString("stream", "PASS: ${WindowLaunchVerification(this).run()}\n")
+                finish(0, results)
+                return
+            }
+            if (windowCapacityOnly) {
+                results.putString("stream", "PASS: ${WindowCapacityVerification(this).run()}\n")
+                finish(0, results)
+                return
+            }
+            if (keyboardCropOnly || keyboardGeometryOnly) {
+                val report = KeyboardCropVerification(this).run(rapid = !keyboardGeometryOnly)
+                results.putString("stream", "PASS: $report\n")
+                finish(0, results)
+                return
+            }
             adbTunnelMode?.let { mode ->
                 val report = AdbTunnelVerification(this).run(mode)
                 results.putString("stream", "PASS: $report\n")

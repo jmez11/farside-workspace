@@ -158,8 +158,7 @@ fun ProfileCard(profile: ConnectionProfile, onEdit: () -> Unit, onDelete: () -> 
     val launchModifier = if (!reordering) Modifier.clickable { onConnect() }.pointerInput(profile.id, view) {
         detectDragGestures(
             onDragStart = {
-                if (!ConnectionSpatialDrag.start(view, latestProfile)) android.widget.Toast.makeText(view.context,
-                    "Couldn't start placement. Try dragging again or click to open.", android.widget.Toast.LENGTH_LONG).show()
+                ConnectionSpatialDrag.start(view, latestProfile)
             },
             onDrag = { change, _ -> change.consume() }
         )

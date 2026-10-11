@@ -102,6 +102,14 @@ class MainActivity : ComponentActivity() {
 
             val refreshProfiles = { profiles = profileManager.getProfiles() }
 
+            DisposableEffect(profileManager) {
+                val preferences = getSharedPreferences("farside_profiles", android.content.Context.MODE_PRIVATE)
+                val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+                    if (key == "profiles") refreshProfiles()
+                }
+                preferences.registerOnSharedPreferenceChangeListener(listener)
+                onDispose { preferences.unregisterOnSharedPreferenceChangeListener(listener) }
+            }
             MaterialTheme(colorScheme = darkColorScheme()) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -142,13 +150,13 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
     var showSoftKeyboard by remember { mutableStateOf(false) }
     val imeVisible = WindowInsets.isImeVisible
     var panelImeVisible by remember { mutableStateOf(false) }
-    val keyboardVisible = imeVisible || panelImeVisible
     var extraKeysExpanded by remember { mutableStateOf(false) }
     val keyboardPanelState = metavrx.layout.window.compose.state.rememberWindowState()
+    val keyboardVisible = imeVisible || panelImeVisible
     var keyboardInteraction by remember { mutableStateOf(0L) }
     var panelKeyboardActivation by remember { mutableStateOf(0L) }
     var desktopKeyboardActivation by remember { mutableStateOf(0L) }
-    SideEffect { (context as? SessionActivity)?.keyboardPanelState = keyboardPanelState }
+    SideEffect { (context as? SessionActivity)?.let { it.keyboardPanelState = keyboardPanelState } }
     var keyboardWasVisible by remember { mutableStateOf(false) }
 
     LaunchedEffect(keyboardVisible, showSoftKeyboard, keyboardInteraction) {
@@ -563,11 +571,10 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
         // Extra Keys Panel (anchored to bottom, expands to 314.dp and contracts to 76.dp)
         RemoteKeyboardPanel(
             visible = showSoftKeyboard,
-            expanded = extraKeysExpanded,
             state = keyboardPanelState,
             onInteraction = {
-                panelKeyboardActivation = SystemClock.uptimeMillis()
-                keyboardInteraction = panelKeyboardActivation
+                keyboardInteraction = SystemClock.uptimeMillis()
+                panelKeyboardActivation = keyboardInteraction
             }
         ) {
             if (showSoftKeyboard) {
@@ -576,7 +583,7 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                     activation = panelKeyboardActivation,
                     showInitially = false,
                     keyboardVisible = keyboardVisible,
-                    onActions = { (context as? SessionActivity)?.keyboardPanelEditorActions = it },
+                    onActions = { (context as? SessionActivity)?.let { activity -> activity.keyboardPanelEditorActions = it } },
                     onImeVisibility = { panelImeVisible = it },
                     onFocus = { (context as? SessionActivity)?.keyboardPanelEditorHasFocus = it },
                     onView = { (context as? SessionActivity)?.keyboardPanelEditorView = it },
@@ -585,7 +592,7 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                 )
             }
             RemoteExtraKeys(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxWidth().height(76.dp),
                 enabled = showSoftKeyboard,
                 expanded = extraKeysExpanded,
                 onExpandedChange = { extraKeysExpanded = it },
@@ -794,13 +801,12 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
     var showSoftKeyboard by remember { mutableStateOf(false) }
     val imeVisible = WindowInsets.isImeVisible
     var panelImeVisible by remember { mutableStateOf(false) }
-    val keyboardVisible = imeVisible || panelImeVisible
     var extraKeysExpanded by remember { mutableStateOf(false) }
     val keyboardPanelState = metavrx.layout.window.compose.state.rememberWindowState()
     var keyboardInteraction by remember { mutableStateOf(0L) }
     var panelKeyboardActivation by remember { mutableStateOf(0L) }
     var desktopKeyboardActivation by remember { mutableStateOf(0L) }
-    SideEffect { (context as? SessionActivity)?.keyboardPanelState = keyboardPanelState }
+    SideEffect { (context as? SessionActivity)?.let { it.keyboardPanelState = keyboardPanelState } }
     var keyboardWasVisible by remember { mutableStateOf(false) }
     LaunchedEffect(keyboardVisible, showSoftKeyboard, keyboardInteraction) {
         Log.d("RdpKeyboard", "requested=$showSoftKeyboard rootIme=$imeVisible panelIme=$panelImeVisible observed=$keyboardWasVisible")
@@ -864,6 +870,7 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
             if (cameraRecording) {
                 cameraHostUnsupported = false
             } else if (rdpBridge.isCameraUnsupported(rdpInstance)) {
+    val keyboardVisible = imeVisible || panelImeVisible
                 cameraHostUnsupported = true
             }
             delay(100)
@@ -1243,21 +1250,21 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
             sendUnicode = { code, down -> sendRdpUnicode(code, down) },
             sendKey = { code, down -> if (rdpInstance != 0L) rdpBridge.sendKeyEvent(rdpInstance, code, down) })
 
-        RemoteKeyboardPanel(visible = showSoftKeyboard, expanded = extraKeysExpanded,
+        RemoteKeyboardPanel(visible = showSoftKeyboard,
             state = keyboardPanelState, onInteraction = {
-                panelKeyboardActivation = SystemClock.uptimeMillis()
-                keyboardInteraction = panelKeyboardActivation
+                keyboardInteraction = SystemClock.uptimeMillis()
+                panelKeyboardActivation = keyboardInteraction
             }) {
         if (showSoftKeyboard) RemoteImeEditor(
             label = "Remote key panel input", activation = panelKeyboardActivation, showInitially = false,
-            keyboardVisible = keyboardVisible, onActions = { (context as? SessionActivity)?.keyboardPanelEditorActions = it },
+            keyboardVisible = keyboardVisible, onActions = { (context as? SessionActivity)?.let { activity -> activity.keyboardPanelEditorActions = it } },
             onImeVisibility = { panelImeVisible = it },
             onFocus = { (context as? SessionActivity)?.keyboardPanelEditorHasFocus = it },
             onView = { (context as? SessionActivity)?.keyboardPanelEditorView = it },
             sendUnicode = { code, down -> sendRdpUnicode(code, down) },
             sendKey = { code, down -> if (rdpInstance != 0L) rdpBridge.sendKeyEvent(rdpInstance, code, down) })
         RemoteExtraKeys(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxWidth().height(76.dp),
             enabled = showSoftKeyboard,
             expanded = extraKeysExpanded,
             onExpandedChange = { extraKeysExpanded = it },

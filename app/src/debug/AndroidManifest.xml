@@ -1,0 +1,9 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity android:name=".WindowCapacityFixtureActivity" android:exported="false"
+            android:documentLaunchMode="always" android:taskAffinity=""
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|screenLayout|density|uiMode">
+            <meta-data android:name="com.oculus.vr.default_display_metrics" android:value="800x500" />
+        </activity>
+    </application>
+</manifest>

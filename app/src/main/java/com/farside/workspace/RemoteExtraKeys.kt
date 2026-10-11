@@ -25,12 +25,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.focusProperties
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.core.tween
 
 private data class ExtraKey(val label: String, val code: Int, val toggle: Boolean = false)
 
@@ -48,12 +42,13 @@ internal fun RemoteExtraKeys(modifier: Modifier = Modifier, enabled: Boolean, ex
     sendKey: (Int, Boolean) -> Unit) {
     val held = remember { mutableStateMapOf<Int, Boolean>() }
     val currentSendKey by rememberUpdatedState(sendKey)
-    var numbers by remember { mutableStateOf(false) }
+    var category by remember { mutableIntStateOf(0) }
+    var page by remember { mutableIntStateOf(0) }
     LaunchedEffect(enabled) {
         if (!enabled) {
             held.filterValues { it }.keys.forEach { currentSendKey(it, false) }
             held.clear()
-            numbers = false
+            category = 0; page = 0
         }
     }
     DisposableEffect(Unit) {
@@ -64,89 +59,41 @@ internal fun RemoteExtraKeys(modifier: Modifier = Modifier, enabled: Boolean, ex
         currentSendKey(code, true)
         currentSendKey(code, false)
     }
-    Column(modifier.clip(RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp))
-        .background(Color(0xFF181818)).padding(12.dp)) {
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val keyWidth = ((maxWidth - 8.dp * (extraKeys.size - 1)) / extraKeys.size).coerceAtLeast(48.dp)
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                extraKeys.forEach { key ->
-                    val active = held[key.code] == true
-                    Keycap(if (key.code == 0 && expanded) "ABC" else key.label, Modifier.width(keyWidth), key.toggle, active) {
-                        if (!enabled) return@Keycap
-                        when {
-                            key.code == 0 -> { onExpandedChange(!expanded); numbers = false }
-                            key.toggle -> {
-                                held[key.code] = !active
-                                currentSendKey(key.code, !active)
-                            }
-                            else -> press(key.code)
-                        }
+    val functionKeys = (1..12).map { n -> ExtraKey("F$n", if (n <= 10) 0x3A + n else 0x57 + n - 11) }
+    val numberKeys = (0..9).map { ExtraKey("$it", if (it == 0) 0x0B else it + 1) } + listOf(
+        ExtraKey(".", 0x34), ExtraKey("/", 0x135), ExtraKey("*", 0x37), ExtraKey("-", 0x4A),
+        ExtraKey("+", 0x4E), ExtraKey("Keypad Enter", 0x11C))
+    val navigationKeys = listOf(ExtraKey("Left", 0x14B), ExtraKey("Down", 0x150), ExtraKey("Up", 0x148),
+        ExtraKey("Right", 0x14D), ExtraKey("Home", 0x147), ExtraKey("End", 0x14F),
+        ExtraKey("PgUp", 0x149), ExtraKey("PgDn", 0x151), ExtraKey("Insert", 0x152),
+        ExtraKey("Delete", 0x153), ExtraKey("Backspace", 0x0E), ExtraKey("Enter", 0x1C), ExtraKey("Print Screen", 0x137))
+    BoxWithConstraints(modifier.background(Color(0xFF181818)).padding(horizontal = 24.dp, vertical = 12.dp)) {
+        val keyWidth = ((maxWidth - 8.dp * 8) / 9).coerceAtLeast(48.dp)
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (!expanded) extraKeys.forEach { key ->
+                val active = held[key.code] == true
+                Keycap(key.label, Modifier.width(keyWidth), key.toggle, active) {
+                    if (!enabled) return@Keycap
+                    when {
+                        key.code == 0 -> { category = 0; page = 0; onExpandedChange(true) }
+                        key.toggle -> { held[key.code] = !active; currentSendKey(key.code, !active) }
+                        else -> press(key.code)
                     }
+                }
+            } else {
+                val pages = when (category) { 0 -> functionKeys; 1 -> numberKeys; else -> navigationKeys }.chunked(6)
+                val currentPage = page.coerceIn(pages.indices)
+                Keycap("ABC", Modifier.width(keyWidth)) { onExpandedChange(false) }
+                pages[currentPage].forEach { key -> Keycap(key.label, Modifier.width(keyWidth)) { press(key.code) } }
+                repeat(6 - pages[currentPage].size) { Spacer(Modifier.width(keyWidth)) }
+                val nextCategory = listOf("Number Keys", "Navigation Keys", "Function Keys")[category]
+                Keycap(nextCategory, Modifier.width(keyWidth), display = listOf("123", "Nav", "F keys")[category]) {
+                    category = (category + 1) % 3; page = 0
+                }
+                Keycap("Next key page", Modifier.width(keyWidth), display = "${currentPage + 1}/${pages.size} ?") {
+                    page = (currentPage + 1) % pages.size
                 }
             }
-        }
-        AnimatedVisibility(expanded,
-            enter = expandVertically(tween(180), expandFrom = Alignment.Top) + fadeIn(tween(180)),
-            exit = shrinkVertically(tween(180), shrinkTowards = Alignment.Top) + fadeOut(tween(180))) {
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val panelWidth = maxWidth.coerceAtLeast(600.dp)
-            Row(Modifier.horizontalScroll(rememberScrollState()).width(panelWidth).padding(top = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    val rows = if (numbers) listOf(
-                        listOf(ExtraKey("7", 0x08), ExtraKey("8", 0x09), ExtraKey("9", 0x0A)),
-                        listOf(ExtraKey("4", 0x05), ExtraKey("5", 0x06), ExtraKey("6", 0x07)),
-                        listOf(ExtraKey("1", 0x02), ExtraKey("2", 0x03), ExtraKey("3", 0x04)),
-                        listOf(ExtraKey("0", 0x0B), ExtraKey(".", 0x34))
-                    ) else (1..12).chunked(3).map { row -> row.map { n ->
-                        ExtraKey("F$n", if (n <= 10) 0x3A + n else 0x57 + n - 11)
-                    } }
-                    rows.forEach { keys ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            keys.forEach { key -> Keycap(key.label, Modifier.weight(if (numbers && key.label == "0") 2f else 1f)) { press(key.code) } }
-                        }
-                    }
-                }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Spacer(Modifier.weight(1f))
-                        Keycap("Backspace", Modifier.weight(1f), display = "\u232B") { press(0x0E) }
-                        Keycap("/", Modifier.weight(1f)) { press(0x135) }
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Keycap("Print Screen", Modifier.weight(1f), icon = Icons.Default.CameraAlt) { press(0x137) }
-                        Keycap("Keypad Enter", Modifier.weight(1f), display = "\u21B5") { press(0x11C) }
-                        Keycap("*", Modifier.weight(1f)) { press(0x37) }
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Spacer(Modifier.weight(1f))
-                        Spacer(Modifier.weight(1f))
-                        Keycap("-", Modifier.weight(1f)) { press(0x4A) }
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Keycap(if (numbers) "Function Keys" else "Number Keys", Modifier.weight(2f)) { numbers = !numbers }
-                        Keycap("+", Modifier.weight(1f)) { press(0x4E) }
-                    }
-                }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    val rows = listOf(
-                        listOf(ExtraKey("Home", 0x147), ExtraKey("Up", 0x148), ExtraKey("PgUp", 0x149)),
-                        listOf(ExtraKey("Left", 0x14B), null, ExtraKey("Right", 0x14D)),
-                        listOf(ExtraKey("End", 0x14F), ExtraKey("Down", 0x150), ExtraKey("PgDn", 0x151)),
-                        listOf(ExtraKey("Insert", 0x152), ExtraKey("Delete", 0x153), ExtraKey("Enter", 0x1C))
-                    )
-                    val arrows = mapOf("Up" to "\u2191", "Left" to "\u2190", "Right" to "\u2192", "Down" to "\u2193")
-                    rows.forEach { keys ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            keys.forEach { key ->
-                                if (key == null) Spacer(Modifier.weight(1f))
-                                else Keycap(key.label, Modifier.weight(1f), display = arrows[key.label] ?: key.label) { press(key.code) }
-                            }
-                        }
-                    }
-                }
-            }
-        }
         }
     }
 }

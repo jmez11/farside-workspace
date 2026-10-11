@@ -53,7 +53,8 @@ class SessionActivity : ComponentActivity() {
     internal var sessionSlot = 0
         private set
     private val movementObserver = WindowMovementObserver(this,
-        onMoved = { windowInteraction.value += 1L })
+        onMoved = { windowInteraction.value += 1L },
+        onPresented = { WindowLaunchMonitor.complete(intent.getStringExtra(WindowLaunchMonitor.EXTRA_REQUEST)) })
 
     override fun onPostResume() {
         super.onPostResume()
@@ -76,6 +77,7 @@ class SessionActivity : ComponentActivity() {
         super.onWindowFocusChanged(hasFocus)
         if (!hasFocus) controllerScroll.stop()
         if (keyboardPanelState?.lifecycle?.value == metavrx.layout.window.compose.state.WindowLifecycle.Active) return
+                WindowLaunchMonitor.observe(this)
         // System window affordances may take focus while moving/resizing the panel.
         windowInteraction.value += 1L
     }
