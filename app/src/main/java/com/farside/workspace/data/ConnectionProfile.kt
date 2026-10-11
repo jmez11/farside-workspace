@@ -3,7 +3,7 @@ package com.farside.workspace.data
 import org.json.JSONObject
 
 enum class ConnectionType {
-    RDP, SSH
+    RDP, SSH, VNC
 }
 
 enum class ProxyType {
@@ -35,7 +35,7 @@ data class ConnectionProfile(
     val name: String,
     val type: ConnectionType,
     val host: String,
-    val port: Int,
+    val port: Int = when (type) { ConnectionType.RDP -> 3389; ConnectionType.SSH -> 22; ConnectionType.VNC -> 5900 },
     val user: String,
     val pass: String,
     val remoteApp: String? = null,
@@ -82,7 +82,7 @@ data class ConnectionProfile(
         json.put("type", type.name)
         json.put("host", host)
         json.put("port", port)
-        if (credentialId == null) {
+        if (credentialId == null && type != ConnectionType.VNC) {
             json.put("user", user)
             com.farside.workspace.CredentialManager.writePassword(json, "pass", pass)
         }
@@ -134,9 +134,9 @@ data class ConnectionProfile(
                 name = json.getString("name"),
                 type = ConnectionType.valueOf(json.getString("type")),
                 host = json.getString("host"),
-                port = json.getInt("port"),
+                port = json.optInt("port", when (json.getString("type")) { "VNC" -> 5900; "SSH" -> 22; else -> 3389 }),
                 user = json.optString("user", ""),
-                pass = com.farside.workspace.CredentialManager.readPassword(json, "pass") ?: "",
+                pass = if (json.getString("type") == "VNC") "" else com.farside.workspace.CredentialManager.readPassword(json, "pass") ?: "",
                 credentialId = if (json.has("credentialId") && !json.isNull("credentialId")) json.getString("credentialId") else null,
                 sshKeyId = if (json.has("sshKeyId") && !json.isNull("sshKeyId")) json.getString("sshKeyId") else null,
                 remoteApp = if (json.has("remoteApp") && !json.isNull("remoteApp")) json.getString("remoteApp") else null,

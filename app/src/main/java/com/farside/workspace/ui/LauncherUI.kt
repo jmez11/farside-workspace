@@ -44,6 +44,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.farside.workspace.data.ConnectionProfile
+import androidx.compose.material.icons.filled.DesktopMac
 import com.farside.workspace.data.ConnectionType
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -176,13 +177,17 @@ fun ProfileCard(profile: ConnectionProfile, onEdit: () -> Unit, onDelete: () -> 
                 verticalArrangement = Arrangement.Center
             ) {
                 Icon(
-                    imageVector = if (profile.type == ConnectionType.RDP) Icons.Default.Computer else Icons.Default.Terminal,
+                    imageVector = when (profile.type) { ConnectionType.RDP -> Icons.Default.Computer; ConnectionType.SSH -> Icons.Default.Terminal; ConnectionType.VNC -> Icons.Default.DesktopMac },
                     contentDescription = null,
-                    modifier = Modifier.size(48.dp),
+                    modifier = Modifier.size(40.dp),
                     tint = MaterialTheme.colorScheme.primary
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(profile.name, style = MaterialTheme.typography.titleMedium)
+                Surface(shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)) {
+                    Text(profile.type.name, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 1.dp))
+                }
+                Text(profile.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 Text("${profile.host}:${profile.port}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             
@@ -601,7 +606,7 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(if (editingCredentialId == null) "Add New Credential" else "Edit Credential", color = Color(0xFF1E88E5), fontSize = 14.sp)
                             SettingsTextField(newCredName, { newCredName = it }, "Account Display Name")
-                            SettingsTextField(newCredUser, { newCredUser = it }, "Username")
+                            SettingsTextField(newCredUser, { newCredUser = it }, "Username (optional for VNC)")
                             SettingsTextField(newCredPass, { newCredPass = it }, "Password", visualTransformation = PasswordVisualTransformation())
                             if (editingCredentialId != null) Text("Leave password blank to keep the saved password.", color = Color.Gray, fontSize = 12.sp)
                             SettingsSwitchRow("Require PIN", requirePin, { enabled ->
@@ -622,7 +627,7 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                             })
                             pinError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                             TextButton(enabled = !savingCredential && !pendingPinDisable, onClick = {
-                                if (newCredName.isNotBlank() && newCredUser.isNotBlank()) {
+                                if (newCredName.isNotBlank()) {
                                     val credential = com.farside.workspace.data.SavedCredential(
                                         id = editingCredentialId ?: java.util.UUID.randomUUID().toString(),
                                         name = newCredName, user = newCredUser,
@@ -813,31 +818,13 @@ fun SettingsSwitchRow(label: String, checked: Boolean, onCheckedChange: (Boolean
 
 @Composable
 fun SettingsSegmentedControl(selectedType: ConnectionType, onTypeSelected: (ConnectionType) -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.Center
-    ) {
-        FilterChip(
-            selected = selectedType == ConnectionType.RDP,
-            onClick = { onTypeSelected(ConnectionType.RDP) },
-            label = { Text("RDP") },
-            colors = FilterChipDefaults.filterChipColors(
-                selectedContainerColor = Color(0xFF1E88E5),
-                selectedLabelColor = Color.White
-            )
-        )
-        Spacer(modifier = Modifier.width(16.dp))
-        FilterChip(
-            selected = selectedType == ConnectionType.SSH,
-            onClick = { onTypeSelected(ConnectionType.SSH) },
-            label = { Text("SSH") },
-            colors = FilterChipDefaults.filterChipColors(
-                selectedContainerColor = Color(0xFF1E88E5),
-                selectedLabelColor = Color.White
-            )
-        )
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally)) {
+        ConnectionType.entries.forEach { type ->
+            FilterChip(selected = selectedType == type, onClick = { onTypeSelected(type) },
+                label = { Text(type.name) }, colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = Color(0xFF1E88E5), selectedLabelColor = Color.White))
+        }
     }
 }
 
@@ -1076,8 +1063,12 @@ fun AddProfileForm(
                     }
                     val creds = profileManager.getCredentials()
                     val selectedCred = creds.find { it.id == savedCredId }
-                    val credSelected = (type == ConnectionType.SSH) || (selectedCred != null) || (user.isNotBlank())
-                    if (host.isBlank() || !credSelected) {
+                    val credSelected = when (type) {
+                        ConnectionType.SSH -> true
+                        ConnectionType.VNC -> selectedCred != null && selectedCred.pass.isNotEmpty() && selectedCred.pass.length <= 8 && selectedCred.pass.all { it.code in 1..255 }
+                        ConnectionType.RDP -> if (selectedCred != null) selectedCred.user.isNotBlank() else user.isNotBlank()
+                    }
+                    if (host.isBlank() || !credSelected || port.toIntOrNull() !in 1..65535) {
                         showValidationErrors = true
                         return@TextButton
                     }
@@ -1095,9 +1086,9 @@ fun AddProfileForm(
                         name = name.takeIf { it.isNotBlank() } ?: "Unnamed",
                         type = type,
                         host = host,
-                        port = port.toIntOrNull() ?: if (type == ConnectionType.RDP) 3389 else 22,
-                        user = selectedCred?.user ?: user,
-                        pass = selectedCred?.pass ?: pass,
+                        port = port.toIntOrNull() ?: when (type) { ConnectionType.RDP -> 3389; ConnectionType.SSH -> 22; ConnectionType.VNC -> 5900 },
+                        user = if (type == ConnectionType.VNC) "" else selectedCred?.user ?: user,
+                        pass = if (type == ConnectionType.VNC) "" else selectedCred?.pass ?: pass,
                         credentialId = selectedCred?.id,
                         sshKeyId = if (type == ConnectionType.SSH) savedSshKeyId.takeIf { it.isNotBlank() } else null,
                         remoteApp = remoteApp.takeIf { it.isNotBlank() },
@@ -1149,7 +1140,8 @@ fun AddProfileForm(
             ) {
                 SettingsSegmentedControl(type) { 
                     type = it
-                    port = if (it == ConnectionType.RDP) "3389" else "22"
+                    port = when (it) { ConnectionType.RDP -> "3389"; ConnectionType.SSH -> "22"; ConnectionType.VNC -> "5900" }
+                    discoveredHosts = emptyList()
                 }
 
                 if (type == ConnectionType.RDP) {
@@ -1159,17 +1151,30 @@ fun AddProfileForm(
                 SettingsHeader("Connection Name")
                 SettingsTextField(name, { name = it }, "Enter display name")
 
+                if (type == ConnectionType.VNC) {
+                    SettingsHeader("Screen Sharing")
+                    Text("On Mac: enable Screen Sharing, then enable VNC viewers with a password in Computer Settings. Select a saved 1 to 8 character VNC password below. Apple username/password login is not supported.",
+                        color = Color.LightGray, modifier = Modifier.padding(horizontal = 16.dp), fontSize = 13.sp)
+                }
                 SettingsHeader("Host / Server")
-                if (type == ConnectionType.RDP) {
+                if (type == ConnectionType.RDP || type == ConnectionType.VNC) {
                     Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(onClick = {
+                        TextButton(enabled = !isScanning, onClick = {
+                            val scanType = type
                             isScanning = true
                             coroutineScope.launch {
-                                discoveredHosts = com.farside.workspace.utils.NetworkScanner.scanLocalNetworkForRdp(context)
-                                isScanning = false
+                                try {
+                                    val found = if (scanType == ConnectionType.VNC) com.farside.workspace.utils.NetworkScanner.scanLocalNetworkForVnc(context)
+                                        else com.farside.workspace.utils.NetworkScanner.scanLocalNetworkForRdp(context)
+                                    if (type == scanType) discoveredHosts = found
+                                    if (found.isEmpty()) android.widget.Toast.makeText(context, "No local services found. Enter the host manually or check Screen Sharing and the LAN.", android.widget.Toast.LENGTH_LONG).show()
+                                } catch (error: Exception) {
+                                    if (error is kotlinx.coroutines.CancellationException) throw error
+                                    android.widget.Toast.makeText(context, error.message ?: "Discovery failed", android.widget.Toast.LENGTH_LONG).show()
+                                } finally { isScanning = false }
                             }
                         }) {
-                            Text(if (isScanning) "Scanning subnet for RDP..." else "Click here to Find Local PCs", color = Color(0xFF1E88E5))
+                            Text(if (isScanning) "Finding local ${type.name} sessions..." else if (type == ConnectionType.VNC) "Find Screen Sharing on this LAN" else "Click here to Find Local PCs", color = Color(0xFF1E88E5))
                         }
                     }
                     if (discoveredHosts.isNotEmpty()) {
@@ -1180,7 +1185,7 @@ fun AddProfileForm(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
                         ) {
                             TextField(
-                                value = "Select Discovered PC",
+                                value = if (type == ConnectionType.VNC) "Select Screen Sharing server" else "Select Discovered PC",
                                 onValueChange = {},
                                 readOnly = true,
                                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
@@ -1200,7 +1205,7 @@ fun AddProfileForm(
                                                 name = foundHost.name
                                             }
                                             host = foundHost.ip
-                                            port = "3389"
+                                            port = foundHost.port.toString()
                                             expanded = false
                                         }
                                     )
@@ -1213,11 +1218,11 @@ fun AddProfileForm(
                 SettingsTextField(
                     value = port, 
                     onValueChange = { port = it }, 
-                    placeholder = "Port (e.g. 3389 for RDP or 22 for SSH)",
+                    placeholder = "Port (RDP 3389 / SSH 22 / VNC 5900)",
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
                 )
 
-                SettingsHeader(if (type == ConnectionType.SSH) "User Account (Optional for SSH)" else "User Account")
+                SettingsHeader(when (type) { ConnectionType.SSH -> "User Account (Optional for SSH)"; ConnectionType.VNC -> "VNC Password Credential"; else -> "User Account" })
                 var expandedCreds by rememberSaveable { mutableStateOf(false) }
                 
                 ExposedDropdownMenuBox(
@@ -1236,7 +1241,7 @@ fun AddProfileForm(
                             focusedTextColor = Color.White, unfocusedTextColor = Color.White
                         ),
                         modifier = Modifier.menuAnchor().fillMaxWidth(),
-                        isError = showValidationErrors && type == ConnectionType.RDP && savedCredId.isBlank()
+                        isError = showValidationErrors && type != ConnectionType.SSH && savedCredId.isBlank()
                     )
                     ExposedDropdownMenu(expanded = expandedCreds, onDismissRequest = { expandedCreds = false }) {
                         if (type == ConnectionType.SSH) {
@@ -1271,6 +1276,9 @@ fun AddProfileForm(
                     }
                 }
 
+                if (type == ConnectionType.VNC && showValidationErrors) {
+                    Text("Select a saved VNC password (1 to 8 Latin-1 characters) and a valid port (1 to 65535).", color = Color.Red, modifier = Modifier.padding(16.dp))
+                }
                 if (type == ConnectionType.SSH && savedCredId.isBlank()) {
                     SettingsTextField(user, { user = it }, "Username (or blank to prompt on connect)")
                 }
@@ -1342,7 +1350,7 @@ fun AddProfileForm(
                     Text("Select None, Cloudflared, SOCKS5 or HTTP before saving.", color = Color.Red, modifier = Modifier.padding(16.dp))
                 }
                 if (proxyType == com.farside.workspace.data.ProxyType.CLOUDFLARED) {
-                    Text("Uses the connection hostname with cloudflared access (ssh/rdp). Browser sign-in opens when needed; tokens stay in private app storage.", color = Color.Gray, modifier = Modifier.padding(16.dp))
+                    Text("Routes the connection through Cloudflare Access. Browser sign-in opens when needed; tokens stay in private app storage.", color = Color.Gray, modifier = Modifier.padding(16.dp))
                     SettingsTextField(cloudflaredParameters, { cloudflaredParameters = it; cloudflaredError = null }, "Extra parameters (optional)",
                         visualTransformation = if (showCloudflaredParameters) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
                         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(autoCorrect = false, keyboardType = androidx.compose.ui.text.input.KeyboardType.Password))

@@ -2,9 +2,9 @@ package com.farside.workspace
 
 import android.view.Surface
 
-class FreeRDPBridge {
+class FreeRDPBridge : DesktopSessionBridge {
     @Volatile internal var disconnectListener: ((String, Boolean) -> Unit)? = null
-    @Volatile internal var clipboardListener: ((String) -> Unit)? = null
+    @Volatile override var clipboardListener: ((String) -> Unit)? = null
     @Volatile internal var displayCapture: DisplayCapturePermission? = null
 
     @androidx.annotation.Keep
@@ -24,15 +24,15 @@ class FreeRDPBridge {
     }
 
     external fun connect(hostname: String, port: Int, username: String, password: String, remoteApp: String?, enableCamera: Boolean, enableMicrophone: Boolean, enableStorage: Boolean, surface: Surface, certificateHost: String, certificateVerifier: RdpCertificateVerifier): Long
-    external fun sendClipboardText(instance: Long, text: String): Boolean
+    external override fun sendClipboardText(instance: Long, text: String): Boolean
     external fun isClipboardConnected(instance: Long): Boolean
     external fun certificateMatchesHost(pem: ByteArray, host: String): Boolean
-    external fun setAudioMuted(instance: Long, speakerMuted: Boolean, micMuted: Boolean)
-    external fun isMicrophoneRecording(instance: Long): Boolean
-    external fun setCameraMuted(instance: Long, muted: Boolean)
-    external fun isCameraRecording(instance: Long): Boolean
+    external override fun setAudioMuted(instance: Long, speakerMuted: Boolean, micMuted: Boolean)
+    external override fun isMicrophoneRecording(instance: Long): Boolean
+    external override fun setCameraMuted(instance: Long, muted: Boolean)
+    external override fun isCameraRecording(instance: Long): Boolean
     external fun isCameraMuted(instance: Long): Boolean
-    external fun isCameraUnsupported(instance: Long): Boolean
+    external override fun isCameraUnsupported(instance: Long): Boolean
     external fun setCameraMaxDimension(maxDim: Int)
     // Debug instrumentation only; release native builds refuse verification patterns.
     external fun setCameraVerificationPattern(enabled: Boolean): Boolean
@@ -44,14 +44,14 @@ class FreeRDPBridge {
     external fun getAudioPulseTimes(instance: Long): LongArray
     external fun disconnect(instance: Long)
     external fun setSurface(instance: Long, surface: Surface?)
-    external fun sendMouseEvent(instance: Long, x: Int, y: Int, flags: Int)
-    external fun sendKeyEvent(instance: Long, scancode: Int, isDown: Boolean)
-    external fun sendUnicodeKeyEvent(instance: Long, unicodeChar: Int, isDown: Boolean)
+    external override fun sendMouseEvent(instance: Long, x: Int, y: Int, flags: Int)
+    external override fun sendKeyEvent(instance: Long, scancode: Int, isDown: Boolean)
+    external override fun sendUnicodeKeyEvent(instance: Long, unicodeChar: Int, isDown: Boolean)
     external fun addSurface(instance: Long, surface: Surface)
     external fun removeSurface(instance: Long, surface: Surface)
-    external fun updateDisplay(instance: Long, width: Int, height: Int, zoom: Float)
-    external fun getDesktopWidth(instance: Long): Int
-    external fun getDesktopHeight(instance: Long): Int
+    external override fun updateDisplay(instance: Long, width: Int, height: Int, zoom: Float)
+    external override fun getDesktopWidth(instance: Long): Int
+    external override fun getDesktopHeight(instance: Long): Int
 
     companion object {
         init {

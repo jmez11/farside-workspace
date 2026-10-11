@@ -693,6 +693,16 @@ fun mapAndroidKeyCodeToXt(keyCode: Int): Int {
 @OptIn(ExperimentalLayoutApi::class, ExperimentalComposeUiApi::class)
 @Composable
 fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Unit, onClose: () -> Unit, windowInteraction: Long = 0L, onBridgeCreated: ((FreeRDPBridge) -> Unit)? = null) {
+    DesktopSessionScreen(session, onInstanceCreated, onClose, windowInteraction,
+        { (it as? FreeRDPBridge)?.let { bridge -> onBridgeCreated?.invoke(bridge) } })
+}
+
+@OptIn(ExperimentalLayoutApi::class, ExperimentalComposeUiApi::class)
+@Composable
+internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Unit, onClose: () -> Unit,
+    windowInteraction: Long = 0L, onBridgeCreated: ((DesktopSessionBridge) -> Unit)? = null) {
+    val isVnc = session.type == ConnectionType.VNC
+    val protocolName = if (isVnc) "VNC" else "RDP"
     val permissionContext = LocalContext.current
     var microphoneReady by remember(session.id) {
         mutableStateOf(!session.redirectMicrophone || hasMicrophonePermission(permissionContext))
@@ -760,7 +770,9 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
             redirectStorage = storageAllowed && hasStoragePermission(permissionContext)
         )
     }
-    val rdpBridge = remember { FreeRDPBridge().also { onBridgeCreated?.invoke(it) } }
+    val rdpBridge: DesktopSessionBridge = remember(session.id) {
+        (if (isVnc) VncBridge() else FreeRDPBridge()).also { onBridgeCreated?.invoke(it) }
+    }
     var rdpInstance by remember { mutableStateOf(0L) }
     val context = LocalContext.current
     var certificateRequest by remember { mutableStateOf<RdpCertificateRequest?>(null) }
@@ -771,14 +783,18 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
     val certificates = remember(session.id) {
         RdpCertificateVerifier(context, session.host, session.port, { certificateRequest = it })
     }
-    val connection = remember(session.id) {
-        RdpSessionConnection(context, effectiveSession, rdpBridge, certificates, onDisconnected = { reason, established ->
+    val connection: DesktopSessionConnection = remember(session.id) {
+        val ended: (String, Boolean) -> Unit = { reason, established ->
             if (established) disconnectedReason = reason else connectFailureReason = reason
-        }, onStatus = { tunnelStatus = it }) {
+        }
+        val status: (String) -> Unit = { tunnelStatus = it }
+        val connected: (Long) -> Unit = {
             rdpInstance = it
             connectionFailed = it == 0L
             onInstanceCreated(it)
         }
+        if (isVnc) VncSessionConnection(context, effectiveSession, rdpBridge as VncBridge, ended, status, connected)
+        else RdpSessionConnection(context, effectiveSession, rdpBridge as FreeRDPBridge, certificates, ended, status, connected)
     }
     DisposableEffect(connection) {
         onDispose {
@@ -854,14 +870,14 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
     if (connectionFailed) AlertDialog(
         onDismissRequest = { (context as? android.app.Activity)?.finish() },
         title = { Text("Connection failed") },
-        text = { Text(connectFailureReason.ifBlank { "The RDP connection could not be established or its certificate was not accepted." }) },
+        text = { Text(connectFailureReason.ifBlank { "The $protocolName connection could not be established." }) },
         confirmButton = { TextButton(onClick = { (context as? android.app.Activity)?.finish() }) { Text("Close") } },
     )
     disconnectedReason?.let { reason ->
         AlertDialog(
             onDismissRequest = {},
             title = { Text("Disconnected") },
-            text = { Text(if (reason.isBlank()) "The RDP session has disconnected." else "The RDP session has disconnected.\n\n$reason") },
+            text = { Text(if (reason.isBlank()) "The $protocolName session has disconnected." else "The $protocolName session has disconnected.\n\n$reason") },
             confirmButton = { TextButton(onClick = onClose) { Text("OK") } },
         )
     }
@@ -998,7 +1014,7 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
 
     // TextureView fills immediately; ask the server for matching resolution once resizing settles.
     LaunchedEffect(rdpInstance, currentWidth, currentHeight) {
-        if (rdpInstance != 0L && currentWidth > 0 && currentHeight > 0) {
+        if (!isVnc && rdpInstance != 0L && currentWidth > 0 && currentHeight > 0) {
             delay(300)
             val targetWidth = currentWidth.coerceIn(200, 8192) and -2
             val targetHeight = currentHeight.coerceIn(200, 8192)
@@ -1070,7 +1086,10 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                     val isDown = event.type == KeyEventType.KeyDown
                     val unicode = event.nativeKeyEvent.unicodeChar
                     val scancode = mapAndroidKeyCodeToXt(event.nativeKeyEvent.keyCode)
-                    if (unicode != 0 && scancode == 0) {
+                    if (rdpBridge is VncBridge) {
+                        rdpBridge.sendPhysicalKey(rdpInstance, event.nativeKeyEvent, isDown)
+                        true
+                    } else if (unicode != 0 && scancode == 0) {
                         rdpBridge.sendUnicodeKeyEvent(rdpInstance, unicode, isDown)
                         true
                     } else if (scancode != 0) {
@@ -1087,12 +1106,26 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
             }
             .pointerInput(Unit) {
                 awaitPointerEventScope {
+                    var lastVncHover = 0L
                     while (true) {
                         val event = awaitPointerEvent()
                         if (event.type == PointerEventType.Move || event.type == PointerEventType.Press) {
                             val pos = event.changes.first().position
                             if (toolbarBounds.inflate(48.dp.toPx()).contains(pos)) {
                                 revealToolbar()
+                            }
+                        }
+                        // Compose hover is not delivered through pointerInteropFilter's touch
+                        // callback. VNC needs it to position its negotiated software cursor.
+                        if (isVnc && rdpInstance != 0L && event.changes.none { it.pressed } &&
+                            (event.type == PointerEventType.Move || event.type == PointerEventType.Enter)) {
+                            val now = SystemClock.uptimeMillis()
+                            if (now - lastVncHover >= 16) {
+                                lastVncHover = now
+                                val pos = event.changes.first().position
+                                val (x, y) = desktopPoint(pos.x, pos.y)
+                                remotePointer[0] = x; remotePointer[1] = y
+                                rdpBridge.sendMouseEvent(rdpInstance, x, y, FreeRDPBridge.PTR_FLAGS_MOVE)
                             }
                         }
                     }
@@ -1223,7 +1256,7 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
                         Icon(Icons.Default.PushPin, if (toolbarPinned) "Unpin toolbar" else "Keep toolbar visible",
                             tint = if (toolbarPinned) MaterialTheme.colorScheme.primary else Color.White)
                     }
-                    IconButton(onClick = { speakerMuted = !speakerMuted; revealToolbar() }) {
+                    if (!isVnc) IconButton(onClick = { speakerMuted = !speakerMuted; revealToolbar() }) {
                         Icon(if (speakerMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
                             if (speakerMuted) "Unmute speakers" else "Mute speakers", tint = Color.White)
                     }
@@ -1301,7 +1334,7 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
         }
         fun sendRdpUnicode(code: Int, down: Boolean) {
             if (rdpInstance == 0L) return
-            if (code > 0xFFFF) {
+            if (!isVnc && code > 0xFFFF) {
                 val high = Character.highSurrogate(code).code
                 val low = Character.lowSurrogate(code).code
                 rdpBridge.sendUnicodeKeyEvent(rdpInstance, high, down)

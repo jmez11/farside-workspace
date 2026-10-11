@@ -173,3 +173,6 @@ target_link_libraries(
         camera2ndk
         mediandk
 )
+
+# Independent client-only VNC build; all platform adapters stay outside upstream.
+add_subdirectory(vnc)

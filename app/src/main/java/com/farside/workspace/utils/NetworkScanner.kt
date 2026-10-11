@@ -13,9 +13,64 @@ import java.net.Socket
 import java.net.DatagramSocket
 import java.net.DatagramPacket
 
-data class DiscoveredHost(val ip: String, val name: String)
+data class DiscoveredHost(val ip: String, val name: String, val port: Int = 3389)
 
 object NetworkScanner {
+    /** Only Screen-Sharing-enabled Macs advertise _rfb._tcp. mDNS is link-local:
+     * same LAN only, not across VLANs or Tailscale; it never supplies credentials. */
+    @Suppress("DEPRECATION")
+    suspend fun scanLocalNetworkForVnc(context: Context): List<DiscoveredHost> = withContext(Dispatchers.Main.immediate) {
+        val nsd = context.getSystemService(Context.NSD_SERVICE) as android.net.nsd.NsdManager
+        val results = linkedMapOf<String, DiscoveredHost>()
+        val pending = java.util.ArrayDeque<android.net.nsd.NsdServiceInfo>()
+        val present = mutableSetOf<String>()
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        var active = true
+        var resolving = false
+        var failure: String? = null
+        fun resolveNext() {
+            if (!active || resolving || pending.isEmpty()) return
+            val service = pending.removeFirst()
+            resolving = true
+            try {
+                nsd.resolveService(service, object : android.net.nsd.NsdManager.ResolveListener {
+                    override fun onResolveFailed(info: android.net.nsd.NsdServiceInfo, error: Int) {
+                        handler.post { resolving = false; resolveNext() }
+                    }
+                    override fun onServiceResolved(info: android.net.nsd.NsdServiceInfo) {
+                        handler.post {
+                            if (active && service.serviceName in present) info.host?.hostAddress?.let { address ->
+                                if (info.port in 1..65535) results[service.serviceName] = DiscoveredHost(address, info.serviceName, info.port)
+                            }
+                            resolving = false; resolveNext()
+                        }
+                    }
+                })
+            } catch (_: IllegalArgumentException) { resolving = false; resolveNext() }
+        }
+        val listener = object : android.net.nsd.NsdManager.DiscoveryListener {
+            override fun onDiscoveryStarted(type: String) {}
+            override fun onDiscoveryStopped(type: String) {}
+            override fun onStartDiscoveryFailed(type: String, error: Int) { handler.post { failure = "Local VNC discovery could not start ($error)." } }
+            override fun onStopDiscoveryFailed(type: String, error: Int) {}
+            override fun onServiceFound(info: android.net.nsd.NsdServiceInfo) { handler.post {
+                if (active && present.add(info.serviceName)) { pending.add(info); resolveNext() }
+            } }
+            override fun onServiceLost(info: android.net.nsd.NsdServiceInfo) { handler.post {
+                present.remove(info.serviceName); results.remove(info.serviceName)
+            } }
+        }
+        try {
+            nsd.discoverServices("_rfb._tcp.", android.net.nsd.NsdManager.PROTOCOL_DNS_SD, listener)
+            kotlinx.coroutines.delay(5000)
+            failure?.let { throw IllegalStateException(it) }
+            results.values.sortedBy { it.name.lowercase() }
+        } finally {
+            active = false
+            runCatching { nsd.stopServiceDiscovery(listener) }
+        }
+    }
+
     suspend fun scanLocalNetworkForRdp(context: Context): List<DiscoveredHost> = withContext(Dispatchers.IO) {
         val ipAddress = getLocalIpAddress()
         

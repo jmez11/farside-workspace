@@ -13,6 +13,9 @@ import java.io.File
 
 /** On-device regression check: saved RDP profile, actual task resizes, full-frame captures. */
 class RdpResizeInstrumentation : Instrumentation() {
+    private var vncMode: String? = null
+    private var vncProfile: String? = null
+    private var vncPassword: String? = null
     private var adbCapabilityOnly = false
     private var adbTunnelMode: String? = null
     private var lifecycleMode: String? = null
@@ -47,6 +50,9 @@ class RdpResizeInstrumentation : Instrumentation() {
     private var imeOnly = false
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(arguments)
+        vncPassword = arguments?.getString("vncPassword")
+        vncMode = arguments?.getString("vncMode")
+        vncProfile = arguments?.getString("vncProfile")
         adbCapabilityOnly = arguments?.getString("adbCapabilityOnly") == "true"
         adbTunnelMode = arguments?.getString("adbTunnelMode")
         cloudflaredOnly = arguments?.getString("cloudflaredOnly") == "true"
@@ -93,6 +99,12 @@ class RdpResizeInstrumentation : Instrumentation() {
     override fun onStart() {
         val results = Bundle()
         try {
+            vncMode?.let { mode ->
+                val report = VncVerification(this).run(mode, vncProfile, vncPassword)
+                results.putString("stream", "PASS: $report\n")
+                finish(0, results)
+                return
+            }
             if (windowLaunchOnly) {
                 results.putString("stream", "PASS: ${WindowLaunchVerification(this).run()}\n")
                 finish(0, results)

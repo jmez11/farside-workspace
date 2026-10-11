@@ -19,7 +19,7 @@ internal class RdpSessionConnection(
     private val onDisconnected: (String, Boolean) -> Unit,
     private val onStatus: (String) -> Unit = {},
     private val onConnected: (Long) -> Unit,
-) {
+) : DesktopSessionConnection {
     private val context = context.applicationContext
     private val worker = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
@@ -39,7 +39,7 @@ internal class RdpSessionConnection(
         }
     }
 
-    fun attach(next: Surface) {
+    override fun attach(next: Surface) {
         if (closed.get() || ended.get()) {
             next.release()
             return
@@ -109,7 +109,7 @@ internal class RdpSessionConnection(
         }
     }
 
-    fun detach() {
+    override fun detach() {
         if (closed.get()) return
         worker.execute {
             if (instance != 0L) bridge.setSurface(instance, null)
@@ -118,7 +118,7 @@ internal class RdpSessionConnection(
         }
     }
 
-    fun close() {
+    override fun close() {
         if (!closed.compareAndSet(false, true)) return
         bridge.displayCapture?.close()
         bridge.disconnectListener = null

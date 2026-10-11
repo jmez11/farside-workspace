@@ -139,17 +139,19 @@ class CloudflaredVerification(private val instrumentation: Instrumentation) {
             val version = invoke(work, listOf("--version"))
             check(version.first == 0 && version.second.contains("2026.5.1-farside")) { "Wrong bundled executable" }
             val port = ServerSocket(0, 0, InetAddress.getLoopbackAddress()).use { it.localPort }
-            val listener = launch(work, listOf("access", "rdp", "--hostname", "rdp.example.com", "--url", "127.0.0.1:$port"))
+            for (command in listOf("rdp", "tcp")) {
+            val listener = launch(work, listOf("access", command, "--hostname", "rdp.example.com", "--url", "127.0.0.1:$port"))
             try {
                 val output = AtomicReference("")
                 val reader = Thread { runCatching { listener.inputStream.bufferedReader().useLines { lines -> lines.forEach { if (it.startsWith("FARSIDE_LISTENER_READY")) output.set(it) } } } }.apply { start() }
                 val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15)
                 while (output.get().isEmpty() && listener.isAlive && System.nanoTime() < deadline) Thread.sleep(50)
-                check(output.get() == "FARSIDE_LISTENER_READY 127.0.0.1:$port") { "Listener not ready" }
+                check(output.get() == "FARSIDE_LISTENER_READY 127.0.0.1:$port") { "$command listener not ready" }
                 listener.destroy()
                 check(listener.waitFor(3, TimeUnit.SECONDS)) { "Child did not stop" }
                 reader.join(1000)
             } finally { listener.destroyForcibly() }
+            }
             verifyAuthentication(work)
         } finally { work.deleteRecursively() }
         Log.i("CloudflaredTest", "PASS: argument/hostname allowlist, encrypted profile roundtrip, browser URI validation/resolution, private HOME and cancellation, packaged Android binary, real loopback listener and cleanup, local TLS credential preflight, cached JWT, rejected credentials fall back to browser transfer URL. Fixtures do not establish live Cloudflare sign-in or remote RDP.")

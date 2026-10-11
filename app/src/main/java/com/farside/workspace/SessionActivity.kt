@@ -44,7 +44,7 @@ class SessionActivity : ComponentActivity() {
             }
             return true
         }
-        if (rdpInstance != 0L && remoteScroll != null && controllerScroll.onMotion(event)) return true
+        if ((rdpInstance != 0L || vncInstance != 0L) && remoteScroll != null && controllerScroll.onMotion(event)) return true
         return super.dispatchGenericMotionEvent(event)
     }
 
@@ -53,6 +53,8 @@ class SessionActivity : ComponentActivity() {
         controllerScroll.stop()
         super.onPause()
     }
+    internal var vncBridge: VncBridge? = null
+    internal var vncInstance = 0L
     internal var rdpBridge: FreeRDPBridge? = null
         internal set
     internal var rdpInstance = 0L
@@ -165,6 +167,12 @@ class SessionActivity : ComponentActivity() {
                             onBridgeCreated = { rdpBridge = it; it.displayCapture = displayCapture },
                             onClose = { finish() }
                         )
+                        }
+                    } else if (profile.type == ConnectionType.VNC) {
+                        SpatialScene {
+                            VncSessionScreen(profile, onInstanceCreated = { vncInstance = it },
+                                onBridgeCreated = { vncBridge = it }, onClose = { finish() },
+                                windowInteraction = windowInteraction.value)
                         }
                     } else {
                         SpatialScene {
