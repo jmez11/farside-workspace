@@ -51,6 +51,7 @@ class RdpResizeInstrumentation : Instrumentation() {
     private var zoomTest = false
     private var clipboardOnly = false
     private var imeOnly = false
+    private var sshImeOnly = false
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(arguments)
         systemPinMode = arguments?.getString("systemPinMode")
@@ -91,6 +92,7 @@ class RdpResizeInstrumentation : Instrumentation() {
         zoomTest = arguments?.getString("zoomTest") == "true"
         clipboardOnly = arguments?.getString("clipboardOnly") == "true"
         imeOnly = arguments?.getString("imeOnly") == "true"
+        sshImeOnly = arguments?.getString("sshImeOnly") == "true"
         start()
     }
 
@@ -175,9 +177,9 @@ class RdpResizeInstrumentation : Instrumentation() {
                 finish(0, results)
                 return
             }
-            if (sshFeaturesOnly) {
-                SshFeaturesVerification(this).run()
-                results.putString("stream", "PASS: SSH forwarding traffic, live edits, terminal settings, selection, scrollback and joystick checks.\n")
+            if (sshFeaturesOnly || sshImeOnly) {
+                SshFeaturesVerification(this, imeOnly = sshImeOnly).run()
+                results.putString("stream", if (sshImeOnly) "PASS: actual Compose IME typing/replacement and buffered Enter over encrypted SSH.\n" else "PASS: SSH forwarding traffic, live edits, terminal settings, selection, scrollback and joystick checks.\n")
                 finish(0, results)
                 return
             }

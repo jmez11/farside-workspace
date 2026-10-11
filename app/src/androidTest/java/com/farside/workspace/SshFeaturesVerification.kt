@@ -17,7 +17,7 @@ import java.security.KeyPairGenerator
 import kotlin.concurrent.thread
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
-class SshFeaturesVerification(private val test: Instrumentation) {
+class SshFeaturesVerification(private val test: Instrumentation, private val imeOnly: Boolean = false) {
     private val shellBytes = java.util.concurrent.ConcurrentLinkedQueue<Int>()
     private val evidence = java.io.File(test.targetContext.cacheDir, "ssh-features-results.txt")
     private fun record(message: String) { evidence.appendText("$message\n"); android.util.Log.i("SshFeatures", message) }
@@ -202,6 +202,10 @@ class SshFeaturesVerification(private val test: Instrumentation) {
             val view = checkNotNull(terminal(activity.window.decorView))
             waitFor("Saved forwarding did not start with SSH login") { runCatching { Socket("127.0.0.1", initialForward.sourcePort).use { it.soTimeout = 1000; it.getOutputStream().write(65); it.getInputStream().read() == 65 } }.getOrDefault(false) }
             record("PASS: saved forwarding starts automatically in actual SshTerminalSession with fixture shell")
+            if (imeOnly) {
+                verifyNativeIme(activity, view)
+                return
+            }
             click("Zoom"); find("18sp"); click("Zoom")
             click("Transparency"); find("70%"); click("Transparency")
             click("Terminal settings"); setText("Scrollback lines (100–50,000)", "250"); click("Save settings")
@@ -521,6 +525,39 @@ class SshFeaturesVerification(private val test: Instrumentation) {
         main { check(connection.finishComposingText()) }
         Thread.sleep(150)
         check(shellBytes.toList() == "word".map { it.code }) { "Finish resent composing word" }
+        for (keyEventEnter in listOf(false, true)) {
+            main {
+                shellBytes.clear()
+                check(connection.setComposingText("word", 1))
+            }
+            waitFor("Buffered word was not streamed") { shellBytes.size >= 4 }
+            Thread.sleep(250)
+            main {
+                shellBytes.clear()
+                if (keyEventEnter) {
+                    check(connection.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_ENTER)))
+                    check(connection.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_ENTER)))
+                } else check(connection.commitText("word\n", 1))
+            }
+            waitFor("Buffered Return did not reach SSH") { shellBytes.isNotEmpty() }
+            Thread.sleep(150)
+            check(shellBytes.toList() == listOf(13)) { "Return replayed buffer or sent editing keys: ${shellBytes.toList()}" }
+            main {
+                val extracted = checkNotNull(connection.getExtractedText(android.view.inputmethod.ExtractedTextRequest(), 0))
+                check(extracted.text.toString() == " ") { "Return did not clear editor buffer: ${extracted.text}" }
+                shellBytes.clear()
+                check(connection.setComposingText("x", 1))
+            }
+            waitFor("Typing after Return did not reach SSH") { shellBytes.isNotEmpty() }
+            Thread.sleep(150)
+            check(shellBytes.toList() == listOf('x'.code)) { "Stale buffer changed typing after Return: ${shellBytes.toList()}" }
+            main { check(connection.finishComposingText()) }
+        }
+        record("PASS: buffered newline commit and Enter key event send only SSH Return, clear actual Compose buffer, and preserve next typing")
+        if (imeOnly) {
+            click("Keyboard")
+            return
+        }
         record("PASS: composing characters and whole-word increments reach SSH before Return; finish does not duplicate; composing alternative erases primary")
         record("PASS: Horizon cached-range replaceText(1,2) erases a committed primary instead of appending b/")
         record("PASS: real Compose InputConnection commitText(b)/replaceText(/) reaches actual SSH shell in order before/after terminal drag; 160-character burst intact; physical Horizon popup remains manual")

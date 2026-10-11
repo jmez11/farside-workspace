@@ -98,6 +98,15 @@ internal fun processImeChange(
     sendUnicode: (Int, Boolean) -> Unit,
     sendKey: (Int, Boolean) -> Unit
 ): Long {
+    // Horizon may submit the whole keyboard buffer with Return; its text was already streamed.
+    if ('\n' in next.text) {
+        if (now - lastEnterTime > 200) {
+            sendKey(0x1C, true)
+            sendKey(0x1C, false)
+            return now
+        }
+        return lastEnterTime
+    }
     var newLastEnterTime = lastEnterTime
     var newChars: String
     if (previous?.composition != null) {
@@ -192,12 +201,14 @@ internal fun RemoteImeEditor(label: String, activation: Long, showInitially: Boo
             )
             explicitReplacement = false
             // Keep composing ranges for incremental updates, without delaying their remote input.
-            text = if (next.composition != null) next else TextFieldValue(" ", selection = TextRange(1))
+            text = if ('\n' !in next.text && next.composition != null) next else TextFieldValue(" ", selection = TextRange(1))
         }, keyboardOptions = KeyboardOptions(imeAction = ImeAction.None, autoCorrect = false),
             modifier = Modifier.size(1.dp).alpha(0f).focusRequester(focus)
                 .onPreviewKeyEvent { event ->
                     if (event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_ENTER) {
                         if (event.type == KeyEventType.KeyDown) {
+                            text = TextFieldValue(" ", selection = TextRange(1))
+                            explicitReplacement = false
                             val now = android.os.SystemClock.uptimeMillis()
                             if (now - lastEnterTime > 200) {
                                 lastEnterTime = now

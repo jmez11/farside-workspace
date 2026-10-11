@@ -12,10 +12,32 @@ class ImeVerification(private val instrumentation: Instrumentation) {
         testSpaceTyping()
         testEmptyBufferBackspace()
         testEnterDebounce()
+        testBufferedEnter()
         testMultiCharacterReplacement()
         testEmojiInput()
         testComposingTyping()
-        return "All IME input scenarios verified: alternative keys, standard typing, space, empty backspace, enter debouncing, multi-char replacements, and emojis."
+        return "All IME input scenarios verified: alternative keys, standard typing, space, empty backspace, buffered Enter without text replay, enter debouncing, multi-char replacements, composing typing, and emojis."
+    }
+
+    private fun testBufferedEnter() {
+        for (previous in listOf(TextFieldValue(" ", TextRange(1)),
+            TextFieldValue(" word", TextRange(5), TextRange(1, 5)))) {
+            for (buffer in listOf(" word\n", "different\n", " \n")) {
+                for (lastEnter in listOf(0L, 900L)) {
+                    val unicodes = mutableListOf<Pair<Int, Boolean>>()
+                    val keys = mutableListOf<Pair<Int, Boolean>>()
+                    val time = processImeChange(TextFieldValue(buffer, TextRange(buffer.length), TextRange(0, buffer.length)),
+                        lastEnterTime = lastEnter, now = 1000L, previous = previous, explicitReplacement = true,
+                        sendUnicode = { code, down -> unicodes.add(code to down) },
+                        sendKey = { code, down -> keys.add(code to down) })
+                    check(unicodes.isEmpty()) { "Enter replayed buffered text: $unicodes" }
+                    check(keys == if (lastEnter == 0L) listOf(0x1C to true, 0x1C to false) else emptyList()) {
+                        "Buffered Enter sent text-editing keys or duplicate Return: $keys"
+                    }
+                    check(time == if (lastEnter == 0L) 1000L else lastEnter)
+                }
+            }
+        }
     }
 
     private fun testComposingTyping() {
