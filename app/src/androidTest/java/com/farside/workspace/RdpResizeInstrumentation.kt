@@ -41,9 +41,11 @@ class RdpResizeInstrumentation : Instrumentation() {
     private var windowCapacityOnly = false
     private var windowLaunchOnly = false
     private var keyboardGeometryOnly = false
+    private var keyboardFadeOnly = false
     private var toolbarOnly = false
     private var sshFeaturesOnly = false
     private var sshOnly = false
+    private var sshToolbarOnly = false
     private var sshKeysOnly = false
     private var sshProbe = false
     private var zoomTest = false
@@ -79,9 +81,11 @@ class RdpResizeInstrumentation : Instrumentation() {
         windowCapacityOnly = arguments?.getString("windowCapacityOnly") == "true"
         windowLaunchOnly = arguments?.getString("windowLaunchOnly") == "true"
         keyboardGeometryOnly = arguments?.getString("keyboardGeometryOnly") == "true"
+        keyboardFadeOnly = arguments?.getString("keyboardFadeOnly") == "true"
         toolbarOnly = arguments?.getString("toolbarOnly") == "true"
         sshFeaturesOnly = arguments?.getString("sshFeaturesOnly") == "true"
         sshOnly = arguments?.getString("sshOnly") == "true"
+        sshToolbarOnly = arguments?.getString("sshToolbarOnly") == "true"
         sshKeysOnly = arguments?.getString("sshKeysOnly") == "true"
         sshProbe = arguments?.getString("sshProbe") == "true"
         zoomTest = arguments?.getString("zoomTest") == "true"
@@ -123,8 +127,8 @@ class RdpResizeInstrumentation : Instrumentation() {
                 finish(0, results)
                 return
             }
-            if (keyboardCropOnly || keyboardGeometryOnly) {
-                val report = KeyboardCropVerification(this).run(rapid = !keyboardGeometryOnly)
+            if (keyboardCropOnly || keyboardGeometryOnly || keyboardFadeOnly) {
+                val report = KeyboardCropVerification(this).run(rapid = !keyboardGeometryOnly, fadeOnly = keyboardFadeOnly)
                 results.putString("stream", "PASS: $report\n")
                 finish(0, results)
                 return
@@ -174,6 +178,12 @@ class RdpResizeInstrumentation : Instrumentation() {
             if (sshFeaturesOnly) {
                 SshFeaturesVerification(this).run()
                 results.putString("stream", "PASS: SSH forwarding traffic, live edits, terminal settings, selection, scrollback and joystick checks.\n")
+                finish(0, results)
+                return
+            }
+            if (sshToolbarOnly) {
+                SshVerification(this).run(toolbarOnly = true)
+                results.putString("stream", "PASS: SSH floating toolbar controls present; menu/settings menu button absent.\n")
                 finish(0, results)
                 return
             }

@@ -43,7 +43,6 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.InvertColors
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Opacity
-import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Keyboard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -151,7 +150,6 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
     var showSoftKeyboard by remember { mutableStateOf(false) }
     val imeVisible = WindowInsets.isImeVisible
     var panelImeVisible by remember { mutableStateOf(false) }
-    var extraKeysExpanded by remember { mutableStateOf(false) }
     val keyboardVisible = imeVisible || panelImeVisible
     val keyboardPanelState = metavrx.layout.window.compose.state.rememberWindowState()
     var keyboardInteraction by remember { mutableStateOf(0L) }
@@ -169,7 +167,6 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
         }
         if (!showSoftKeyboard) {
             keyboardWasVisible = false
-            extraKeysExpanded = false
             keyboardInteraction = 0L
             desktopKeyboardActivation = 0L
             panelKeyboardActivation = 0L
@@ -577,9 +574,6 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                         IconButton(onClick = { showForwards = true; revealToolbar() }) {
                             Icon(Icons.Default.SwapHoriz, "Port forwarding", tint = Color.White)
                         }
-                        IconButton(onClick = { scrollbackText = scrollback.toString(); showTerminalSettings = true; revealToolbar() }) {
-                            Icon(Icons.Default.Menu, "Terminal settings", tint = Color.White)
-                        }
                         IconButton(onClick = {
                             revealToolbar()
                             showSoftKeyboard = !showSoftKeyboard
@@ -661,11 +655,9 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                 )
             }
             RemoteExtraKeys(
-                modifier = Modifier.fillMaxWidth().height(76.dp),
+                modifier = Modifier.fillMaxSize(),
                 enabled = showSoftKeyboard,
-                expanded = extraKeysExpanded,
-                onExpandedChange = { extraKeysExpanded = it },
-                    sendKey = { code, down -> handleSshKey(code, down) }
+                sendKey = { code, down -> handleSshKey(code, down) }
             )
         }
     }
@@ -886,7 +878,6 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
     var showSoftKeyboard by remember { mutableStateOf(false) }
     val imeVisible = WindowInsets.isImeVisible
     var panelImeVisible by remember { mutableStateOf(false) }
-    var extraKeysExpanded by remember { mutableStateOf(false) }
     val keyboardVisible = imeVisible || panelImeVisible
     val keyboardPanelState = metavrx.layout.window.compose.state.rememberWindowState()
     var keyboardInteraction by remember { mutableStateOf(0L) }
@@ -903,7 +894,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
             showSoftKeyboard = false
             focusRequester.requestFocus()
         }
-        if (!showSoftKeyboard) { keyboardWasVisible = false; extraKeysExpanded = false; keyboardInteraction = 0L; desktopKeyboardActivation = 0L; panelKeyboardActivation = 0L }
+        if (!showSoftKeyboard) { keyboardWasVisible = false; keyboardInteraction = 0L; desktopKeyboardActivation = 0L; panelKeyboardActivation = 0L }
     }
 
     
@@ -1286,9 +1277,6 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                             Icon(Icons.Default.FullscreenExit, "Reset Zoom", tint = androidx.compose.ui.graphics.Color.White)
                         }
                     }
-                    IconButton(onClick = { /* Implement menu later */ }) {
-                        Icon(Icons.Default.Menu, "Menu", tint = androidx.compose.ui.graphics.Color.White)
-                    }
                     IconButton(onClick = { revealToolbar(); showSoftKeyboard = !showSoftKeyboard; if (!showSoftKeyboard) { keyboardController?.hide() } }) {
                         Icon(Icons.Default.Keyboard, "Keyboard", tint = Color.White)
                     }
@@ -1366,10 +1354,8 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
             sendUnicode = { code, down -> sendRdpUnicode(code, down) },
             sendKey = { code, down -> if (rdpInstance != 0L) rdpBridge.sendKeyEvent(rdpInstance, code, down) })
         RemoteExtraKeys(
-            modifier = Modifier.fillMaxWidth().height(76.dp),
+            modifier = Modifier.fillMaxSize(),
             enabled = showSoftKeyboard,
-            expanded = extraKeysExpanded,
-            onExpandedChange = { extraKeysExpanded = it },
             sendKey = { code, down ->
                 if (rdpInstance != 0L) rdpBridge.sendKeyEvent(rdpInstance, code, down)
             }

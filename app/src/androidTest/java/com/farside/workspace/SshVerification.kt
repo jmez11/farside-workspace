@@ -38,7 +38,7 @@ class SshVerification(private val test: Instrumentation) {
         Thread.sleep(300)
     }
 
-    fun run() {
+    fun run(toolbarOnly: Boolean = false) {
         Log.i("SshVerification", "Starting SshVerification run")
         val serviceInfo = test.uiAutomation.serviceInfo
         serviceInfo.flags = serviceInfo.flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
@@ -84,6 +84,9 @@ class SshVerification(private val test: Instrumentation) {
             checkNotNull(find("Zoom")) { "Missing zoom button in toolbar" }
             checkNotNull(find("Transparency")) { "Missing transparency button in toolbar" }
             checkNotNull(find("Keyboard")) { "Missing keyboard toggle in toolbar" }
+
+            check(find("Menu", retries = 1) == null && find("Terminal settings", retries = 1) == null) { "Menu button still in SSH toolbar" }
+            if (toolbarOnly) return
 
             // 2. Verify Zoom (Font Size) slider and Reset Zoom button
             Log.i("SshVerification", "Step 2: Testing Zoom")
