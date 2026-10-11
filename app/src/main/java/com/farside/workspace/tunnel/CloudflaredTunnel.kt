@@ -162,6 +162,19 @@ class CloudflaredTunnel(private val context: Context) : AutoCloseable {
     }
 
     companion object {
+        /** Clear Access app and organization JWTs, preserving trust anchors and other settings. */
+        fun clearCachedLogins(context: Context) {
+            val cache = File(context.noBackupFilesDir, "cloudflared/.cloudflared")
+            if (!cache.exists()) return
+            val files = checkNotNull(cache.listFiles()) { "Could not read Cloudflare login cache." }
+            check(files.none { it.name.endsWith("-token.lock") }) {
+                "Cloudflare sign-in is in progress. Close Cloudflare sessions and try again."
+            }
+            for (file in files.filter { it.isFile && it.name.endsWith("-token") }) {
+                check(file.delete()) { "Could not clear all Cloudflare logins. Try again." }
+            }
+        }
+
         fun authenticationUri(line: String, host: String): Uri? {
             if (line.length > 16384 || line.any { it.isWhitespace() }) return null
             val uri = Uri.parse(line)

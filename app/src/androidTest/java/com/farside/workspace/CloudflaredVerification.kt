@@ -3,6 +3,11 @@ package com.farside.workspace
 import android.app.Instrumentation
 import android.graphics.Bitmap
 import android.content.Intent
+import android.content.ContextWrapper
+import androidx.activity.compose.setContent
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalContext
 import android.net.Uri
 import android.system.Os
 import android.util.Base64
@@ -152,9 +157,71 @@ class CloudflaredVerification(private val instrumentation: Instrumentation) {
                 reader.join(1000)
             } finally { listener.destroyForcibly() }
             }
-            verifyAuthentication(work)
+            verifyClearLogins(work)
+            verifyAuthentication(File(work, "cloudflared").apply { mkdirs() })
         } finally { work.deleteRecursively() }
         Log.i("CloudflaredTest", "PASS: argument/hostname allowlist, encrypted profile roundtrip, browser URI validation/resolution, private HOME and cancellation, packaged Android binary, real loopback listener and cleanup, local TLS credential preflight, cached JWT, rejected credentials fall back to browser transfer URL. Fixtures do not establish live Cloudflare sign-in or remote RDP.")
+    }
+
+    private fun verifyClearLogins(work: File) {
+        val isolated = object : ContextWrapper(context) {
+            override fun getNoBackupFilesDir() = work
+        }
+        CloudflaredTunnel.clearCachedLogins(isolated) // Empty/missing cache is a successful no-op.
+        val home = File(work, "cloudflared").apply { mkdirs() }
+        val cache = File(home, ".cloudflared").apply { mkdirs() }
+        val appToken = File(cache, "fixture-aud-token").apply { writeText("fixture-app") }
+        val orgToken = File(cache, "fixture-org-token").apply { writeText("fixture-org") }
+        val ca = File(home, "android-ca.pem").apply { writeText("fixture-ca") }
+        val config = File(cache, "config.yml").apply { writeText("fixture-config") }
+        val nested = File(cache, "folder-token").apply { mkdirs() }
+        val lock = File(cache, "fixture-aud-token.lock").apply { writeText("fixture-lock") }
+        check(runCatching { CloudflaredTunnel.clearCachedLogins(isolated) }.isFailure)
+        check(appToken.exists() && orgToken.exists() && lock.exists())
+        check(lock.delete())
+        instrumentation.uiAutomation.serviceInfo = instrumentation.uiAutomation.serviceInfo.apply {
+            flags = flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+        }
+        val activity = instrumentation.startActivitySync(Intent(context, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
+        val status = AtomicReference("")
+        try {
+            instrumentation.runOnMainSync {
+                activity.setContent {
+                    MaterialTheme {
+                        CompositionLocalProvider(LocalContext provides isolated) {
+                            com.farside.workspace.ui.ClearCloudflareLoginsButton { status.set(it) }
+                        }
+                    }
+                }
+            }
+            fun find(node: android.view.accessibility.AccessibilityNodeInfo): android.view.accessibility.AccessibilityNodeInfo? {
+                if (node.text?.toString() == "Clear Cloudflare Logins") return node
+                for (i in 0 until node.childCount) node.getChild(i)?.let { find(it)?.let { found -> return found } }
+                return null
+            }
+            var button: android.view.accessibility.AccessibilityNodeInfo? = null
+            for (attempt in 0 until 60) {
+                instrumentation.uiAutomation.clearCache()
+                val windows = instrumentation.uiAutomation.windowsOnAllDisplays
+                for (i in 0 until windows.size()) for (window in windows.valueAt(i)) {
+                    window.root?.let { find(it) }?.let { button = it }
+                }
+                if (button != null) break
+                Thread.sleep(200)
+            }
+            var clickable = checkNotNull(button) { "Cloudflare clear button missing" }
+            while (!clickable.isClickable) clickable = checkNotNull(clickable.parent)
+            check(clickable.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK))
+            repeat(50) { if (status.get().isEmpty()) Thread.sleep(100) }
+            check(status.get().startsWith("Cached Cloudflare Access logins cleared."))
+            check(!appToken.exists() && !orgToken.exists())
+            check(ca.readText() == "fixture-ca" && config.readText() == "fixture-config" && nested.isDirectory)
+            CloudflaredTunnel.clearCachedLogins(isolated) // Repeated clear remains successful.
+            Log.i("CloudflaredTest", "PASS: clear-login UI click, app/org token removal, missing/repeated cache, auth-lock rejection and unrelated file preservation; isolated cache only.")
+        } finally {
+            instrumentation.runOnMainSync { activity.finish() }
+        }
     }
 
     private fun launch(work: File, args: List<String>, trusted: Boolean = true): Process {
@@ -228,7 +295,10 @@ class CloudflaredVerification(private val instrumentation: Instrumentation) {
             omitDomain.set(false)
             val fallback = invoke(work, login + listOf("--service-token-id", "wrong", "--service-token-secret", "wrong") + url)
             check(fallback.first == 0 && fallback.second.contains("FARSIDE_AUTH_USER")) { "Invalid service token did not fall back to cached JWT" }
-            tokenFile.delete()
+            CloudflaredTunnel.clearCachedLogins(object : ContextWrapper(context) {
+                override fun getNoBackupFilesDir() = work.parentFile!!
+            })
+            check(!tokenFile.exists())
             val interactive = launch(work, login + url)
             val sawUrl = AtomicBoolean(false)
             val reader = Thread { runCatching { interactive.inputStream.bufferedReader().useLines { lines -> lines.forEach { if (it.startsWith("https://localhost:") && it.contains("/cdn-cgi/access/cli?") && it.contains("edge_token_transfer=true")) sawUrl.set(true) } } } }.apply { start() }

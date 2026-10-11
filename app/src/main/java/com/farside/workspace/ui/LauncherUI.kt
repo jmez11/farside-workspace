@@ -533,7 +533,7 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                             Spacer(modifier = Modifier.height(16.dp))
                             SettingsHeader("Debug Actions")
                             Text(
-                                "Options for testing trust store prompts and permission re-requests.",
+                                "Options for testing sign-in, trust store prompts and permission re-requests.",
                                 color = Color.Gray,
                                 fontSize = 12.sp,
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
@@ -572,6 +572,7 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                                     Text("Revoke Granted Permissions")
                                 }
                             }
+                            ClearCloudflareLoginsButton { debugStatusMessage = it }
                             debugStatusMessage?.let { msg ->
                                 Text(
                                     msg,
@@ -786,6 +787,27 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                 }
             }
         }
+    }
+}
+
+@Composable
+fun ClearCloudflareLoginsButton(onStatus: (String) -> Unit) {
+    val context = LocalContext.current
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+        Button(
+            onClick = {
+                onStatus(runCatching {
+                    com.farside.workspace.tunnel.CloudflaredTunnel.clearCachedLogins(context)
+                    "Cached Cloudflare Access logins cleared. Reconnect to sign in again."
+                }.getOrElse { it.message ?: "Could not clear Cloudflare logins." })
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
+        ) { Text("Clear Cloudflare Logins") }
+        Text(
+            "Close Cloudflare sessions first. Clears cached Access tokens; browser sign-in may remain active.",
+            color = Color.Gray,
+            fontSize = 12.sp
+        )
     }
 }
 
