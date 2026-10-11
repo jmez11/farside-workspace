@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.InvertColors
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Opacity
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Keyboard
@@ -101,7 +102,6 @@ class MainActivity : ComponentActivity() {
             var arrangement by remember { mutableStateOf(arrangementStore.load()) }
 
             val refreshProfiles = { profiles = profileManager.getProfiles() }
-
             DisposableEffect(profileManager) {
                 val preferences = getSharedPreferences("farside_profiles", android.content.Context.MODE_PRIVATE)
                 val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
@@ -110,6 +110,7 @@ class MainActivity : ComponentActivity() {
                 preferences.registerOnSharedPreferenceChangeListener(listener)
                 onDispose { preferences.unregisterOnSharedPreferenceChangeListener(listener) }
             }
+
             MaterialTheme(colorScheme = darkColorScheme()) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -151,8 +152,8 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
     val imeVisible = WindowInsets.isImeVisible
     var panelImeVisible by remember { mutableStateOf(false) }
     var extraKeysExpanded by remember { mutableStateOf(false) }
-    val keyboardPanelState = metavrx.layout.window.compose.state.rememberWindowState()
     val keyboardVisible = imeVisible || panelImeVisible
+    val keyboardPanelState = metavrx.layout.window.compose.state.rememberWindowState()
     var keyboardInteraction by remember { mutableStateOf(0L) }
     var panelKeyboardActivation by remember { mutableStateOf(0L) }
     var desktopKeyboardActivation by remember { mutableStateOf(0L) }
@@ -188,17 +189,64 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
     }
 
     val defaultFontSize = 14
-    var fontSize by remember { mutableStateOf(defaultFontSize) }
+    var fontSize by remember { mutableStateOf(session.terminalFontSize) }
     var showZoomSlider by remember { mutableStateOf(false) }
-    var terminalAlpha by remember { mutableStateOf(1.0f) }
+    var terminalAlpha by remember { mutableStateOf(session.terminalOpacity) }
     var showTransparencySlider by remember { mutableStateOf(false) }
 
     var terminalViewRef by remember { mutableStateOf<com.termux.view.TerminalView?>(null) }
     var sshSessionRef by remember { mutableStateOf<com.termux.terminal.SshTerminalSession?>(null) }
+    val profileManager = remember { ProfileManager(context) }
+    var forwards by remember { mutableStateOf(session.sshForwards) }
+    var forwardStatuses by remember { mutableStateOf(emptyMap<String, String>()) }
+    var showForwards by remember { mutableStateOf(false) }
+    var showTerminalSettings by remember { mutableStateOf(false) }
+    var scrollback by remember { mutableStateOf(session.terminalScrollback) }
+    var scrollbackText by remember { mutableStateOf(scrollback.toString()) }
+    var scrollbackError by remember { mutableStateOf<String?>(null) }
+    fun saveTerminalSettings() {
+        profileManager.getProfiles().find { it.id == session.id }?.let {
+            profileManager.updateProfile(it.copy(terminalFontSize = fontSize, terminalOpacity = terminalAlpha,
+                terminalScrollback = scrollback))
+        }
+    }
+    LaunchedEffect(fontSize, terminalAlpha) { delay(250); saveTerminalSettings() }
+    if (showForwards) com.farside.workspace.ui.SshForwardingDialog(forwards, forwardStatuses,
+        onChange = { next ->
+            profileManager.getProfiles().find { it.id == session.id }?.let {
+                profileManager.updateProfile(it.copy(sshForwards = next))
+            }
+            forwards = next
+            sshSessionRef?.forwarding?.update(next)
+        }, onDismiss = { showForwards = false })
+    if (showTerminalSettings) AlertDialog(onDismissRequest = { showTerminalSettings = false },
+        title = { Text("Terminal settings") }, text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Scrollback stores previous lines locally. Lowering the limit discards older history.")
+                OutlinedTextField(scrollbackText, { scrollbackText = it; scrollbackError = null },
+                    label = { Text("Scrollback lines (100–50,000)") }, singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number))
+                Text("Font: ${fontSize}sp · Opacity: ${(terminalAlpha * 100).roundToInt()}%", style = MaterialTheme.typography.bodySmall)
+                Text("All terminal settings save to this connection.", style = MaterialTheme.typography.bodySmall)
+                scrollbackError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            }
+        }, dismissButton = { TextButton(onClick = { showTerminalSettings = false }) { Text("Cancel") } },
+        confirmButton = { TextButton(onClick = {
+            val count = scrollbackText.toIntOrNull()
+            if (count == null || count !in 100..50000) scrollbackError = "Enter 100–50,000 lines"
+            else {
+                scrollback = count
+                terminalViewRef?.mEmulator?.setScrollbackRows(count)
+                terminalViewRef?.onScreenUpdated()
+                saveTerminalSettings()
+                showTerminalSettings = false
+            }
+        }) { Text("Save settings") } })
+
 
     SideEffect {
         (context as? SessionActivity)?.setZoom = { factor ->
-            val size = (defaultFontSize * factor).roundToInt().coerceIn(8, 36)
+            val size = (defaultFontSize * factor).roundToInt().coerceIn(8, 32)
             fontSize = size
             terminalViewRef?.setTextSize(size)
         }
@@ -231,6 +279,8 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
 
     DisposableEffect(Unit) {
         onDispose {
+            saveTerminalSettings()
+            (context as? SessionActivity)?.sshHistoryScroll = null
             sshSessionRef?.finishIfRunning()
         }
     }
@@ -333,6 +383,10 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                         val event = awaitPointerEvent(PointerEventPass.Initial)
                         if (event.type == PointerEventType.Press) {
                             revealToolbar()
+                            if (showSoftKeyboard) {
+                                desktopKeyboardActivation = SystemClock.uptimeMillis()
+                                keyboardInteraction = desktopKeyboardActivation
+                            }
                         }
                     }
                 }
@@ -346,6 +400,13 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
             factory = { viewContext ->
                 val terminalView = com.termux.view.TerminalView(viewContext, null)
                 terminalView.setTextSize(fontSize)
+                terminalView.setPointerDragSelectionEnabled(true)
+                terminalView.setTextSelectionMoreEnabled(false)
+                terminalView.setPointerPasteMenuEnabled(true)
+                // Compose owns the SSH InputConnection, including Horizon replacement/pop-up keys.
+                terminalView.isFocusable = false
+                terminalView.isFocusableInTouchMode = false
+                terminalView.setHistoryScrollbarEnabled(true)
 
                 val copyTextToClipboard: (String) -> Unit = { text ->
                     try {
@@ -439,7 +500,9 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                 terminalView.setTerminalViewClient(viewClient)
 
                 val sshTerm = com.termux.terminal.SshTerminalSession(session, sessionClient, viewContext)
+                sshTerm.onForwardStatus = { forwardStatuses = it }
                 terminalView.attachSession(sshTerm)
+                (context as? SessionActivity)?.sshHistoryScroll = { terminalView.scrollHistory(it) }
 
                 terminalViewRef = terminalView
                 sshSessionRef = sshTerm
@@ -511,6 +574,12 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                                 tint = if (terminalAlpha < 1.0f) MaterialTheme.colorScheme.primary else Color.White
                             )
                         }
+                        IconButton(onClick = { showForwards = true; revealToolbar() }) {
+                            Icon(Icons.Default.SwapHoriz, "Port forwarding", tint = Color.White)
+                        }
+                        IconButton(onClick = { scrollbackText = scrollback.toString(); showTerminalSettings = true; revealToolbar() }) {
+                            Icon(Icons.Default.Menu, "Terminal settings", tint = Color.White)
+                        }
                         IconButton(onClick = {
                             revealToolbar()
                             showSoftKeyboard = !showSoftKeyboard
@@ -568,7 +637,7 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
             )
         }
 
-        // Extra Keys Panel (anchored to bottom, expands to 314.dp and contracts to 76.dp)
+        // Parent-width companion preserves the pre-narrowing spatial layout.
         RemoteKeyboardPanel(
             visible = showSoftKeyboard,
             state = keyboardPanelState,
@@ -585,8 +654,8 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                     keyboardVisible = keyboardVisible,
                     onActions = { (context as? SessionActivity)?.let { activity -> activity.keyboardPanelEditorActions = it } },
                     onImeVisibility = { panelImeVisible = it },
-                    onFocus = { (context as? SessionActivity)?.keyboardPanelEditorHasFocus = it },
-                    onView = { (context as? SessionActivity)?.keyboardPanelEditorView = it },
+                    onFocus = { (context as? SessionActivity)?.let { activity -> activity.keyboardPanelEditorHasFocus = it } },
+                    onView = { (context as? SessionActivity)?.let { activity -> activity.keyboardPanelEditorView = it } },
                     sendUnicode = { code, down -> handleSshUnicode(code, down) },
                     sendKey = { code, down -> handleSshKey(code, down) }
                 )
@@ -596,7 +665,7 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                 enabled = showSoftKeyboard,
                 expanded = extraKeysExpanded,
                 onExpandedChange = { extraKeysExpanded = it },
-                sendKey = { code, down -> handleSshKey(code, down) }
+                    sendKey = { code, down -> handleSshKey(code, down) }
             )
         }
     }
@@ -802,6 +871,7 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
     val imeVisible = WindowInsets.isImeVisible
     var panelImeVisible by remember { mutableStateOf(false) }
     var extraKeysExpanded by remember { mutableStateOf(false) }
+    val keyboardVisible = imeVisible || panelImeVisible
     val keyboardPanelState = metavrx.layout.window.compose.state.rememberWindowState()
     var keyboardInteraction by remember { mutableStateOf(0L) }
     var panelKeyboardActivation by remember { mutableStateOf(0L) }
@@ -870,7 +940,6 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
             if (cameraRecording) {
                 cameraHostUnsupported = false
             } else if (rdpBridge.isCameraUnsupported(rdpInstance)) {
-    val keyboardVisible = imeVisible || panelImeVisible
                 cameraHostUnsupported = true
             }
             delay(100)
@@ -1259,8 +1328,8 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
             label = "Remote key panel input", activation = panelKeyboardActivation, showInitially = false,
             keyboardVisible = keyboardVisible, onActions = { (context as? SessionActivity)?.let { activity -> activity.keyboardPanelEditorActions = it } },
             onImeVisibility = { panelImeVisible = it },
-            onFocus = { (context as? SessionActivity)?.keyboardPanelEditorHasFocus = it },
-            onView = { (context as? SessionActivity)?.keyboardPanelEditorView = it },
+            onFocus = { (context as? SessionActivity)?.let { activity -> activity.keyboardPanelEditorHasFocus = it } },
+            onView = { (context as? SessionActivity)?.let { activity -> activity.keyboardPanelEditorView = it } },
             sendUnicode = { code, down -> sendRdpUnicode(code, down) },
             sendKey = { code, down -> if (rdpInstance != 0L) rdpBridge.sendKeyEvent(rdpInstance, code, down) })
         RemoteExtraKeys(

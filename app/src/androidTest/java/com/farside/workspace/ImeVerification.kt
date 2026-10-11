@@ -14,7 +14,40 @@ class ImeVerification(private val instrumentation: Instrumentation) {
         testEnterDebounce()
         testMultiCharacterReplacement()
         testEmojiInput()
+        testComposingTyping()
         return "All IME input scenarios verified: alternative keys, standard typing, space, empty backspace, enter debouncing, multi-char replacements, and emojis."
+    }
+
+    private fun testComposingTyping() {
+        val unicodes = mutableListOf<Pair<Int, Boolean>>()
+        val keys = mutableListOf<Pair<Int, Boolean>>()
+        var previous = TextFieldValue(" ", TextRange(1))
+        fun input(value: TextFieldValue) {
+            processImeChange(next = value, previous = previous, lastEnterTime = 0L, now = 1000L,
+                sendUnicode = { code, down -> unicodes.add(code to down) },
+                sendKey = { code, down -> keys.add(code to down) })
+            previous = if (value.composition != null) value else TextFieldValue(" ", TextRange(1))
+        }
+        for (prefix in listOf("w", "wo", "wor", "word")) {
+            input(TextFieldValue(" $prefix", TextRange(prefix.length + 1), TextRange(1, prefix.length + 1)))
+            check(unicodes.filter { it.second }.map { it.first } == prefix.map { it.code }) { "Typing delayed or duplicated composing prefix" }
+            check(keys.isEmpty())
+        }
+        input(TextFieldValue(" word", TextRange(5)))
+        check(unicodes.size == 8 && keys.isEmpty()) { "Finishing composition resent the word" }
+        unicodes.clear()
+        input(TextFieldValue(" b", TextRange(2), TextRange(1, 2)))
+        check(unicodes == listOf('b'.code to true, 'b'.code to false)) { "Composing b must be immediate" }
+        input(TextFieldValue(" /", TextRange(2)))
+        check(keys == listOf(0x0E to true, 0x0E to false)) { "Alternative did not erase composing b" }
+        check(unicodes.filter { it.second }.map { it.first } == listOf('b'.code, '/'.code))
+        unicodes.clear(); keys.clear()
+        val emoji = "\uD83D\uDE00"
+        input(TextFieldValue(" $emoji", TextRange(3), TextRange(1, 3)))
+        input(TextFieldValue(" $emoji!", TextRange(4), TextRange(1, 4)))
+        input(TextFieldValue(" !", TextRange(2)))
+        check(unicodes.filter { it.second }.map { it.first } == listOf(0x1F600, '!'.code, '!'.code))
+        check(keys.size == 4) { "Surrogate-pair replacement must erase two code points, not UTF-16 units" }
     }
 
     private fun testAlternativeKeys() {

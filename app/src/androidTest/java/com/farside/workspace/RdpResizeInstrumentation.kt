@@ -38,6 +38,7 @@ class RdpResizeInstrumentation : Instrumentation() {
     private var windowLaunchOnly = false
     private var keyboardGeometryOnly = false
     private var toolbarOnly = false
+    private var sshFeaturesOnly = false
     private var sshOnly = false
     private var sshKeysOnly = false
     private var sshProbe = false
@@ -71,6 +72,7 @@ class RdpResizeInstrumentation : Instrumentation() {
         windowLaunchOnly = arguments?.getString("windowLaunchOnly") == "true"
         keyboardGeometryOnly = arguments?.getString("keyboardGeometryOnly") == "true"
         toolbarOnly = arguments?.getString("toolbarOnly") == "true"
+        sshFeaturesOnly = arguments?.getString("sshFeaturesOnly") == "true"
         sshOnly = arguments?.getString("sshOnly") == "true"
         sshKeysOnly = arguments?.getString("sshKeysOnly") == "true"
         sshProbe = arguments?.getString("sshProbe") == "true"
@@ -149,9 +151,15 @@ class RdpResizeInstrumentation : Instrumentation() {
                 finish(0, results)
                 return
             }
+            if (sshFeaturesOnly) {
+                SshFeaturesVerification(this).run()
+                results.putString("stream", "PASS: SSH forwarding traffic, live edits, terminal settings, selection, scrollback and joystick checks.\n")
+                finish(0, results)
+                return
+            }
             if (sshOnly) {
                 SshVerification(this).run()
-                results.putString("stream", "PASS: SSH session floating toolbar (name, host, pin, zoom font sizing, keyboard toggle), extra keys strip, 123 expansion to 314dp, ABC contraction to 76dp, and unchanged main content window geometry.\n")
+                results.putString("stream", "PASS: SSH session floating toolbar (name, host, pin, zoom font sizing, keyboard toggle), extra keys strip, fixed 76dp strip with 238dp bank, repeated ABC/123 without strip buffer changes, and unchanged main content window geometry.\n")
                 finish(0, results)
                 return
             }
@@ -395,6 +403,8 @@ class RdpResizeInstrumentation : Instrumentation() {
             val desktopPose = parentPose()
             fun panelView(): View = checkNotNull(keyboardState.javaClass.methods.single {
                 it.name.startsWith("getHostedView") }.invoke(keyboardState) as? View)
+            fun bankView(): View = checkNotNull(sessionActivity.keyboardBankState).let { state ->
+                checkNotNull(state.javaClass.methods.single { it.name.startsWith("getHostedView") }.invoke(state) as? View) }
             fun verifyKeyboardGeometry(): Int {
                 check(keyboardState.lifecycle.value == metavrx.layout.window.compose.state.WindowLifecycle.Active) { "Key window not placed: ${keyboardState.lifecycle.value}" }
                 check(desktop.width == desktopWidth && desktop.height == desktopHeight) { "Keyboard changed desktop texture bounds" }
@@ -440,15 +450,16 @@ class RdpResizeInstrumentation : Instrumentation() {
             fun keyboardRetainsFocus() {
                 check(find("Remote keyboard input") != null) { "Missing keyboard input" }
                 // Observe the current Compose focus callback, rather than a stale/evicted log line.
-                check(activity.keyboardEditorHasFocus || activity.keyboardPanelEditorHasFocus) {
+                check(activity.keyboardEditorHasFocus || activity.keyboardPanelEditorHasFocus || activity.keyboardBankEditorHasFocus) {
                     "Pointer touch stole focus from keyboard input"
                 }
                 check(find("ESC") != null) { "Remote touch dismissed keyboard modifier controls" }
             }
-            fun nativeFocus(panel: Boolean): Boolean {
+            fun nativeFocus(panel: Boolean, bank: Boolean = false): Boolean {
                 try {
-                    val host = keyboardState.javaClass.methods.find { it.name.startsWith("getSurfaceControlViewHost") }
-                        ?.invoke(keyboardState) as? android.view.SurfaceControlViewHost ?: return false
+                    val focusState = if (bank) checkNotNull(sessionActivity.keyboardBankState) else keyboardState
+                    val host = focusState.javaClass.methods.find { it.name.startsWith("getSurfaceControlViewHost") }
+                        ?.invoke(focusState) as? android.view.SurfaceControlViewHost ?: return false
                     val target = try {
                         host.javaClass.getMethod("getFocusGrantToken").invoke(host)
                     } catch (e: Throwable) {
@@ -474,13 +485,14 @@ class RdpResizeInstrumentation : Instrumentation() {
                 }
             }
             fun touchKey(label: String, nativeFocus: Boolean = false) {
-                val actions = checkNotNull(sessionActivity.keyboardPanelEditorActions)
+                val bank = label !in listOf("WIN", "SHIFT", "CTRL", "ALT", "AltGr", "DEL", "ESC", "TAB", "123", "ABC")
+                val actions = checkNotNull(if (bank) sessionActivity.keyboardBankEditorActions else sessionActivity.keyboardPanelEditorActions)
                 val actionCounts = listOf(actions.focusRequests, actions.focusResets, actions.restarts, actions.showRequests)
-                val exercisedNativeFocus = if (nativeFocus) nativeFocus(true) else false
+                val exercisedNativeFocus = if (nativeFocus) nativeFocus(true, bank) else false
                 val node = checkNotNull(find(label)) { "Missing touch key: $label" }
                 val bounds = android.graphics.Rect().also { node.getBoundsInScreen(it) }
                 runOnMainSync {
-                    val panel = panelView()
+                    val panel = if (bank) bankView() else panelView()
                     val origin = IntArray(2).also { panel.getLocationOnScreen(it) }
                     val started = android.os.SystemClock.uptimeMillis()
                     for (action in listOf(android.view.MotionEvent.ACTION_DOWN, android.view.MotionEvent.ACTION_UP)) {
@@ -495,8 +507,8 @@ class RdpResizeInstrumentation : Instrumentation() {
                 // the native child activation and parent-focus restoration above remain real.
                 if (simulatedIme && nativeFocus) imeVisibility(true) else Thread.sleep(500)
                 if (exercisedNativeFocus) {
-                    val editor = checkNotNull(sessionActivity.keyboardPanelEditorView)
-                    check(sessionActivity.keyboardPanelEditorHasFocus) { "Key window did not focus its IME editor" }
+                    val editor = checkNotNull(if (bank) sessionActivity.keyboardBankEditorView else sessionActivity.keyboardPanelEditorView)
+                    check(if (bank) sessionActivity.keyboardBankEditorHasFocus else sessionActivity.keyboardPanelEditorHasFocus) { "Key window did not focus its IME editor" }
                     val input = editor.context.getSystemService(android.view.inputmethod.InputMethodManager::class.java)
                     check(input.isActive(editor)) { "Key window does not own Android's active InputConnection" }
                     check(editor.onCheckIsTextEditor() && input.isAcceptingText) { "Key window has no accepting text InputConnection" }
@@ -525,13 +537,14 @@ class RdpResizeInstrumentation : Instrumentation() {
             touchKey("CTRL", nativeFocus = true)
             touchKey("123", nativeFocus = true)
             check(find("ABC") != null && find("123") == null) { "Expanded close label missing" }
-            val expandedHeight = verifyKeyboardGeometry()
-            check(expandedHeight > collapsedHeight * 3) { "123 did not extend the bottom panel" }
+            check(verifyKeyboardGeometry() == collapsedHeight) { "123 resized the stable strip" }
+            check(kotlin.math.abs(bankView().height - 238 * activity.resources.displayMetrics.density) <= 1) { "Bank height is incorrect" }
+            check(bankView().width == panelView().width) { "Bank width differs from strip" }
             var heldCtrl = checkNotNull(find("CTRL"))
             while (heldCtrl.stateDescription == null && heldCtrl.parent != null) heldCtrl = heldCtrl.parent
             check(heldCtrl.stateDescription?.toString() == "Held") { "Expansion released CTRL" }
             fun captureKeyboard(name: String) {
-                val panel = panelView()
+                val panel = if (name == "collapsed") panelView() else bankView()
                 val image = Bitmap.createBitmap(panel.width, panel.height, Bitmap.Config.ARGB_8888)
                 runOnMainSync { panel.draw(android.graphics.Canvas(image)) }
                 File(targetContext.cacheDir, "keyboard-$name.png").outputStream().use {
@@ -544,22 +557,20 @@ class RdpResizeInstrumentation : Instrumentation() {
             for (n in 1..12) if (n == 1) touchKey("F$n") else click("F$n")
             for (label in listOf("Home", "Up", "PgUp", "Left", "Right", "End", "Down", "PgDn",
                 "Insert", "Delete", "Enter", "Backspace", "Keypad Enter", "/", "*", "-", "+", "Print Screen")) click(label)
-            touchKey("Number Keys")
+            touchKey("Number Keys", nativeFocus = true)
             check(find("F1") == null && find("Function Keys") != null) { "Function bank did not switch to numbers" }
             for (label in listOf("7", "8", "9", "4", "5", "6", "1", "2", "3", "0", ".")) click(label)
             captureKeyboard("numbers")
             click("Function Keys")
             check(find("F1") != null && find("1") == null) { "Function bank did not restore" }
-            val committedBeforeCollapse = KeyboardPanelResize.committedCompactions
             touchKey("ABC", nativeFocus = true)
             check(find("123") != null && find("F1") == null && find("Up") == null) { "ABC did not close extras" }
             check(verifyKeyboardGeometry() == collapsedHeight) { "ABC did not restore collapsed panel height" }
-            check(KeyboardPanelResize.committedCompactions > committedBeforeCollapse &&
-                KeyboardPanelResize.committedHeight == collapsedHeight) { "Compact key buffer was not committed before reveal" }
             click("123")
             check(find("F12") != null) { "Extras could not reopen" }
             click("ABC")
             captureKeyboard("collapsed")
+            KeyboardTransitionVerification.verify(this, sessionActivity, keyboardState) { label -> touchKey(label, nativeFocus = true) }
             click("CTRL") // Dismissal must release a held modifier.
 
             keyboardRetainsFocus()

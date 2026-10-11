@@ -69,7 +69,11 @@ data class ConnectionProfile(
     val autoCopySelection: Boolean = true,
     val adminMode: Boolean = false,
     val credentialId: String? = null,
-    val sshKeyId: String? = null
+    val sshKeyId: String? = null,
+    val sshForwards: List<SshForward> = emptyList(),
+    val terminalScrollback: Int = 2000,
+    val terminalFontSize: Int = 14,
+    val terminalOpacity: Float = 1f
 ) {
     fun toJson(): JSONObject {
         val json = JSONObject()
@@ -112,6 +116,10 @@ data class ConnectionProfile(
         json.put("resolutionScaling", resolutionScaling)
         json.put("swapMouseButtons", swapMouseButtons)
         json.put("autoCopySelection", autoCopySelection)
+        json.put("sshForwards", org.json.JSONArray().also { a -> sshForwards.forEach { a.put(it.toJson()) } })
+        json.put("terminalScrollback", terminalScrollback)
+        json.put("terminalFontSize", terminalFontSize)
+        json.put("terminalOpacity", terminalOpacity)
         json.put("adminMode", adminMode)
         return json
     }
@@ -160,6 +168,10 @@ data class ConnectionProfile(
                 resolutionScaling = json.optInt("resolutionScaling", 100),
                 swapMouseButtons = json.optBoolean("swapMouseButtons", false),
                 autoCopySelection = json.optBoolean("autoCopySelection", true),
+                sshForwards = json.optJSONArray("sshForwards")?.let { a -> (0 until a.length()).map { SshForward.fromJson(a.getJSONObject(it)) } } ?: emptyList(),
+                terminalScrollback = json.optInt("terminalScrollback", 2000).coerceIn(100, 50000),
+                terminalFontSize = json.optInt("terminalFontSize", 14).coerceIn(8, 32),
+                terminalOpacity = json.optDouble("terminalOpacity", 1.0).toFloat().let { if (it.isFinite()) it.coerceIn(0.2f, 1f) else 1f },
                 adminMode = json.optBoolean("adminMode", false)
             )
         }

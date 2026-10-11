@@ -16,6 +16,10 @@ import metavrx.layout.compose.SpatialScene
 class SessionActivity : ComponentActivity() {
     internal val displayCapture = DisplayCapturePermission(this)
     internal var keyboardPanelState: metavrx.layout.window.compose.state.WindowState? = null
+    internal var keyboardBankState: metavrx.layout.window.compose.state.WindowState? = null
+    internal var keyboardBankEditorView: android.view.View? = null
+    internal var keyboardBankEditorHasFocus = false
+    internal var keyboardBankEditorActions: ImeEditorActions? = null
     internal var keyboardEditorHasFocus = false
     internal var keyboardPanelEditorHasFocus = false
     internal var keyboardEditorView: android.view.View? = null
@@ -27,13 +31,25 @@ class SessionActivity : ComponentActivity() {
     internal var setPan: ((Float, Float) -> Unit)? = null
     internal var onTouchDebug: ((android.view.MotionEvent, Float, Float, Float) -> Unit)? = null
     private val controllerScroll = RdpControllerScroll { remoteScroll?.invoke(it) }
+    internal var sshHistoryScroll: ((Int) -> Unit)? = null
+    private val sshControllerScroll = SshControllerScroll { sshHistoryScroll?.invoke(it) }
+    private var nextSshInputLog = 0L
 
     override fun dispatchGenericMotionEvent(event: android.view.MotionEvent): Boolean {
+        if (sshHistoryScroll != null && sshControllerScroll.onMotion(event)) {
+            val now = android.os.SystemClock.uptimeMillis()
+            if (BuildConfig.DEBUG && now >= nextSshInputLog) {
+                android.util.Log.d("SshInput", "motion=${event.actionMasked} source=${event.source} y=${event.getAxisValue(android.view.MotionEvent.AXIS_Y)} ry=${event.getAxisValue(android.view.MotionEvent.AXIS_RY)} hat=${event.getAxisValue(android.view.MotionEvent.AXIS_HAT_Y)} wheel=${event.getAxisValue(android.view.MotionEvent.AXIS_VSCROLL)} focus=${hasWindowFocus()}")
+                nextSshInputLog = now + 1000
+            }
+            return true
+        }
         if (rdpInstance != 0L && remoteScroll != null && controllerScroll.onMotion(event)) return true
         return super.dispatchGenericMotionEvent(event)
     }
 
     override fun onPause() {
+        sshControllerScroll.stop()
         controllerScroll.stop()
         super.onPause()
     }
@@ -61,11 +77,13 @@ class SessionActivity : ComponentActivity() {
         window.decorView.post {
             if (!isDestroyed) {
                 movementObserver.start()
+                WindowLaunchMonitor.observe(this)
             }
         }
     }
 
     override fun onDestroy() {
+        sshControllerScroll.stop()
         credentialPrefs?.unregisterOnSharedPreferenceChangeListener(credentialListener)
         displayCapture.close()
         movementObserver.close()
@@ -76,8 +94,8 @@ class SessionActivity : ComponentActivity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (!hasFocus) controllerScroll.stop()
+        if (!hasFocus) sshControllerScroll.stop()
         if (keyboardPanelState?.lifecycle?.value == metavrx.layout.window.compose.state.WindowLifecycle.Active) return
-                WindowLaunchMonitor.observe(this)
         // System window affordances may take focus while moving/resizing the panel.
         windowInteraction.value += 1L
     }

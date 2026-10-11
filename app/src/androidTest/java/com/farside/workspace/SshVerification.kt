@@ -45,7 +45,6 @@ class SshVerification(private val test: Instrumentation) {
         test.uiAutomation.serviceInfo = serviceInfo
 
         val profileManager = ProfileManager(test.targetContext)
-        val originalProfiles = profileManager.getProfiles()
         val testProfile = ConnectionProfile(
             id = "test-ssh-verify-profile",
             name = "SSH Term Test",
@@ -67,18 +66,21 @@ class SshVerification(private val test: Instrumentation) {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         val activity = test.startActivitySync(intent) as SessionActivity
-        Thread.sleep(2500)
+        Thread.sleep(1000)
 
         val fixtureHandler = Handler(Looper.getMainLooper())
         var fixtureVisible = false
         var fixturePump: Runnable? = null
 
         try {
+            // Pin before accessibility lookups: the toolbar intentionally fades after three seconds.
+            test.runOnMainSync { activity.setZoom?.invoke(1f) }
+            click("Keep toolbar visible")
             // 1. Verify Floating Toolbar appears with connection name, host, pin, zoom, and keyboard toggle
             Log.i("SshVerification", "Step 1: Finding toolbar controls")
             checkNotNull(find("SSH Term Test")) { "Missing connection name in floating toolbar" }
             checkNotNull(find("127.0.0.1")) { "Missing connection host in floating toolbar" }
-            checkNotNull(find("Keep toolbar visible")) { "Missing pin button in toolbar" }
+            checkNotNull(find("Unpin toolbar")) { "Missing pin button in toolbar" }
             checkNotNull(find("Zoom")) { "Missing zoom button in toolbar" }
             checkNotNull(find("Transparency")) { "Missing transparency button in toolbar" }
             checkNotNull(find("Keyboard")) { "Missing keyboard toggle in toolbar" }
@@ -106,7 +108,6 @@ class SshVerification(private val test: Instrumentation) {
 
             // 3. Verify Pinning toolbar and disappearing behavior
             Log.i("SshVerification", "Step 3: Testing Pinning")
-            click("Keep toolbar visible")
             checkNotNull(find("Unpin toolbar")) { "Toolbar pin toggle did not change to Unpin" }
             click("Unpin toolbar")
             checkNotNull(find("Keep toolbar visible")) { "Toolbar pin toggle did not change to Keep toolbar visible" }
@@ -179,11 +180,13 @@ class SshVerification(private val test: Instrumentation) {
             fun panelView(): View = checkNotNull(keyboardState.javaClass.methods.single {
                 it.name.startsWith("getHostedView") }.invoke(keyboardState) as? View)
 
+            fun bankView(): View = checkNotNull(activity.keyboardBankState).let { state ->
+                checkNotNull(state.javaClass.methods.single { it.name.startsWith("getHostedView") }.invoke(state) as? View) }
             fun touchKey(label: String) {
                 val node = checkNotNull(find(label)) { "Missing touch key: $label" }
                 val bounds = android.graphics.Rect().also { node.getBoundsInScreen(it) }
                 test.runOnMainSync {
-                    val panel = panelView()
+                    val panel = if (label in listOf("Number Keys", "Function Keys")) bankView() else panelView()
                     val origin = IntArray(2).also { panel.getLocationOnScreen(it) }
                     val started = android.os.SystemClock.uptimeMillis()
                     for (action in listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP)) {
@@ -207,6 +210,24 @@ class SshVerification(private val test: Instrumentation) {
             checkNotNull(find("123")) { "Missing 123 extra keys expansion key" }
 
             val collapsedHeight = panelView().height
+            val panelOrigin = IntArray(2).also { panelView().getLocationOnScreen(it) }
+            val edgeClearance = 48f * panelView().resources.displayMetrics.density
+            for (label in listOf("WIN", "123")) {
+                val bounds = android.graphics.Rect().also { checkNotNull(find(label)).getBoundsInScreen(it) }
+                check(bounds.left - panelOrigin[0] >= edgeClearance - 1f &&
+                    panelOrigin[0] + panelView().width - bounds.right >= edgeClearance - 1f) {
+                    "$label overlaps the companion window's native corner controls"
+                }
+            }
+            fun winState(): String? {
+                var node = checkNotNull(find("WIN"))
+                while (node.stateDescription == null && node.parent != null) node = node.parent
+                return node.stateDescription?.toString()
+            }
+            touchKey("WIN")
+            check(winState() == "Held") { "WIN touch cannot select/latch key" }
+            touchKey("WIN")
+            check(winState() == "Released") { "WIN touch cannot release key" }
 
             // Verify main content window did NOT move or shift
             val contentLocationWithKeys = IntArray(2)
@@ -216,13 +237,14 @@ class SshVerification(private val test: Instrumentation) {
                 "Main content window moved or shifted when opening extra keys panel: before=${initialContentLocation.toList()} after=${contentLocationWithKeys.toList()}"
             }
 
-            // 6. Verify Extra Keys expansion ("123" -> expands panel to 314dp with full keys)
+            // 6. Extra bank opens below the fixed strip.
             Log.i("SshVerification", "Step 6: Testing 123 expansion")
             touchKey("123")
             Thread.sleep(600)
             checkNotNull(find("ABC")) { "123 button did not switch to ABC on expansion" }
-            val expandedHeight = panelView().height
-            check(expandedHeight > collapsedHeight * 2) { "123 did not expand the keyboard panel: expanded=$expandedHeight collapsed=$collapsedHeight" }
+            check(panelView().height == collapsedHeight) { "123 resized the stable strip" }
+            check(kotlin.math.abs(bankView().height - 238 * activity.resources.displayMetrics.density) <= 1) { "Bank height is incorrect" }
+            check(bankView().width == panelView().width) { "Bank width differs from strip" }
 
             checkNotNull(find("F1")) { "Missing F1 key on expanded panel" }
             checkNotNull(find("F12")) { "Missing F12 key on expanded panel" }
@@ -244,7 +266,7 @@ class SshVerification(private val test: Instrumentation) {
             Thread.sleep(300)
             checkNotNull(find("F1")) { "Function Keys did not restore F1 key" }
 
-            // 7. Verify Contraction on close ("ABC" -> contracts window back to compact 76dp)
+            // 7. Closing the bank leaves the strip untouched.
             Log.i("SshVerification", "Step 7: Testing ABC contraction")
             touchKey("ABC")
             Thread.sleep(600)
@@ -258,6 +280,8 @@ class SshVerification(private val test: Instrumentation) {
             check(initialContentLocation.contentEquals(contentLocationAfterCollapse)) {
                 "Main content window moved or shifted after contracting extra keys panel"
             }
+
+            KeyboardTransitionVerification.verify(test, activity, keyboardState) { label -> touchKey(label) }
 
             // 8. Close keyboard panel
             Log.i("SshVerification", "Step 8: Closing keyboard")
@@ -273,7 +297,10 @@ class SshVerification(private val test: Instrumentation) {
             Log.i("SshVerification", "Cleaning up activity and profiles")
             fixtureVisible = false
             fixturePump?.let { fixtureHandler.removeCallbacks(it) }
+            test.runOnMainSync { activity.finish() }
+            Thread.sleep(400)
             profileManager.deleteProfile(testProfile.id)
+            check(test.targetContext.getSharedPreferences("farside_profiles", 0).edit().commit())
         }
     }
 }

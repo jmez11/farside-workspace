@@ -121,7 +121,6 @@ fun LauncherScreen(
                     }
                 }
                 Spacer(Modifier.height(8.dp))
-
                 LauncherConnectionGrid(profiles = profiles, starredIds = starredIds, reordering = reordering,
                     modifier = Modifier.weight(1f), onEdit = { editingProfile = it }, onDelete = onDeleteProfile,
                     onConnect = onConnectProfile, onToggleStar = onToggleStar, onMove = onMoveProfile)
@@ -1045,6 +1044,10 @@ fun AddProfileForm(
 
     var swapMouseButtons by rememberSaveable { mutableStateOf(initialProfile?.swapMouseButtons ?: false) }
     var autoCopySelection by rememberSaveable { mutableStateOf(initialProfile?.autoCopySelection ?: true) }
+    var sshForwards by remember { mutableStateOf(initialProfile?.sshForwards ?: emptyList<com.farside.workspace.data.SshForward>()) }
+    var showSshForwards by remember { mutableStateOf(false) }
+    if (showSshForwards) SshForwardingDialog(sshForwards, onChange = { sshForwards = it }, onDismiss = { showSshForwards = false })
+
     var adminMode by rememberSaveable { mutableStateOf(initialProfile?.adminMode ?: false) }
 
     var showValidationErrors by rememberSaveable { mutableStateOf(false) }
@@ -1122,6 +1125,10 @@ fun AddProfileForm(
                         resolutionScaling = initialProfile?.resolutionScaling ?: 100,
                         swapMouseButtons = swapMouseButtons,
                         autoCopySelection = autoCopySelection,
+                        sshForwards = sshForwards,
+                        terminalScrollback = initialProfile?.terminalScrollback ?: 2000,
+                        terminalFontSize = initialProfile?.terminalFontSize ?: 14,
+                        terminalOpacity = initialProfile?.terminalOpacity ?: 1f,
                         adminMode = adminMode
                     )
                 )
@@ -1323,6 +1330,10 @@ fun AddProfileForm(
                 } else if (type == ConnectionType.SSH) {
                     SettingsHeader("Terminal & Clipboard")
                     SettingsSwitchRow("Auto-copy selection to clipboard", autoCopySelection, { autoCopySelection = it })
+                    OutlinedButton(onClick = { showSshForwards = true }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                        Text("Port forwarding · ${sshForwards.size} saved")
+                    }
+
                 }
                 
                 SettingsHeader("Proxy Settings")

@@ -23,7 +23,11 @@ class SshTerminalSession(
     val sshSessionInfo: ConnectionProfile,
     client: TerminalSessionClient,
     val context: Context? = null
-) : TerminalSession("dummy", "/", emptyArray(), emptyArray(), 2000, client) {
+) : TerminalSession("dummy", "/", emptyArray(), emptyArray(), sshSessionInfo.terminalScrollback, client) {
+    val forwarding = com.farside.workspace.SshForwarding { statuses ->
+        Handler(Looper.getMainLooper()).post { onForwardStatus?.invoke(statuses) }
+    }
+    var onForwardStatus: ((Map<String, String>) -> Unit)? = null
 
     companion object {
         init {
@@ -48,9 +52,13 @@ class SshTerminalSession(
     @Volatile
     private var isFinished = false
     private val inputQueue = LinkedBlockingQueue<Byte>()
+    private val outputWriter = java.util.concurrent.Executors.newSingleThreadExecutor { task ->
+        Thread(task, "ssh-terminal-input").apply { isDaemon = true }
+    }
 
     init {
         mShellPid = -1
+        forwarding.update(sshSessionInfo.sshForwards)
     }
 
     override fun isRunning(): Boolean {
@@ -97,6 +105,7 @@ class SshTerminalSession(
 
     override fun initializeEmulator(columns: Int, rows: Int, cellWidthPixels: Int, cellHeightPixels: Int) {
         mEmulator = TerminalEmulator(this, columns, rows, cellWidthPixels, cellHeightPixels, 2000, mClient)
+        mEmulator.setScrollbackRows(sshSessionInfo.terminalScrollback)
         
         thread {
             try {
@@ -225,6 +234,7 @@ class SshTerminalSession(
                     return@thread
                 }
 
+                forwarding.attach(ssh)
                 val session = ssh.startSession()
                 sshSession = session
                 session.allocateDefaultPTY()
@@ -265,6 +275,11 @@ class SshTerminalSession(
                         mClient.onTextChanged(this)
                     }
                 }
+            } finally {
+                outputWriter.shutdownNow()
+                forwarding.close()
+                runCatching { sshClient?.disconnect() }
+                runCatching { tunnel?.close() }
             }
         }
     }
@@ -285,6 +300,8 @@ class SshTerminalSession(
     override fun finishIfRunning() {
         if (isFinished) return
         isFinished = true
+        outputWriter.shutdownNow()
+        forwarding.close()
         mShellPid = -1
         inputQueue.offer(3.toByte())
         thread {
@@ -297,14 +314,19 @@ class SshTerminalSession(
     }
 
     override fun write(data: ByteArray, offset: Int, count: Int) {
+        if (isFinished) return
         val out = sshOut
         if (out != null) {
-            thread {
-                try {
-                    out.write(data, offset, count)
-                    out.flush()
-                } catch (e: Exception) {}
-            }
+            // Preserve primary/backspace/alternative ordering and snapshot Termux's reused buffer.
+            val bytes = data.copyOfRange(offset, offset + count)
+            try {
+                outputWriter.execute {
+                    try {
+                        out.write(bytes)
+                        out.flush()
+                    } catch (e: Exception) {}
+                }
+            } catch (_: java.util.concurrent.RejectedExecutionException) { /* Session closed. */ }
         } else {
             for (i in offset until (offset + count)) {
                 inputQueue.offer(data[i])

@@ -48,10 +48,12 @@ android {
     packaging {
         jniLibs { useLegacyPackaging = true; keepDebugSymbols += "**/libcloudflared.so" }
         resources.excludes += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
+        resources.merges += listOf("META-INF/DEPENDENCIES", "META-INF/LICENSE", "META-INF/NOTICE")
     }
 }
 
 dependencies {
+    androidTestImplementation("org.apache.sshd:sshd-core:2.12.1")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.2")
@@ -67,6 +69,8 @@ dependencies {
     implementation(platform("com.meta.metavrx:metavrx-bom:1.2026.0.0"))
     implementation("com.meta.metavrx.layout:layout-compose-compat")
     implementation("com.meta.metavrx.layout:layout-window-compose-compat")
+    // OS-provided types used to attach the key bank to its hosted strip window.
+    compileOnly("com.meta.metavr:metavr-os-jsdk")
 
     // Termux VT Emulator
     implementation(project(":terminal-view"))
