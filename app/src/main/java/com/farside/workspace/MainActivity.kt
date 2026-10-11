@@ -1073,7 +1073,11 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
             .focusRequester(focusRequester)
             .focusable()
             .onKeyEvent { event ->
-                if (rdpInstance != 0L) {
+                // Horizon's control-bar Back is local navigation, even while the
+                // desktop owns keyboard focus. Let Activity route it to the launcher.
+                if (event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_BACK) {
+                    false
+                } else if (rdpInstance != 0L) {
                     val isDown = event.type == KeyEventType.KeyDown
                     val unicode = event.nativeKeyEvent.unicodeChar
                     val scancode = mapAndroidKeyCodeToXt(event.nativeKeyEvent.keyCode)

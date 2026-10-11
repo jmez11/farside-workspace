@@ -53,6 +53,8 @@ internal class SessionLifecycleVerification(private val test: Instrumentation) {
                 "placement" -> placement(profiles.first { it.type == ConnectionType.RDP })
                 "launch" -> launchPlacement()
                 "manipulation" -> manipulation()
+                "back" -> launcherBack()
+                "backLive" -> launcherBack(true)
                 else -> error("Unknown lifecycle mode $mode")
             }
         } finally {
@@ -205,6 +207,112 @@ internal class SessionLifecycleVerification(private val test: Instrumentation) {
             result = SavedWindowPose.read(info.javaClass.getMethod("getPose").invoke(info))
         }
         return checkNotNull(result)
+    }
+
+    private fun launcherBack(liveOnly: Boolean = false) {
+        val report = JSONArray()
+        var launcher: MainActivity? = null
+        val latest = java.util.concurrent.atomic.AtomicReference<MainActivity?>()
+        val application = context.applicationContext as android.app.Application
+        val callbacks = object : android.app.Application.ActivityLifecycleCallbacks {
+            override fun onActivityCreated(activity: Activity, state: android.os.Bundle?) { if (activity is MainActivity) latest.set(activity) }
+            override fun onActivityResumed(activity: Activity) { if (activity is MainActivity) latest.set(activity) }
+            override fun onActivityStarted(activity: Activity) {}
+            override fun onActivityPaused(activity: Activity) {}
+            override fun onActivityStopped(activity: Activity) {}
+            override fun onActivitySaveInstanceState(activity: Activity, state: android.os.Bundle) {}
+            override fun onActivityDestroyed(activity: Activity) {}
+        }
+        application.registerActivityLifecycleCallbacks(callbacks)
+        try {
+            for ((index, type) in (if (liveOnly) emptyList() else ConnectionType.values().toList()).withIndex()) {
+                val profile = ConnectionProfile("verification-back-$type", "Back $type", type, "127.0.0.1", 1, "", "")
+                ProfileManager(context).addProfile(profile)
+                val session = launch(profile.id)
+                Thread.sleep(1200)
+                test.uiAutomation.adoptShellPermissionIdentity()
+                val source = if (type == ConnectionType.VNC)
+                    SavedWindowPose(index * 0.4f, 0.2f, -1.5f, 0f, 0.70710677f, 0f, 0.70710677f)
+                    else SavedWindowPose(index * 0.4f, 0.2f, -1.5f, 0f, 0f, 0f, 1f)
+                move(session, source)
+                test.uiAutomation.dropShellPermissionIdentity()
+                check(near(readPose(session), source)) { "Fixture session placement failed" }
+                val expected = if (type == ConnectionType.VNC) source.copy(x = source.x + 0.15f)
+                    else source.copy(z = source.z + 0.15f)
+                repeat(2) { attempt ->
+                    test.runOnMainSync {
+                        if (attempt == 0) session.onBackPressedDispatcher.onBackPressed() else check(session.onNavigateUp())
+                    }
+                    Thread.sleep(1500)
+                    launcher = latest.get()
+                    val current = checkNotNull(launcher) { "Back did not open launcher" }
+                    Thread.sleep(1200)
+                    val tasks = context.getSystemService(android.app.ActivityManager::class.java).appTasks
+                        .filter { it.taskInfo.baseIntent.component?.className == MainActivity::class.java.name && it.taskInfo.isRunning }
+                    check(tasks.size == 1) { "Expected one launcher task, found ${tasks.size}" }
+                    val actual = readPose(current)
+                    report.put(JSONObject().put("type", type.name).put("attempt", attempt).put("expected", expected.encode())
+                        .put("actual", actual.encode()).put("launcherTask", current.taskId).put("sessionAlive", !session.isDestroyed))
+                    File(context.cacheDir, "launcher-back-results.json").writeText(report.toString(2))
+                    check(near(actual, expected)) { "Launcher did not move in front of $type: ${actual.encode()} expected ${expected.encode()}" }
+                    check(kotlin.math.abs(actual.qy - expected.qy) < 0.001f && kotlin.math.abs(actual.qw - expected.qw) < 0.001f)
+                    check(near(readPose(session), source)) { "Back moved the session" }
+                    check(!session.isDestroyed) { "Back closed session" }
+                    if (attempt == 0) {
+                        test.uiAutomation.adoptShellPermissionIdentity()
+                        move(current, expected.copy(x = expected.x + 0.6f))
+                        test.uiAutomation.dropShellPermissionIdentity()
+                    }
+                }
+                close(session)
+            }
+            val rotated = LauncherWindowLauncher.inFront(floatArrayOf(0f, 0f, 0f, 0f, 0.70710677f, 0f, 0.70710677f))
+            check(kotlin.math.abs(rotated[0] - 0.15f) < 0.001f && kotlin.math.abs(rotated[2]) < 0.001f)
+            val liveProfile = ProfileManager(context).getProfiles().firstOrNull { it.type == ConnectionType.RDP && it.name.startsWith("LAPTOP-") }
+            check(!liveOnly || liveProfile != null) { "The first LAPTOP connection is unavailable" }
+            if (liveProfile != null) {
+                val live = launch(liveProfile.id)
+                connected(live)
+                val instance = live.rdpInstance
+                val source = readPose(live)
+                val expected = LauncherWindowLauncher.inFront(floatArrayOf(source.x, source.y, source.z, source.qx, source.qy, source.qz, source.qw))
+                repeat(2) {
+                    latest.set(null)
+                    test.runOnMainSync {
+                        // A desktop pointer-down gives the RDP Compose node keyboard
+                        // focus, which direct dispatcher calls never exercised.
+                        val touchTime = android.os.SystemClock.uptimeMillis()
+                        for (action in listOf(android.view.MotionEvent.ACTION_DOWN, android.view.MotionEvent.ACTION_UP)) {
+                            val touch = android.view.MotionEvent.obtain(touchTime, touchTime + 20, action, 40f, 40f, 0)
+                            live.window.decorView.dispatchTouchEvent(touch)
+                            touch.recycle()
+                        }
+                    }
+                    Thread.sleep(150)
+                    test.runOnMainSync {
+                        val now = android.os.SystemClock.uptimeMillis()
+                        live.dispatchKeyEvent(android.view.KeyEvent(now, now, android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_BACK, 0))
+                        live.dispatchKeyEvent(android.view.KeyEvent(now, now + 20, android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_BACK, 0))
+                    }
+                    Thread.sleep(2000)
+                    launcher = checkNotNull(latest.get()) { "Dispatched Android Back was consumed before opening the launcher" }
+                    val actual = readPose(checkNotNull(launcher))
+                    check(near(actual, source.copy(x = expected[0], y = expected[1], z = expected[2]))) { "Live Back launcher placement failed" }
+                    check(context.getSystemService(android.app.ActivityManager::class.java).appTasks.count {
+                        it.taskInfo.isRunning && it.taskInfo.baseIntent.component?.className == MainActivity::class.java.name
+                    } == 1) { "Live Back duplicated the launcher" }
+                }
+                connected(live)
+                check(live.rdpInstance == instance && !live.isDestroyed) { "Back restarted or closed live RDP" }
+                report.put(JSONObject().put("liveProfile", liveProfile.name).put("sameRdpInstance", true).put("desktopAfterBack", true)
+                    .put("activityKeyDispatch", true).put("repeatedBackSingletonPlacement", true))
+                File(context.cacheDir, if (liveOnly) "launcher-back-live-results.json" else "launcher-back-results.json").writeText(report.toString(2))
+                close(live)
+            }
+        } finally {
+            application.unregisterActivityLifecycleCallbacks(callbacks)
+            launcher?.let { if (!it.isDestroyed) close(it) }
+        }
     }
     private fun move(activity: Activity, pose: SavedWindowPose) {
         test.runOnMainSync {

@@ -104,6 +104,9 @@ class SessionActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() = LauncherWindowLauncher.show(this@SessionActivity)
+        })
         SessionWindowLauncher.forgetLegacyPositions(this)
         androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
         window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
@@ -193,5 +196,10 @@ class SessionActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNavigateUp(): Boolean {
+        LauncherWindowLauncher.show(this)
+        return true
     }
 }
