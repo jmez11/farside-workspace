@@ -310,7 +310,7 @@ class CredentialUiVerification(private val instrumentation: Instrumentation) {
             click("Select Saved Credential")
             click("+ Add New Credential")
             enter("Account Display Name", "Credential regression")
-            enter("Username", "regression-user")
+            enter("Username (optional for VNC)", "regression-user")
             enter("Password", "fixture-password")
             click("Save Credential")
             check(com.farside.workspace.data.ProfileManager(instrumentation.targetContext).getCredentials()
@@ -340,7 +340,7 @@ class CredentialUiVerification(private val instrumentation: Instrumentation) {
             check(edited.id == credential.id && edited.name == "Renamed credential")
             val reloaded = com.farside.workspace.data.ProfileManager(instrumentation.targetContext).getProfiles()
             for (id in listOf("legacy-credential-test", "linked-credential-test")) {
-                val profile = reloaded.single { it.id == id }
+                val profile = reloaded.singleOrNull { it.id == id } ?: error("Missing edited fixture profile: $id")
                 check(profile.credentialId == credential.id && profile.user == "updated-user" && profile.pass == "updated-password")
             }
             check(reloaded.single { it.id == "unrelated-test" }.user == "different-user")
@@ -361,7 +361,9 @@ class CredentialUiVerification(private val instrumentation: Instrumentation) {
             click("Back")
             find("Renamed credential")
             enter("Hostname or IP address", "127.0.0.1")
+            enter("Port (RDP 3389 / SSH 22 / VNC 5900)", "3389")
             click("SAVE")
+            awaitCheck { manager.getProfiles().any { it.id !in listOf("legacy-credential-test", "linked-credential-test", "unrelated-test") } }
             val saved = manager.getProfiles().single { it.id !in listOf("legacy-credential-test", "linked-credential-test", "unrelated-test") }
             check(saved.credentialId == credential.id && saved.user == edited.user && saved.pass == edited.pass)
             // Two credentials can share identical login data; an explicit ID must remain authoritative.

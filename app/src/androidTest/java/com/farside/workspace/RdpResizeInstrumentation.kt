@@ -13,6 +13,7 @@ import java.io.File
 
 /** On-device regression check: saved RDP profile, actual task resizes, full-frame captures. */
 class RdpResizeInstrumentation : Instrumentation() {
+    private var systemPinMode: String? = null
     private var vncMode: String? = null
     private var vncProfile: String? = null
     private var vncPassword: String? = null
@@ -50,6 +51,7 @@ class RdpResizeInstrumentation : Instrumentation() {
     private var imeOnly = false
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(arguments)
+        systemPinMode = arguments?.getString("systemPinMode")
         vncPassword = arguments?.getString("vncPassword")
         vncMode = arguments?.getString("vncMode")
         vncProfile = arguments?.getString("vncProfile")
@@ -99,6 +101,12 @@ class RdpResizeInstrumentation : Instrumentation() {
     override fun onStart() {
         val results = Bundle()
         try {
+            systemPinMode?.let {
+                SystemPinVerification(this).run(it)
+                results.putString("stream", "PASS: system passcode checks.\n")
+                finish(0, results)
+                return
+            }
             vncMode?.let { mode ->
                 val report = VncVerification(this).run(mode, vncProfile, vncPassword)
                 results.putString("stream", "PASS: $report\n")
@@ -177,7 +185,7 @@ class RdpResizeInstrumentation : Instrumentation() {
             }
             if (sshKeysOnly) {
                 SshKeyAndPinVerification(this).run()
-                results.putString("stream", "PASS: SSH key saving and PIN lock in settings, 5-minute PIN cache bypass and checkbox, profile SSH key selection, optional credentials, and Keystore encryption.\n")
+                results.putString("stream", "PASS: SSH key saving, App PIN lock/cache, key association, optional credentials and Keystore encryption.\n")
                 finish(0, results)
                 return
             }
@@ -194,7 +202,7 @@ class RdpResizeInstrumentation : Instrumentation() {
             }
             if (credentialsOnly) {
                 CredentialUiVerification(this).run()
-                results.putString("stream", "PASS: optional credential PIN setup/change/removal, protected edit/delete and session startup, wrong/cancel/correct PIN, persistent backoff, password encryption/IME and stable links.\n")
+                results.putString("stream", "PASS: credential lifecycle, App PIN setup/gates/backoff, password encryption/IME and stable links.\n")
                 finish(0, results)
                 return
             }

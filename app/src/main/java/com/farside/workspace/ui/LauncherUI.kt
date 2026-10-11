@@ -294,6 +294,8 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
     var selectedTab by rememberSaveable(initialTab) { mutableStateOf(initialTab) }
     
     var appPinVerifier by remember { mutableStateOf(profileManager.getAppPinVerifier()) }
+    var systemPinEnabled by remember { mutableStateOf(profileManager.usesSystemPin()) }
+    var enablingSystemPin by remember { mutableStateOf(false) }
     var settingAppPin by remember { mutableStateOf(false) }
     var changingAppPin by remember { mutableStateOf(false) }
     var removingAppPin by remember { mutableStateOf(false) }
@@ -365,6 +367,9 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
         pinError = null
     }
     if (pendingKeyPinDisable) {
+        if (systemPinEnabled) SystemCredentialDialog(title = "Remove PIN requirement", allowRemembered = false,
+            onUnlocked = { keyRequirePin = false; keyPinError = null; pendingKeyPinDisable = false },
+            onCancel = { pendingKeyPinDisable = false }) else
         CredentialPinDialog(
             title = "Remove PIN requirement",
             message = "Enter the App PIN to remove PIN requirement.",
@@ -377,6 +382,9 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
         )
     }
     if (pendingPinDisable) {
+        if (systemPinEnabled) SystemCredentialDialog(title = "Remove PIN requirement", allowRemembered = false,
+            onUnlocked = { requirePin = false; pinError = null; pendingPinDisable = false },
+            onCancel = { pendingPinDisable = false }) else
         CredentialPinDialog(
             title = "Remove PIN requirement",
             message = "Enter the App PIN to remove PIN requirement.",
@@ -387,6 +395,16 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
             },
             onCancel = { pendingPinDisable = false }
         )
+    }
+    if (enablingSystemPin) {
+        SystemCredentialDialog(title = "Use headset passcode", allowRemembered = false,
+            message = "Switch protected connections to the Quest headset passcode after successful system authentication. Your App PIN remains active if Quest does not allow the prompt.",
+            onUnlocked = {
+                profileManager.enableSystemPin()
+                systemPinEnabled = true
+                appPinVerifier = null
+                enablingSystemPin = false
+            }, onCancel = { enablingSystemPin = false })
     }
     if (removingAppPin) {
         CredentialPinDialog(
@@ -464,63 +482,72 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                 when (selectedTab) {
                     0 -> {
                         SettingsHeader("App Security")
-                        if (appPinVerifier == null || settingAppPin) {
-                            Text(if (settingAppPin) "Enter new App PIN:" else "Set an App-wide PIN to secure credentials.",
-                                color = Color.Gray, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 16.dp))
-                            SettingsTextField(appPinNew, { appPinNew = it; appPinError = null }, "New PIN (4–12 digits)",
-                                accessibleLabel = "New PIN (4–12 digits)",
-                                visualTransformation = PasswordVisualTransformation(),
-                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword))
-                            SettingsTextField(appPinConfirm, { appPinConfirm = it; appPinError = null }, "Confirm PIN",
-                                accessibleLabel = "Confirm PIN",
-                                visualTransformation = PasswordVisualTransformation(),
-                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword))
-                            appPinError?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 16.dp)) }
-                            Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                                TextButton(onClick = {
-                                    if (!com.farside.workspace.CredentialPin.valid(appPinNew)) {
-                                        appPinError = "Use 4–12 digits for the PIN."
-                                        return@TextButton
-                                    }
-                                    if (appPinNew != appPinConfirm) {
-                                        appPinError = "PINs do not match."
-                                        return@TextButton
-                                    }
-                                    val verifier = com.farside.workspace.CredentialPin.create(appPinNew)
-                                    profileManager.setAppPinVerifier(verifier)
-                                    appPinVerifier = verifier
-                                    settingAppPin = false
-                                    appPinNew = ""
-                                    appPinConfirm = ""
-                                    appPinError = null
-                                }) { Text("Save PIN", color = Color(0xFF1E88E5)) }
-                                if (settingAppPin) {
-                                    TextButton(onClick = { settingAppPin = false; appPinNew = ""; appPinConfirm = ""; appPinError = null }) {
-                                        Text("Cancel", color = Color.Gray)
-                                    }
-                                }
-                            }
+                        if (systemPinEnabled) {
+                            Text("Headset passcode active", color = Color.White, modifier = Modifier.padding(horizontal = 16.dp))
+                            Text("Manage your passcode in Quest Settings > Security. Protected connections require system authentication.",
+                                color = Color.Gray, modifier = Modifier.padding(horizontal = 16.dp))
                         } else {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column {
-                                    Text("App PIN active", color = Color.White, fontWeight = FontWeight.Bold)
-                                    Text("Secures credentials with Require PIN enabled", color = Color.Gray, fontSize = 12.sp)
-                                }
-                                Row {
-                                    TextButton(onClick = { changingAppPin = true }) {
-                                        Text("Change PIN", color = Color(0xFF1E88E5))
+                            if (com.farside.workspace.DeviceCredentialAuth.SYSTEM_PIN_SWITCH_VISIBLE) {
+                                TextButton(onClick = { enablingSystemPin = true }) { Text("Use headset passcode instead") }
+                            }
+                            if (appPinVerifier == null || settingAppPin) {
+                                Text(if (settingAppPin) "Enter new App PIN:" else "Set an App-wide PIN to secure credentials.",
+                                    color = Color.Gray, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 16.dp))
+                                SettingsTextField(appPinNew, { appPinNew = it; appPinError = null }, "New PIN (4–12 digits)",
+                                    accessibleLabel = "New PIN (4–12 digits)",
+                                    visualTransformation = PasswordVisualTransformation(),
+                                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword))
+                                SettingsTextField(appPinConfirm, { appPinConfirm = it; appPinError = null }, "Confirm PIN",
+                                    accessibleLabel = "Confirm PIN",
+                                    visualTransformation = PasswordVisualTransformation(),
+                                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword))
+                                appPinError?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 16.dp)) }
+                                Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                                    TextButton(onClick = {
+                                        if (!com.farside.workspace.CredentialPin.valid(appPinNew)) {
+                                            appPinError = "Use 4–12 digits for the PIN."
+                                            return@TextButton
+                                        }
+                                        if (appPinNew != appPinConfirm) {
+                                            appPinError = "PINs do not match."
+                                            return@TextButton
+                                        }
+                                        val verifier = com.farside.workspace.CredentialPin.create(appPinNew)
+                                        profileManager.setAppPinVerifier(verifier)
+                                        appPinVerifier = verifier
+                                        settingAppPin = false
+                                        appPinNew = ""
+                                        appPinConfirm = ""
+                                        appPinError = null
+                                    }) { Text("Save PIN", color = Color(0xFF1E88E5)) }
+                                    if (settingAppPin) {
+                                        TextButton(onClick = { settingAppPin = false; appPinNew = ""; appPinConfirm = ""; appPinError = null }) {
+                                            Text("Cancel", color = Color.Gray)
+                                        }
                                     }
-                                    TextButton(onClick = { removingAppPin = true }) {
-                                        Text("Remove PIN", color = Color.Red)
+                                }
+                            } else {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text("App PIN active", color = Color.White, fontWeight = FontWeight.Bold)
+                                        Text("Secures credentials with Require PIN enabled", color = Color.Gray, fontSize = 12.sp)
+                                    }
+                                    Row {
+                                        TextButton(onClick = { changingAppPin = true }) {
+                                            Text("Change PIN", color = Color(0xFF1E88E5))
+                                        }
+                                        TextButton(onClick = { removingAppPin = true }) {
+                                            Text("Remove PIN", color = Color.Red)
+                                        }
                                     }
                                 }
                             }
-                        }
 
+                        }
                         Spacer(modifier = Modifier.height(16.dp))
                         AdbTunnelSection()
 
@@ -615,7 +642,7 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                                 if (!enabled && previous?.requirePin == true) {
                                     pendingPinDisable = true
                                 } else if (enabled) {
-                                    if (appPinVerifier == null) {
+                                    if (!systemPinEnabled && appPinVerifier == null) {
                                         pinError = "Set an App PIN in Tunnels & Global settings first."
                                     } else {
                                         requirePin = true
@@ -718,7 +745,7 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                                 if (!enabled && previous?.requirePin == true) {
                                     pendingKeyPinDisable = true
                                 } else if (enabled) {
-                                    if (appPinVerifier == null) {
+                                    if (!systemPinEnabled && appPinVerifier == null) {
                                         keyPinError = "Set an App PIN in Tunnels & Global settings first."
                                     } else {
                                         keyRequirePin = true

@@ -144,14 +144,21 @@ class SessionActivity : ComponentActivity() {
             val credential = profileManager.getCredentials().find { it.id == profile.credentialId }
             val sshKey = profileManager.getSshKeys().find { it.id == profile.sshKeyId }
             val appPinVerifier = profileManager.getAppPinVerifier()
-            val requiresPin = ((credential?.requirePin == true) || (sshKey?.requirePin == true)) && appPinVerifier != null
-            var unlocked by remember { mutableStateOf(!requiresPin || (appPinVerifier != null && CredentialPin.hasValidCachedPin(appPinVerifier))) }
+            val systemPin = profileManager.usesSystemPin()
+            val requiresPin = ((credential?.requirePin == true) || (sshKey?.requirePin == true)) && (systemPin || appPinVerifier != null)
+            var unlocked by remember { mutableStateOf(!requiresPin || if (systemPin) DeviceCredentialAuth.hasRememberedUnlock(this)
+                else appPinVerifier != null && CredentialPin.hasValidCachedPin(appPinVerifier)) }
             MaterialTheme(colorScheme = darkColorScheme()) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = androidx.compose.ui.graphics.Color.Transparent
                 ) {
                     if (!unlocked) {
+                        if (systemPin) com.farside.workspace.ui.SystemCredentialDialog(
+                            title = "Unlock connection",
+                            message = "Confirm your headset passcode to connect to ${profile.name}.",
+                            onUnlocked = { unlocked = true }, onCancel = { finish() }
+                        ) else
                         com.farside.workspace.ui.CredentialPinDialog(
                             title = "Unlock connection",
                             message = "Enter the App PIN to connect to ${profile.name}.",

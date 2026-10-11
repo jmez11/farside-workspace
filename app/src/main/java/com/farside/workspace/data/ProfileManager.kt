@@ -8,6 +8,7 @@ class ProfileManager(private val context: Context) {
     private val prefs = context.getSharedPreferences("farside_profiles", Context.MODE_PRIVATE)
 
     init {
+        com.farside.workspace.DeviceCredentialAuth.initialize(context)
         // Encrypt legacy plaintext in both arrays in one durable preference transaction.
         val editor = prefs.edit()
         var changed = false
@@ -205,6 +206,15 @@ class ProfileManager(private val context: Context) {
         } else if (stored.startsWith("v1:")) {
             stored
         } else null
+    }
+
+    fun usesSystemPin(): Boolean = prefs.getBoolean("system_pin_enabled", false)
+
+    /** Called only after the system-authentication callback has verified the device credential. */
+    fun enableSystemPin() {
+        com.farside.workspace.CredentialPin.clearCache()
+        check(prefs.edit().putBoolean("system_pin_enabled", true).remove("app_pinVerifier")
+            .remove("app-pin-attempts").remove("app-pin-until").commit())
     }
 
     fun setAppPinVerifier(verifier: String?) {
