@@ -4,9 +4,9 @@ import android.view.MotionEvent
 import android.view.ViewConfiguration
 import kotlin.math.hypot
 
-/** Wait half a second before drawing the one-second clockwise hold indicator. */
+/** Wait half a second before drawing the half-second clockwise hold indicator. */
 internal fun rightClickBoxProgress(elapsedMillis: Long): Float =
-    ((elapsedMillis - 500L) / 1000f).coerceIn(0f, 1f)
+    ((elapsedMillis - 500L) / 500f).coerceIn(0f, 1f)
 
 /**
  * Invert Compose graphicsLayer scale and pan to map raw screen pointer events

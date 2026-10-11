@@ -758,7 +758,7 @@ class RdpResizeInstrumentation : Instrumentation() {
 
     private fun verifyPointerGestures() {
         for ((elapsed, expected) in listOf(0L to 0f, 499L to 0f, 500L to 0f,
-            750L to 0.25f, 1000L to 0.5f, 1500L to 1f, 2000L to 1f)) {
+            625L to 0.25f, 750L to 0.5f, 875L to 0.75f, 1000L to 1f, 1500L to 1f)) {
             check(rightClickBoxProgress(elapsed) == expected) { "Wrong right-click box progress at $elapsed" }
         }
         val sent = mutableListOf<Int>()
