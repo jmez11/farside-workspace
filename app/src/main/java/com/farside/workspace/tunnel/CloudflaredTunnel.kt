@@ -5,7 +5,11 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.system.Os
+import android.system.OsConstants
+import android.system.ErrnoException
+import org.json.JSONObject
 import android.util.Base64
 import java.io.File
 import java.net.InetAddress
@@ -167,12 +171,41 @@ class CloudflaredTunnel(private val context: Context) : AutoCloseable {
             val cache = File(context.noBackupFilesDir, "cloudflared/.cloudflared")
             if (!cache.exists()) return
             val files = checkNotNull(cache.listFiles()) { "Could not read Cloudflare login cache." }
-            check(files.none { it.name.endsWith("-token.lock") }) {
+            val locks = files.filter { it.isFile && it.name.endsWith("-token.lock") }
+            check(locks.none { isAuthenticationLockActive(it) }) {
                 "Cloudflare sign-in is in progress. Close Cloudflare sessions and try again."
             }
-            for (file in files.filter { it.isFile && it.name.endsWith("-token") }) {
+            for (file in files.filter { it.isFile && (it.name.endsWith("-token") ||
+                    it.name.endsWith("-token.lock") || it.name.endsWith("-token.url")) }) {
                 check(file.delete()) { "Could not clear all Cloudflare logins. Try again." }
             }
+        }
+
+        private fun isAuthenticationLockActive(lock: File): Boolean {
+            // Cloudflared leaves lock/URL files behind after exiting. Match its ten-minute
+            // authentication timeout, PID and process start time rather than file existence.
+            if (System.currentTimeMillis() - lock.lastModified() > TimeUnit.MINUTES.toMillis(10)) return false
+            return runCatching {
+                val owner = JSONObject(lock.readText())
+                val pid = owner.getInt("pid")
+                check(pid > 0)
+                try {
+                    Os.kill(pid, 0)
+                } catch (error: ErrnoException) {
+                    if (error.errno == OsConstants.ESRCH) return false
+                    throw error
+                }
+                // Go's boot-time calculation is rounded to seconds; tolerate that rounding.
+                kotlin.math.abs(processStartMillis(pid) - owner.getLong("start_time")) <= 2000
+            }.getOrDefault(true) // Unreadable/mid-write locks must not interrupt active sign-in.
+        }
+
+        internal fun processStartMillis(pid: Int): Long {
+            val stat = File("/proc/$pid/stat").readText()
+            val fields = stat.substring(stat.lastIndexOf(')') + 2).trim().split(Regex("\\s+"))
+            val ticks = fields[19].toLong() // /proc stat field 22 (starttime).
+            val bootMillis = (System.currentTimeMillis() - SystemClock.elapsedRealtime()) / 1000 * 1000
+            return bootMillis + ticks * 1000 / Os.sysconf(OsConstants._SC_CLK_TCK)
         }
 
         fun authenticationUri(line: String, host: String): Uri? {

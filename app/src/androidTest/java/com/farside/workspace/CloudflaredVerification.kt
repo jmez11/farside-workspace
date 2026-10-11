@@ -175,10 +175,25 @@ class CloudflaredVerification(private val instrumentation: Instrumentation) {
         val ca = File(home, "android-ca.pem").apply { writeText("fixture-ca") }
         val config = File(cache, "config.yml").apply { writeText("fixture-config") }
         val nested = File(cache, "folder-token").apply { mkdirs() }
-        val lock = File(cache, "fixture-aud-token.lock").apply { writeText("fixture-lock") }
+        val pid = android.os.Process.myPid()
+        val start = CloudflaredTunnel.processStartMillis(pid)
+        val lock = File(cache, "fixture-aud-token.lock").apply {
+            writeText("{\"pid\":$pid,\"start_time\":$start}")
+        }
         check(runCatching { CloudflaredTunnel.clearCachedLogins(isolated) }.isFailure)
         check(appToken.exists() && orgToken.exists() && lock.exists())
-        check(lock.delete())
+        lock.writeText("fixture-lock") // A malformed/mid-write lock is conservatively preserved.
+        check(runCatching { CloudflaredTunnel.clearCachedLogins(isolated) }.isFailure)
+        check(appToken.exists() && orgToken.exists())
+        lock.writeText("{\"pid\":$pid,\"start_time\":${start - 60_000}}") // Recycled PID.
+        val deadLock = File(cache, "fixture-org-token.lock").apply {
+            writeText("{\"pid\":2147483647,\"start_time\":0}")
+        }
+        val expiredLock = File(cache, "expired-token.lock").apply {
+            writeText("{\"pid\":$pid,\"start_time\":$start}")
+            check(setLastModified(System.currentTimeMillis() - TimeUnit.MINUTES.toMillis(11)))
+        }
+        val transferUrl = File(cache, "fixture-aud-token.url").apply { writeText("fixture-url") }
         instrumentation.uiAutomation.serviceInfo = instrumentation.uiAutomation.serviceInfo.apply {
             flags = flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
         }
@@ -216,9 +231,10 @@ class CloudflaredVerification(private val instrumentation: Instrumentation) {
             repeat(50) { if (status.get().isEmpty()) Thread.sleep(100) }
             check(status.get().startsWith("Cached Cloudflare Access logins cleared."))
             check(!appToken.exists() && !orgToken.exists())
+            check(!lock.exists() && !deadLock.exists() && !expiredLock.exists() && !transferUrl.exists())
             check(ca.readText() == "fixture-ca" && config.readText() == "fixture-config" && nested.isDirectory)
             CloudflaredTunnel.clearCachedLogins(isolated) // Repeated clear remains successful.
-            Log.i("CloudflaredTest", "PASS: clear-login UI click, app/org token removal, missing/repeated cache, auth-lock rejection and unrelated file preservation; isolated cache only.")
+            Log.i("CloudflaredTest", "PASS: clear-login UI click, app/org token removal, stale/dead/recycled/expired lock and URL cleanup, active/malformed lock rejection, missing/repeated cache and unrelated file preservation; isolated cache only.")
         } finally {
             instrumentation.runOnMainSync { activity.finish() }
         }
@@ -295,9 +311,10 @@ class CloudflaredVerification(private val instrumentation: Instrumentation) {
             omitDomain.set(false)
             val fallback = invoke(work, login + listOf("--service-token-id", "wrong", "--service-token-secret", "wrong") + url)
             check(fallback.first == 0 && fallback.second.contains("FARSIDE_AUTH_USER")) { "Invalid service token did not fall back to cached JWT" }
-            CloudflaredTunnel.clearCachedLogins(object : ContextWrapper(context) {
+            val isolated = object : ContextWrapper(context) {
                 override fun getNoBackupFilesDir() = work.parentFile!!
-            })
+            }
+            CloudflaredTunnel.clearCachedLogins(isolated)
             check(!tokenFile.exists())
             val interactive = launch(work, login + url)
             val sawUrl = AtomicBoolean(false)
@@ -306,9 +323,18 @@ class CloudflaredVerification(private val instrumentation: Instrumentation) {
                 val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20)
                 while (!sawUrl.get() && interactive.isAlive && System.nanoTime() < deadline) Thread.sleep(100)
                 check(sawUrl.get()) { "Missing-token browser transfer URL not produced" }
+                val activeLocks = cache.listFiles().orEmpty().filter { it.name.endsWith("-token.lock") }
+                check(activeLocks.isNotEmpty()) { "Packaged Cloudflared did not create an authentication lock" }
+                check(runCatching { CloudflaredTunnel.clearCachedLogins(isolated) }.isFailure) {
+                    "Active packaged Cloudflared authentication was not protected"
+                }
+                check(activeLocks.all { it.exists() })
                 interactive.destroy()
                 check(interactive.waitFor(3, TimeUnit.SECONDS))
                 reader.join(1000)
+                CloudflaredTunnel.clearCachedLogins(isolated)
+                check(cache.listFiles().orEmpty().none { it.name.endsWith("-token.lock") || it.name.endsWith("-token.url") })
+                Log.i("CloudflaredTest", "PASS: actual packaged Cloudflared active lock rejected, exited child lock/URL cleared.")
             } finally { interactive.destroyForcibly() }
         } finally { stopped.set(true); server.close(); worker.join(1000) }
     }
