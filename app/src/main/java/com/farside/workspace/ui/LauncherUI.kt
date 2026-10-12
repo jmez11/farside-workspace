@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.MoreVert
@@ -65,6 +66,7 @@ fun LauncherScreen(
     var isAdding by rememberSaveable { mutableStateOf(false) }
     var editingProfile by remember { mutableStateOf<ConnectionProfile?>(null) }
     var isSettingsOpen by rememberSaveable { mutableStateOf(false) }
+    var filesOpen by remember { mutableStateOf(false) }
     var settingsInitialTab by rememberSaveable { mutableStateOf(0) }
     var credentialRevision by remember { mutableIntStateOf(0) }
     var reordering by rememberSaveable { mutableStateOf(false) }
@@ -101,6 +103,9 @@ fun LauncherScreen(
             ) {
                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     Text("Farside Connections", style = MaterialTheme.typography.headlineLarge)
+                    IconButton(onClick = { filesOpen = true }, modifier = Modifier.align(Alignment.CenterEnd).padding(end = 48.dp)) {
+                        Icon(androidx.compose.material.icons.Icons.Default.Folder, contentDescription = "Files", tint = Color.White)
+                    }
                     IconButton(
                         onClick = { 
                             settingsInitialTab = 0
@@ -145,6 +150,7 @@ fun LauncherScreen(
                 initialTab = settingsInitialTab
             )
         }
+        if (filesOpen) com.farside.workspace.sftp.SftpFilesEntry(onClose = { filesOpen = false })
     }
 }
 
@@ -1071,6 +1077,12 @@ fun AddProfileForm(
     var redirectStorage by rememberSaveable {
         mutableStateOf((initialProfile?.redirectStorage ?: false) && com.farside.workspace.hasStoragePermission(context))
     }
+    var enableSftp by rememberSaveable {
+        mutableStateOf((initialProfile?.enableSftp ?: false) && com.farside.workspace.hasStoragePermission(context))
+    }
+    val sftpPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { enableSftp = com.farside.workspace.hasStoragePermission(context) }
     val storagePermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
     ) {
@@ -1156,6 +1168,7 @@ fun AddProfileForm(
                         soundRedirection = soundRedirection,
                         redirectMicrophone = redirectMicrophone && com.farside.workspace.hasMicrophonePermission(context),
                         redirectStorage = redirectStorage,
+                        enableSftp = type == ConnectionType.SSH && enableSftp,
                         redirectClipboard = redirectClipboard,
                         customResolution = initialProfile?.customResolution ?: false,
                         matchDevice = initialProfile?.matchDevice ?: true,
@@ -1385,6 +1398,12 @@ fun AddProfileForm(
                     SettingsSwitchRow("Admin mode", adminMode, { adminMode = it })
                     SettingsSwitchRow("Swap mouse buttons", swapMouseButtons, { swapMouseButtons = it })
                 } else if (type == ConnectionType.SSH) {
+                    SettingsHeader("Files")
+                    SettingsSwitchRow("Enable SFTP file access", enableSftp, { enabled ->
+                        if (!enabled) enableSftp = false
+                        else if (com.farside.workspace.hasStoragePermission(context)) enableSftp = true
+                        else com.farside.workspace.requestStoragePermission(context) { sftpPermissionLauncher.launch(it) }
+                    })
                     SettingsHeader("Terminal & Clipboard")
                     SettingsSwitchRow("Auto-copy selection to clipboard", autoCopySelection, { autoCopySelection = it })
                     OutlinedButton(onClick = { showSshForwards = true }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {

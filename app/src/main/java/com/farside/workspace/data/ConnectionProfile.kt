@@ -70,6 +70,7 @@ data class ConnectionProfile(
     val adminMode: Boolean = false,
     val credentialId: String? = null,
     val sshKeyId: String? = null,
+    val enableSftp: Boolean = false,
     val sshForwards: List<SshForward> = emptyList(),
     val terminalScrollback: Int = 2000,
     val terminalFontSize: Int = 14,
@@ -88,6 +89,7 @@ data class ConnectionProfile(
         }
         json.put("credentialId", credentialId)
         json.put("sshKeyId", sshKeyId)
+        json.put("enableSftp", type == ConnectionType.SSH && enableSftp)
         json.put("remoteApp", remoteApp)
         json.put("useCloudflare", useCloudflare)
         json.put("enableCamera", enableCamera)
@@ -139,6 +141,7 @@ data class ConnectionProfile(
                 pass = if (json.getString("type") == "VNC") "" else com.farside.workspace.CredentialManager.readPassword(json, "pass") ?: "",
                 credentialId = if (json.has("credentialId") && !json.isNull("credentialId")) json.getString("credentialId") else null,
                 sshKeyId = if (json.has("sshKeyId") && !json.isNull("sshKeyId")) json.getString("sshKeyId") else null,
+                enableSftp = json.getString("type") == "SSH" && json.optBoolean("enableSftp", false),
                 remoteApp = if (json.has("remoteApp") && !json.isNull("remoteApp")) json.getString("remoteApp") else null,
                 useCloudflare = if (json.has("useCloudflare")) json.getBoolean("useCloudflare") else false,
                 enableCamera = if (json.has("enableCamera")) json.getBoolean("enableCamera") else false,

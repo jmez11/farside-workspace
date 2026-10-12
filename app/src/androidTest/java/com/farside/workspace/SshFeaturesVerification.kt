@@ -17,7 +17,8 @@ import java.security.KeyPairGenerator
 import kotlin.concurrent.thread
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
-class SshFeaturesVerification(private val test: Instrumentation, private val imeOnly: Boolean = false) {
+class SshFeaturesVerification(private val test: Instrumentation, private val imeOnly: Boolean = false, private val keyAuth: Boolean = false) {
+    private var fixtureKeyId: String? = null
     private val shellBytes = java.util.concurrent.ConcurrentLinkedQueue<Int>()
     private val evidence = java.io.File(test.targetContext.cacheDir, "ssh-features-results.txt")
     private fun record(message: String) { evidence.appendText("$message\n"); android.util.Log.i("SshFeatures", message) }
@@ -53,10 +54,18 @@ class SshFeaturesVerification(private val test: Instrumentation, private val ime
         // Android has no Java user.home; the fixture server's default key-path resolver requires one.
         org.apache.sshd.common.util.io.PathUtils.setUserHomeFolderResolver { test.targetContext.cacheDir.toPath() }
         val pair = KeyPairGenerator.getInstance("RSA").apply { initialize(2048) }.generateKeyPair()
+        val pm = ProfileManager(test.targetContext)
+        if (keyAuth) {
+            val pem = "-----BEGIN PRIVATE KEY-----\n" + android.util.Base64.encodeToString(pair.private.encoded, android.util.Base64.NO_WRAP).chunked(64).joinToString("\n") + "\n-----END PRIVATE KEY-----\n"
+            val key = SavedSshKey(name = "Transport verification", privateKey = pem)
+            fixtureKeyId = key.id
+            pm.addSshKey(key)
+        }
         val server = SshServer.setUpDefaultServer().apply {
             host = "127.0.0.1"; port = 0
             keyPairProvider = org.apache.sshd.common.keyprovider.KeyPairProvider { listOf(pair) }
             passwordAuthenticator = org.apache.sshd.server.auth.password.PasswordAuthenticator { user, pass, _ -> user == "fixture" && pass == "fixture" }
+            publickeyAuthenticator = org.apache.sshd.server.auth.pubkey.PublickeyAuthenticator { user, key, _ -> user == "fixture" && key.encoded.contentEquals(pair.public.encoded) }
             forwardingFilter = AcceptAllForwardingFilter.INSTANCE
             shellFactory = org.apache.sshd.server.shell.ShellFactory {
                 object : org.apache.sshd.server.command.Command {
@@ -100,7 +109,7 @@ class SshFeaturesVerification(private val test: Instrumentation, private val ime
             client.connect("127.0.0.1", server.port); client.authPassword("fixture", "fixture")
             forwarding(client, echo.localPort)
             terminalUi(server.port, echo.localPort)
-        } finally { client.close(); echo.close(); server.stop(true) }
+        } finally { client.close(); echo.close(); server.stop(true); fixtureKeyId?.let(pm::deleteSshKey) }
         record("PASS: all SSH feature checks complete; fixture SSH server and profiles removed")
     }
     private fun forwarding(client: SSHClient, destination: Int) {
@@ -188,7 +197,7 @@ class SshFeaturesVerification(private val test: Instrumentation, private val ime
         val clipboard = test.targetContext.getSystemService(android.content.ClipboardManager::class.java)
         val originalClip = clipboard.primaryClip
         val initialForward = SshForward(sourcePort = freePort(), destinationHost = "127.0.0.1", destinationPort = echoPort, family = ForwardFamily.IPV4)
-        val profile = ConnectionProfile("ssh-features-fixture", "SSH features fixture", ConnectionType.SSH, "127.0.0.1", serverPort, "fixture", "fixture", sshForwards = listOf(initialForward), terminalFontSize = 18, terminalOpacity = 0.7f, terminalScrollback = 500)
+        val profile = ConnectionProfile("ssh-features-fixture", "SSH features fixture", ConnectionType.SSH, "127.0.0.1", serverPort, "fixture", if (keyAuth) "" else "fixture", sshKeyId = fixtureKeyId, sshForwards = listOf(initialForward), terminalFontSize = 18, terminalOpacity = 0.7f, terminalScrollback = 500)
         pm.addProfile(profile)
         val intent = Intent(test.targetContext, SessionActivity::class.java).putExtra("profileId", profile.id).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         // The native WindowSession captures permissions at creation, as in toolbarOnly.
@@ -202,6 +211,14 @@ class SshFeaturesVerification(private val test: Instrumentation, private val ime
             val view = checkNotNull(terminal(activity.window.decorView))
             waitFor("Saved forwarding did not start with SSH login") { runCatching { Socket("127.0.0.1", initialForward.sourcePort).use { it.soTimeout = 1000; it.getOutputStream().write(65); it.getInputStream().read() == 65 } }.getOrDefault(false) }
             record("PASS: saved forwarding starts automatically in actual SshTerminalSession with fixture shell")
+            com.farside.workspace.ssh.SshConnectionManager.acquire(test.targetContext, profile.id).use { first ->
+                val shared = first.connect(profile)
+                com.farside.workspace.ssh.SshConnectionManager.acquire(test.targetContext, profile.id).use { second ->
+                    check(second.connect(profile) === shared)
+                }
+                check(shared.isConnected && shared.isAuthenticated)
+            }
+            record("PASS: ${if (keyAuth) "saved-key" else "password"} terminal transport shares SSH identity; releasing other consumers preserves shell")
             if (imeOnly) {
                 verifyNativeIme(activity, view)
                 return

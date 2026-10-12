@@ -13,6 +13,9 @@ import java.io.File
 
 /** On-device regression check: saved RDP profile, actual task resizes, full-frame captures. */
 class RdpResizeInstrumentation : Instrumentation() {
+    private var sftpMode: String? = null
+    private var sftpProfile: String? = null
+    private var sshKeyTransportOnly = false
     private var systemPinMode: String? = null
     private var vncMode: String? = null
     private var vncProfile: String? = null
@@ -54,6 +57,9 @@ class RdpResizeInstrumentation : Instrumentation() {
     private var sshImeOnly = false
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(arguments)
+        sftpMode = arguments?.getString("sftpMode")
+        sftpProfile = arguments?.getString("sftpProfile")
+        sshKeyTransportOnly = arguments?.getString("sshKeyTransportOnly") == "true"
         systemPinMode = arguments?.getString("systemPinMode")
         vncPassword = arguments?.getString("vncPassword")
         vncMode = arguments?.getString("vncMode")
@@ -107,6 +113,17 @@ class RdpResizeInstrumentation : Instrumentation() {
     override fun onStart() {
         val results = Bundle()
         try {
+            sftpMode?.let { mode ->
+                results.putString("stream", SftpVerification(this).run(mode, sftpProfile))
+                finish(0, results)
+                return
+            }
+            if (sshKeyTransportOnly) {
+                SshFeaturesVerification(this, imeOnly = true, keyAuth = true).run()
+                results.putString("stream", "PASS: saved-key terminal auth, shared transport, forwarding and IME.\n")
+                finish(0, results)
+                return
+            }
             systemPinMode?.let {
                 SystemPinVerification(this).run(it)
                 results.putString("stream", "PASS: system passcode checks.\n")

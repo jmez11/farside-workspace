@@ -3,18 +3,9 @@ package com.termux.terminal
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
-import net.schmizz.sshj.SSHClient
-import net.schmizz.sshj.transport.verification.PromiscuousVerifier
-import net.schmizz.sshj.userauth.method.AuthKeyboardInteractive
-import net.schmizz.sshj.userauth.method.ChallengeResponseProvider
-import net.schmizz.sshj.userauth.password.Resource
 import com.farside.workspace.data.ConnectionProfile
-import com.farside.workspace.data.ProfileManager
 import com.farside.workspace.data.ProxyType
-import com.farside.workspace.tunnel.CloudflaredTunnel
-import org.bouncycastle.jce.provider.BouncyCastleProvider
 import java.io.OutputStream
-import java.security.Security
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
@@ -35,20 +26,14 @@ class SshTerminalSession(
         }
 
         fun ensureBouncyCastleProvider() {
-            try {
-                Security.removeProvider(BouncyCastleProvider.PROVIDER_NAME)
-                Security.insertProviderAt(BouncyCastleProvider(), 1)
-            } catch (e: Exception) {
-                android.util.Log.w("SshTerminalSession", "Failed to register BouncyCastleProvider: ${e.message}")
-            }
+            com.farside.workspace.ssh.SshConnectionManager.ensureBouncyCastleProvider()
         }
     }
 
     private var sshOut: OutputStream? = null
-    private var sshClient: SSHClient? = null
+    @Volatile private var connectionLease: com.farside.workspace.ssh.SshConnectionManager.Lease? = null
     private var sshSession: net.schmizz.sshj.connection.channel.direct.Session? = null
     private var sshShell: net.schmizz.sshj.connection.channel.direct.Session.Shell? = null
-    private var tunnel: CloudflaredTunnel? = null
     @Volatile
     private var isFinished = false
     private val inputQueue = LinkedBlockingQueue<Byte>()
@@ -109,130 +94,18 @@ class SshTerminalSession(
         
         thread {
             try {
-                var targetHost = sshSessionInfo.host
-                var targetPort = sshSessionInfo.port
-
-                val useCloudflared = sshSessionInfo.useCloudflare || sshSessionInfo.proxyType == ProxyType.CLOUDFLARED
-                if (useCloudflared && context != null) {
-                    printToTerminal("[Starting Cloudflare Access SSH tunnel...]\r\n")
-                    val cfTunnel = CloudflaredTunnel(context)
-                    tunnel = cfTunnel
-                    val tunnelPort = cfTunnel.start(
-                        hostInput = sshSessionInfo.host,
-                        parameters = sshSessionInfo.cloudflaredParameters,
-                        onStatus = { status -> printToTerminal("[$status]\r\n") },
-                        onExit = {
-                            if (!isFinished) {
-                                printToTerminal("\r\n[Cloudflared tunnel process exited]\r\n")
-                                finishIfRunning()
-                            }
-                        },
-                        accessSubcommand = "ssh"
-                    )
-                    targetHost = "127.0.0.1"
-                    targetPort = tunnelPort
-                }
-
-                val ssh = SSHClient()
-                sshClient = ssh
-                ssh.addHostKeyVerifier(PromiscuousVerifier())
-
-                ssh.connect(targetHost, targetPort)
-
-                var user = sshSessionInfo.user.trim()
-                if (user.isEmpty() && sshSessionInfo.host.contains("@")) {
-                    user = sshSessionInfo.host.substringBefore("@").trim()
-                }
-                if (user.isEmpty()) {
-                    printToTerminal("login as: ")
-                    user = readInteractiveLine(echo = true)?.trim() ?: return@thread
-                    if (user.isEmpty()) {
-                        printToTerminal("No username provided.\r\n")
-                        return@thread
-                    }
-                }
-
-                var authenticated = false
-
-                // 1. Try public key authentication if SSH key is selected
-                val savedKey = sshSessionInfo.sshKeyId?.let { keyId ->
-                    context?.let { ctx -> ProfileManager(ctx).getSshKeys().find { it.id == keyId } }
-                }
-                if (savedKey != null && savedKey.privateKey.isNotBlank()) {
-                    printToTerminal("[Offering SSH key '${savedKey.name}' for user '$user'...]\r\n")
-                    try {
-                        ensureBouncyCastleProvider()
-                        val passwordFinder = if (savedKey.passphrase.isNotEmpty()) {
-                            net.schmizz.sshj.userauth.password.PasswordUtils.createOneOff(savedKey.passphrase.toCharArray())
-                        } else null
-                        val cleanKey = savedKey.privateKey.trim().replace("\r\n", "\n")
-                        val keyProvider = ssh.loadKeys(cleanKey, null as String?, passwordFinder)
-                        ssh.authPublickey(user, keyProvider)
-                        authenticated = ssh.isAuthenticated
-                        if (authenticated) {
-                            printToTerminal("[SSH key '${savedKey.name}' accepted by server]\r\n")
-                        } else {
-                            val allowed = try { ssh.userAuth.allowedMethods } catch (e: Exception) { null }
-                            printToTerminal("[Server refused key '${savedKey.name}' for user '$user'${if (allowed != null) " (allowed methods: $allowed)" else ""}]\r\n")
+                val lease = com.farside.workspace.ssh.SshConnectionManager.acquire(context, sshSessionInfo.id)
+                connectionLease = lease
+                if (isFinished) { lease.close(); return@thread }
+                val ssh = lease.connect(sshSessionInfo, ::printToTerminal,
+                    interactive = { echo -> readInteractiveLine(echo) },
+                    onExit = {
+                        if (!isFinished) {
+                            printToTerminal("\r\n[Cloudflared tunnel process exited]\r\n")
+                            finishIfRunning()
                         }
-                    } catch (e: Exception) {
-                        val allowed = try { ssh.userAuth.allowedMethods } catch (ex: Exception) { null }
-                        val reason = if (e is net.schmizz.sshj.userauth.UserAuthException) {
-                            "Key refused by server${if (allowed != null) " (allowed methods: $allowed)" else ""}"
-                        } else {
-                            e.message ?: "Authentication failed"
-                        }
-                        printToTerminal("[Server refused SSH key '${savedKey.name}' for user '$user': $reason]\r\n")
-                    }
-                } else if (savedKey != null && savedKey.privateKey.isBlank()) {
-                    printToTerminal("[Notice: SSH key '${savedKey.name}' has no private key data]\r\n")
-                } else if (!sshSessionInfo.sshKeyId.isNullOrBlank()) {
-                    printToTerminal("[Notice: Configured SSH key not found in saved keys]\r\n")
-                }
-
-                // 2. Try password authentication if password was provided and not yet authenticated
-                if (!authenticated && sshSessionInfo.pass.isNotEmpty()) {
-                    try {
-                        ssh.authPassword(user, sshSessionInfo.pass)
-                        authenticated = ssh.isAuthenticated
-                    } catch (e: Exception) {
-                        // Password failed; fall back to interactive prompt below
-                    }
-                }
-
-                // 3. Fallback to interactive login when credentials were not entered or failed
-                if (!authenticated) {
-                    var attempts = 0
-                    while (!authenticated && attempts < 3 && !isFinished) {
-                        attempts++
-                        printToTerminal("$user@$targetHost's password: ")
-                        val enteredPass = readInteractiveLine(echo = false) ?: return@thread
-                        try {
-                            ssh.authPassword(user, enteredPass)
-                            authenticated = ssh.isAuthenticated
-                        } catch (e: Exception) {
-                            try {
-                                ssh.auth(user, AuthKeyboardInteractive(object : ChallengeResponseProvider {
-                                    override fun getSubmethods(): List<String> = emptyList()
-                                    override fun init(resource: Resource<*>?, name: String?, instruction: String?) {}
-                                    override fun getResponse(prompt: String?, echo: Boolean): CharArray = enteredPass.toCharArray()
-                                    override fun shouldRetry(): Boolean = false
-                                }))
-                                authenticated = ssh.isAuthenticated
-                            } catch (e2: Exception) {
-                                // Interactive also rejected
-                            }
-                        }
-                        if (!authenticated) {
-                            printToTerminal("Permission denied, please try again.\r\n")
-                        }
-                    }
-                }
-
-                if (!authenticated) {
-                    printToTerminal("[Authentication failed]\r\n")
-                    return@thread
-                }
+                    })
+                if (isFinished) return@thread
 
                 forwarding.attach(ssh)
                 val session = ssh.startSession()
@@ -247,7 +120,7 @@ class SshTerminalSession(
                 val buffer = ByteArray(4096)
                 val mainHandler = Handler(Looper.getMainLooper())
                 
-                val connectedBytes = "\r\n[SSH Connected to ${targetHost}]\r\n".toByteArray()
+                val connectedBytes = "\r\n[SSH Connected to ${if (sshSessionInfo.useCloudflare || sshSessionInfo.proxyType == ProxyType.CLOUDFLARED) "127.0.0.1" else sshSessionInfo.host}]\r\n".toByteArray()
                 mainHandler.post {
                     mEmulator.append(connectedBytes, connectedBytes.size)
                     mClient.onTextChanged(this)
@@ -278,8 +151,9 @@ class SshTerminalSession(
             } finally {
                 outputWriter.shutdownNow()
                 forwarding.close()
-                runCatching { sshClient?.disconnect() }
-                runCatching { tunnel?.close() }
+                runCatching { sshShell?.close() }
+                runCatching { sshSession?.close() }
+                connectionLease?.close()
             }
         }
     }
@@ -308,8 +182,7 @@ class SshTerminalSession(
             try { sshOut?.close() } catch (e: Exception) {}
             try { sshShell?.close() } catch (e: Exception) {}
             try { sshSession?.close() } catch (e: Exception) {}
-            try { sshClient?.disconnect() } catch (e: Exception) {}
-            try { tunnel?.close() } catch (e: Exception) {}
+            connectionLease?.close()
         }
     }
 
