@@ -1,5 +1,8 @@
 package com.farside.workspace.ui
 
+import com.farside.workspace.R
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -17,11 +20,11 @@ fun SshForwardingDialog(rules: List<SshForward>, statuses: Map<String, String> =
     onChange: (List<SshForward>) -> Unit, onDismiss: () -> Unit) {
     var editing by remember { mutableStateOf<SshForward?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    AlertDialog(onDismissRequest = onDismiss, title = { Text("Port forwarding") },
+    AlertDialog(onDismissRequest = onDismiss, title = { Text(stringResource(R.string.port_forwarding)) },
         text = {
             Column(Modifier.width(560.dp).heightIn(max = 400.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Tunnels start with this SSH connection. Changes in a session apply now and are saved for next time.")
-                if (rules.isEmpty()) Text("No saved tunnels. Add a port or a SOCKS proxy.", style = MaterialTheme.typography.bodyMedium)
+                Text(stringResource(R.string.ssh_forwarding_help))
+                if (rules.isEmpty()) Text(stringResource(R.string.no_saved_tunnels), style = MaterialTheme.typography.bodyMedium)
                 rules.forEach { rule ->
                     OutlinedCard(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(12.dp)) {
@@ -33,18 +36,18 @@ fun SshForwardingDialog(rules: List<SshForward>, statuses: Map<String, String> =
                                 })
                             }
                             Text(rule.route)
-                            Text("${rule.family.label} · ${if (rule.allowOtherHosts) "Other hosts allowed" else "Loopback only"} · ${statuses[rule.id] ?: if (rule.enabled) "Saved" else "Disabled"}", style = MaterialTheme.typography.bodySmall)
+                            Text(stringResource(R.string.forwarding_rule_status, rule.family.label, if (rule.allowOtherHosts) stringResource(R.string.other_hosts_allowed) else stringResource(R.string.loopback_only), statuses[rule.id] ?: if (rule.enabled) stringResource(R.string.saved) else stringResource(R.string.disabled)), style = MaterialTheme.typography.bodySmall)
                             Row {
-                                TextButton(onClick = { editing = rule }) { Text("Edit tunnel") }
-                                TextButton(onClick = { onChange(rules.filterNot { it.id == rule.id }); error = null }) { Text("Remove tunnel") }
+                                TextButton(onClick = { editing = rule }) { Text(stringResource(R.string.edit_tunnel)) }
+                                TextButton(onClick = { onChange(rules.filterNot { it.id == rule.id }); error = null }) { Text(stringResource(R.string.remove_tunnel)) }
                             }
                         }
                     }
                 }
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                OutlinedButton(onClick = { editing = SshForward() }) { Text("Add tunnel") }
+                OutlinedButton(onClick = { editing = SshForward() }) { Text(stringResource(R.string.add_tunnel)) }
             }
-        }, confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } })
+        }, confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.done)) } })
     editing?.let { original ->
         key(original.id) {
             ForwardEditor(original, onCancel = { editing = null }, onSave = { rule ->
@@ -67,39 +70,39 @@ private fun ForwardEditor(original: SshForward, onCancel: () -> Unit, onSave: (S
     var port by remember { mutableStateOf(original.destinationPort.toString()) }
     var otherHosts by remember { mutableStateOf(original.allowOtherHosts) }
     var error by remember { mutableStateOf<String?>(null) }
-    AlertDialog(onDismissRequest = onCancel, title = { Text("Configure tunnel") }, text = {
+    AlertDialog(onDismissRequest = onCancel, title = { Text(stringResource(R.string.configure_tunnel)) }, text = {
         Column(Modifier.width(560.dp).heightIn(max = 400.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ForwardKind.entries.forEach { FilterChip(kind == it, onClick = { kind = it }, label = { Text(it.label) }) }
             }
             Text(when (kind) {
-                ForwardKind.LOCAL -> "Listen on Quest. The SSH server connects to the destination."
-                ForwardKind.REMOTE -> "Listen on the SSH server. Quest connects to the destination."
-                ForwardKind.DYNAMIC -> "Listen on Quest as a SOCKS5 proxy. Each app chooses its destination through SSH (TCP only)."
+                ForwardKind.LOCAL -> stringResource(R.string.local_forward_help)
+                ForwardKind.REMOTE -> stringResource(R.string.remote_forward_help)
+                ForwardKind.DYNAMIC -> stringResource(R.string.dynamic_forward_help)
             })
-            OutlinedTextField(source, { source = it }, label = { Text("Source port") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(source, { source = it }, label = { Text(stringResource(R.string.source_port)) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
             if (kind != ForwardKind.DYNAMIC) {
-                OutlinedTextField(host, { host = it }, label = { Text("Destination host") }, supportingText = { Text(if (kind == ForwardKind.LOCAL) "localhost means the SSH server" else "localhost means Quest") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(port, { port = it }, label = { Text("Destination port") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(host, { host = it }, label = { Text(stringResource(R.string.destination_host)) }, supportingText = { Text(if (kind == ForwardKind.LOCAL) stringResource(R.string.local_forward_localhost_help) else stringResource(R.string.remote_forward_localhost_help)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(port, { port = it }, label = { Text(stringResource(R.string.destination_port)) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
             }
-            Text("Listener address family", style = MaterialTheme.typography.labelLarge)
+            Text(stringResource(R.string.listener_address_family), style = MaterialTheme.typography.labelLarge)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ForwardFamily.entries.forEach { FilterChip(family == it, onClick = { family = it }, label = { Text(it.label) }) }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Allow connections from other hosts", Modifier.weight(1f))
+                Text(stringResource(R.string.allow_connections_from_other_hosts), Modifier.weight(1f))
                 Switch(otherHosts, onCheckedChange = { otherHosts = it })
             }
-            if (kind == ForwardKind.REMOTE) Text("The server must permit remote forwarding. Other-host access also requires its GatewayPorts setting.", style = MaterialTheme.typography.bodySmall)
+            if (kind == ForwardKind.REMOTE) Text(stringResource(R.string.remote_forward_server_help), style = MaterialTheme.typography.bodySmall)
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
-    }, dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } }, confirmButton = {
+    }, dismissButton = { TextButton(onClick = onCancel) { Text(stringResource(R.string.cancel)) } }, confirmButton = {
         TextButton(onClick = {
             error = runCatching {
                 val rule = original.copy(kind = kind, family = family, sourcePort = source.toIntOrNull() ?: 0,
                     destinationHost = host.trim(), destinationPort = port.toIntOrNull() ?: 0, allowOtherHosts = otherHosts)
                 rule.validate(); onSave(rule)
             }.exceptionOrNull()?.message
-        }) { Text("Save tunnel") }
+        }) { Text(stringResource(R.string.save_tunnel)) }
     })
 }
