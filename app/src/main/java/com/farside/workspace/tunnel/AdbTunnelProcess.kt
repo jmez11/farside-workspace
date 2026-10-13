@@ -52,7 +52,7 @@ class AdbTunnelProcess(context: Context, config: AdbTunnelConfig, private val st
                             if (!overflow) {
                                 val text = line.toString()
                                 if ("Registered tunnel connection" in text) {
-                                    status(if (routeConfigured) "Cloudflare connected; ADB route configured" else "Cloudflare connected; check dashboard ADB route")
+                                    status(if (routeConfigured) context.getString(com.farside.workspace.R.string.cloudflare_adb_route_ready) else context.getString(com.farside.workspace.R.string.cloudflare_check_adb_route))
                                 }
                                 if ("Updated to new configuration" in text) {
                                     val jsonText = text.replace("\\\"", "\"")
@@ -63,9 +63,9 @@ class AdbTunnelProcess(context: Context, config: AdbTunnelConfig, private val st
                                             rule.optString("hostname") == config.hostname && rule.optString("service") in listOf("tcp://127.0.0.1:${config.port}", "tcp://localhost:${config.port}")
                                         }
                                     }.getOrDefault(false)
-                                    status(if (routeConfigured) "Cloudflare connected; ADB route configured" else "Set dashboard route: ${config.hostname} → tcp://127.0.0.1:${config.port}")
+                                    status(if (routeConfigured) context.getString(com.farside.workspace.R.string.cloudflare_adb_route_ready) else context.getString(com.farside.workspace.R.string.adb_set_dashboard_route, config.hostname, config.port))
                                 }
-                                if ("Unauthorized" in text || "Invalid tunnel secret" in text) status("Cloudflare rejected the tunnel token")
+                                if ("Unauthorized" in text || "Invalid tunnel secret" in text) status(context.getString(com.farside.workspace.R.string.cloudflare_token_rejected))
                             }
                             line.clear(); overflow = false
                         } else if (line.length < 65536) line.append(ch.toChar()) else overflow = true
