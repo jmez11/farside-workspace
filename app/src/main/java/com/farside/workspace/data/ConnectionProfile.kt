@@ -1,18 +1,24 @@
 package com.farside.workspace.data
 
 import org.json.JSONObject
+import androidx.annotation.StringRes
+import com.farside.workspace.R
 
-enum class ConnectionType {
-    RDP, SSH, VNC
+enum class ConnectionType(@StringRes val labelResId: Int) {
+    RDP(R.string.protocol_rdp), SSH(R.string.protocol_ssh), VNC(R.string.protocol_vnc)
 }
 
 enum class ProxyType {
     NONE, SOCKS4, SOCKS5, HTTP, LOCAL, TELNET, CLOUDFLARED;
 
-    val displayName: String get() = when (this) {
-        NONE -> "None"
-        CLOUDFLARED -> "Cloudflared"
-        else -> name
+    @get:StringRes val labelResId: Int get() = when (this) {
+        NONE -> R.string.proxy_none
+        CLOUDFLARED -> R.string.proxy_cloudflared
+        SOCKS4 -> R.string.proxy_socks4
+        SOCKS5 -> R.string.proxy_socks5
+        HTTP -> R.string.proxy_http
+        LOCAL -> R.string.proxy_local
+        TELNET -> R.string.proxy_telnet
     }
     companion object {
         // Retain other enum values only to read legacy profiles without silently dropping proxies.
@@ -24,10 +30,10 @@ enum class SoundRedirection {
     PLAY_ON_DEVICE, PLAY_ON_REMOTE, DO_NOT_PLAY
 }
 
-enum class CameraResolution(val displayName: String, val maxDim: Int) {
-    SD("SD (480p)", 480),
-    HD_720("720p", 720),
-    NATIVE_MAX("Highest native resolution", -1)
+enum class CameraResolution(@StringRes val labelResId: Int, val maxDim: Int) {
+    SD(R.string.camera_resolution_sd, 480),
+    HD_720(R.string.camera_resolution_720, 720),
+    NATIVE_MAX(R.string.camera_resolution_native, -1)
 }
 
 data class ConnectionProfile(
