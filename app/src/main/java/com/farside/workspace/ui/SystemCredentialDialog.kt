@@ -1,5 +1,8 @@
 package com.farside.workspace.ui
 
+import com.farside.workspace.R
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -20,8 +23,8 @@ private fun Context.activity(): Activity? = when (this) {
 
 @Composable
 fun SystemCredentialDialog(
-    title: String = "Unlock credential",
-    message: String = "Confirm your headset passcode.",
+    title: String = stringResource(R.string.unlock_credential),
+    message: String = stringResource(R.string.confirm_headset_passcode),
     allowRemembered: Boolean = true,
     onUnlocked: () -> Unit,
     onCancel: () -> Unit
@@ -43,13 +46,13 @@ fun SystemCredentialDialog(
             Text(message)
             if (allowRemembered) Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(checked = rememberFor5Min, onCheckedChange = { rememberFor5Min = it }, enabled = !busy)
-                Text("Don't reprompt for 5 minutes")
+                Text(pluralStringResource(R.plurals.pin_remember_minutes, 5, 5))
             }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         } },
         confirmButton = { TextButton(enabled = !busy, onClick = {
             val activity = context.activity()
-            if (activity == null) { error = "System authentication requires an active window." }
+            if (activity == null) { error = context.getString(R.string.system_auth_requires_window) }
             else {
                 busy = true
                 error = null
@@ -59,7 +62,7 @@ fun SystemCredentialDialog(
                     if (failure == null) latestUnlocked()
                 }
             }
-        }) { Text(if (busy) "Waiting for system" else "Unlock with headset passcode") } },
-        dismissButton = { TextButton(onClick = { request[0]?.cancel(); onCancel() }) { Text("Cancel") } }
+        }) { Text(if (busy) stringResource(R.string.waiting_for_system) else stringResource(R.string.unlock_with_headset_passcode)) } },
+        dismissButton = { TextButton(onClick = { request[0]?.cancel(); onCancel() }) { Text(stringResource(R.string.cancel)) } }
     )
 }
