@@ -259,4 +259,15 @@
         <item quantity="one">Port forwarding · %1$d saved</item>
         <item quantity="other">Port forwarding · %1$d saved</item>
     </plurals>
+    <string name="enable_wireless_debugging_help">Enable wireless debugging on the headset to set up the tunnel.</string>
+    <string name="wireless_adb_detected">Wireless ADB detected on port %1$d</string>
+    <string name="discovering_wireless_adb">Discovering this headset\'s wireless ADB endpoint…</string>
+    <string name="new_tunnel_token">New tunnel token (blank keeps saved token)</string>
+    <string name="published_hostname_hint">Published hostname (e.g. quest-adb.example.com)</string>
+    <string name="bridge_port_hint">Bridge port (e.g. 5555)</string>
+    <string name="adb_bridge_help">In Cloudflare\'s tunnel dashboard, publish this hostname as TCP to 127.0.0.1:%1$s. The headset keeps that bridge connected to the current wireless ADB port.</string>
+    <string name="adb_bridge_port_conflict">Bridge port must differ from the wireless ADB port.</string>
+    <string name="tunnel_start_failed">Could not start the tunnel.</string>
+    <string name="adb_tunnel_config_preview">config.yml (mirror this ingress in the Cloudflare dashboard):\n%1$s</string>
+    <string name="adb_tunnel_client_instructions">On your computer:\n%1$s\nadb connect 127.0.0.1:%2$d</string>
 </resources>
