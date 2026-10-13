@@ -15,8 +15,6 @@ class JumpChainException : Exception, LocalizableError {
     constructor(@StringRes resId: Int, vararg args: Any, quantity: Int? = null) : super() {
         this.resId = resId; formatArgs = args; this.quantity = quantity
     }
-    // Retained while the transport emission sites are migrated in their own step.
-    constructor(message: String) : super(message) { resId = 0; formatArgs = emptyArray(); quantity = null }
 }
 
 /** [hops] are in connect order and end with the target profile itself. [warning] is set for a dangling jump reference. */

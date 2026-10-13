@@ -1,5 +1,40 @@
 # Translation notes
 
+- `ssh_connection_closed`: Shared SSH transport lease is closed.
+- `ssh_io_main_thread`: SSH network operations cannot run on Android main/UI thread.
+- `ssh_settings_changed`: Shared open transport has different saved connection settings.
+- `ssh_hop_pending`: Ellipsis marks an SSH hop waiting to connect.
+- `ssh_hop_success`: Check mark marks a successfully connected SSH hop.
+- `ssh_hop_failure`: Cross marks a failed SSH hop; preserve the original glyph.
+- `ssh_hop_state`: Profile name followed by its connection state symbol.
+- `ssh_jump_progress`: Current jump-host ordinal, total jump hosts and profile name; preserve CR/LF.
+- `ssh_hop_prefix`: Prefix inserted into hop status brackets; preserve trailing space.
+- `ssh_auth_failed_short`: Short authentication failure reason in chain status.
+- `ssh_chain_failure`: Route, failed profile name and reason; preserve brackets and CR/LF.
+- `ssh_jump_failed`: Intermediate SSH host failed; placeholders are profile name and reason.
+- `ssh_warning`: Terminal warning wrapper; preserve brackets and CR/LF.
+- `ssh_tunnel_ignored`: Jump transport already reaches this hop, so its Cloudflare tunnel is ignored.
+- `ssh_tunnel_starting`: Starting Cloudflare Access SSH tunnel child process; preserve CR/LF.
+- `ssh_status_line`: Terminal wrapper for a tunnel status; preserve brackets and CR/LF.
+- `ssh_unreachable`: Network destination could not be reached.
+- `ssh_username_required`: Headless SSH needs a saved username because it cannot prompt.
+- `ssh_login_prompt`: Interactive terminal username prompt; preserve trailing space.
+- `ssh_sign_in_cancelled`: Interactive SSH authentication was cancelled.
+- `ssh_username_empty`: Interactive login received an empty username; preserve CR/LF.
+- `ssh_key_offering`: Cryptographic key name and SSH username; preserve quotes and CR/LF.
+- `ssh_key_accepted`: Server accepted the named cryptographic SSH key; preserve CR/LF.
+- `ssh_allowed_methods`: Server-supplied authentication method list; preserve leading space and parentheses.
+- `ssh_key_refused`: Key name, username and optional allowed-methods suffix; preserve CR/LF.
+- `ssh_key_refused_reason`: Key rejected by server with optional allowed-methods suffix.
+- `ssh_auth_failed`: Generic SSH authentication failure reason.
+- `ssh_key_refused_detail`: Key name, username and rejection reason; preserve CR/LF.
+- `ssh_key_empty`: Saved key has no private cryptographic key data; preserve CR/LF.
+- `ssh_key_missing`: Configured cryptographic key record was not found; preserve CR/LF.
+- `ssh_password_prompt`: SSH username and effective host; preserve apostrophe and trailing space.
+- `ssh_credential_check`: Check saved username/password credentials or the cryptographic SSH key.
+- `ssh_permission_denied`: Interactive SSH authentication retry message; preserve CR/LF.
+- `ssh_chain_success`: Successfully connected route; preserve brackets and CR/LF.
+
 - `cf_hostname_invalid`: DNS host only; exclude URL scheme, port and path.
 - `cf_parameters_too_long`: Cloudflared command-line parameter input exceeds its length limit.
 - `cf_shell_operators_invalid`: Shell metacharacters, escapes and control bytes cannot appear in argument input.
