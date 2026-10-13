@@ -510,4 +510,8 @@
     <string name="key_down_symbol">\u2193</string>
     <string name="key_held">Held</string>
     <string name="key_released">Released</string>
+    <string name="cloudflared_tunnel_exited">Cloudflared tunnel exited.</string>
+    <string name="cloudflared_connection_failed">Cloudflared connection failed.</string>
+    <string name="choose_another_credential">Saved credential was deleted. Choose another credential.</string>
+    <string name="proxy_connection_not_supported">%1$s proxy connections are not supported yet. Select None or Cloudflared.</string>
 </resources>
