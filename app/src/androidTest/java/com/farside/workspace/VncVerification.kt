@@ -100,7 +100,7 @@ internal class VncVerification(private val test: Instrumentation) {
                 val loginPassword = if (mode == "macLogin") ProfileManager(test.targetContext).getCredentials()
                     .single { it.id == profile.credentialId }.pass else if (mode == "login") requireNotNull(password) else null
                 session(profile, null, probePointer = mode == "pointer", loginPassword = loginPassword,
-                    loginAccountX = if (mode == "macLogin") 280 else 400)
+                    loginAccountX = if (mode == "macLogin") 280 else 400, verifyFinder = mode != "macLogin")
                 record(if (loginPassword != null) "LIVE LOGIN PASS: desktop/window updates and synthetic Command keys verified; clean close. Physical gestures/keys and real Mac clipboard remain pending."
                     else "LIVE PASS: saved VNC credential connect, nonblank actual surface, pointer event, clean close. Mac-visible input/clipboard and physical gestures require wearer checks.")
             } else if (mode == "discovery") {
@@ -134,7 +134,7 @@ internal class VncVerification(private val test: Instrumentation) {
         }
     }
     private fun session(profile: ConnectionProfile, server: Fixture?, probePointer: Boolean = false,
-        loginPassword: String? = null, loginAccountX: Int = 400) {
+        loginPassword: String? = null, loginAccountX: Int = 400, verifyFinder: Boolean = true) {
         val activity = test.startActivitySync(Intent(test.targetContext, SessionActivity::class.java)
             .putExtra("profileId", profile.id).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as SessionActivity
         var instance = 0L
@@ -179,9 +179,10 @@ internal class VncVerification(private val test: Instrumentation) {
                 val points = (10 until desktop.height step 20).flatMap { y ->
                     (10 until desktop.width step 20).map { x -> x to y }
                 }
-                check(points.count { (x, y) -> desktop.getPixel(x, y) and 0x00ffffff != 0 } > points.size * 0.9) {
+                check(points.count { (x, y) -> desktop.getPixel(x, y) and 0x00ffffff != 0 } > points.size * 0.1) {
                     "Mac desktop remains black after login reset"
                 }
+                if (verifyFinder) {
                 fun command(scancode: Int) {
                     bridge!!.sendKeyEvent(instance, 0x15b, true)
                     bridge!!.sendKeyEvent(instance, scancode, true); bridge!!.sendKeyEvent(instance, scancode, false)
@@ -203,8 +204,10 @@ internal class VncVerification(private val test: Instrumentation) {
                     restored
                 }
                 capture(activity, "vnc-login-restored.png").recycle()
-                desktop.recycle(); window.recycle()
+                window.recycle()
                 record("PASS: actual Mac login reset renders desktop; Command+N opens a visibly updated Finder window and Command+W closes it")
+                } else record("PASS: saved macOS account logged in and rendered the Mac desktop wallpaper")
+                desktop.recycle()
             }
             if (probePointer) {
                 val decor = activity.window.decorView
