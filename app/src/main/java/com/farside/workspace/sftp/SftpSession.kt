@@ -102,13 +102,10 @@ internal class SftpSession(private val context: Context, val profile: Connection
         sftp.sftpEngine.timeoutMs = 30_000
         operation.track(sftp).use { operation.check(); block(it) }
     }
-    fun list(path: String, operation: SftpOperation, onProgress: (found: Int, processed: Int) -> Unit = { _, _ -> }): List<SftpEntry> = channel(operation) { sftp ->
+    fun list(path: String, operation: SftpOperation): List<SftpEntry> = channel(operation) { sftp ->
         val items = sftp.ls(path).filter { it.name != "." && it.name != ".." }
-        onProgress(items.size, 0)
-        var processed = 0
         items.map { item ->
             operation.check()
-            if (++processed % 25 == 0) onProgress(items.size, processed)
             var link: String? = null
             var unavailable = false
             val attributes = if (item.attributes.type != FileMode.Type.SYMLINK) item.attributes else try {
@@ -231,5 +228,87 @@ internal class SftpDownloads(private val context: Context) {
                 }, null, null) == 1)
             }
         } catch (e: Exception) { resolver.delete(uri, null, null); throw e }
+    }
+
+    fun downloadFolder(session: SftpSession, entry: SftpEntry, tree: android.net.Uri, operation: SftpOperation,
+        update: (Long, Long) -> Unit, onStatus: (String) -> Unit) {
+        require(entry.directory && entry.link == null && !entry.unavailable)
+        val resolver = context.contentResolver
+        val rootId = android.provider.DocumentsContract.getTreeDocumentId(tree)
+        fun findChild(parentId: String, name: String): android.net.Uri? = resolver.query(
+            android.provider.DocumentsContract.buildChildDocumentsUriUsingTree(tree, parentId),
+            arrayOf(android.provider.DocumentsContract.Document.COLUMN_DOCUMENT_ID, android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME),
+            null, null, null
+        )?.use { cursor ->
+            val idColumn = cursor.getColumnIndexOrThrow(android.provider.DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+            val nameColumn = cursor.getColumnIndexOrThrow(android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+            while (cursor.moveToNext()) {
+                if (cursor.getString(nameColumn) == name) {
+                    return@use android.provider.DocumentsContract.buildDocumentUriUsingTree(tree, cursor.getString(idColumn))
+                }
+            }
+            null
+        }
+        fun create(parentId: String, name: String, mime: String): android.net.Uri = checkNotNull(
+            android.provider.DocumentsContract.createDocument(resolver,
+                android.provider.DocumentsContract.buildDocumentUriUsingTree(tree, parentId), mime, name))
+        check(findChild(rootId, sftpName(entry.name)) == null) { "Destination already exists" }
+        val target = create(rootId, sftpName(entry.name), "vnd.android.document/directory")
+        val targetId = android.provider.DocumentsContract.getDocumentId(target)
+        val targetMime = resolver.getType(target)
+        require(targetMime == "vnd.android.document/directory") { "Destination already exists" }
+        data class RemoteFile(val entry: SftpEntry, val parentRelative: String)
+        val directories = mutableListOf<String>()
+        val files = mutableListOf<RemoteFile>()
+        fun scan(remote: String, relative: String) {
+            operation.check()
+            onStatus(context.getString(R.string.sftp_scanning_folder, relative.ifEmpty { entry.name }))
+            val children = session.list(remote, operation)
+            children.forEach { child ->
+                operation.check()
+                if (child.unavailable || child.link != null) return@forEach
+                val name = sftpName(child.name)
+                if (child.directory) {
+                    val childRelative = if (relative.isEmpty()) name else "$relative/$name"
+                    directories += childRelative
+                    scan(child.path, childRelative)
+                } else {
+                    files += RemoteFile(child, relative)
+                }
+            }
+        }
+        scan(entry.path, "")
+        val directoryIds = mutableMapOf("" to targetId)
+        directories.forEachIndexed { index, relative ->
+            operation.check()
+            onStatus(context.getString(R.string.sftp_creating_folders, index + 1, directories.size))
+            val parentRelative = relative.substringBeforeLast('/', "")
+            val name = relative.substringAfterLast('/')
+            val parentId = checkNotNull(directoryIds[parentRelative])
+            check(findChild(parentId, name) == null) { "Destination already exists" }
+            val dir = create(parentId, name, "vnd.android.document/directory")
+            check(resolver.getType(dir) == "vnd.android.document/directory") { "Could not create destination folder" }
+            directoryIds[relative] = android.provider.DocumentsContract.getDocumentId(dir)
+        }
+        val totalBytes = files.sumOf { it.entry.size.coerceAtLeast(0L) }
+        var completedBytes = 0L
+        files.forEachIndexed { index, file ->
+            operation.check()
+            onStatus(context.getString(R.string.sftp_downloading_file, index + 1, files.size, file.entry.name))
+            val parentId = checkNotNull(directoryIds[file.parentRelative])
+            check(findChild(parentId, sftpName(file.entry.name)) == null) { "Destination already exists" }
+            val created = create(parentId, sftpName(file.entry.name), "application/octet-stream")
+            var fileBytes = 0L
+            try {
+                checkNotNull(resolver.openOutputStream(created, "w")).use { output ->
+                    session.download(file.entry.path, output, operation) { done, _ ->
+                        fileBytes = done
+                        update((completedBytes + done).coerceAtMost(totalBytes), totalBytes)
+                    }
+                }
+            } catch (e: Exception) { runCatching { android.provider.DocumentsContract.deleteDocument(resolver, created) }; throw e }
+            completedBytes += fileBytes.coerceAtMost(file.entry.size.coerceAtLeast(0L))
+            update(completedBytes.coerceAtMost(totalBytes), totalBytes)
+        }
     }
 }

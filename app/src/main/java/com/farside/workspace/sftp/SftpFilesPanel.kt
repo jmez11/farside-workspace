@@ -5,8 +5,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.pluralStringResource
 import android.content.*
 import android.os.Environment
+import android.util.Log
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -20,10 +24,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.RoundedCornerShape
 import com.farside.workspace.data.*
 import com.farside.workspace.ui.CredentialPinDialog
 import com.farside.workspace.ui.SystemCredentialDialog
@@ -77,7 +83,7 @@ internal fun SftpFilesEntry(onClose: () -> Unit, profileId: String? = null, allo
         security = withContext(Dispatchers.IO) { ProfileManager(context).let { it.usesSystemPin() to it.getAppPinVerifier() } }
     }
     BackHandler { onClose() }
-    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+    Surface(Modifier.fillMaxSize(), color = Color(0xFF202124)) {
         val auth = security
         when {
             auth == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
@@ -100,6 +106,8 @@ private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?, allowDisable
     var entries by remember { mutableStateOf<List<SftpEntry>>(emptyList()) }
     val listingCache = remember { HashMap<String, List<SftpEntry>>() }
     var cachedView by remember { mutableStateOf(false) }
+    var sortByDate by remember { mutableStateOf(false) }
+    var sortMenu by remember { mutableStateOf(false) }
     var autoConnected by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
@@ -110,6 +118,7 @@ private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?, allowDisable
     var editName by remember { mutableStateOf("") }
     var confirm by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
     var localFolder by remember { mutableStateOf<File?>(null) }
+    var pendingFolderDownload by remember { mutableStateOf<SftpEntry?>(null) }
     var localFiles by remember { mutableStateOf<List<HeadsetFile>>(emptyList()) }
     val latestSession by rememberUpdatedState(session)
     val latestOperation by rememberUpdatedState(operation)
@@ -133,16 +142,16 @@ private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?, allowDisable
         operation = op; status = label; error = null; progress = null
         scope.launch {
             try { task(op); op.check(); status = context.getString(R.string.done) }
-            catch (e: Exception) { error = try { op.check(); sftpError(context, e) } catch (_: java.util.concurrent.CancellationException) { context.getString(R.string.cancelled) } }
+            catch (e: Exception) {
+                Log.e("SftpFiles", "Operation failed: ${e.javaClass.simpleName}: ${e.message ?: "(no message)"}", e)
+                error = try { op.check(); sftpError(context, e) } catch (_: java.util.concurrent.CancellationException) { context.getString(R.string.cancelled) }
+            }
             finally { operation = null; progress = null }
         }
     }
     suspend fun refresh(op: SftpOperation, folder: String = path) {
         val current = checkNotNull(session)
-        val result = withContext(Dispatchers.IO) { current.list(folder, op) { found, done ->
-            val text = if (done == 0) context.resources.getQuantityString(R.plurals.sftp_loading_found, found, found) else context.resources.getQuantityString(R.plurals.sftp_loading_details, found, found, done)
-            scope.launch { if (operation === op) status = text }
-        } }
+        val result = withContext(Dispatchers.IO) { current.list(folder, op) }
         op.check(); entries = result; path = folder; cachedView = false; listingCache[folder] = result
     }
     /** Shows a cached listing instantly when available; Refresh always re-reads from the server. */
@@ -188,6 +197,17 @@ private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?, allowDisable
         val now = android.os.SystemClock.uptimeMillis()
         if (now - last >= 100 || done == total) { last = now; scope.launch { progress = done to total } }
     } }
+    val folderDestinationPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        val entry = pendingFolderDownload
+        pendingFolderDownload = null
+        if (uri != null && entry != null) {
+            runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION) }
+            work(context.getString(R.string.sftp_downloading, entry.name)) { op ->
+                withContext(Dispatchers.IO) { SftpDownloads(context).downloadFolder(checkNotNull(session), entry, uri, op, report) { text -> scope.launch { if (operation === op) status = text } } }
+                status = context.getString(R.string.sftp_folder_downloaded, entry.name)
+            }
+        }
+    }
     fun download(entry: SftpEntry, overwrite: Boolean) { work(context.getString(R.string.sftp_downloading, entry.name)) { op ->
         withContext(Dispatchers.IO) { SftpDownloads(context).download(checkNotNull(session), entry, overwrite, op, report) }
         status = context.getString(R.string.saved_to_downloads)
@@ -208,6 +228,10 @@ private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?, allowDisable
             catch (_: Exception) { localFiles = emptyList(); error = context.getString(R.string.headset_folder_unreadable) }
         }
     }
+    val visibleEntries = remember(entries, sortByDate) {
+        if (sortByDate) entries.sortedWith(compareByDescending<SftpEntry> { it.directory }.thenByDescending { it.modified }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+        else entries.sortedWith(compareByDescending<SftpEntry> { it.directory }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+    }
     Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = ::back) { Icon(Icons.Default.ArrowBack, stringResource(R.string.back_in_files)) }
@@ -218,6 +242,17 @@ private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?, allowDisable
             TextButton(onClick = ::root, enabled = operation == null) { Text(stringResource(R.string.ssh_files_root)) }
             Text(session?.profile?.name.orEmpty(), Modifier.weight(1f))
             if (session != null) {
+                Box {
+                    TextButton(onClick = { sortMenu = true }, enabled = operation == null) {
+                        Icon(Icons.Default.Sort, null)
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(if (sortByDate) R.string.sftp_sort_date else R.string.sftp_sort_name))
+                    }
+                    DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
+                        DropdownMenuItem(text = { Text(stringResource(R.string.sftp_sort_name)) }, onClick = { sortByDate = false; sortMenu = false })
+                        DropdownMenuItem(text = { Text(stringResource(R.string.sftp_sort_date)) }, onClick = { sortByDate = true; sortMenu = false })
+                    }
+                }
                 TextButton(onClick = { work(context.getString(R.string.refreshing)) { refresh(it) } }, enabled = operation == null) { Text(stringResource(R.string.refresh)) }
                 TextButton(onClick = { edit = context.getString(R.string.new_folder) to null; editName = "" }, enabled = operation == null) { Text(context.getString(R.string.new_folder)) }
                 TextButton(onClick = { localFolder = Environment.getExternalStorageDirectory() }, enabled = operation == null) { Text(stringResource(R.string.upload)) }
@@ -231,7 +266,8 @@ private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?, allowDisable
             val p = progress
             if (p != null && p.second > 0) {
                 LinearProgressIndicator(progress = (p.first.toFloat() / p.second).coerceIn(0f, 1f), modifier = Modifier.fillMaxWidth())
-                Text(stringResource(R.string.sftp_transfer_megabytes, p.first / 1024 / 1024, p.second / 1024 / 1024))
+                Text(if (p.second < 1024L * 1024L) stringResource(R.string.sftp_transfer_bytes, p.first, p.second)
+                    else stringResource(R.string.sftp_transfer_megabytes, p.first / 1024 / 1024, p.second / 1024 / 1024))
             } else LinearProgressIndicator(Modifier.fillMaxWidth())
         }
         error?.let { message -> Card { Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -247,22 +283,32 @@ private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?, allowDisable
                 } }
             } else {
                 if (entries.isEmpty() && operation == null && error == null) item { Text(stringResource(R.string.empty_folder)) }
-                items(entries, key = { it.path }) { entry -> Card(Modifier.fillMaxWidth().alpha(if (entry.unavailable) 0.45f else 1f)) {
+                items(visibleEntries, key = { it.path }) { entry -> Card(
+                    Modifier.fillMaxWidth().alpha(if (entry.unavailable) 0.45f else 1f),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF292A2E)),
+                    border = BorderStroke(1.dp, Color(0xFF393A3F))
+                ) {
                     Row(Modifier.fillMaxWidth().clickable(enabled = !entry.unavailable && operation == null) {
                         if (entry.directory) open(entry.path) else requestDownload(entry)
-                    }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(if (entry.directory) Icons.Default.Folder else Icons.Default.InsertDriveFile, null)
-                        Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-                            Text(entry.name)
-                            entry.link?.let { Text(stringResource(R.string.sftp_link_target, it), style = MaterialTheme.typography.bodySmall) }
+                    }.padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Surface(Modifier.size(54.dp), shape = RoundedCornerShape(11.dp), color = Color(0xFF303136), border = BorderStroke(1.dp, Color(0xFF45464C))) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(if (entry.directory) Icons.Default.Folder else Icons.Default.InsertDriveFile, null, tint = Color(0xFFE4E1EA), modifier = Modifier.size(28.dp))
+                            }
+                        }
+                        Column(Modifier.weight(1f).padding(start = 14.dp, end = 8.dp)) {
+                            Text(entry.name, color = Color(0xFFF1F0F4), style = MaterialTheme.typography.titleMedium)
+                            entry.link?.let { Text(stringResource(R.string.sftp_link_target, it), color = Color(0xFFB9B7C0), style = MaterialTheme.typography.bodySmall) }
                             Text(if (entry.unavailable) stringResource(R.string.file_unavailable) else
-                                stringResource(R.string.sftp_entry_details, if (entry.directory) stringResource(R.string.folder) else pluralStringResource(R.plurals.sftp_file_bytes, entry.size.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), entry.size), DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(entry.modified))), style = MaterialTheme.typography.bodySmall)
+                                stringResource(R.string.sftp_entry_details, if (entry.directory) stringResource(R.string.folder) else pluralStringResource(R.plurals.sftp_file_bytes, entry.size.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), entry.size), DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(entry.modified))), color = Color(0xFFB9B7C0), style = MaterialTheme.typography.bodySmall)
                         }
                         Box { IconButton(onClick = { menu = entry }, enabled = operation == null) { Icon(Icons.Default.MoreVert, stringResource(R.string.sftp_entry_actions, entry.name)) }
                             DropdownMenu(expanded = menu == entry, onDismissRequest = { menu = null }) {
+                                if (entry.directory && entry.link == null && !entry.unavailable) DropdownMenuItem(text = { Text(stringResource(R.string.download_folder)) }, onClick = { menu = null; pendingFolderDownload = entry; folderDestinationPicker.launch(null) })
                                 if (!entry.directory && !entry.unavailable) DropdownMenuItem(text = { Text(stringResource(R.string.download)) }, onClick = { menu = null; requestDownload(entry) })
                                 DropdownMenuItem(text = { Text(context.getString(R.string.rename)) }, onClick = { menu = null; edit = context.getString(R.string.rename) to entry; editName = entry.name })
-                                DropdownMenuItem(text = { Text(stringResource(R.string.delete)) }, onClick = { menu = null; confirm = context.getString(R.string.sftp_confirm_delete, entry.name) to {
+                                DropdownMenuItem(text = { Text(stringResource(R.string.delete)) }, onClick = { menu = null; confirm = context.getString(if (entry.directory) R.string.sftp_confirm_delete_folder else R.string.sftp_confirm_delete_file, entry.name) to {
                                     work(context.getString(R.string.deleting)) { op -> withContext(Dispatchers.IO) { checkNotNull(session).delete(entry, op) }; listingCache.keys.removeAll { it == entry.path || it.startsWith(entry.path.trimEnd('/') + "/") }; refresh(op) }
                                 } })
                             }
