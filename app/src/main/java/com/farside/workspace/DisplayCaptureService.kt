@@ -14,10 +14,10 @@ class DisplayCaptureService : Service() {
     internal inner class CaptureBinder : Binder() {
         fun promote() {
             val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(NotificationChannel(CHANNEL, "Headset display sharing", NotificationManager.IMPORTANCE_LOW))
+            manager.createNotificationChannel(NotificationChannel(CHANNEL, getString(R.string.headset_display_sharing), NotificationManager.IMPORTANCE_LOW))
             val notification = Notification.Builder(this@DisplayCaptureService, CHANNEL)
-                .setContentTitle("Headset display sharing")
-                .setContentText("An RDP session can capture the view you selected.")
+                .setContentTitle(getString(R.string.headset_display_sharing))
+                .setContentText(getString(R.string.rdp_capture_notice))
                 .setSmallIcon(android.R.drawable.ic_menu_camera)
                 .setOngoing(true)
                 .build()
