@@ -488,4 +488,7 @@
     <string name="ssh_clipboard_label">ssh-clipboard</string>
     <string name="vnc_password_latin1">VNC password must contain 1 to 8 Latin-1 characters.</string>
     <string name="vnc_server_disconnected">VNC server disconnected or sent an unsupported message.</string>
+    <string name="ssh_tunnel_process_exited">\r\n[Cloudflared tunnel process exited]\r\n</string>
+    <string name="ssh_connected_host">\r\n[SSH Connected to %1$s]\r\n</string>
+    <string name="ssh_terminal_error">\r\n[SSH Error: %1$s]\r\n</string>
 </resources>

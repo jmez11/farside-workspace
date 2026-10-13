@@ -1,5 +1,9 @@
 # Translation notes
 
+- `ssh_tunnel_process_exited`: Cloudflared child process stopped; retain terminal CR/LF and brackets.
+- `ssh_connected_host`: Host is the effective SSH destination, possibly the local tunnel address; retain CR/LF.
+- `ssh_terminal_error`: Placeholder is the connection error; retain terminal CR/LF and brackets.
+
 - `vnc_password_latin1`: Latin-1 is the VNC password character encoding; preserve the 1 to 8 limit.
 - `vnc_server_disconnected`: Unsupported refers to a VNC protocol message sent by the remote server.
 
