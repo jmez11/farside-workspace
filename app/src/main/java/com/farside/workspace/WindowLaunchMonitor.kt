@@ -38,6 +38,6 @@ internal object WindowLaunchMonitor {
     fun fail(id: String?) { requests[id]?.run() }
     fun showFailure(context: Context) {
         Toast.makeText(context.applicationContext,
-            "Couldn't open a new window. Try again, or close another window and retry.", Toast.LENGTH_LONG).show()
+            context.getString(R.string.window_launch_failed), Toast.LENGTH_LONG).show()
     }
 }
