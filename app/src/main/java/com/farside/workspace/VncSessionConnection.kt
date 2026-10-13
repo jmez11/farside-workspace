@@ -7,6 +7,7 @@ import android.view.Surface
 import com.farside.workspace.data.ConnectionProfile
 import com.farside.workspace.tunnel.CloudflaredTunnel
 import com.farside.workspace.data.ProxyType
+import com.farside.workspace.data.VncAuthMode
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -92,19 +93,25 @@ internal class VncSessionConnection(
                     main.post { if (!closed.get()) { onDisconnected(context.getString(R.string.choose_another_credential), false); onConnected(0L) } }
                     return@execute
                 }
-                if (credential == null || credential.pass.isEmpty()) {
+                if (credential == null || credential.pass.isEmpty() ||
+                    (profile.vncAuthMode == VncAuthMode.MAC_USER && credential.user.isBlank())) {
                     next.release(); ended.set(true); tunnel?.close()
-                    main.post { if (!closed.get()) { onDisconnected(context.getString(R.string.choose_vnc_password_credential), false); onConnected(0L) } }
+                    main.post { if (!closed.get()) { onDisconnected(context.getString(
+                        if (profile.vncAuthMode == VncAuthMode.MAC_USER) R.string.vnc_mac_credential_required
+                        else R.string.choose_vnc_password_credential), false); onConnected(0L) } }
                     return@execute
                 }
-                instance = try { bridge.connect(host, port, credential.pass, next) } catch (error: IllegalArgumentException) {
-                    main.post { if (!closed.get()) onDisconnected(error.localizedMessage(context) ?: context.getString(R.string.invalid_vnc_password), false) }
-                    0L
-                }
+                var failure: String? = null
+                instance = try { bridge.connect(host, port, credential.pass, next, credential.user, profile.vncAuthMode) }
+                    catch (error: VncAuthenticationException) { failure = context.getString(R.string.vnc_mac_auth_failed); 0L }
+                    catch (error: IllegalArgumentException) {
+                        failure = error.localizedMessage(context) ?: context.getString(R.string.invalid_vnc_password); 0L
+                    }
+                    catch (error: Exception) { android.util.Log.w("VncSession", "Connection failed", error); 0L }
                 if (instance == 0L) {
                     ended.set(true)
                     main.post { if (!closed.get()) onDisconnected(
-                        context.getString(R.string.vnc_connection_failed_help), false) }
+                        failure ?: context.getString(R.string.vnc_connection_failed_help), false) }
                 }
                 val connected = instance
                 this.connected.set(connected != 0L)
