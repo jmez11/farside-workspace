@@ -52,7 +52,7 @@ object DeviceCredentialAuth {
         val cancellation = CancellationSignal()
         if (!isSecure(activity)) {
             clear()
-            onResult("Set a headset passcode in Quest Settings > Security before unlocking this connection.")
+            onResult(activity.getString(R.string.headset_passcode_required))
             return cancellation
         }
         val completed = AtomicBoolean(false)
@@ -61,7 +61,7 @@ object DeviceCredentialAuth {
             if (completed.compareAndSet(false, true)) {
                 cancellation.cancel()
                 clear()
-                onResult("Quest did not provide passcode authentication. This OS may restrict system prompts to approved apps. Your security settings have not changed.")
+                onResult(activity.getString(R.string.headset_auth_timeout))
             }
         }
         cancellation.setOnCancelListener { completed.set(true); handler.removeCallbacks(timeout) }
@@ -75,21 +75,21 @@ object DeviceCredentialAuth {
         }
         try {
             BiometricPrompt.Builder(activity).setTitle(title)
-                .setDescription("Confirm your headset passcode to continue in Farside Workspace.")
+                .setDescription(activity.getString(R.string.headset_auth_description))
                 .setAllowedAuthenticators(BiometricManager.Authenticators.DEVICE_CREDENTIAL).build()
                 .authenticate(cancellation, activity.mainExecutor, object : BiometricPrompt.AuthenticationCallback() {
                     override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                         if (cancellation.isCanceled || completed.get()) return
                         if (result.authenticationType != BiometricPrompt.AUTHENTICATION_RESULT_TYPE_DEVICE_CREDENTIAL || !isSecure(activity)) {
-                            clear(); complete("System passcode authentication could not be verified.")
+                            clear(); complete(activity.getString(R.string.headset_auth_unverified))
                         } else { complete(null, remember) }
                     }
                     override fun onAuthenticationError(errorCode: Int, errString: CharSequence?) {
-                        if (!cancellation.isCanceled) { clear(); complete(errString?.toString() ?: "Quest did not allow system passcode authentication.") }
+                        if (!cancellation.isCanceled) { clear(); complete(errString?.toString() ?: activity.getString(R.string.headset_auth_rejected)) }
                     }
                 })
         } catch (_: RuntimeException) {
-            clear(); complete("System passcode authentication is unavailable. Try again from Quest Home.")
+            clear(); complete(activity.getString(R.string.headset_auth_unavailable))
         }
         return cancellation
     }
