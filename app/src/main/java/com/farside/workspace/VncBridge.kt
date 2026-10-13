@@ -5,7 +5,7 @@ import android.view.Surface
 /** Per-session LibVNCClient owner. The monitor serializes native handles with teardown. */
 class VncBridge : DesktopSessionBridge {
     @Volatile override var clipboardListener: ((String) -> Unit)? = null
-    @Volatile internal var disconnectListener: ((String, Boolean) -> Unit)? = null
+    @Volatile internal var disconnectListener: ((Int, Boolean) -> Unit)? = null
     private var active = 0L
     private val callbacks = android.os.Handler(android.os.Looper.getMainLooper())
     private val heldPrintable = mutableMapOf<Int, Int>()
@@ -13,9 +13,8 @@ class VncBridge : DesktopSessionBridge {
     @Synchronized fun connect(host: String, port: Int, password: String, surface: Surface): Long {
         check(active == 0L)
         require(port in 1..65535)
-        require(password.isNotEmpty() && password.toByteArray(Charsets.ISO_8859_1).size <= 8 && password.all { it.code in 1..255 }) {
-            "VNC password must contain 1 to 8 Latin-1 characters."
-        }
+        if (!(password.isNotEmpty() && password.toByteArray(Charsets.ISO_8859_1).size <= 8 && password.all { it.code in 1..255 }))
+            throw LocalizableException(R.string.vnc_password_latin1)
         active = nativeConnect(host.removeSurrounding("[", "]"), port, password.toByteArray(Charsets.ISO_8859_1), surface)
         return active
     }
@@ -61,7 +60,7 @@ class VncBridge : DesktopSessionBridge {
     @Synchronized override fun getDesktopWidth(instance: Long): Int = if (instance != 0L && instance == active) nativeSize(instance, true) else 0
     @Synchronized override fun getDesktopHeight(instance: Long): Int = if (instance != 0L && instance == active) nativeSize(instance, false) else 0
     override fun updateDisplay(instance: Long, width: Int, height: Int, zoom: Float) = Unit // VNC follows server size; scale locally.
-    @androidx.annotation.Keep fun onNativeDisconnected() { callbacks.post { disconnectListener?.invoke("VNC server disconnected or sent an unsupported message.", true) } }
+    @androidx.annotation.Keep fun onNativeDisconnected() { callbacks.post { disconnectListener?.invoke(R.string.vnc_server_disconnected, true) } }
     @androidx.annotation.Keep fun onNativeClipboardChanged(bytes: ByteArray, utf8: Boolean) {
         val text = bytes.toString(if (utf8) Charsets.UTF_8 else Charsets.ISO_8859_1)
         callbacks.post { clipboardListener?.invoke(text) }
