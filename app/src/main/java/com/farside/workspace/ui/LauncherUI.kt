@@ -35,6 +35,9 @@ import android.hardware.camera2.CameraCharacteristics
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import com.farside.workspace.R
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.input.pointer.pointerInput
@@ -102,9 +105,9 @@ fun LauncherScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    Text("Farside Connections", style = MaterialTheme.typography.headlineLarge)
+                    Text(stringResource(R.string.farside_connections), style = MaterialTheme.typography.headlineLarge)
                     IconButton(onClick = { filesOpen = true }, modifier = Modifier.align(Alignment.CenterEnd).padding(end = 48.dp)) {
-                        Icon(androidx.compose.material.icons.Icons.Default.Folder, contentDescription = "Files", tint = Color.White)
+                        Icon(androidx.compose.material.icons.Icons.Default.Folder, contentDescription = stringResource(R.string.files), tint = Color.White)
                     }
                     IconButton(
                         onClick = { 
@@ -113,17 +116,17 @@ fun LauncherScreen(
                         },
                         modifier = Modifier.align(Alignment.CenterEnd)
                     ) {
-                        Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color.White)
+                        Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.settings), tint = Color.White)
                     }
                 }
                 Spacer(modifier = Modifier.height(24.dp))
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Text(if (reordering) "Drag to reorder. Starred connections stay first."
-                        else "Click to open, or drag into space to place a window.",
+                    Text(if (reordering) stringResource(R.string.reorder_hint)
+                        else stringResource(R.string.open_or_place_hint),
                         style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
                     OutlinedButton(onClick = { reordering = !reordering }, enabled = profiles.size > 1 || reordering) {
-                        Text(if (reordering) "Done reordering" else "Reorder")
+                        Text(if (reordering) stringResource(R.string.done_reordering) else stringResource(R.string.reorder))
                     }
                 }
                 Spacer(Modifier.height(8.dp))
@@ -134,8 +137,8 @@ fun LauncherScreen(
                 Spacer(modifier = Modifier.height(16.dp))
                 ExtendedFloatingActionButton(
                     onClick = { isAdding = true },
-                    icon = { Icon(Icons.Default.Add, "Add") },
-                    text = { Text("New Connection") }
+                    icon = { Icon(Icons.Default.Add, stringResource(R.string.add)) },
+                    text = { Text(stringResource(R.string.new_connection)) }
                 )
             }
         }
@@ -195,43 +198,43 @@ fun ProfileCard(profile: ConnectionProfile, onEdit: () -> Unit, onDelete: () -> 
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 1.dp))
                 }
                 Text(profile.name, style = MaterialTheme.typography.titleMedium)
-                Text("${profile.host}:${profile.port}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.connection_address, profile.host, profile.port), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (jumpLabel != null) Text(jumpLabel, style = MaterialTheme.typography.labelSmall,
                     color = if (jumpLabel.startsWith("\u26A0")) Color(0xFFFFB300) else MaterialTheme.colorScheme.primary)
             }
             
             IconButton(onClick = onToggleStar, modifier = Modifier.align(Alignment.TopStart)) {
                 Icon(if (starred) Icons.Default.Star else Icons.Default.StarBorder,
-                    contentDescription = if (starred) "Unstar ${profile.name}" else "Star ${profile.name}",
+                    contentDescription = if (starred) stringResource(R.string.unstar_connection, profile.name) else stringResource(R.string.star_connection, profile.name),
                     tint = if (starred) Color(0xFFFFD166) else MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (reordering) {
                 Row(modifier = Modifier.align(Alignment.BottomCenter)) {
                     IconButton(onClick = { onMoveEarlier?.invoke() }, enabled = onMoveEarlier != null) {
-                        Icon(Icons.Default.KeyboardArrowLeft, "Move ${profile.name} earlier")
+                        Icon(Icons.Default.KeyboardArrowLeft, stringResource(R.string.move_connection_earlier, profile.name))
                     }
                     IconButton(onClick = { onMoveLater?.invoke() }, enabled = onMoveLater != null) {
-                        Icon(Icons.Default.KeyboardArrowRight, "Move ${profile.name} later")
+                        Icon(Icons.Default.KeyboardArrowRight, stringResource(R.string.move_connection_later, profile.name))
                     }
                 }
             }
             Box(modifier = Modifier.align(Alignment.TopEnd)) {
                 IconButton(onClick = { menuExpanded = true }) {
-                    Icon(Icons.Default.MoreVert, contentDescription = "More options")
+                    Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.more_options))
                 }
                 DropdownMenu(
                     expanded = menuExpanded,
                     onDismissRequest = { menuExpanded = false }
                 ) {
                     DropdownMenuItem(
-                        text = { Text("Edit") },
+                        text = { Text(stringResource(R.string.edit)) },
                         onClick = {
                             menuExpanded = false
                             onEdit()
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                        text = { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) },
                         onClick = {
                             menuExpanded = false
                             onDelete()
@@ -300,6 +303,7 @@ fun SettingsTextField(
 
 @Composable
 fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.data.ProfileManager, initialTab: Int = 0) {
+    val context = LocalContext.current
     var selectedTab by rememberSaveable(initialTab) { mutableStateOf(initialTab) }
     
     var appPinVerifier by remember { mutableStateOf(profileManager.getAppPinVerifier()) }
@@ -376,12 +380,12 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
         pinError = null
     }
     if (pendingKeyPinDisable) {
-        if (systemPinEnabled) SystemCredentialDialog(title = "Remove PIN requirement", allowRemembered = false,
+        if (systemPinEnabled) SystemCredentialDialog(title = stringResource(R.string.remove_pin_requirement), allowRemembered = false,
             onUnlocked = { keyRequirePin = false; keyPinError = null; pendingKeyPinDisable = false },
             onCancel = { pendingKeyPinDisable = false }) else
         CredentialPinDialog(
-            title = "Remove PIN requirement",
-            message = "Enter the App PIN to remove PIN requirement.",
+            title = stringResource(R.string.remove_pin_requirement),
+            message = stringResource(R.string.enter_the_app_pin_to_remove_pin_requirement),
             onUnlocked = {
                 keyRequirePin = false
                 keyPinError = null
@@ -391,12 +395,12 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
         )
     }
     if (pendingPinDisable) {
-        if (systemPinEnabled) SystemCredentialDialog(title = "Remove PIN requirement", allowRemembered = false,
+        if (systemPinEnabled) SystemCredentialDialog(title = stringResource(R.string.remove_pin_requirement), allowRemembered = false,
             onUnlocked = { requirePin = false; pinError = null; pendingPinDisable = false },
             onCancel = { pendingPinDisable = false }) else
         CredentialPinDialog(
-            title = "Remove PIN requirement",
-            message = "Enter the App PIN to remove PIN requirement.",
+            title = stringResource(R.string.remove_pin_requirement),
+            message = stringResource(R.string.enter_the_app_pin_to_remove_pin_requirement),
             onUnlocked = {
                 requirePin = false
                 pinError = null
@@ -406,8 +410,8 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
         )
     }
     if (enablingSystemPin) {
-        SystemCredentialDialog(title = "Use headset passcode", allowRemembered = false,
-            message = "Switch protected connections to the Quest headset passcode after successful system authentication. Your App PIN remains active if Quest does not allow the prompt.",
+        SystemCredentialDialog(title = stringResource(R.string.use_headset_passcode), allowRemembered = false,
+            message = stringResource(R.string.switch_protected_connections_to_the_quest_headset_passcode_after),
             onUnlocked = {
                 profileManager.enableSystemPin()
                 systemPinEnabled = true
@@ -417,8 +421,8 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
     }
     if (removingAppPin) {
         CredentialPinDialog(
-            title = "Remove App PIN",
-            message = "Enter the current App PIN to remove it.",
+            title = stringResource(R.string.remove_app_pin),
+            message = stringResource(R.string.enter_the_current_app_pin_to_remove_it),
             onUnlocked = {
                 profileManager.setAppPinVerifier(null)
                 appPinVerifier = null
@@ -429,8 +433,8 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
     }
     if (changingAppPin) {
         CredentialPinDialog(
-            title = "Change App PIN",
-            message = "Enter the current App PIN.",
+            title = stringResource(R.string.change_app_pin),
+            message = stringResource(R.string.enter_the_current_app_pin),
             onUnlocked = {
                 changingAppPin = false
                 settingAppPin = true
@@ -459,10 +463,10 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
             ) {
                 Icon(Icons.Default.ArrowBack, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text("Back", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Text(stringResource(R.string.back), fontWeight = FontWeight.Bold, fontSize = 18.sp)
             }
             Spacer(Modifier.width(16.dp))
-            Text("App Settings", color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.app_settings), color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         }
         
         Divider(color = Color.DarkGray, thickness = 1.dp)
@@ -480,45 +484,45 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                     containerColor = Color.Black,
                     contentColor = Color.White
                 ) {
-                    Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Tunnels & Global") })
-                    Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Credentials") })
-                    Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("SSH Keys") })
-                    Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }, text = { Text("About") })
+                    Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text(stringResource(R.string.tunnels_global)) })
+                    Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text(stringResource(R.string.credentials)) })
+                    Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text(stringResource(R.string.ssh_keys)) })
+                    Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }, text = { Text(stringResource(R.string.about)) })
                 }
                 
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 when (selectedTab) {
                     0 -> {
-                        SettingsHeader("App Security")
+                        SettingsHeader(stringResource(R.string.app_security))
                         if (systemPinEnabled) {
-                            Text("Headset passcode active", color = Color.White, modifier = Modifier.padding(horizontal = 16.dp))
-                            Text("Manage your passcode in Quest Settings > Security. Protected connections require system authentication.",
+                            Text(stringResource(R.string.headset_passcode_active), color = Color.White, modifier = Modifier.padding(horizontal = 16.dp))
+                            Text(stringResource(R.string.manage_your_passcode_in_quest_settings_security_protected_connec),
                                 color = Color.Gray, modifier = Modifier.padding(horizontal = 16.dp))
                         } else {
                             if (com.farside.workspace.DeviceCredentialAuth.SYSTEM_PIN_SWITCH_VISIBLE) {
-                                TextButton(onClick = { enablingSystemPin = true }) { Text("Use headset passcode instead") }
+                                TextButton(onClick = { enablingSystemPin = true }) { Text(stringResource(R.string.use_headset_passcode_instead)) }
                             }
                             if (appPinVerifier == null || settingAppPin) {
-                                Text(if (settingAppPin) "Enter new App PIN:" else "Set an App-wide PIN to secure credentials.",
+                                Text(if (settingAppPin) stringResource(R.string.enter_new_app_pin) else stringResource(R.string.set_app_pin_help),
                                     color = Color.Gray, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 16.dp))
-                                SettingsTextField(appPinNew, { appPinNew = it; appPinError = null }, "New PIN (4–12 digits)",
-                                    accessibleLabel = "New PIN (4–12 digits)",
+                                SettingsTextField(appPinNew, { appPinNew = it; appPinError = null }, stringResource(R.string.new_pin_hint),
+                                    accessibleLabel = stringResource(R.string.new_pin_hint),
                                     visualTransformation = PasswordVisualTransformation(),
                                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword))
-                                SettingsTextField(appPinConfirm, { appPinConfirm = it; appPinError = null }, "Confirm PIN",
-                                    accessibleLabel = "Confirm PIN",
+                                SettingsTextField(appPinConfirm, { appPinConfirm = it; appPinError = null }, stringResource(R.string.confirm_pin),
+                                    accessibleLabel = stringResource(R.string.confirm_pin),
                                     visualTransformation = PasswordVisualTransformation(),
                                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword))
                                 appPinError?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 16.dp)) }
                                 Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                                     TextButton(onClick = {
                                         if (!com.farside.workspace.CredentialPin.valid(appPinNew)) {
-                                            appPinError = "Use 4–12 digits for the PIN."
+                                            appPinError = context.getString(R.string.pin_length_error)
                                             return@TextButton
                                         }
                                         if (appPinNew != appPinConfirm) {
-                                            appPinError = "PINs do not match."
+                                            appPinError = context.getString(R.string.pin_mismatch)
                                             return@TextButton
                                         }
                                         val verifier = com.farside.workspace.CredentialPin.create(appPinNew)
@@ -528,10 +532,10 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                                         appPinNew = ""
                                         appPinConfirm = ""
                                         appPinError = null
-                                    }) { Text("Save PIN", color = Color(0xFF1E88E5)) }
+                                    }) { Text(stringResource(R.string.save_pin), color = Color(0xFF1E88E5)) }
                                     if (settingAppPin) {
                                         TextButton(onClick = { settingAppPin = false; appPinNew = ""; appPinConfirm = ""; appPinError = null }) {
-                                            Text("Cancel", color = Color.Gray)
+                                            Text(stringResource(R.string.cancel), color = Color.Gray)
                                         }
                                     }
                                 }
@@ -542,15 +546,15 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Column {
-                                        Text("App PIN active", color = Color.White, fontWeight = FontWeight.Bold)
-                                        Text("Secures credentials with Require PIN enabled", color = Color.Gray, fontSize = 12.sp)
+                                        Text(stringResource(R.string.app_pin_active), color = Color.White, fontWeight = FontWeight.Bold)
+                                        Text(stringResource(R.string.secures_credentials_with_require_pin_enabled), color = Color.Gray, fontSize = 12.sp)
                                     }
                                     Row {
                                         TextButton(onClick = { changingAppPin = true }) {
-                                            Text("Change PIN", color = Color(0xFF1E88E5))
+                                            Text(stringResource(R.string.change_pin), color = Color(0xFF1E88E5))
                                         }
                                         TextButton(onClick = { removingAppPin = true }) {
-                                            Text("Remove PIN", color = Color.Red)
+                                            Text(stringResource(R.string.remove_pin), color = Color.Red)
                                         }
                                     }
                                 }
@@ -567,9 +571,9 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                         if (isDebuggable) {
                             var debugStatusMessage by remember { mutableStateOf<String?>(null) }
                             Spacer(modifier = Modifier.height(16.dp))
-                            SettingsHeader("Debug Actions")
+                            SettingsHeader(stringResource(R.string.debug_actions))
                             Text(
-                                "Options for testing sign-in, trust store prompts and permission re-requests.",
+                                stringResource(R.string.options_for_testing_sign_in_trust_store_prompts_and_permission_r),
                                 color = Color.Gray,
                                 fontSize = 12.sp,
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
@@ -581,11 +585,11 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                                 Button(
                                     onClick = {
                                         com.farside.workspace.RdpCertificateStore(context).clearAll()
-                                        debugStatusMessage = "All saved trusted certificates cleared."
+                                        debugStatusMessage = context.getString(R.string.trusted_certificates_cleared)
                                     },
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
                                 ) {
-                                    Text("Clear Trusted Certificates")
+                                    Text(stringResource(R.string.clear_trusted_certificates))
                                 }
                                 Button(
                                     onClick = {
@@ -598,14 +602,14 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                                         )
                                         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
                                             context.revokeSelfPermissionsOnKill(runtimePerms)
-                                            debugStatusMessage = "Permissions scheduled to revoke when app is closed."
+                                            debugStatusMessage = context.getString(R.string.permissions_revoke_scheduled)
                                         } else {
-                                            debugStatusMessage = "Permission revocation requires Android 13+."
+                                            debugStatusMessage = context.getString(R.string.permissions_revoke_requires_android_13)
                                         }
                                     },
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE65100))
                                 ) {
-                                    Text("Revoke Granted Permissions")
+                                    Text(stringResource(R.string.revoke_granted_permissions))
                                 }
                             }
                             ClearCloudflareLoginsButton { debugStatusMessage = it }
@@ -620,39 +624,39 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                         }
                     }
                     1 -> {
-                        SettingsHeader("User Management")
+                        SettingsHeader(stringResource(R.string.user_management))
                         Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                             credentials.forEach { cred ->
                                 Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                     Column {
                                         Text(cred.name, color = Color.White, fontWeight = FontWeight.Bold)
                                         Text(cred.user, color = Color.Gray, fontSize = 12.sp)
-                                        if (cred.requirePin) Text("PIN required", color = Color.Gray, fontSize = 12.sp)
+                                        if (cred.requirePin) Text(stringResource(R.string.pin_required), color = Color.Gray, fontSize = 12.sp)
                                     }
                                     Row {
                                         TextButton(enabled = !savingCredential, onClick = {
                                             credentialAction(cred, "edit")
-                                        }) { Text("Edit", color = Color(0xFF1E88E5)) }
+                                        }) { Text(stringResource(R.string.edit), color = Color(0xFF1E88E5)) }
                                         TextButton(enabled = !savingCredential, onClick = {
                                             credentialAction(cred, "delete")
-                                        }) { Text("Delete", color = Color.Red) }
+                                        }) { Text(stringResource(R.string.delete), color = Color.Red) }
                                     }
                                 }
                             }
                             
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text(if (editingCredentialId == null) "Add New Credential" else "Edit Credential", color = Color(0xFF1E88E5), fontSize = 14.sp)
-                            SettingsTextField(newCredName, { newCredName = it }, "Account Display Name")
-                            SettingsTextField(newCredUser, { newCredUser = it }, "Username (optional for VNC)")
-                            SettingsTextField(newCredPass, { newCredPass = it }, "Password", visualTransformation = PasswordVisualTransformation())
-                            if (editingCredentialId != null) Text("Leave password blank to keep the saved password.", color = Color.Gray, fontSize = 12.sp)
-                            SettingsSwitchRow("Require PIN", requirePin, { enabled ->
+                            Text(if (editingCredentialId == null) stringResource(R.string.new_credential) else stringResource(R.string.edit_credential), color = Color(0xFF1E88E5), fontSize = 14.sp)
+                            SettingsTextField(newCredName, { newCredName = it }, stringResource(R.string.account_display_name))
+                            SettingsTextField(newCredUser, { newCredUser = it }, stringResource(R.string.username_optional_for_vnc))
+                            SettingsTextField(newCredPass, { newCredPass = it }, stringResource(R.string.password), visualTransformation = PasswordVisualTransformation())
+                            if (editingCredentialId != null) Text(stringResource(R.string.leave_password_blank_to_keep_the_saved_password), color = Color.Gray, fontSize = 12.sp)
+                            SettingsSwitchRow(stringResource(R.string.require_pin), requirePin, { enabled ->
                                 val previous = credentials.find { it.id == editingCredentialId }
                                 if (!enabled && previous?.requirePin == true) {
                                     pendingPinDisable = true
                                 } else if (enabled) {
                                     if (!systemPinEnabled && appPinVerifier == null) {
-                                        pinError = "Set an App PIN in Tunnels & Global settings first."
+                                        pinError = context.getString(R.string.set_app_pin_first)
                                     } else {
                                         requirePin = true
                                         pinError = null
@@ -689,7 +693,7 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                                     }
                                 }
                             }, modifier = Modifier.align(Alignment.End)) {
-                                Text(if (editingCredentialId == null) "Save Credential" else "Save Changes", color = Color(0xFF1E88E5))
+                                Text(if (editingCredentialId == null) stringResource(R.string.save_credential) else stringResource(R.string.save_changes), color = Color(0xFF1E88E5))
                             }
                             if (editingCredentialId != null) {
                                 TextButton(enabled = !savingCredential && !pendingPinDisable, onClick = {
@@ -699,12 +703,12 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                                     newCredPass = ""
                                     requirePin = false
                                     pinError = null
-                                }, modifier = Modifier.align(Alignment.End)) { Text("Cancel Edit") }
+                                }, modifier = Modifier.align(Alignment.End)) { Text(stringResource(R.string.cancel_edit)) }
                             }
                         }
                     }
                     2 -> {
-                        SettingsHeader("SSH Key Management")
+                        SettingsHeader(stringResource(R.string.ssh_key_management))
                         Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                             sshKeys.forEach { key ->
                                 Row(
@@ -714,48 +718,48 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                                 ) {
                                     Column {
                                         Text(key.name, color = Color.White, fontWeight = FontWeight.Bold)
-                                        if (key.requirePin) Text("PIN required", color = Color.Gray, fontSize = 12.sp)
+                                        if (key.requirePin) Text(stringResource(R.string.pin_required), color = Color.Gray, fontSize = 12.sp)
                                     }
                                     Row {
                                         TextButton(
-                                            modifier = Modifier.semantics { contentDescription = "Edit ${key.name}" },
+                                            modifier = Modifier.semantics { contentDescription = context.getString(R.string.edit_named_item, key.name) },
                                             enabled = !savingSshKey,
                                             onClick = {
                                                 sshKeyAction(key, "edit")
                                             }
-                                        ) { Text("Edit", color = Color(0xFF1E88E5)) }
+                                        ) { Text(stringResource(R.string.edit), color = Color(0xFF1E88E5)) }
                                         TextButton(
-                                            modifier = Modifier.semantics { contentDescription = "Delete ${key.name}" },
+                                            modifier = Modifier.semantics { contentDescription = context.getString(R.string.delete_named_item, key.name) },
                                             enabled = !savingSshKey,
                                             onClick = {
                                                 sshKeyAction(key, "delete")
                                             }
-                                        ) { Text("Delete", color = Color.Red) }
+                                        ) { Text(stringResource(R.string.delete), color = Color.Red) }
                                     }
                                 }
                             }
                             
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text(if (editingSshKeyId == null) "Add New SSH Key" else "Edit SSH Key", color = Color(0xFF1E88E5), fontSize = 14.sp)
-                            SettingsTextField(newKeyName, { newKeyName = it }, "Key Display Name")
+                            Text(if (editingSshKeyId == null) stringResource(R.string.new_ssh_key) else stringResource(R.string.edit_ssh_key), color = Color(0xFF1E88E5), fontSize = 14.sp)
+                            SettingsTextField(newKeyName, { newKeyName = it }, stringResource(R.string.key_display_name))
                             SettingsTextField(
                                 value = newKeyPrivate,
                                 onValueChange = { newKeyPrivate = it },
-                                placeholder = "-----BEGIN OPENSSH PRIVATE KEY-----\n...",
-                                accessibleLabel = "Private Key",
+                                placeholder = stringResource(R.string.begin_openssh_private_key_n),
+                                accessibleLabel = stringResource(R.string.private_key),
                                 singleLine = false,
                                 minLines = 3,
                                 maxLines = 6
                             )
-                            SettingsTextField(newKeyPassphrase, { newKeyPassphrase = it }, "Passphrase (Optional)", visualTransformation = PasswordVisualTransformation())
-                            if (editingSshKeyId != null) Text("Leave passphrase blank to keep the saved passphrase.", color = Color.Gray, fontSize = 12.sp)
-                            SettingsSwitchRow("Require PIN", keyRequirePin, { enabled ->
+                            SettingsTextField(newKeyPassphrase, { newKeyPassphrase = it }, stringResource(R.string.passphrase_optional), visualTransformation = PasswordVisualTransformation())
+                            if (editingSshKeyId != null) Text(stringResource(R.string.leave_passphrase_blank_to_keep_the_saved_passphrase), color = Color.Gray, fontSize = 12.sp)
+                            SettingsSwitchRow(stringResource(R.string.require_pin), keyRequirePin, { enabled ->
                                 val previous = sshKeys.find { it.id == editingSshKeyId }
                                 if (!enabled && previous?.requirePin == true) {
                                     pendingKeyPinDisable = true
                                 } else if (enabled) {
                                     if (!systemPinEnabled && appPinVerifier == null) {
-                                        keyPinError = "Set an App PIN in Tunnels & Global settings first."
+                                        keyPinError = context.getString(R.string.set_app_pin_first)
                                     } else {
                                         keyRequirePin = true
                                         keyPinError = null
@@ -793,7 +797,7 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                                     }
                                 }
                             }, modifier = Modifier.align(Alignment.End)) {
-                                Text(if (editingSshKeyId == null) "Save SSH Key" else "Save Changes", color = Color(0xFF1E88E5))
+                                Text(if (editingSshKeyId == null) stringResource(R.string.save_ssh_key) else stringResource(R.string.save_changes), color = Color(0xFF1E88E5))
                             }
                             if (editingSshKeyId != null) {
                                 TextButton(enabled = !savingSshKey && !pendingKeyPinDisable, onClick = {
@@ -803,21 +807,21 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                                     newKeyPassphrase = ""
                                     keyRequirePin = false
                                     keyPinError = null
-                                }, modifier = Modifier.align(Alignment.End)) { Text("Cancel Edit") }
+                                }, modifier = Modifier.align(Alignment.End)) { Text(stringResource(R.string.cancel_edit)) }
                             }
                         }
                     }
                     3 -> {
-                        SettingsHeader("About & Open Source Licenses")
+                        SettingsHeader(stringResource(R.string.about_open_source_licenses))
                         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                            Text("Farside Workspace", color = Color.White, style = MaterialTheme.typography.titleMedium)
+                            Text(stringResource(R.string.farside_workspace), color = Color.White, style = MaterialTheme.typography.titleMedium)
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text("Licenses in use:", color = Color.LightGray, fontWeight = FontWeight.Bold)
-                            Text("• FreeRDP 3.x (Apache-2.0)", color = Color.Gray)
-                            Text("• SSHJ (Apache-2.0)", color = Color.Gray)
-                            Text("• Termux Terminal Emulator (GPLv3)", color = Color.Gray)
-                            Text("• Jetpack Compose & Kotlin (Apache-2.0)", color = Color.Gray)
-                            Text("• Meta Spatial SDK (Proprietary)", color = Color.Gray)
+                            Text(stringResource(R.string.licenses_in_use), color = Color.LightGray, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.license_freerdp), color = Color.Gray)
+                            Text(stringResource(R.string.license_sshj), color = Color.Gray)
+                            Text(stringResource(R.string.license_termux), color = Color.Gray)
+                            Text(stringResource(R.string.license_compose), color = Color.Gray)
+                            Text(stringResource(R.string.license_meta), color = Color.Gray)
                         }
                     }
                 }
@@ -834,13 +838,13 @@ fun ClearCloudflareLoginsButton(onStatus: (String) -> Unit) {
             onClick = {
                 onStatus(runCatching {
                     com.farside.workspace.tunnel.CloudflaredTunnel.clearCachedLogins(context)
-                    "Cached Cloudflare Access logins cleared. Reconnect to sign in again."
-                }.getOrElse { it.message ?: "Could not clear Cloudflare logins." })
+                    context.getString(R.string.cloudflare_logins_cleared)
+                }.getOrElse { it.message ?: context.getString(R.string.cloudflare_logins_clear_failed) })
             },
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
-        ) { Text("Clear Cloudflare Logins") }
+        ) { Text(stringResource(R.string.clear_cloudflare_logins)) }
         Text(
-            "Close Cloudflare sessions first. Clears cached Access tokens; browser sign-in may remain active.",
+            stringResource(R.string.close_cloudflare_sessions_first_clears_cached_access_tokens_brow),
             color = Color.Gray,
             fontSize = 12.sp
         )
@@ -903,7 +907,7 @@ fun CameraResolutionSelector(
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(
-            "Camera Resolution",
+            stringResource(R.string.camera_resolution),
             color = if (enabled) Color.White else Color.Gray,
             style = MaterialTheme.typography.bodyMedium
         )
@@ -939,7 +943,7 @@ fun ProxyTypeSelector(selectedType: com.farside.workspace.data.ProxyType, onType
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
     ) {
         TextField(
-            value = if (selectedType in com.farside.workspace.data.ProxyType.choices) selectedType.displayName else "Unsupported saved proxy",
+            value = if (selectedType in com.farside.workspace.data.ProxyType.choices) selectedType.displayName else stringResource(R.string.unsupported_saved_proxy),
             onValueChange = {},
             readOnly = true,
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
@@ -1118,9 +1122,9 @@ fun AddProfileForm(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             IconButton(onClick = onCancel) {
-                Icon(Icons.Default.Close, contentDescription = "Close", tint = Color(0xFF1E88E5))
+                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.close), tint = Color(0xFF1E88E5))
             }
-            Text("Add Connection", color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.add_connection), color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             TextButton(onClick = {
                     if (proxyType !in com.farside.workspace.data.ProxyType.choices) {
                         showValidationErrors = true
@@ -1148,7 +1152,7 @@ fun AddProfileForm(
                     onSave(
                         ConnectionProfile(
                             id = initialProfile?.id ?: UUID.randomUUID().toString(),
-                        name = name.takeIf { it.isNotBlank() } ?: "Unnamed",
+                        name = name.takeIf { it.isNotBlank() } ?: context.getString(R.string.unnamed_connection),
                         type = type,
                         host = host,
                         port = port.toIntOrNull() ?: when (type) { ConnectionType.RDP -> 3389; ConnectionType.SSH -> 22; ConnectionType.VNC -> 5900 },
@@ -1191,7 +1195,7 @@ fun AddProfileForm(
                     )
                 )
             }) {
-                Text("SAVE", color = Color(0xFF1E88E5), fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.save_2), color = Color(0xFF1E88E5), fontWeight = FontWeight.Bold)
             }
         }
         
@@ -1215,15 +1219,15 @@ fun AddProfileForm(
 
                 }
 
-                SettingsHeader("Connection Name")
-                SettingsTextField(name, { name = it }, "Enter display name")
+                SettingsHeader(stringResource(R.string.connection_name))
+                SettingsTextField(name, { name = it }, stringResource(R.string.enter_display_name))
 
                 if (type == ConnectionType.VNC) {
-                    SettingsHeader("Screen Sharing")
-                    Text("On Mac: enable Screen Sharing, then enable VNC viewers with a password in Computer Settings. Select a saved 1 to 8 character VNC password below. Apple username/password login is not supported.",
+                    SettingsHeader(stringResource(R.string.screen_sharing))
+                    Text(stringResource(R.string.on_mac_enable_screen_sharing_then_enable_vnc_viewers_with_a_pass),
                         color = Color.LightGray, modifier = Modifier.padding(horizontal = 16.dp), fontSize = 13.sp)
                 }
-                SettingsHeader("Host / Server")
+                SettingsHeader(stringResource(R.string.host_server))
                 if (type == ConnectionType.RDP || type == ConnectionType.VNC) {
                     Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         TextButton(enabled = !isScanning, onClick = {
@@ -1234,14 +1238,14 @@ fun AddProfileForm(
                                     val found = if (scanType == ConnectionType.VNC) com.farside.workspace.utils.NetworkScanner.scanLocalNetworkForVnc(context)
                                         else com.farside.workspace.utils.NetworkScanner.scanLocalNetworkForRdp(context)
                                     if (type == scanType) discoveredHosts = found
-                                    if (found.isEmpty()) android.widget.Toast.makeText(context, "No local services found. Enter the host manually or check Screen Sharing and the LAN.", android.widget.Toast.LENGTH_LONG).show()
+                                    if (found.isEmpty()) android.widget.Toast.makeText(context, context.getString(R.string.discovery_no_services), android.widget.Toast.LENGTH_LONG).show()
                                 } catch (error: Exception) {
                                     if (error is kotlinx.coroutines.CancellationException) throw error
-                                    android.widget.Toast.makeText(context, error.message ?: "Discovery failed", android.widget.Toast.LENGTH_LONG).show()
+                                    android.widget.Toast.makeText(context, error.message ?: context.getString(R.string.discovery_failed), android.widget.Toast.LENGTH_LONG).show()
                                 } finally { isScanning = false }
                             }
                         }) {
-                            Text(if (isScanning) "Finding local ${type.name} sessions..." else if (type == ConnectionType.VNC) "Find Screen Sharing on this LAN" else "Click here to Find Local PCs", color = Color(0xFF1E88E5))
+                            Text(if (isScanning) stringResource(R.string.finding_local_sessions, type.name) else if (type == ConnectionType.VNC) stringResource(R.string.find_screen_sharing) else stringResource(R.string.find_local_pcs), color = Color(0xFF1E88E5))
                         }
                     }
                     if (discoveredHosts.isNotEmpty()) {
@@ -1252,7 +1256,7 @@ fun AddProfileForm(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
                         ) {
                             TextField(
-                                value = if (type == ConnectionType.VNC) "Select Screen Sharing server" else "Select Discovered PC",
+                                value = if (type == ConnectionType.VNC) stringResource(R.string.select_screen_sharing_server) else stringResource(R.string.select_discovered_pc),
                                 onValueChange = {},
                                 readOnly = true,
                                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
@@ -1281,15 +1285,15 @@ fun AddProfileForm(
                         }
                     }
                 }
-                SettingsTextField(host, { host = it }, "Hostname or IP address", isError = showValidationErrors && host.isBlank())
+                SettingsTextField(host, { host = it }, stringResource(R.string.hostname_or_ip_address), isError = showValidationErrors && host.isBlank())
                 SettingsTextField(
                     value = port, 
                     onValueChange = { port = it }, 
-                    placeholder = "Port (RDP 3389 / SSH 22 / VNC 5900)",
+                    placeholder = stringResource(R.string.port_rdp_3389_ssh_22_vnc_5900),
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
                 )
 
-                SettingsHeader(when (type) { ConnectionType.SSH -> "User Account (Optional for SSH)"; ConnectionType.VNC -> "VNC Password Credential"; else -> "User Account" })
+                SettingsHeader(when (type) { ConnectionType.SSH -> stringResource(R.string.user_account_optional_for_ssh); ConnectionType.VNC -> stringResource(R.string.vnc_password_credential); else -> stringResource(R.string.user_account) })
                 var expandedCreds by rememberSaveable { mutableStateOf(false) }
                 
                 ExposedDropdownMenuBox(
@@ -1298,7 +1302,7 @@ fun AddProfileForm(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
                 ) {
                     TextField(
-                        value = creds.find { it.id == savedCredId }?.name ?: if (type == ConnectionType.SSH && savedCredId.isBlank()) "None (Interactive / Key auth)" else "Select Saved Credential",
+                        value = creds.find { it.id == savedCredId }?.name ?: if (type == ConnectionType.SSH && savedCredId.isBlank()) stringResource(R.string.none_interactive_key_auth) else stringResource(R.string.select_saved_credential),
                         onValueChange = {},
                         readOnly = true,
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedCreds) },
@@ -1313,7 +1317,7 @@ fun AddProfileForm(
                     ExposedDropdownMenu(expanded = expandedCreds, onDismissRequest = { expandedCreds = false }) {
                         if (type == ConnectionType.SSH) {
                             DropdownMenuItem(
-                                text = { Text("None (Interactive / Key auth)") },
+                                text = { Text(stringResource(R.string.none_interactive_key_auth)) },
                                 onClick = {
                                     savedCredId = ""
                                     user = ""
@@ -1334,7 +1338,7 @@ fun AddProfileForm(
                             )
                         }
                         DropdownMenuItem(
-                            text = { Text("+ Add New Credential", color = MaterialTheme.colorScheme.primary) },
+                            text = { Text(stringResource(R.string.add_new_credential), color = MaterialTheme.colorScheme.primary) },
                             onClick = {
                                 expandedCreds = false
                                 onNavigateToSettings(1)
@@ -1344,14 +1348,14 @@ fun AddProfileForm(
                 }
 
                 if (type == ConnectionType.VNC && showValidationErrors) {
-                    Text("Select a saved VNC password (1 to 8 Latin-1 characters) and a valid port (1 to 65535).", color = Color.Red, modifier = Modifier.padding(16.dp))
+                    Text(stringResource(R.string.select_a_saved_vnc_password_1_to_8_latin_1_characters_and_a_vali), color = Color.Red, modifier = Modifier.padding(16.dp))
                 }
                 if (type == ConnectionType.SSH && savedCredId.isBlank()) {
-                    SettingsTextField(user, { user = it }, "Username (or blank to prompt on connect)")
+                    SettingsTextField(user, { user = it }, stringResource(R.string.username_or_blank_to_prompt_on_connect))
                 }
 
                 if (type == ConnectionType.SSH) {
-                    SettingsHeader("SSH Key")
+                    SettingsHeader(stringResource(R.string.ssh_key))
                     var expandedSshKeys by rememberSaveable { mutableStateOf(false) }
                     ExposedDropdownMenuBox(
                         expanded = expandedSshKeys,
@@ -1359,7 +1363,7 @@ fun AddProfileForm(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
                     ) {
                         TextField(
-                            value = sshKeys.find { it.id == savedSshKeyId }?.name ?: "None (Password / Interactive)",
+                            value = sshKeys.find { it.id == savedSshKeyId }?.name ?: stringResource(R.string.none_password_interactive),
                             onValueChange = {},
                             readOnly = true,
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedSshKeys) },
@@ -1372,7 +1376,7 @@ fun AddProfileForm(
                         )
                         ExposedDropdownMenu(expanded = expandedSshKeys, onDismissRequest = { expandedSshKeys = false }) {
                             DropdownMenuItem(
-                                text = { Text("None (Password / Interactive)") },
+                                text = { Text(stringResource(R.string.none_password_interactive)) },
                                 onClick = {
                                     savedSshKeyId = ""
                                     expandedSshKeys = false
@@ -1388,7 +1392,7 @@ fun AddProfileForm(
                                 )
                             }
                             DropdownMenuItem(
-                                text = { Text("+ Add New SSH Key", color = MaterialTheme.colorScheme.primary) },
+                                text = { Text(stringResource(R.string.add_new_ssh_key), color = MaterialTheme.colorScheme.primary) },
                                 onClick = {
                                     expandedSshKeys = false
                                     onNavigateToSettings(2)
@@ -1396,7 +1400,7 @@ fun AddProfileForm(
                             )
                         }
                     }
-                    SettingsHeader("Jump host")
+                    SettingsHeader(stringResource(R.string.jump_host))
                     val allProfiles = remember(profileManager) { profileManager.getProfiles() }
                     val editedProfile = (initialProfile ?: ConnectionProfile(id = "", name = name, type = ConnectionType.SSH, host = host, user = "", pass = ""))
                         .copy(jumpHostProfileId = savedJumpHostId.takeIf { it.isNotBlank() })
@@ -1410,7 +1414,7 @@ fun AddProfileForm(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
                     ) {
                         TextField(
-                            value = allProfiles.find { it.id == savedJumpHostId }?.name ?: "None (connect directly)",
+                            value = allProfiles.find { it.id == savedJumpHostId }?.name ?: stringResource(R.string.none_connect_directly),
                             onValueChange = {},
                             readOnly = true,
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedJump) },
@@ -1423,7 +1427,7 @@ fun AddProfileForm(
                         )
                         ExposedDropdownMenu(expanded = expandedJump, onDismissRequest = { expandedJump = false }) {
                             DropdownMenuItem(
-                                text = { Text("None (connect directly)") },
+                                text = { Text(stringResource(R.string.none_connect_directly)) },
                                 onClick = { savedJumpHostId = ""; expandedJump = false }
                             )
                             jumpCandidates.forEach { candidate ->
@@ -1436,7 +1440,7 @@ fun AddProfileForm(
                     }
                     val (chainPreview, chainProblem) = com.farside.workspace.ssh.JumpChains.preview(editedProfile, allProfiles)
                     val previewText = chainProblem ?: chainPreview?.takeIf { it.jumpHosts.isNotEmpty() }?.let {
-                        "${editedProfile.name.ifBlank { "this profile" }} \u2192 via ${it.jumpHosts.joinToString(" \u2192 ") { h -> h.name }}"
+                        context.getString(R.string.jump_route_preview, editedProfile.name.ifBlank { context.getString(R.string.this_profile) }, it.jumpHosts.joinToString(context.getString(R.string.jump_route_separator)) { h -> h.name })
                     }
                     if (previewText != null) {
                         Text(previewText, fontSize = 12.sp, color = if (chainProblem != null) Color.Red else Color.Gray,
@@ -1444,56 +1448,56 @@ fun AddProfileForm(
                     }                }
                 
                 if (type == ConnectionType.RDP) {
-                    SettingsHeader("General")
-                    SettingsSwitchRow("Admin mode", adminMode, { adminMode = it })
-                    SettingsSwitchRow("Swap mouse buttons", swapMouseButtons, { swapMouseButtons = it })
+                    SettingsHeader(stringResource(R.string.general))
+                    SettingsSwitchRow(stringResource(R.string.admin_mode), adminMode, { adminMode = it })
+                    SettingsSwitchRow(stringResource(R.string.swap_mouse_buttons), swapMouseButtons, { swapMouseButtons = it })
                 } else if (type == ConnectionType.SSH) {
-                    SettingsHeader("Files")
-                    SettingsSwitchRow("Enable SFTP file access", enableSftp, { enabled ->
+                    SettingsHeader(stringResource(R.string.files))
+                    SettingsSwitchRow(stringResource(R.string.enable_sftp_file_access), enableSftp, { enabled ->
                         if (!enabled) enableSftp = false
                         else if (com.farside.workspace.hasStoragePermission(context)) enableSftp = true
                         else com.farside.workspace.requestStoragePermission(context) { sftpPermissionLauncher.launch(it) }
                     })
-                    SettingsHeader("Terminal & Clipboard")
-                    SettingsSwitchRow("Auto-copy selection to clipboard", autoCopySelection, { autoCopySelection = it })
+                    SettingsHeader(stringResource(R.string.terminal_clipboard))
+                    SettingsSwitchRow(stringResource(R.string.auto_copy_selection_to_clipboard), autoCopySelection, { autoCopySelection = it })
                     OutlinedButton(onClick = { showSshForwards = true }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-                        Text("Port forwarding · ${sshForwards.size} saved")
+                        Text(pluralStringResource(R.plurals.saved_port_forward_count, sshForwards.size, sshForwards.size))
                     }
 
                 }
                 
-                SettingsHeader("Proxy Settings")
+                SettingsHeader(stringResource(R.string.proxy_settings))
                 ProxyTypeSelector(proxyType, { proxyType = it })
                 if (proxyType !in com.farside.workspace.data.ProxyType.choices) {
-                    Text("Select None, Cloudflared, SOCKS5 or HTTP before saving.", color = Color.Red, modifier = Modifier.padding(16.dp))
+                    Text(stringResource(R.string.select_none_cloudflared_socks5_or_http_before_saving), color = Color.Red, modifier = Modifier.padding(16.dp))
                 }
                 if (proxyType == com.farside.workspace.data.ProxyType.CLOUDFLARED) {
-                    Text("Routes the connection through Cloudflare Access. Browser sign-in opens when needed; tokens stay in private app storage.", color = Color.Gray, modifier = Modifier.padding(16.dp))
-                    SettingsTextField(cloudflaredParameters, { cloudflaredParameters = it; cloudflaredError = null }, "Extra parameters (optional)",
+                    Text(stringResource(R.string.routes_the_connection_through_cloudflare_access_browser_sign_in), color = Color.Gray, modifier = Modifier.padding(16.dp))
+                    SettingsTextField(cloudflaredParameters, { cloudflaredParameters = it; cloudflaredError = null }, stringResource(R.string.extra_parameters_optional),
                         visualTransformation = if (showCloudflaredParameters) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
                         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(autoCorrect = false, keyboardType = androidx.compose.ui.text.input.KeyboardType.Password))
-                    SettingsSwitchRow("Show Cloudflared parameters", showCloudflaredParameters, { showCloudflaredParameters = it })
-                    Text("Allowed: --service-token-id and --service-token-secret, or --header (-H) for Cloudflare Access authentication. Quote header values containing spaces.", color = Color.Gray, modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingsSwitchRow(stringResource(R.string.show_cloudflared_parameters), showCloudflaredParameters, { showCloudflaredParameters = it })
+                    Text(stringResource(R.string.allowed_service_token_id_and_service_token_secret_or_header_h_fo), color = Color.Gray, modifier = Modifier.padding(horizontal = 16.dp))
                     cloudflaredError?.let { Text(it, color = Color.Red, modifier = Modifier.padding(16.dp)) }
                 } else if (proxyType == com.farside.workspace.data.ProxyType.SOCKS5 || proxyType == com.farside.workspace.data.ProxyType.HTTP) {
-                    Text("${proxyType.displayName} connections are not available yet.", color = Color.Gray, modifier = Modifier.padding(16.dp))
-                    SettingsTextField(proxyHost, { proxyHost = it }, "Proxy Hostname or IP")
-                    SettingsTextField(proxyPort, { proxyPort = it }, "Proxy Port")
-                    SettingsTextField(proxyUser, { proxyUser = it }, "Proxy Username (Optional)")
-                    SettingsTextField(proxyPass, { proxyPass = it }, "Proxy Password (Optional)", visualTransformation = PasswordVisualTransformation())
-                    SettingsTextField(proxyExclude, { proxyExclude = it }, "Exclude Hosts/IPs (comma separated)")
+                    Text(stringResource(R.string.proxy_connections_unavailable, proxyType.displayName), color = Color.Gray, modifier = Modifier.padding(16.dp))
+                    SettingsTextField(proxyHost, { proxyHost = it }, stringResource(R.string.proxy_hostname_or_ip))
+                    SettingsTextField(proxyPort, { proxyPort = it }, stringResource(R.string.proxy_port))
+                    SettingsTextField(proxyUser, { proxyUser = it }, stringResource(R.string.proxy_username_optional))
+                    SettingsTextField(proxyPass, { proxyPass = it }, stringResource(R.string.proxy_password_optional), visualTransformation = PasswordVisualTransformation())
+                    SettingsTextField(proxyExclude, { proxyExclude = it }, stringResource(R.string.exclude_hosts_ips_comma_separated))
                 }
 
                 if (type == ConnectionType.RDP) {
-                    SettingsHeader("Device & Audio Redirection")
+                    SettingsHeader(stringResource(R.string.device_audio_redirection))
                     // We can reuse ProxyTypeSelector logic for SoundRedirection dropdown if we wanted, or just a simple segmented control.
-                    SettingsTextField(remoteApp, { remoteApp = it }, "RemoteApp Alias (e.g. ||cmd)")
-                    SettingsSwitchRow("Redirect Microphone", redirectMicrophone, { enabled ->
+                    SettingsTextField(remoteApp, { remoteApp = it }, stringResource(R.string.remoteapp_alias_e_g_cmd))
+                    SettingsSwitchRow(stringResource(R.string.redirect_microphone), redirectMicrophone, { enabled ->
                         if (!enabled) redirectMicrophone = false
                         else if (com.farside.workspace.hasMicrophonePermission(context)) redirectMicrophone = true
                         else microphonePermission.launch(android.Manifest.permission.RECORD_AUDIO)
                     })
-                    SettingsSwitchRow("Redirect Camera", enableCamera, { enabled ->
+                    SettingsSwitchRow(stringResource(R.string.redirect_camera), enableCamera, { enabled ->
                         if (!enabled) enableCamera = false
                         else if (com.farside.workspace.hasCameraPermission(context)) enableCamera = true
                         else cameraPermission.launch(com.farside.workspace.REQUIRED_CAMERA_PERMISSIONS)
@@ -1503,12 +1507,12 @@ fun AddProfileForm(
                         enabled = enableCamera,
                         onResolutionSelected = { cameraResolution = it }
                     )
-                    SettingsSwitchRow("Redirect Storage", redirectStorage, { enabled ->
+                    SettingsSwitchRow(stringResource(R.string.redirect_storage), redirectStorage, { enabled ->
                         if (!enabled) redirectStorage = false
                         else if (com.farside.workspace.hasStoragePermission(context)) redirectStorage = true
                         else com.farside.workspace.requestStoragePermission(context) { intent -> storagePermissionLauncher.launch(intent) }
                     })
-                    SettingsSwitchRow("Redirect Clipboard", redirectClipboard, { redirectClipboard = it })
+                    SettingsSwitchRow(stringResource(R.string.redirect_clipboard), redirectClipboard, { redirectClipboard = it })
                     
                     // Display settings removed
                 }
