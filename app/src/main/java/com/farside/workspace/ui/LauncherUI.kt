@@ -1055,6 +1055,8 @@ fun AddProfileForm(
     }
     var savedSshKeyId by rememberSaveable { mutableStateOf(initialProfile?.sshKeyId ?: "") }
     var savedJumpHostId by rememberSaveable { mutableStateOf(initialProfile?.jumpHostProfileId ?: "") }
+    var vncAuthMode by rememberSaveable { mutableStateOf(initialProfile?.vncAuthMode ?: com.farside.workspace.data.VncAuthMode.VNC_PASSWORD) }
+    var sftpPairProfileId by rememberSaveable { mutableStateOf(initialProfile?.sftpPairProfileId ?: "") }
     
     var remoteApp by rememberSaveable { mutableStateOf(initialProfile?.remoteApp ?: "") }
     
@@ -1143,7 +1145,9 @@ fun AddProfileForm(
                     val selectedCred = creds.find { it.id == savedCredId }
                     val credSelected = when (type) {
                         ConnectionType.SSH -> true
-                        ConnectionType.VNC -> selectedCred != null && selectedCred.pass.isNotEmpty() && selectedCred.pass.length <= 8 && selectedCred.pass.all { it.code in 1..255 }
+                        ConnectionType.VNC -> selectedCred != null && selectedCred.pass.isNotEmpty() &&
+                            (if (vncAuthMode == com.farside.workspace.data.VncAuthMode.MAC_USER) selectedCred.user.isNotBlank()
+                            else selectedCred.pass.length <= 8 && selectedCred.pass.all { it.code in 1..255 })
                         ConnectionType.RDP -> if (selectedCred != null) selectedCred.user.isNotBlank() else user.isNotBlank()
                     }
                     if (host.isBlank() || !credSelected || port.toIntOrNull() !in 1..65535) {
@@ -1187,6 +1191,10 @@ fun AddProfileForm(
                         redirectMicrophone = redirectMicrophone && com.farside.workspace.hasMicrophonePermission(context),
                         redirectStorage = redirectStorage,
                         enableSftp = type == ConnectionType.SSH && enableSftp,
+                        vncAuthMode = vncAuthMode,
+                        sftpPairProfileId = if (type == ConnectionType.VNC) sftpPairProfileId.takeIf { id ->
+                            profileManager.getProfiles().any { it.id == id && it.type == ConnectionType.SSH }
+                        } else null,
                         redirectClipboard = redirectClipboard,
                         customResolution = initialProfile?.customResolution ?: false,
                         matchDevice = initialProfile?.matchDevice ?: true,
@@ -1233,8 +1241,19 @@ fun AddProfileForm(
 
                 if (type == ConnectionType.VNC) {
                     SettingsHeader(stringResource(R.string.screen_sharing))
-                    Text(stringResource(R.string.on_mac_enable_screen_sharing_then_enable_vnc_viewers_with_a_pass),
+                    Text(stringResource(if (vncAuthMode == com.farside.workspace.data.VncAuthMode.MAC_USER)
+                        R.string.vnc_mac_user_hint else R.string.on_mac_enable_screen_sharing_then_enable_vnc_viewers_with_a_pass),
                         color = Color.LightGray, modifier = Modifier.padding(horizontal = 16.dp), fontSize = 13.sp)
+                    SettingsHeader(stringResource(R.string.vnc_auth_mode))
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                        listOf(com.farside.workspace.data.VncAuthMode.VNC_PASSWORD to R.string.vnc_auth_password,
+                            com.farside.workspace.data.VncAuthMode.MAC_USER to R.string.vnc_auth_mac_user).forEach { (mode, label) ->
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f).clickable { vncAuthMode = mode }) {
+                                RadioButton(selected = vncAuthMode == mode, onClick = { vncAuthMode = mode })
+                                Text(stringResource(label), color = Color.White)
+                            }
+                        }
+                    }
                 }
                 SettingsHeader(stringResource(R.string.host_server))
                 if (type == ConnectionType.RDP || type == ConnectionType.VNC) {
@@ -1302,7 +1321,7 @@ fun AddProfileForm(
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
                 )
 
-                SettingsHeader(when (type) { ConnectionType.SSH -> stringResource(R.string.user_account_optional_for_ssh); ConnectionType.VNC -> stringResource(R.string.vnc_password_credential); else -> stringResource(R.string.user_account) })
+                SettingsHeader(when (type) { ConnectionType.SSH -> stringResource(R.string.user_account_optional_for_ssh); ConnectionType.VNC -> stringResource(if (vncAuthMode == com.farside.workspace.data.VncAuthMode.MAC_USER) R.string.vnc_auth_mac_user else R.string.vnc_password_credential); else -> stringResource(R.string.user_account) })
                 var expandedCreds by rememberSaveable { mutableStateOf(false) }
                 
                 ExposedDropdownMenuBox(
@@ -1357,7 +1376,26 @@ fun AddProfileForm(
                 }
 
                 if (type == ConnectionType.VNC && showValidationErrors) {
-                    Text(stringResource(R.string.select_a_saved_vnc_password_1_to_8_latin_1_characters_and_a_vali), color = Color.Red, modifier = Modifier.padding(16.dp))
+                    Text(stringResource(if (vncAuthMode == com.farside.workspace.data.VncAuthMode.MAC_USER)
+                        R.string.vnc_mac_credential_required else R.string.select_a_saved_vnc_password_1_to_8_latin_1_characters_and_a_vali),
+                        color = Color.Red, modifier = Modifier.padding(16.dp))
+                }
+                if (type == ConnectionType.VNC) {
+                    val sshProfiles = remember(profileManager) { profileManager.getProfiles().filter { it.type == ConnectionType.SSH } }
+                    var expandedPair by rememberSaveable { mutableStateOf(false) }
+                    SettingsHeader(stringResource(R.string.vnc_sftp_pair))
+                    ExposedDropdownMenuBox(expanded = expandedPair, onExpandedChange = { expandedPair = !expandedPair },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+                        TextField(value = sshProfiles.find { it.id == sftpPairProfileId }?.name ?: stringResource(R.string.vnc_sftp_unpaired),
+                            onValueChange = {}, readOnly = true, modifier = Modifier.menuAnchor().fillMaxWidth(),
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedPair) })
+                        ExposedDropdownMenu(expanded = expandedPair, onDismissRequest = { expandedPair = false }) {
+                            DropdownMenuItem(text = { Text(stringResource(R.string.vnc_sftp_unpaired)) },
+                                onClick = { sftpPairProfileId = ""; expandedPair = false })
+                            sshProfiles.forEach { ssh -> DropdownMenuItem(text = { Text(ssh.name) },
+                                onClick = { sftpPairProfileId = ssh.id; expandedPair = false }) }
+                        }
+                    }
                 }
                 if (type == ConnectionType.SSH && savedCredId.isBlank()) {
                     SettingsTextField(user, { user = it }, stringResource(R.string.username_or_blank_to_prompt_on_connect))
