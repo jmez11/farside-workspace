@@ -514,4 +514,7 @@
     <string name="cloudflared_connection_failed">Cloudflared connection failed.</string>
     <string name="choose_another_credential">Saved credential was deleted. Choose another credential.</string>
     <string name="proxy_connection_not_supported">%1$s proxy connections are not supported yet. Select None or Cloudflared.</string>
+    <string name="choose_vnc_password_credential">Choose a saved VNC password credential.</string>
+    <string name="invalid_vnc_password">Invalid VNC password.</string>
+    <string name="vnc_connection_failed_help">VNC connection failed. Enable Screen Sharing and VNC password access (1 to 8 characters); ARD login is not supported.</string>
 </resources>
