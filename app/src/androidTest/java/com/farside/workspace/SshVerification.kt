@@ -18,7 +18,9 @@ class SshVerification(private val test: Instrumentation) {
         fun visit(node: AccessibilityNodeInfo): List<AccessibilityNodeInfo> = listOf(node) +
             (0 until node.childCount).flatMap { node.getChild(it)?.let(::visit).orEmpty() }
         val displays = test.uiAutomation.windowsOnAllDisplays
-        return (0 until displays.size()).flatMap { index -> displays.valueAt(index).flatMap { it.root?.let(::visit).orEmpty() } }
+        return (0 until displays.size()).flatMap { index -> displays.valueAt(index).flatMap {
+            it.root?.takeIf { root -> root.packageName == test.targetContext.packageName }?.let(::visit).orEmpty()
+        } }
     }
 
     private fun find(label: String, retries: Int = 20): AccessibilityNodeInfo? {
