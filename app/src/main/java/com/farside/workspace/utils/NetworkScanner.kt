@@ -51,7 +51,7 @@ object NetworkScanner {
         val listener = object : android.net.nsd.NsdManager.DiscoveryListener {
             override fun onDiscoveryStarted(type: String) {}
             override fun onDiscoveryStopped(type: String) {}
-            override fun onStartDiscoveryFailed(type: String, error: Int) { handler.post { failure = "Local VNC discovery could not start ($error)." } }
+            override fun onStartDiscoveryFailed(type: String, error: Int) { handler.post { failure = context.getString(com.farside.workspace.R.string.vnc_discovery_failed, error) } }
             override fun onStopDiscoveryFailed(type: String, error: Int) {}
             override fun onServiceFound(info: android.net.nsd.NsdServiceInfo) { handler.post {
                 if (active && present.add(info.serviceName)) { pending.add(info); resolveNext() }
@@ -95,7 +95,7 @@ object NetworkScanner {
                             resolvedName = netbios
                         }
                     }
-                    val finalName = if (resolvedName == host || resolvedName.isBlank()) "Unknown PC ($host)" else resolvedName
+                    val finalName = if (resolvedName == host || resolvedName.isBlank()) context.getString(com.farside.workspace.R.string.unknown_pc, host) else resolvedName
                     
                     synchronized(activeHosts) {
                         activeHosts.add(DiscoveredHost(ip = host, name = finalName))
