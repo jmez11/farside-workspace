@@ -2,18 +2,22 @@ package com.farside.workspace.tunnel
 
 import android.content.Context
 import android.util.Base64
+import com.farside.workspace.LocalizableException
+import com.farside.workspace.R
 import com.farside.workspace.CredentialManager
 import org.json.JSONObject
 import java.io.File
 
 data class AdbTunnelConfig(val token: String, val hostname: String, val port: Int) {
     fun validate(): AdbTunnelConfig {
-        require(port in 1024..65535) { "Use a port between 1024 and 65535." }
+        if (port !in 1024..65535) throw LocalizableException(R.string.adb_tunnel_port_invalid)
         val host = CloudflaredOptions.hostname(hostname)
-        require(token.length in 40..4096 && token.matches(Regex("[A-Za-z0-9+/=_-]+"))) { "Enter only the tunnel token, without the command." }
+        if (!(token.length in 40..4096 && token.matches(Regex("[A-Za-z0-9+/=_-]+"))))
+            throw LocalizableException(R.string.adb_tunnel_token_only)
         val decoded = runCatching { JSONObject(String(Base64.decode(token, Base64.DEFAULT), Charsets.UTF_8)) }.getOrNull()
-        require(decoded != null && decoded.optString("a").matches(Regex("[0-9a-f]{32}")) &&
-            decoded.optString("t").matches(Regex("[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}")) && decoded.optString("s").isNotBlank()) { "Invalid Cloudflare tunnel token." }
+        if (!(decoded != null && decoded.optString("a").matches(Regex("[0-9a-f]{32}")) &&
+            decoded.optString("t").matches(Regex("[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}")) && decoded.optString("s").isNotBlank()))
+            throw LocalizableException(R.string.adb_tunnel_token_invalid)
         return copy(hostname = host)
     }
     fun yaml(): String = "# Token-based tunnels use dashboard ingress; mirror this rule there.\n" +
