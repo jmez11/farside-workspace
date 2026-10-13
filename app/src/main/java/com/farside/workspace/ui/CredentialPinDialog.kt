@@ -1,5 +1,8 @@
 package com.farside.workspace.ui
 
+import com.farside.workspace.R
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.runtime.*
 import androidx.compose.material3.*
 import androidx.compose.foundation.clickable
@@ -19,8 +22,8 @@ import kotlinx.coroutines.withContext
 
 @Composable
 fun CredentialPinDialog(
-    title: String = "Unlock credential",
-    message: String = "Enter the App PIN.",
+    title: String = stringResource(R.string.unlock_credential),
+    message: String = stringResource(R.string.enter_app_pin),
     verifier: String? = null,
     onUnlocked: () -> Unit,
     onCancel: () -> Unit
@@ -48,7 +51,7 @@ fun CredentialPinDialog(
         title = { Text(title) },
         text = { Column {
             Text(message)
-            OutlinedTextField(pin, { pin = it; error = null }, label = { Text("PIN") },
+            OutlinedTextField(pin, { pin = it; error = null }, label = { Text(stringResource(R.string.pin)) },
                 singleLine = true, enabled = !busy, visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, autoCorrect = false),
                 isError = error != null)
@@ -65,7 +68,7 @@ fun CredentialPinDialog(
                     enabled = !busy
                 )
                 Spacer(Modifier.width(8.dp))
-                Text("Don't reprompt for 5 minutes", style = MaterialTheme.typography.bodyMedium)
+                Text(pluralStringResource(R.plurals.pin_remember_minutes, 5, 5), style = MaterialTheme.typography.bodyMedium)
             }
         } },
         confirmButton = { TextButton(enabled = !busy && pin.isNotEmpty(), onClick = {
@@ -82,7 +85,7 @@ fun CredentialPinDialog(
                     onUnlocked()
                 }
             }
-        }) { Text(if (busy) "Checking…" else "Unlock") } },
-        dismissButton = { TextButton(enabled = !busy, onClick = onCancel) { Text("Cancel") } }
+        }) { Text(if (busy) stringResource(R.string.checking) else stringResource(R.string.unlock)) } },
+        dismissButton = { TextButton(enabled = !busy, onClick = onCancel) { Text(stringResource(R.string.cancel)) } }
     )
 }
