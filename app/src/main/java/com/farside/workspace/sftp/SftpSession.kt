@@ -1,4 +1,4 @@
-﻿package com.farside.workspace.sftp
+package com.farside.workspace.sftp
 
 import android.content.ContentValues
 import android.content.Context
@@ -97,13 +97,17 @@ internal class SftpSession(private val context: Context, val profile: Connection
         sftp.sftpEngine.timeoutMs = 30_000
         operation.track(sftp).use { operation.check(); block(it) }
     }
-    fun list(path: String, operation: SftpOperation): List<SftpEntry> = channel(operation) { sftp ->
-        sftp.ls(path).filter { it.name != "." && it.name != ".." }.map { item ->
+    fun list(path: String, operation: SftpOperation, onProgress: (found: Int, processed: Int) -> Unit = { _, _ -> }): List<SftpEntry> = channel(operation) { sftp ->
+        val items = sftp.ls(path).filter { it.name != "." && it.name != ".." }
+        onProgress(items.size, 0)
+        var processed = 0
+        items.map { item ->
             operation.check()
+            if (++processed % 25 == 0) onProgress(items.size, processed)
             var link: String? = null
             var unavailable = false
-            val attributes = try {
-                if (item.attributes.type == FileMode.Type.SYMLINK) link = sftp.readlink(item.path)
+            val attributes = if (item.attributes.type != FileMode.Type.SYMLINK) item.attributes else try {
+                link = sftp.readlink(item.path)
                 sftp.stat(item.path)
             } catch (_: SFTPException) { unavailable = true; item.attributes }
             SftpEntry(item.name, item.path, attributes.type == FileMode.Type.DIRECTORY,

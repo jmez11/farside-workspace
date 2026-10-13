@@ -81,14 +81,15 @@ internal class KeyboardCropVerification(private val test: Instrumentation) {
                 test.runOnMainSync {
                     val frame = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
                     view.draw(Canvas(frame))
-                    value = android.graphics.Color.alpha(frame.getPixel(30, 30))
+                    // Max alpha over a grid: a fixed pixel can land in a transparent gap of the current key layout.
+                    for (gx in 1..9) for (gy in 1..9) value = maxOf(value, android.graphics.Color.alpha(frame.getPixel(frame.width * gx / 10, frame.height * gy / 10)))
                     if (label == "full") File(activity.cacheDir, "keyboard-full.png").outputStream().use { frame.compress(Bitmap.CompressFormat.PNG, 100, it) }
                     frame.recycle()
                 }
                 return value
             }
             val opening = (0 until 16).map { alpha("open-$it").also { Thread.sleep(100) } }
-            check(opening.last() == 255 && opening.any { it in 1..254 }) { "Opening did not fade: $opening" }
+            check(opening.last() == 255 && opening.any { it in 1..254 }) { "Opening did not fade: $opening size=${view.width}x${view.height} alpha=${view.alpha} shown=${view.isShown} attached=${view.isAttachedToWindow} class=${view.javaClass.name} children=${(view as? android.view.ViewGroup)?.childCount}" }
             check(kotlin.math.abs(view.height-251.2*density) <= 1)
             check(find("Show more") == null && find("Show less") == null && find("Keypad Enter") == null && find("Menu") == null && find("Terminal settings") == null)
             fun rect(label: String) = android.graphics.Rect().also { checkNotNull(find(label)).getBoundsInScreen(it) }

@@ -2,8 +2,6 @@
 
 Hi Meta developer team,
 
-I'm developing **Farside Workspace**, an open-source native Android RDP/SSH/VNC client for Quest. It uses Kotlin, Jetpack Compose and the Meta VR Layout SDK to present connections as Spatial Windows in Home/passthrough.
-
 I'd like to let users authorize access to saved remote-login credentials and SSH private keys with their existing **Quest headset passcode**. Today the app has its own PIN access gate and encrypts saved secrets with Android Keystore. Using a trusted system prompt would remove the need for a second PIN and let the OS handle verification and attempt limits. I only need an authenticated result; the app should never receive the headset passcode.
 
 I implemented a test using the public Android device-credential authentication API. Availability checks suggest the feature is available, but actual requests are rejected by a Horizon OS allowlist. Could someone clarify the supported integration path and whether third-party developers can obtain access?

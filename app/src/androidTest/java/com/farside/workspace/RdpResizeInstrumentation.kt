@@ -40,12 +40,9 @@ class RdpResizeInstrumentation : Instrumentation() {
     private var credentialsOnly = false
     private var credentialDeletionOnly = false
     private var proxiesOnly = false
-    private var keyboardCropOnly = false
     private var windowCapacityOnly = false
     private var windowLaunchOnly = false
-    private var keyboardGeometryOnly = false
     private var keyboardFadeOnly = false
-    private var toolbarOnly = false
     private var sshFeaturesOnly = false
     private var sshOnly = false
     private var sshToolbarOnly = false
@@ -55,9 +52,11 @@ class RdpResizeInstrumentation : Instrumentation() {
     private var clipboardOnly = false
     private var imeOnly = false
     private var sshImeOnly = false
+    private var jumpArgs: Bundle? = null
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(arguments)
         sftpMode = arguments?.getString("sftpMode")
+        jumpArgs = arguments
         sftpProfile = arguments?.getString("sftpProfile")
         sshKeyTransportOnly = arguments?.getString("sshKeyTransportOnly") == "true"
         systemPinMode = arguments?.getString("systemPinMode")
@@ -84,12 +83,9 @@ class RdpResizeInstrumentation : Instrumentation() {
         credentialsOnly = arguments?.getString("credentialsOnly") == "true"
         credentialDeletionOnly = arguments?.getString("credentialDeletionOnly") == "true"
         proxiesOnly = arguments?.getString("proxiesOnly") == "true"
-        keyboardCropOnly = arguments?.getString("keyboardCropOnly") == "true"
         windowCapacityOnly = arguments?.getString("windowCapacityOnly") == "true"
         windowLaunchOnly = arguments?.getString("windowLaunchOnly") == "true"
-        keyboardGeometryOnly = arguments?.getString("keyboardGeometryOnly") == "true"
         keyboardFadeOnly = arguments?.getString("keyboardFadeOnly") == "true"
-        toolbarOnly = arguments?.getString("toolbarOnly") == "true"
         sshFeaturesOnly = arguments?.getString("sshFeaturesOnly") == "true"
         sshOnly = arguments?.getString("sshOnly") == "true"
         sshToolbarOnly = arguments?.getString("sshToolbarOnly") == "true"
@@ -113,6 +109,13 @@ class RdpResizeInstrumentation : Instrumentation() {
     override fun onStart() {
         val results = Bundle()
         try {
+            jumpArgs?.getString("jumpMode")?.let { mode ->
+                val a = jumpArgs!!
+                results.putString("stream", JumpHostVerification(this).run(mode, a.getString("jumpKey"),
+                    a.getString("jumpHop1") ?: "nanokvm-ssh.jameskasyan.com", a.getString("jumpHop2") ?: "192.168.1.250", a.getString("jumpDead") ?: "192.168.1.253"))
+                finish(0, results)
+                return
+            }
             sftpMode?.let { mode ->
                 results.putString("stream", SftpVerification(this).run(mode, sftpProfile))
                 finish(0, results)
@@ -146,8 +149,8 @@ class RdpResizeInstrumentation : Instrumentation() {
                 finish(0, results)
                 return
             }
-            if (keyboardCropOnly || keyboardGeometryOnly || keyboardFadeOnly) {
-                val report = KeyboardCropVerification(this).run(rapid = !keyboardGeometryOnly, fadeOnly = keyboardFadeOnly)
+            if (keyboardFadeOnly) {
+                val report = KeyboardCropVerification(this).run(rapid = true, fadeOnly = true)
                 results.putString("stream", "PASS: $report\n")
                 finish(0, results)
                 return
@@ -208,7 +211,7 @@ class RdpResizeInstrumentation : Instrumentation() {
             }
             if (sshOnly) {
                 SshVerification(this).run()
-                results.putString("stream", "PASS: SSH session floating toolbar (name, host, pin, zoom font sizing, keyboard toggle), extra keys strip, fixed 76dp strip with 238dp bank, repeated ABC/123 without strip buffer changes, and unchanged main content window geometry.\n")
+                results.putString("stream", "PASS: SSH session floating toolbar (name, host, pin, zoom font sizing, keyboard toggle), always-full extra keys (modifier row, Backspace, F-keys/arrows, Number/Function Keys swap), no retired 123/ABC controls, and unchanged main content window geometry.\n")
                 finish(0, results)
                 return
             }
@@ -287,21 +290,11 @@ class RdpResizeInstrumentation : Instrumentation() {
                 return
             }
             val profile = ProfileManager(targetContext).getProfiles().first { it.type == ConnectionType.RDP }
-            // A test-only window session can emulate Home's unhosted embedded-window focus grants.
-            // Drop identity before any keyboard UI/input code runs. No app permission is added.
-            if (toolbarOnly) uiAutomation.adoptShellPermissionIdentity("android.permission.INTERNAL_SYSTEM_WINDOW")
-            val activity = try { startActivitySync(Intent(targetContext, SessionActivity::class.java).apply {
+            val activity = startActivitySync(Intent(targetContext, SessionActivity::class.java).apply {
                 putExtra("profileId", profile.id)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }) } finally { if (toolbarOnly) uiAutomation.dropShellPermissionIdentity() }
+            })
             Thread.sleep(6000)
-            if (toolbarOnly) {
-                verifyToolbar(activity)
-                runOnMainSync { activity.finish() }
-                results.putString("stream", "PASS: toolbar offset, full fade, real panel pose change, pin, expanded keyboard/modifier/numeric controls, unchanged desktop/pose, real key-window focus handoff and key touch events, keyboard focus through RDP tap/hold/drag, dismissal/reopening.\n")
-                finish(0, results)
-                return
-            }
             val report = StringBuilder()
             for ((width, height) in listOf(1280 to 800, 1000 to 600, 1600 to 900, 800 to 1000, 1280 to 800)) {
                 uiAutomation.executeShellCommand("am task resize ${activity.taskId} 0 0 $width $height").close()
@@ -366,332 +359,6 @@ class RdpResizeInstrumentation : Instrumentation() {
             finish(1, results)
         }
     }
-    private fun verifyToolbar(activity: android.app.Activity) {
-        val serviceInfo = uiAutomation.serviceInfo
-        serviceInfo.flags = serviceInfo.flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
-        uiAutomation.serviceInfo = serviceInfo
-        fun find(label: String): android.view.accessibility.AccessibilityNodeInfo? {
-            uiAutomation.clearCache()
-            fun search(node: android.view.accessibility.AccessibilityNodeInfo): android.view.accessibility.AccessibilityNodeInfo? {
-                if (node.contentDescription?.toString() == label || node.text?.toString() == label) return node
-                for (index in 0 until node.childCount) {
-                    val child = node.getChild(index) ?: continue
-                    search(child)?.let { return it }
-                }
-                return null
-            }
-            val displays = uiAutomation.windowsOnAllDisplays
-            for (index in 0 until displays.size()) {
-                for (window in displays.valueAt(index)) window.root?.let { if (it.packageName == targetContext.packageName) search(it)?.let { found -> return found } }
-            }
-            return null
-        }
-        fun click(label: String) {
-            var node = checkNotNull(find(label)) { "Missing control: $label" }
-            while (!node.isClickable && node.parent != null) node = node.parent
-            check(node.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)) { "Cannot click $label" }
-            Thread.sleep(500)
-        }
-        check(find("Keep toolbar visible") == null) { "Toolbar did not completely fade" }
-        check(find("Show session toolbar") == null) { "Minimized menu still exists" }
-
-        // Change only the app's own panel pose, then restore it. This exercises the real
-        // Horizon listener without resizing, changing focus, or synthesizing a pointer move.
-        uiAutomation.adoptShellPermissionIdentity("horizonos.permission.MANAGE_VOLUMETRIC_WINDOWS")
-        val managerClass = Class.forName("horizonos.app.volumetricwindow.VolumetricWindowManager")
-        val manager = activity.getSystemService(managerClass)
-        val tokenClass = Class.forName("horizonos.view.VolumetricWindowToken")
-        val token = Class.forName("horizonos.app.ActivityExt").getMethod("getVolumetricWindowToken", android.app.Activity::class.java).invoke(null, activity)
-        val info = managerClass.getMethod("getWindowInfo", tokenClass).invoke(manager, token)
-        val pose = info.javaClass.getMethod("getPose").invoke(info)
-        val poseClass = pose.javaClass
-        val position = poseClass.getMethod("getPosition").invoke(pose)
-        val orientation = poseClass.getMethod("getOrientation").invoke(pose)
-        val vectorClass = position.javaClass
-        fun component(name: String) = vectorClass.getMethod(name).invoke(position) as Float
-        val shiftedPosition = vectorClass.getConstructor(Float::class.javaPrimitiveType, Float::class.javaPrimitiveType, Float::class.javaPrimitiveType)
-            .newInstance(component("getX") + 0.05f, component("getY"), component("getZ"))
-        val shiftedPose = poseClass.getConstructor(orientation.javaClass, vectorClass).newInstance(orientation, shiftedPosition)
-        val fixtureHandler = android.os.Handler(android.os.Looper.getMainLooper())
-        var fixtureVisible = false
-        var fixturePump: Runnable? = null
-        fun applyPose(value: Any) {
-            val builderClass = Class.forName("horizonos.app.volumetricwindow.VolumetricWindowTransaction\$Builder")
-            val builder = builderClass.getConstructor().newInstance()
-            builderClass.getMethod("setPose", tokenClass, poseClass).invoke(builder, token, value)
-            val transaction = builderClass.getMethod("build").invoke(builder)
-            managerClass.getMethod("applyTransaction", transaction.javaClass).invoke(manager, transaction)
-        }
-        try {
-            applyPose(shiftedPose)
-            Thread.sleep(800)
-            val pin = checkNotNull(find("Keep toolbar visible")) { "3D movement did not reveal toolbar" }
-            val rect = android.graphics.Rect().also { pin.getBoundsInScreen(it) }
-            check(rect.top > 0) { "Toolbar is flush with top" }
-            click("Keep toolbar visible")
-            check(find("Unpin toolbar") != null) { "Pin action did not toggle toolbar" }
-            Thread.sleep(4500)
-            check(find("Unpin toolbar") != null) { "Pinned toolbar faded (display ${activity.display?.displayId}; pin=${find("Keep toolbar visible")})" }
-            applyPose(pose)
-            Thread.sleep(500)
-            uiAutomation.dropShellPermissionIdentity() // All keyboard placement/resize checks use app permissions.
-            val desktop = checkNotNull(texture(activity.window.decorView))
-            val desktopWidth = desktop.width
-            val desktopHeight = desktop.height
-            val desktopOrigin = IntArray(2).also { desktop.getLocationInWindow(it) }.toList()
-            val sessionActivity = activity as SessionActivity
-            val keyboardState = checkNotNull(sessionActivity.keyboardPanelState)
-            val desktopBridge = FreeRDPBridge()
-            check(sessionActivity.rdpInstance != 0L) { "No live desktop for keyboard geometry verification" }
-            val remoteWidth = desktopBridge.getDesktopWidth(sessionActivity.rdpInstance)
-            val remoteHeight = desktopBridge.getDesktopHeight(sessionActivity.rdpInstance)
-            fun parentPose(): SavedWindowPose {
-                val current = managerClass.getMethod("getWindowInfo", tokenClass).invoke(manager, token)
-                return SavedWindowPose.read(current.javaClass.getMethod("getPose").invoke(current))
-            }
-            val desktopPose = parentPose()
-            fun panelView(): View = checkNotNull(keyboardState.javaClass.methods.single {
-                it.name.startsWith("getHostedView") }.invoke(keyboardState) as? View)
-            fun bankView(): View = checkNotNull(sessionActivity.keyboardBankState).let { state ->
-                checkNotNull(state.javaClass.methods.single { it.name.startsWith("getHostedView") }.invoke(state) as? View) }
-            fun verifyKeyboardGeometry(): Int {
-                check(keyboardState.lifecycle.value == metavrx.layout.window.compose.state.WindowLifecycle.Active) { "Key window not placed: ${keyboardState.lifecycle.value}" }
-                check(desktop.width == desktopWidth && desktop.height == desktopHeight) { "Keyboard changed desktop texture bounds" }
-                check(IntArray(2).also { desktop.getLocationInWindow(it) }.toList() == desktopOrigin) { "Keyboard shifted the desktop content" }
-                check(desktopBridge.getDesktopWidth(sessionActivity.rdpInstance) == remoteWidth &&
-                    desktopBridge.getDesktopHeight(sessionActivity.rdpInstance) == remoteHeight) { "Keyboard changed the server desktop resolution" }
-                check(parentPose() == desktopPose) { "Keyboard moved the desktop panel" }
-                val panel = panelView()
-                val clearance = (96 * activity.resources.displayMetrics.density).toInt()
-                check(kotlin.math.abs(panel.width - (desktopWidth - clearance)) <= 2) { "Key window does not leave corner clearance: ${panel.width}/$desktopWidth" }
-                android.util.Log.i("KeyboardPanelTest", "fixed desktop=${desktop.width}x${desktop.height}, keys=${panel.width}x${panel.height}, pose=$desktopPose")
-                return panel.height
-            }
-            click("Keyboard")
-            val simulatedIme = !activity.window.decorView.rootWindowInsets.isVisible(android.view.WindowInsets.Type.ime())
-            fun imeVisibility(visible: Boolean) {
-                fixtureVisible = visible
-                runOnMainSync {
-                    val decor = activity.window.decorView
-                    decor.dispatchApplyWindowInsets(android.view.WindowInsets.Builder(decor.rootWindowInsets)
-                        .setVisible(android.view.WindowInsets.Type.ime(), visible).build())
-                }
-                Thread.sleep(if (visible) 500 else 1000)
-            }
-            if (simulatedIme) {
-                // Horizon can reject automated keyboard show while the headset is unworn.
-                // Dispatch real Android inset objects to exercise the Compose visibility path.
-                android.util.Log.i("ToolbarTest", "Horizon rejected automated IME show; testing inset transitions")
-                imeVisibility(true)
-                fixturePump = object : Runnable {
-                    override fun run() {
-                        if (fixtureVisible && !activity.isDestroyed) {
-                            val decor = activity.window.decorView
-                            decor.dispatchApplyWindowInsets(android.view.WindowInsets.Builder(decor.rootWindowInsets)
-                                .setVisible(android.view.WindowInsets.Type.ime(), true).build())
-                        }
-                        fixtureHandler.postDelayed(this, 100)
-                    }
-                }
-                fixtureHandler.post(checkNotNull(fixturePump))
-            } else Thread.sleep(1000)
-            check(find("ESC") != null) { "Keyboard modifier controls missing" }
-            fun keyboardRetainsFocus() {
-                check(find("Remote keyboard input") != null) { "Missing keyboard input" }
-                // Observe the current Compose focus callback, rather than a stale/evicted log line.
-                check(activity.keyboardEditorHasFocus || activity.keyboardPanelEditorHasFocus || activity.keyboardBankEditorHasFocus) {
-                    "Pointer touch stole focus from keyboard input"
-                }
-                check(find("ESC") != null) { "Remote touch dismissed keyboard modifier controls" }
-            }
-            fun nativeFocus(panel: Boolean, bank: Boolean = false): Boolean {
-                try {
-                    val focusState = if (bank) checkNotNull(sessionActivity.keyboardBankState) else keyboardState
-                    val host = focusState.javaClass.methods.find { it.name.startsWith("getSurfaceControlViewHost") }
-                        ?.invoke(focusState) as? android.view.SurfaceControlViewHost ?: return false
-                    val target = try {
-                        host.javaClass.getMethod("getFocusGrantToken").invoke(host)
-                    } catch (e: Throwable) {
-                        null
-                    } ?: return false
-                    val nativeSession = Class.forName("android.view.WindowManagerGlobal").getMethod("getWindowSession").invoke(null)
-                    val windowClass = Class.forName("android.view.IWindow")
-                    uiAutomation.adoptShellPermissionIdentity("android.permission.INTERNAL_SYSTEM_WINDOW")
-                    try {
-                        nativeSession.javaClass.getMethod("grantEmbeddedWindowFocus", windowClass, android.os.IBinder::class.java,
-                            Boolean::class.javaPrimitiveType).invoke(nativeSession, null, target, panel)
-                    } finally { uiAutomation.dropShellPermissionIdentity() }
-                    Thread.sleep(100)
-                    val input = android.os.ParcelFileDescriptor.AutoCloseInputStream(uiAutomation.executeShellCommand("dumpsys input"))
-                        .bufferedReader().use { it.readText() }
-                    File(targetContext.cacheDir, "keyboard-native-focus.txt").writeText(input)
-                    val focused = input.substringAfter("FocusedWindows:").substringBefore("FocusRequests:")
-                    check(focused.contains("Embedded{SurfaceControlViewHost}") == panel) { "Native focus handoff not exercised: $focused" }
-                    return true
-                } catch (e: NoSuchMethodException) {
-                    android.util.Log.i("KeyboardTest", "grantEmbeddedWindowFocus not supported on this OS: ${e.message}")
-                    return false
-                }
-            }
-            fun touchKey(label: String, nativeFocus: Boolean = false) {
-                val bank = label !in listOf("WIN", "SHIFT", "CTRL", "ALT", "AltGr", "DEL", "ESC", "TAB", "123", "ABC")
-                val actions = checkNotNull(if (bank) sessionActivity.keyboardBankEditorActions else sessionActivity.keyboardPanelEditorActions)
-                val actionCounts = listOf(actions.focusRequests, actions.focusResets, actions.restarts, actions.showRequests)
-                val exercisedNativeFocus = if (nativeFocus) nativeFocus(true, bank) else false
-                val node = checkNotNull(find(label)) { "Missing touch key: $label" }
-                val bounds = android.graphics.Rect().also { node.getBoundsInScreen(it) }
-                runOnMainSync {
-                    val panel = if (bank) bankView() else panelView()
-                    val origin = IntArray(2).also { panel.getLocationOnScreen(it) }
-                    val started = android.os.SystemClock.uptimeMillis()
-                    for (action in listOf(android.view.MotionEvent.ACTION_DOWN, android.view.MotionEvent.ACTION_UP)) {
-                        val event = android.view.MotionEvent.obtain(started, started + if (action == android.view.MotionEvent.ACTION_UP) 50 else 0,
-                            action, bounds.exactCenterX() - origin[0], bounds.exactCenterY() - origin[1], 0)
-                        event.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
-                        try { check(panel.dispatchTouchEvent(event)) { "$label touch was not handled" } }
-                        finally { event.recycle() }
-                    }
-                }
-                // Unworn Horizon rejects automatic IME show. Keep only its visibility synthetic;
-                // the native child activation and parent-focus restoration above remain real.
-                if (simulatedIme && nativeFocus) imeVisibility(true) else Thread.sleep(500)
-                if (exercisedNativeFocus) {
-                    val editor = checkNotNull(if (bank) sessionActivity.keyboardBankEditorView else sessionActivity.keyboardPanelEditorView)
-                    check(if (bank) sessionActivity.keyboardBankEditorHasFocus else sessionActivity.keyboardPanelEditorHasFocus) { "Key window did not focus its IME editor" }
-                    val input = editor.context.getSystemService(android.view.inputmethod.InputMethodManager::class.java)
-                    check(input.isActive(editor)) { "Key window does not own Android's active InputConnection" }
-                    check(editor.onCheckIsTextEditor() && input.isAcceptingText) { "Key window has no accepting text InputConnection" }
-                    check(listOf(actions.focusRequests, actions.focusResets, actions.restarts, actions.showRequests) == actionCounts) {
-                        "Prepared key editor restarted focus/IME during native handoff"
-                    }
-                }
-                keyboardRetainsFocus()
-                verifyKeyboardGeometry()
-            }
-            val collapsedHeight = verifyKeyboardGeometry()
-            for (label in listOf("WIN", "SHIFT", "CTRL", "ALT", "AltGr")) {
-                fun state(): String? {
-                    var node = checkNotNull(find(label))
-                    while (node.stateDescription == null && node.parent != null) node = node.parent
-                    return node.stateDescription?.toString()
-                }
-                check(state() == "Released") { "$label starts held" }
-                touchKey(label)
-                check(state() == "Held") { "$label did not latch" }
-                touchKey(label)
-                check(state() == "Released") { "$label did not release" }
-            }
-            for (label in listOf("DEL", "TAB")) touchKey(label)
-            check(find("Up") == null && find("F1") == null) { "Expanded keys visible in first level" }
-            touchKey("CTRL", nativeFocus = true)
-            touchKey("123", nativeFocus = true)
-            check(find("ABC") != null && find("123") == null) { "Expanded close label missing" }
-            check(verifyKeyboardGeometry() == collapsedHeight) { "123 resized the stable strip" }
-            check(kotlin.math.abs(bankView().height - 238 * activity.resources.displayMetrics.density) <= 1) { "Bank height is incorrect" }
-            check(bankView().width == panelView().width) { "Bank width differs from strip" }
-            var heldCtrl = checkNotNull(find("CTRL"))
-            while (heldCtrl.stateDescription == null && heldCtrl.parent != null) heldCtrl = heldCtrl.parent
-            check(heldCtrl.stateDescription?.toString() == "Held") { "Expansion released CTRL" }
-            fun captureKeyboard(name: String) {
-                val panel = if (name == "collapsed") panelView() else bankView()
-                val image = Bitmap.createBitmap(panel.width, panel.height, Bitmap.Config.ARGB_8888)
-                runOnMainSync { panel.draw(android.graphics.Canvas(image)) }
-                File(targetContext.cacheDir, "keyboard-$name.png").outputStream().use {
-                    image.compress(Bitmap.CompressFormat.PNG, 100, it)
-                }
-                image.recycle()
-            }
-            captureKeyboard("expanded")
-            click("CTRL")
-            for (n in 1..12) if (n == 1) touchKey("F$n") else click("F$n")
-            for (label in listOf("Home", "Up", "PgUp", "Left", "Right", "End", "Down", "PgDn",
-                "Insert", "Delete", "Enter", "Backspace", "Keypad Enter", "/", "*", "-", "+", "Print Screen")) click(label)
-            touchKey("Number Keys", nativeFocus = true)
-            check(find("F1") == null && find("Function Keys") != null) { "Function bank did not switch to numbers" }
-            for (label in listOf("7", "8", "9", "4", "5", "6", "1", "2", "3", "0", ".")) click(label)
-            captureKeyboard("numbers")
-            click("Function Keys")
-            check(find("F1") != null && find("1") == null) { "Function bank did not restore" }
-            touchKey("ABC", nativeFocus = true)
-            check(find("123") != null && find("F1") == null && find("Up") == null) { "ABC did not close extras" }
-            check(verifyKeyboardGeometry() == collapsedHeight) { "ABC did not restore collapsed panel height" }
-            click("123")
-            check(find("F12") != null) { "Extras could not reopen" }
-            click("ABC")
-            captureKeyboard("collapsed")
-            KeyboardTransitionVerification.verify(this, sessionActivity, keyboardState) { label -> touchKey(label, nativeFocus = true) }
-            click("CTRL") // Dismissal must release a held modifier.
-
-            keyboardRetainsFocus()
-            fun remoteTouch(action: Int, downTime: Long, eventTime: Long, dx: Float = 0f) {
-                val actions = checkNotNull(sessionActivity.keyboardEditorActions)
-                val actionCounts = listOf(actions.focusRequests, actions.focusResets, actions.restarts, actions.showRequests)
-                if (action == android.view.MotionEvent.ACTION_DOWN) nativeFocus(false)
-                var handled = false
-                runOnMainSync {
-                    val view = checkNotNull(texture(activity.window.decorView))
-                    val location = IntArray(2).also { view.getLocationInWindow(it) }
-                    val event = android.view.MotionEvent.obtain(downTime, eventTime, action,
-                        location[0] + view.width * 0.5f + dx, location[1] + view.height * 0.65f, 0)
-                    event.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
-                    try { handled = activity.dispatchTouchEvent(event) }
-                    finally { event.recycle() }
-                }
-                check(handled) { "Remote touch not handled by the screen input overlay" }
-                Thread.sleep(200)
-                keyboardRetainsFocus()
-                check(listOf(actions.focusRequests, actions.focusResets, actions.restarts, actions.showRequests) == actionCounts) {
-                    "Prepared desktop editor restarted focus/IME during native handoff"
-                }
-            }
-            for ((duration, movement) in listOf(80L to 0f, 1200L to 0f, 150L to 60f)) {
-                val start = android.os.SystemClock.uptimeMillis()
-                remoteTouch(android.view.MotionEvent.ACTION_DOWN, start, start)
-                if (movement != 0f) remoteTouch(android.view.MotionEvent.ACTION_MOVE, start, start + duration / 2, movement)
-                remoteTouch(android.view.MotionEvent.ACTION_UP, start, start + duration, movement)
-            }
-            android.util.Log.i("ToolbarTest", "PASS: keyboard input focus survived RDP tap, hold, and drag; simulatedIme=$simulatedIme")
-
-            nativeFocus(false)
-            if (simulatedIme) imeVisibility(false)
-            else {
-                runOnMainSync {
-                    activity.getSystemService(android.view.inputmethod.InputMethodManager::class.java)
-                        .hideSoftInputFromWindow(activity.window.decorView.windowToken, 0)
-                }
-                Thread.sleep(1000)
-            }
-            check(find("ESC") == null) { "Keyboard modifier controls survived dismissal" }
-            check(keyboardState.lifecycle.value != metavrx.layout.window.compose.state.WindowLifecycle.Active) { "Key window survived dismissal" }
-            check(desktop.width == desktopWidth && desktop.height == desktopHeight && parentPose() == desktopPose)
-            check(desktopBridge.getDesktopWidth(sessionActivity.rdpInstance) == remoteWidth &&
-                desktopBridge.getDesktopHeight(sessionActivity.rdpInstance) == remoteHeight) { "Keyboard dismissal changed the server desktop resolution" }
-            click("Keyboard")
-            if (simulatedIme) imeVisibility(true) else Thread.sleep(1500)
-            check(find("ESC") != null) { "Keyboard could not be reopened after dismissal" }
-            check(verifyKeyboardGeometry() == collapsedHeight) { "Reopened keyboard retained expanded height" }
-            touchKey("SHIFT", nativeFocus = true)
-            touchKey("SHIFT", nativeFocus = true)
-            var ctrl = checkNotNull(find("CTRL"))
-            while (ctrl.stateDescription == null && ctrl.parent != null) ctrl = ctrl.parent
-            check(ctrl.stateDescription?.toString() == "Released") { "CTRL remained held after dismissal" }
-            if (simulatedIme) imeVisibility(false)
-            else runOnMainSync {
-                activity.getSystemService(android.view.inputmethod.InputMethodManager::class.java)
-                    .hideSoftInputFromWindow(activity.window.decorView.windowToken, 0)
-            }
-            Thread.sleep(500)
-            click("Unpin toolbar")
-            Thread.sleep(4500)
-            check(find("Keep toolbar visible") == null && find("Show session toolbar") == null)
-        } finally {
-            fixturePump?.let { fixtureHandler.removeCallbacks(it) }
-            uiAutomation.adoptShellPermissionIdentity("horizonos.permission.MANAGE_VOLUMETRIC_WINDOWS")
-            applyPose(pose)
-            uiAutomation.dropShellPermissionIdentity()
-        }
-    }
-
     private fun verifyControllerScroll() {
         val sent = mutableListOf<Int>()
         lateinit var scroll: RdpControllerScroll

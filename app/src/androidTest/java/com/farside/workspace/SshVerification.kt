@@ -183,13 +183,11 @@ class SshVerification(private val test: Instrumentation) {
             fun panelView(): View = checkNotNull(keyboardState.javaClass.methods.single {
                 it.name.startsWith("getHostedView") }.invoke(keyboardState) as? View)
 
-            fun bankView(): View = checkNotNull(activity.keyboardBankState).let { state ->
-                checkNotNull(state.javaClass.methods.single { it.name.startsWith("getHostedView") }.invoke(state) as? View) }
             fun touchKey(label: String) {
                 val node = checkNotNull(find(label)) { "Missing touch key: $label" }
                 val bounds = android.graphics.Rect().also { node.getBoundsInScreen(it) }
                 test.runOnMainSync {
-                    val panel = if (label in listOf("Number Keys", "Function Keys")) bankView() else panelView()
+                    val panel = panelView()
                     val origin = IntArray(2).also { panel.getLocationOnScreen(it) }
                     val started = android.os.SystemClock.uptimeMillis()
                     for (action in listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP)) {
@@ -210,18 +208,8 @@ class SshVerification(private val test: Instrumentation) {
             checkNotNull(find("DEL")) { "Missing DEL key" }
             checkNotNull(find("ESC")) { "Missing ESC key" }
             checkNotNull(find("TAB")) { "Missing TAB key" }
-            checkNotNull(find("123")) { "Missing 123 extra keys expansion key" }
+            checkNotNull(find("Backspace")) { "Missing Backspace key" }
 
-            val collapsedHeight = panelView().height
-            val panelOrigin = IntArray(2).also { panelView().getLocationOnScreen(it) }
-            val edgeClearance = 48f * panelView().resources.displayMetrics.density
-            for (label in listOf("WIN", "123")) {
-                val bounds = android.graphics.Rect().also { checkNotNull(find(label)).getBoundsInScreen(it) }
-                check(bounds.left - panelOrigin[0] >= edgeClearance - 1f &&
-                    panelOrigin[0] + panelView().width - bounds.right >= edgeClearance - 1f) {
-                    "$label overlaps the companion window's native corner controls"
-                }
-            }
             fun winState(): String? {
                 var node = checkNotNull(find("WIN"))
                 while (node.stateDescription == null && node.parent != null) node = node.parent
@@ -240,15 +228,8 @@ class SshVerification(private val test: Instrumentation) {
                 "Main content window moved or shifted when opening extra keys panel: before=${initialContentLocation.toList()} after=${contentLocationWithKeys.toList()}"
             }
 
-            // 6. Extra bank opens below the fixed strip.
-            Log.i("SshVerification", "Step 6: Testing 123 expansion")
-            touchKey("123")
-            Thread.sleep(600)
-            checkNotNull(find("ABC")) { "123 button did not switch to ABC on expansion" }
-            check(panelView().height == collapsedHeight) { "123 resized the stable strip" }
-            check(kotlin.math.abs(bankView().height - 238 * activity.resources.displayMetrics.density) <= 1) { "Bank height is incorrect" }
-            check(bankView().width == panelView().width) { "Bank width differs from strip" }
-
+            // 6. Companion is always full-size: no expansion/ABC/123 controls remain.
+            check(find("123", retries = 2) == null && find("ABC", retries = 2) == null) { "Retired expansion controls are present" }
             checkNotNull(find("F1")) { "Missing F1 key on expanded panel" }
             checkNotNull(find("F12")) { "Missing F12 key on expanded panel" }
             checkNotNull(find("Home")) { "Missing Home key on expanded panel" }
@@ -258,7 +239,6 @@ class SshVerification(private val test: Instrumentation) {
             checkNotNull(find("Left")) { "Missing Left arrow on expanded panel" }
             checkNotNull(find("Right")) { "Missing Right arrow on expanded panel" }
             checkNotNull(find("Backspace")) { "Missing Backspace on expanded panel" }
-            checkNotNull(find("Keypad Enter")) { "Missing Keypad Enter on expanded panel" }
 
             touchKey("Number Keys")
             Thread.sleep(300)
@@ -269,13 +249,6 @@ class SshVerification(private val test: Instrumentation) {
             Thread.sleep(300)
             checkNotNull(find("F1")) { "Function Keys did not restore F1 key" }
 
-            // 7. Closing the bank leaves the strip untouched.
-            Log.i("SshVerification", "Step 7: Testing ABC contraction")
-            touchKey("ABC")
-            Thread.sleep(600)
-            checkNotNull(find("123")) { "ABC button did not contract and switch back to 123" }
-            check(panelView().height == collapsedHeight) { "Keyboard panel did not contract to collapsed height: ${panelView().height} vs $collapsedHeight" }
-            check(find("F1", retries = 2) == null) { "Expanded keys still visible after contracting" }
 
             // Verify main content window still did not move or shift
             val contentLocationAfterCollapse = IntArray(2)
@@ -284,14 +257,13 @@ class SshVerification(private val test: Instrumentation) {
                 "Main content window moved or shifted after contracting extra keys panel"
             }
 
-            KeyboardTransitionVerification.verify(test, activity, keyboardState) { label -> touchKey(label) }
 
             // 8. Close keyboard panel
             Log.i("SshVerification", "Step 8: Closing keyboard")
             fixtureVisible = false
             click("Keyboard")
             Thread.sleep(600)
-            check(find("123", retries = 2) == null) { "Extra keys panel did not close" }
+            check(find("WIN", retries = 2) == null) { "Keyboard panel did not close" }
             Log.i("SshVerification", "All steps completed successfully!")
         } catch (e: Throwable) {
             Log.e("SshVerification", "Exception during SshVerification", e)

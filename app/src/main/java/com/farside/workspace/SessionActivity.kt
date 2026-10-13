@@ -138,9 +138,12 @@ class SessionActivity : ComponentActivity() {
             else SessionWindowSlots.reserve(this, profile.id, taskId)
         intent.putExtra(SessionWindowSlots.EXTRA_SLOT, sessionSlot)
         SessionWindowSlots.claim(profile.id, sessionSlot)
-        setTitle(profile.name)
+        val headerTitle = if (profile.jumpHostProfileId.isNullOrBlank()) profile.name else runCatching {
+            com.farside.workspace.ssh.JumpChains.resolveChain(profile, com.farside.workspace.data.ProfileManager(this).getProfiles()).describe()
+        }.getOrDefault(profile.name)
+        setTitle(headerTitle)
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
-            setTaskDescription(android.app.ActivityManager.TaskDescription(profile.name))
+            setTaskDescription(android.app.ActivityManager.TaskDescription(headerTitle))
         }
 
         setContent {

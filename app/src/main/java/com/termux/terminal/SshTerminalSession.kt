@@ -19,6 +19,8 @@ class SshTerminalSession(
         Handler(Looper.getMainLooper()).post { onForwardStatus?.invoke(statuses) }
     }
     var onForwardStatus: ((Map<String, String>) -> Unit)? = null
+    /** Invoked on the connection thread after the shell starts; must not block the terminal. */
+    var onConnected: (() -> Unit)? = null
 
     companion object {
         init {
@@ -116,6 +118,7 @@ class SshTerminalSession(
                 
                 sshOut = shell.outputStream
                 val sshIn = shell.inputStream
+                runCatching { onConnected?.invoke() }
                 
                 val buffer = ByteArray(4096)
                 val mainHandler = Handler(Looper.getMainLooper())

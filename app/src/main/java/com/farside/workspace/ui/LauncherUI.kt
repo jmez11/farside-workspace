@@ -157,7 +157,8 @@ fun LauncherScreen(
 @Composable
 fun ProfileCard(profile: ConnectionProfile, onEdit: () -> Unit, onDelete: () -> Unit, onConnect: () -> Unit,
     reordering: Boolean = false, starred: Boolean = false, onToggleStar: () -> Unit = {},
-    dragging: Boolean = false, onMoveEarlier: (() -> Unit)? = null, onMoveLater: (() -> Unit)? = null) {
+    dragging: Boolean = false, onMoveEarlier: (() -> Unit)? = null, onMoveLater: (() -> Unit)? = null,
+    jumpLabel: String? = null) {
     var menuExpanded by remember { mutableStateOf(false) }
     val view = LocalView.current
     val latestProfile by rememberUpdatedState(profile)
@@ -195,6 +196,8 @@ fun ProfileCard(profile: ConnectionProfile, onEdit: () -> Unit, onDelete: () -> 
                 }
                 Text(profile.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 Text("${profile.host}:${profile.port}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (jumpLabel != null) Text(jumpLabel, style = MaterialTheme.typography.labelSmall, maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, color = if (jumpLabel.startsWith("\u26A0")) Color(0xFFFFB300) else MaterialTheme.colorScheme.primary)
             }
             
             IconButton(onClick = onToggleStar, modifier = Modifier.align(Alignment.TopStart)) {
@@ -1038,6 +1041,7 @@ fun AddProfileForm(
         } ?: "")
     }
     var savedSshKeyId by rememberSaveable { mutableStateOf(initialProfile?.sshKeyId ?: "") }
+    var savedJumpHostId by rememberSaveable { mutableStateOf(initialProfile?.jumpHostProfileId ?: "") }
     
     var remoteApp by rememberSaveable { mutableStateOf(initialProfile?.remoteApp ?: "") }
     
@@ -1152,6 +1156,7 @@ fun AddProfileForm(
                         pass = if (type == ConnectionType.VNC) "" else selectedCred?.pass ?: pass,
                         credentialId = selectedCred?.id,
                         sshKeyId = if (type == ConnectionType.SSH) savedSshKeyId.takeIf { it.isNotBlank() } else null,
+                        jumpHostProfileId = if (type == ConnectionType.SSH) savedJumpHostId.takeIf { it.isNotBlank() } else null,
                         remoteApp = remoteApp.takeIf { it.isNotBlank() },
                         useCloudflare = false,
                         enableCamera = enableCamera,
@@ -1391,7 +1396,52 @@ fun AddProfileForm(
                             )
                         }
                     }
-                }
+                    SettingsHeader("Jump host")
+                    val allProfiles = remember(profileManager) { profileManager.getProfiles() }
+                    val editedProfile = (initialProfile ?: ConnectionProfile(id = "", name = name, type = ConnectionType.SSH, host = host, user = "", pass = ""))
+                        .copy(jumpHostProfileId = savedJumpHostId.takeIf { it.isNotBlank() })
+                    val jumpCandidates = remember(allProfiles, initialProfile?.id) {
+                        com.farside.workspace.ssh.JumpChains.candidates(editedProfile.copy(jumpHostProfileId = null), allProfiles)
+                    }
+                    var expandedJump by rememberSaveable { mutableStateOf(false) }
+                    ExposedDropdownMenuBox(
+                        expanded = expandedJump,
+                        onExpandedChange = { expandedJump = !expandedJump },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+                    ) {
+                        TextField(
+                            value = allProfiles.find { it.id == savedJumpHostId }?.name ?: "None (connect directly)",
+                            onValueChange = {},
+                            readOnly = true,
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedJump) },
+                            colors = ExposedDropdownMenuDefaults.textFieldColors(
+                                focusedContainerColor = Color(0xFF1C1C1E), unfocusedContainerColor = Color(0xFF1C1C1E),
+                                focusedIndicatorColor = Color(0xFF1E88E5), unfocusedIndicatorColor = Color.DarkGray,
+                                focusedTextColor = Color.White, unfocusedTextColor = Color.White
+                            ),
+                            modifier = Modifier.menuAnchor().fillMaxWidth()
+                        )
+                        ExposedDropdownMenu(expanded = expandedJump, onDismissRequest = { expandedJump = false }) {
+                            DropdownMenuItem(
+                                text = { Text("None (connect directly)") },
+                                onClick = { savedJumpHostId = ""; expandedJump = false }
+                            )
+                            jumpCandidates.forEach { candidate ->
+                                DropdownMenuItem(
+                                    text = { Text(candidate.name) },
+                                    onClick = { savedJumpHostId = candidate.id; expandedJump = false }
+                                )
+                            }
+                        }
+                    }
+                    val (chainPreview, chainProblem) = com.farside.workspace.ssh.JumpChains.preview(editedProfile, allProfiles)
+                    val previewText = chainProblem ?: chainPreview?.takeIf { it.jumpHosts.isNotEmpty() }?.let {
+                        "${editedProfile.name.ifBlank { "this profile" }} \u2192 via ${it.jumpHosts.joinToString(" \u2192 ") { h -> h.name }}"
+                    }
+                    if (previewText != null) {
+                        Text(previewText, fontSize = 12.sp, color = if (chainProblem != null) Color.Red else Color.Gray,
+                            modifier = Modifier.padding(horizontal = 16.dp))
+                    }                }
                 
                 if (type == ConnectionType.RDP) {
                     SettingsHeader("General")

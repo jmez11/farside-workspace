@@ -514,12 +514,15 @@ static void destroy_client(freerdp* instance, bool connected) {
     if (ctx->render_thread.joinable()) ctx->render_thread.join();
     if (connected) freerdp_disconnect(instance);
     if (instance->context->gdi) gdi_free(instance);
+    // Windows in ctx->windows are owned references (see connect() and setSurface()).
     for (auto* win : ctx->windows) if (win) ANativeWindow_release(win);
     JNIEnv* env = nullptr;
     if (ctx->javaVm && ctx->javaVm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) == JNI_OK && ctx->certificateVerifier)
         env->DeleteGlobalRef(ctx->certificateVerifier);
     if (env && ctx->eventReceiver) env->DeleteGlobalRef(ctx->eventReceiver);
     ctx->eventReceiver = nullptr;
+    // Explicit destructors below pair with the placement-new constructions in
+    // Java_com_farside_workspace_FreeRDPBridge_connect(); keep the two lists in sync.
     ctx->certificateHost.~basic_string();
     ctx->storagePath.~basic_string();
     ctx->windows.~vector();
@@ -614,13 +617,15 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
         env->DeleteLocalRef(verifierClass);
     }
     const char* certificateHostChars = certificateHost ? env->GetStringUTFChars(certificateHost, nullptr) : nullptr;
-    new (&ctx->certificateHost) std::string(certificateHostChars ? certificateHostChars : "");
+    // Placement-new below: each member constructed here is destroyed explicitly in destroy_client()
+    // (before freerdp_context_free). Keep the two lists in sync.
+    new (&ctx->certificateHost) std::string(certificateHostChars ? certificateHostChars : "");  // destroyed in destroy_client()
     if (certificateHostChars) env->ReleaseStringUTFChars(certificateHost, certificateHostChars);
     ctx->origSurfaceCommand = nullptr;
-    for (auto& count : ctx->codecCounts) new (&count) std::atomic<uint32_t>(0);
+    for (auto& count : ctx->codecCounts) new (&count) std::atomic<uint32_t>(0);  // destroyed in destroy_client()
     ctx->audio = new QuestAudioState();
-    new (&ctx->windows) std::vector<ANativeWindow*>();
-    new (&ctx->windowMutex) std::mutex();
+    new (&ctx->windows) std::vector<ANativeWindow*>();  // destroyed in destroy_client()
+    new (&ctx->windowMutex) std::mutex();  // destroyed in destroy_client()
     new (&ctx->render_running) std::atomic<bool>(false);
     new (&ctx->dirty) std::atomic<bool>(false);
     new (&ctx->render_thread) std::thread();
@@ -637,17 +642,19 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
     ctx->camera.displayStart = display_capture_start;
     ctx->camera.displayStop = display_capture_stop;
     new (&ctx->cameraRequested) std::atomic<bool>(enableCamera == JNI_TRUE);
-    new (&ctx->cameraConnected) std::atomic<bool>(false);
+    new (&ctx->cameraConnected) std::atomic<bool>(false);  // destroyed in destroy_client()
     new (&ctx->storageRequested) std::atomic<bool>(enableStorage == JNI_TRUE);
-    new (&ctx->storageConnected) std::atomic<bool>(false);
-    new (&ctx->storagePath) std::string("/sdcard");
+    new (&ctx->storageConnected) std::atomic<bool>(false);  // destroyed in destroy_client()
+    new (&ctx->storagePath) std::string("/sdcard");  // destroyed in destroy_client()
     ctx->cliprdr = nullptr;
-    new (&ctx->clipMutex) std::mutex();
-    new (&ctx->clientClipText) std::string();
-    new (&ctx->clipConnected) std::atomic<bool>(false);
+    new (&ctx->clipMutex) std::mutex();  // destroyed in destroy_client()
+    new (&ctx->clientClipText) std::string();  // destroyed in destroy_client()
+    new (&ctx->clipConnected) std::atomic<bool>(false);  // destroyed in destroy_client()
     ctx->connectTime = std::chrono::steady_clock::now();
     
     if (surface) {
+        // Display 0 window: ANativeWindow_fromSurface acquires a reference now owned by
+        // ctx->windows. Released in destroy_client() or when setSurface() replaces it.
         ANativeWindow* win = ANativeWindow_fromSurface(env, surface);
         ANativeWindow_setBuffersGeometry(win, 1920, 1080, WINDOW_FORMAT_RGBA_8888);
         ctx->windows.push_back(win);
@@ -661,6 +668,9 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
     LOGI("Setting freerdp settings");
     if (!instance->context->settings) {
         LOGE("Settings is NULL!");
+        env->ReleaseStringUTFChars(hostname, host_c);
+        env->ReleaseStringUTFChars(username, user_c);
+        env->ReleaseStringUTFChars(password, pass_c);
         return 0;
     }
     freerdp_settings_set_string(instance->context->settings, FreeRDP_ServerHostname, host_c);
@@ -723,6 +733,7 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
         LOGI("RDP_CAMERA: rdpecam dynamic channel added");
     }
     
+    env->ReleaseStringUTFChars(hostname, host_c);
     env->ReleaseStringUTFChars(username, user_c);
     env->ReleaseStringUTFChars(password, pass_c);
     
@@ -1064,6 +1075,13 @@ Java_com_farside_workspace_FreeRDPBridge_setSurface(
         JNIEnv* env, jobject, jlong instance_ptr, jobject surface) {
     if (!instance_ptr) return;
     auto* ctx = (RdpContext*)((freerdp*)instance_ptr)->context;
+    // Ownership: ctx->windows owns one reference per ANativeWindow* (each acquired via
+    // ANativeWindow_fromSurface, which adds a reference). `replacement` is a new reference
+    // transferred into ctx->windows below. References are released in exactly two places:
+    // here (all current windows released before replacement) and destroy_client().
+    // addSurface() pushes further owned references; removeSurface() is a no-op, so those
+    // are only released here or in destroy_client(). The connect() path pushes display 0's
+    // initial window; if connect() returns early, nothing releases it (see PROGRESS.md).
     ANativeWindow* replacement = surface ? ANativeWindow_fromSurface(env, surface) : nullptr;
     std::lock_guard<std::mutex> lock(ctx->windowMutex);
     for (auto* window : ctx->windows) if (window) ANativeWindow_release(window);

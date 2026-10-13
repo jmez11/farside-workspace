@@ -108,7 +108,8 @@ internal fun LauncherConnectionGrid(
                 onConnect = { onConnect(profile.id) }, reordering = reordering, starred = starred,
                 onToggleStar = { onToggleStar(profile.id) }, dragging = dragged == profile.id,
                 onMoveEarlier = earlier?.let { { latestMove(profile.id, it.id) } },
-                onMoveLater = later?.let { { latestMove(profile.id, it.id) } })
+                onMoveLater = later?.let { { latestMove(profile.id, it.id) } },
+                jumpLabel = profile.jumpHostProfileId?.takeIf { it.isNotBlank() }?.let { id -> profiles.find { it.id == id }?.let { "via ${it.name}" } ?: "\u26A0 jump host missing" })
         }
     }
 }

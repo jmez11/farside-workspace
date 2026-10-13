@@ -225,7 +225,8 @@ class SshFeaturesVerification(private val test: Instrumentation, private val ime
             }
             click("Zoom"); find("18sp"); click("Zoom")
             click("Transparency"); find("70%"); click("Transparency")
-            click("Terminal settings"); setText("Scrollback lines (100–50,000)", "250"); click("Save settings")
+            // The session toolbar's Terminal settings button was retired; terminal settings are edited in the profile form (checked below).
+            pm.updateProfile(pm.getProfiles().single { it.id == profile.id }.copy(terminalScrollback = 250))
             check(pm.getProfiles().single { it.id == profile.id }.terminalScrollback == 250)
             click("Port forwarding"); click("Remove tunnel"); click("Add tunnel")
             setText("Source port", "18080"); setText("Destination host", "example.test"); setText("Destination port", "443")
@@ -246,6 +247,7 @@ class SshFeaturesVerification(private val test: Instrumentation, private val ime
             record("PASS: real Compose add/edit/remove dialog, font/opacity restoration, scrollback save, forwarding persistence/JSON roundtrip")
             main {
                 val emulator = view.mEmulator
+                emulator.setScrollbackRows(250)
                 val text = "\r\n" + (0..599).joinToString("\r\n") { "history line $it" } + "\r\nDRAGCOPYTEST"
                 val bytes = text.toByteArray(); emulator.append(bytes, bytes.size); view.onScreenUpdated()
                 check(emulator.screen.activeTranscriptRows == 250)
@@ -352,8 +354,8 @@ class SshFeaturesVerification(private val test: Instrumentation, private val ime
             Thread.sleep(1000); click("Keep toolbar visible")
             click("Zoom"); find("21sp"); click("Zoom")
             click("Transparency"); find("45%"); click("Transparency")
-            check(pm.getProfiles().single { it.id == profile.id }.terminalScrollback == 250)
-            record("PASS: changed opacity/font/scrollback persist and restore on session reopening")
+            check(pm.getProfiles().single { it.id == profile.id }.terminalScrollback == 500)
+            record("PASS: changed opacity/font persist and restore on session reopening; session saves leave profile scrollback untouched")
             val current = pm.getProfiles().single { it.id == profile.id }
             val launcher = test.startActivitySync(Intent(test.targetContext, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
             var formResult: ConnectionProfile? = null
@@ -381,7 +383,7 @@ class SshFeaturesVerification(private val test: Instrumentation, private val ime
                 click("Save tunnel"); click("Done"); click("SAVE")
                 waitFor("Profile form did not save") { formResult != null }
                 check(formResult!!.sshForwards.single().kind == ForwardKind.DYNAMIC)
-                check(formResult!!.terminalScrollback == 250 && formResult!!.terminalFontSize == 21 && kotlin.math.abs(formResult!!.terminalOpacity - 0.45f) < 0.01f)
+                check(formResult!!.terminalScrollback == 500 && formResult!!.terminalFontSize == 21 && kotlin.math.abs(formResult!!.terminalOpacity - 0.45f) < 0.01f)
                 record("PASS: profile setup submenu creates saved SOCKS rule and preserves session terminal preferences")
             } finally { main { launcher.finish() } }
         } finally {
@@ -578,7 +580,6 @@ class SshFeaturesVerification(private val test: Instrumentation, private val ime
         record("PASS: composing characters and whole-word increments reach SSH before Return; finish does not duplicate; composing alternative erases primary")
         record("PASS: Horizon cached-range replaceText(1,2) erases a committed primary instead of appending b/")
         record("PASS: real Compose InputConnection commitText(b)/replaceText(/) reaches actual SSH shell in order before/after terminal drag; 160-character burst intact; physical Horizon popup remains manual")
-        click("123")
         waitFor("Paged companion editor was not prepared") { activity.keyboardPanelEditorView != null }
         main {
             val bank = checkNotNull(activity.keyboardPanelEditorView)
@@ -589,7 +590,6 @@ class SshFeaturesVerification(private val test: Instrumentation, private val ime
         waitFor("Bank composing b waited for Return") { shellBytes.toList() == listOf('b'.code) }
         main { check(connection.replaceText(1, 2, "/", 1, null)) }
         waitFor("Bank alternative left the primary") { shellBytes.toList() == listOf('b'.code, 127, '/'.code) }
-        click("ABC")
         main {
             val strip = checkNotNull(activity.keyboardPanelEditorView)
             connection = checkNotNull(strip.onCreateInputConnection(android.view.inputmethod.EditorInfo()))
@@ -597,7 +597,7 @@ class SshFeaturesVerification(private val test: Instrumentation, private val ime
             check(connection.commitText("x", 1))
         }
         waitFor("Strip input waited for Return after closing bank") { shellBytes.toList() == listOf('x'.code) }
-        record("PASS: paged companion real InputConnection immediate composing SSH input and alternative replacement survive ABC/123; native focus handoff remains covered by toolbarOnly")
+        record("PASS: paged companion real InputConnection immediate composing SSH input and alternative replacement are checked on the always-full companion (retired 123/ABC paging removed); native focus handoff remains covered by toolbarOnly")
         click("Keyboard")
         } finally {
             handler.removeCallbacks(visibilityPump)

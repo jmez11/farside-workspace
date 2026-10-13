@@ -27,7 +27,7 @@ import java.util.Date
 private data class HeadsetFile(val file: File, val directory: Boolean)
 
 @Composable
-internal fun SftpFilesEntry(onClose: () -> Unit) {
+internal fun SftpFilesEntry(onClose: () -> Unit, profileId: String? = null) {
     val context = LocalContext.current
     var security by remember { mutableStateOf<Pair<Boolean, String?>?>(null) }
     var unlocked by remember { mutableStateOf(false) }
@@ -41,13 +41,13 @@ internal fun SftpFilesEntry(onClose: () -> Unit) {
             auth == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             !unlocked && auth.first -> SystemCredentialDialog(title = "Unlock Files", message = "Confirm your headset passcode to browse SSH files.", onUnlocked = { unlocked = true }, onCancel = onClose)
             !unlocked && auth.second != null -> CredentialPinDialog(title = "Unlock Files", verifier = auth.second, onUnlocked = { unlocked = true }, onCancel = onClose)
-            else -> SftpFilesPanel(onClose)
+            else -> SftpFilesPanel(onClose, profileId)
         }
     }
 }
 
 @Composable
-private fun SftpFilesPanel(onClose: () -> Unit) {
+private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var profiles by remember { mutableStateOf<List<ConnectionProfile>>(emptyList()) }
@@ -55,6 +55,9 @@ private fun SftpFilesPanel(onClose: () -> Unit) {
     var selectedId by remember { mutableStateOf<String?>(null) }
     var path by remember { mutableStateOf("") }
     var entries by remember { mutableStateOf<List<SftpEntry>>(emptyList()) }
+    val listingCache = remember { HashMap<String, List<SftpEntry>>() }
+    var cachedView by remember { mutableStateOf(false) }
+    var autoConnected by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var operation by remember { mutableStateOf<SftpOperation?>(null) }
@@ -90,12 +93,21 @@ private fun SftpFilesPanel(onClose: () -> Unit) {
     }
     suspend fun refresh(op: SftpOperation, folder: String = path) {
         val current = checkNotNull(session)
-        val result = withContext(Dispatchers.IO) { current.list(folder, op) }
-        op.check(); entries = result; path = folder
+        val result = withContext(Dispatchers.IO) { current.list(folder, op) { found, done ->
+            val text = if (done == 0) "Loading… (Found $found items)" else "Loading… (Found $found items, read details $done/$found)"
+            scope.launch { if (operation === op) status = text }
+        } }
+        op.check(); entries = result; path = folder; cachedView = false; listingCache[folder] = result
+    }
+    /** Shows a cached listing instantly when available; Refresh always re-reads from the server. */
+    fun open(folder: String) {
+        val hit = listingCache[folder]
+        if (operation == null && hit != null) { entries = hit; path = folder; cachedView = true; error = null; status = "" }
+        else work("Loading…") { refresh(it, folder) }
     }
     fun connect(id: String) {
         work("Connecting…") { op ->
-            session?.close(); session = null; entries = emptyList(); path = ""; selectedId = id
+            session?.close(); session = null; entries = emptyList(); path = ""; selectedId = id; listingCache.clear(); cachedView = false
             val profile = withContext(Dispatchers.IO) {
                 check(com.farside.workspace.hasStoragePermission(context)) { "Storage permission required" }
                 val pm = ProfileManager(context)
@@ -113,13 +125,16 @@ private fun SftpFilesPanel(onClose: () -> Unit) {
             } catch (e: Exception) { next.close(); session = null; throw e }
         }
     }
-    fun root() { operation?.cancel(); session?.close(); session = null; selectedId = null; entries = emptyList(); path = ""; error = null }
+    LaunchedEffect(profiles) {
+        if (profileId != null && !autoConnected && profiles.any { it.id == profileId }) { autoConnected = true; connect(profileId) }
+    }
+    fun root() { operation?.cancel(); session?.close(); session = null; selectedId = null; entries = emptyList(); path = ""; error = null; listingCache.clear(); cachedView = false }
     fun back() {
         if (operation != null) { operation?.cancel(); return }
         if (localFolder != null) { localFolder = null; return }
         if (selectedId == null) onClose()
-        else if (path.isEmpty() || path == "/") root()
-        else work("Loading…") { refresh(it, path.substringBeforeLast('/').ifEmpty { "/" }) }
+        else if (path.isEmpty() || path == "/") { if (profileId != null) onClose() else root() }
+        else open(path.substringBeforeLast('/').ifEmpty { "/" })
     }
     BackHandler { back() }
     val report: (Long, Long) -> Unit = remember { var last = 0L; { done, total ->
@@ -161,7 +176,7 @@ private fun SftpFilesPanel(onClose: () -> Unit) {
                 TextButton(onClick = { localFolder = Environment.getExternalStorageDirectory() }, enabled = operation == null) { Text("Upload") }
             }
         }
-        if (path.isNotEmpty()) Text(path, style = MaterialTheme.typography.bodyMedium)
+        if (path.isNotEmpty()) Text(if (cachedView && operation == null) "$path · cached (Refresh for latest)" else path, style = MaterialTheme.typography.bodyMedium)
         if (operation != null) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(status, Modifier.weight(1f)); TextButton(onClick = { operation?.cancel(); if (path.isEmpty()) session?.close() }) { Text("Cancel") }
@@ -186,7 +201,7 @@ private fun SftpFilesPanel(onClose: () -> Unit) {
                 if (entries.isEmpty() && operation == null && error == null) item { Text("This folder is empty.") }
                 items(entries, key = { it.path }) { entry -> Card(Modifier.fillMaxWidth().alpha(if (entry.unavailable) 0.45f else 1f)) {
                     Row(Modifier.fillMaxWidth().clickable(enabled = !entry.unavailable && operation == null) {
-                        if (entry.directory) work("Loading…") { refresh(it, entry.path) } else requestDownload(entry)
+                        if (entry.directory) open(entry.path) else requestDownload(entry)
                     }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(if (entry.directory) Icons.Default.Folder else Icons.Default.InsertDriveFile, null)
                         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
@@ -200,7 +215,7 @@ private fun SftpFilesPanel(onClose: () -> Unit) {
                                 if (!entry.directory && !entry.unavailable) DropdownMenuItem(text = { Text("Download") }, onClick = { menu = null; requestDownload(entry) })
                                 DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = null; edit = "Rename" to entry; editName = entry.name })
                                 DropdownMenuItem(text = { Text("Delete") }, onClick = { menu = null; confirm = "Delete ${entry.name}? Folders must be empty." to {
-                                    work("Deleting…") { op -> withContext(Dispatchers.IO) { checkNotNull(session).delete(entry, op) }; refresh(op) }
+                                    work("Deleting…") { op -> withContext(Dispatchers.IO) { checkNotNull(session).delete(entry, op) }; listingCache.keys.removeAll { it == entry.path || it.startsWith(entry.path.trimEnd('/') + "/") }; refresh(op) }
                                 } })
                             }
                         }
@@ -215,7 +230,7 @@ private fun SftpFilesPanel(onClose: () -> Unit) {
         val name = editName; edit = null
         work(action.first) { op ->
             val target = remoteChild(path, name)
-            withContext(Dispatchers.IO) { val current = checkNotNull(session); if (action.second == null) current.mkdir(target, op) else current.rename(action.second!!.path, target, op) }
+            withContext(Dispatchers.IO) { val current = checkNotNull(session); if (action.second == null) current.mkdir(target, op) else current.rename(action.second!!.path, target, op) }; action.second?.let { old -> listingCache.keys.removeAll { it == old.path || it.startsWith(old.path.trimEnd('/') + "/") } }
             refresh(op)
         }
     }) { Text("Save") } }, dismissButton = { TextButton(onClick = { edit = null }) { Text("Cancel") } }) }
