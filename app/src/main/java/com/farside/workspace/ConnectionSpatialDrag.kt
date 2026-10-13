@@ -92,6 +92,7 @@ internal object ConnectionSpatialDrag {
     fun shadow(view: View, name: String): View.DragShadowBuilder = ConnectionShadow(view, name)
 
     private class ConnectionShadow(view: View, private val name: String) : View.DragShadowBuilder() {
+        private val releaseHint = view.context.getString(R.string.release_to_open_here)
         private val scale = view.resources.displayMetrics.density
         // Read the target Activity's sizing contract, not the launcher's current bounds.
         // Horizon's display-metrics metadata is in pixels; layout dimensions are already
@@ -126,7 +127,7 @@ internal object ConnectionSpatialDrag {
             canvas.drawText(title, width / 2f, height / 2f - 12 * scale, paint)
             paint.textSize = 18 * scale
             paint.color = Color.LTGRAY
-            canvas.drawText("Release to open here", width / 2f, height / 2f + 24 * scale, paint)
+            canvas.drawText(releaseHint, width / 2f, height / 2f + 24 * scale, paint)
         }
     }
 }
