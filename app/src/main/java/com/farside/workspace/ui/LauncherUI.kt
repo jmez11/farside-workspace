@@ -979,7 +979,7 @@ fun ProxyTypeSelector(selectedType: com.farside.workspace.data.ProxyType, onType
 @Composable
 fun ResolutionDropdown(selectedRes: String, onResSelected: (String) -> Unit) {
     var expanded by rememberSaveable { mutableStateOf(false) }
-    val resolutions = listOf("1368 x 768", "1600 x 900", "1920 x 1080", "2000 x 1124", "2400 x 1348", "2800 x 1572", "3200 x 1800")
+    val resolutions = listOf(stringResource(R.string.resolution_1368_x_768), stringResource(R.string.resolution_1600_x_900), stringResource(R.string.resolution_1920_x_1080), stringResource(R.string.resolution_2000_x_1124), stringResource(R.string.resolution_2400_x_1348), stringResource(R.string.resolution_2800_x_1572), stringResource(R.string.resolution_3200_x_1800))
 
     ExposedDropdownMenuBox(
         expanded = expanded,
@@ -1195,7 +1195,7 @@ fun AddProfileForm(
                     )
                 )
             }) {
-                Text(stringResource(R.string.save_2), color = Color(0xFF1E88E5), fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.save_uppercase), color = Color(0xFF1E88E5), fontWeight = FontWeight.Bold)
             }
         }
         
