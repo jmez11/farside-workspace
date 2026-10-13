@@ -367,4 +367,12 @@
     <string name="session_disconnected">The %1$s session has disconnected.</string>
     <string name="session_disconnected_reason">The %1$s session has disconnected.\n\n%2$s</string>
     <string name="zoom_percent">%1$d%%</string>
+    <string name="scrollback_help">Scrollback stores previous lines locally. Lowering the limit discards older history.</string>
+    <string name="scrollback_lines_hint">Scrollback lines (100–50,000)</string>
+    <string name="terminal_settings_saved_help">All terminal settings save to this connection.</string>
+    <string name="transparency">Transparency</string>
+    <string name="scrollback_lines_validation">Enter 100–50,000 lines</string>
+    <string name="terminal_font_opacity">Font: %1$dsp · Opacity: %2$d%%</string>
+    <string name="terminal_font_size">%1$dsp</string>
+    <string name="terminal_opacity_percent">%1$d%%</string>
 </resources>
