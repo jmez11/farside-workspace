@@ -2,6 +2,9 @@ package com.farside.workspace.ssh
 
 import android.content.Context
 import android.os.Looper
+import androidx.annotation.StringRes
+import com.farside.workspace.R
+import com.farside.workspace.localizedMessage
 import com.farside.workspace.data.ConnectionProfile
 import com.farside.workspace.data.ProfileManager
 import com.farside.workspace.data.ProxyType
@@ -17,6 +20,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /** Reference-counted transport shared by terminal and SFTP channels for one profile. */
 class SshConnectionManager private constructor(private val context: Context?, private val id: String) {
+    private fun text(@StringRes resId: Int, english: String, vararg args: Any): String =
+        context?.getString(resId, *args) ?: english
+    private fun reason(error: Throwable): String? = context?.let { error.localizedMessage(it) } ?: error.message
     companion object {
         private val holders = mutableMapOf<String, SshConnectionManager>()
         private val cleanup = java.util.concurrent.Executors.newCachedThreadPool()
@@ -35,13 +41,13 @@ class SshConnectionManager private constructor(private val context: Context?, pr
         internal var onExit: () -> Unit = {}
         fun connect(profile: ConnectionProfile, onStatus: (String) -> Unit = {},
                     interactive: ((Boolean) -> String?)? = null, onExit: () -> Unit = {}): SSHClient {
-            check(!closed.get()) { "SSH connection closed" }
+            check(!closed.get()) { owner.text(R.string.ssh_connection_closed, "SSH connection closed") }
             this.onExit = onExit
             return owner.connect(this, profile, onStatus, interactive, null, true)
         }
         /** Connects one hop of a jump chain, tunnelled through [via] when non-null; never resolves further jumps. */
         internal fun connectHop(profile: ConnectionProfile, via: SSHClient?, onStatus: (String) -> Unit, onExit: () -> Unit): SSHClient {
-            check(!closed.get()) { "SSH connection closed" }
+            check(!closed.get()) { owner.text(R.string.ssh_connection_closed, "SSH connection closed") }
             this.onExit = onExit
             return owner.connect(this, profile, onStatus, null, via, false)
         }
@@ -75,36 +81,36 @@ class SshConnectionManager private constructor(private val context: Context?, pr
     /** Connects every jump host in order (own lease "jumphost-<id>" each) and returns the last hop's client. */
     private fun connectJumpHosts(chain: JumpChain, onStatus: (String) -> Unit): SSHClient {
         val labels = chain.hops.map { it.name }
-        val state = chain.hops.map { "…" }.toMutableList()
-        fun progress() = labels.indices.joinToString(" → ") { "${labels[it]} ${state[it]}" }
+        val state = chain.hops.map { text(R.string.ssh_hop_pending, "…") }.toMutableList()
+        fun progress() = labels.indices.joinToString(text(R.string.jump_route_separator, " → ")) { text(R.string.ssh_hop_state, "${labels[it]} ${state[it]}", labels[it], state[it]) }
         var upstream: SSHClient? = null
         chain.jumpHosts.forEachIndexed { index, hop ->
             val hopLease = acquire(context, "jumphost-${hop.id}")
             synchronized(hopLeases) { hopLeases.add(hopLease) }
-            onStatus("[Jump host ${index + 1}/${chain.jumpHosts.size}: ${hop.name}]\r\n")
+            onStatus(text(R.string.ssh_jump_progress, "[Jump host ${index + 1}/${chain.jumpHosts.size}: ${hop.name}]\r\n", index + 1, chain.jumpHosts.size, hop.name))
             try {
-                upstream = hopLease.connectHop(hop, upstream, { onStatus(it.replace("[", "[${hop.name}: ")) }, { notifyExit() })
-                state[index] = "✓"
+                upstream = hopLease.connectHop(hop, upstream, { onStatus(it.replace("[", text(R.string.ssh_hop_prefix, "[${hop.name}: ", hop.name))) }, { notifyExit() })
+                state[index] = text(R.string.ssh_hop_success, "✓")
             } catch (e: Exception) {
-                state[index] = "✗"
-                val reason = if (e is net.schmizz.sshj.userauth.UserAuthException) "auth failed" else e.message ?: e.javaClass.simpleName
-                onStatus("[Chain: ${progress()} (${hop.name}: $reason)]\r\n")
-                throw JumpChainException("Jump host ${hop.name} failed ($reason)")
+                state[index] = text(R.string.ssh_hop_failure, "✗")
+                val reason = if (e is net.schmizz.sshj.userauth.UserAuthException) text(R.string.ssh_auth_failed_short, "auth failed") else reason(e) ?: e.javaClass.simpleName
+                onStatus(text(R.string.ssh_chain_failure, "[Chain: ${progress()} (${hop.name}: $reason)]\r\n", progress(), hop.name, reason))
+                throw JumpChainException(R.string.ssh_jump_failed, hop.name, reason)
             }
         }
         return checkNotNull(upstream)
     }
     private fun connect(lease: Lease, profile: ConnectionProfile, onStatus: (String) -> Unit,
                         interactive: ((Boolean) -> String?)?, viaParam: SSHClient?, resolveJumps: Boolean): SSHClient = synchronized(connectLock) {
-        check(Looper.myLooper() != Looper.getMainLooper()) { "SSH IO must run off the main thread" }
-        check(!closed.get() && !lease.closed.get()) { "SSH connection closed" }
+        check(Looper.myLooper() != Looper.getMainLooper()) { text(R.string.ssh_io_main_thread, "SSH IO must run off the main thread") }
+        check(!closed.get() && !lease.closed.get()) { text(R.string.ssh_connection_closed, "SSH connection closed") }
         sshClient?.takeIf { it.isConnected && it.isAuthenticated }?.let {
             val previous = checkNotNull(connectedProfile)
             check(previous.host == profile.host && previous.port == profile.port && previous.user == profile.user &&
                 previous.pass == profile.pass && previous.sshKeyId == profile.sshKeyId && previous.credentialId == profile.credentialId &&
                 previous.proxyType == profile.proxyType && previous.useCloudflare == profile.useCloudflare &&
                 previous.cloudflaredParameters == profile.cloudflaredParameters &&
-                (!resolveJumps || previous.jumpHostProfileId == profile.jumpHostProfileId)) { "Connection settings changed. Close existing sessions and reconnect." }
+                (!resolveJumps || previous.jumpHostProfileId == profile.jumpHostProfileId)) { text(R.string.ssh_settings_changed, "Connection settings changed. Close existing sessions and reconnect.") }
             return@synchronized it
         }
         disconnect()
@@ -117,7 +123,7 @@ class SshConnectionManager private constructor(private val context: Context?, pr
                 if (resolveJumps && context != null && !profile.jumpHostProfileId.isNullOrBlank()) {
                     chain = JumpChains.resolveChain(profile, ProfileManager(context).getProfiles())
                     chainRef = chain
-                    chain.warning?.let { onStatus("[Warning: ${context.getString(it)}]\r\n") }
+                    chain.warning?.let { val warning = context.getString(it); onStatus(text(R.string.ssh_warning, "[Warning: $warning]\r\n", warning)) }
                     if (chain.jumpHosts.isNotEmpty()) via = connectJumpHosts(chain, onStatus)
                 }
                 var targetHost = profile.host
@@ -125,19 +131,19 @@ class SshConnectionManager private constructor(private val context: Context?, pr
 
                 val useCloudflared = (profile.useCloudflare || profile.proxyType == ProxyType.CLOUDFLARED) && via == null
                 if (via != null && (profile.useCloudflare || profile.proxyType == ProxyType.CLOUDFLARED)) {
-                    onStatus("[Cloudflare tunnel ignored: this host is reached through a jump host]\r\n")
+                    onStatus(text(R.string.ssh_tunnel_ignored, "[Cloudflare tunnel ignored: this host is reached through a jump host]\r\n"))
                 }
                 if (useCloudflared && context != null) {
-                    onStatus("[Starting Cloudflare Access SSH tunnel...]\r\n")
+                    onStatus(text(R.string.ssh_tunnel_starting, "[Starting Cloudflare Access SSH tunnel...]\r\n"))
                     val cfTunnel = CloudflaredTunnel(context)
                     tunnel = cfTunnel
                     val tunnelPort = cfTunnel.start(
                         hostInput = profile.host,
                         parameters = profile.cloudflaredParameters,
-                        onStatus = { status -> onStatus("[$status]\r\n") },
+                        onStatus = { status -> onStatus(text(R.string.ssh_status_line, "[$status]\r\n", status)) },
                         onExit = {
                             if (!closed.get()) {
-                                onStatus("\r\n[Cloudflared tunnel process exited]\r\n")
+                                onStatus(text(R.string.ssh_tunnel_process_exited, "\r\n[Cloudflared tunnel process exited]\r\n"))
                                 notifyExit()
                             }
                         },
@@ -157,7 +163,12 @@ class SshConnectionManager private constructor(private val context: Context?, pr
                     } catch (e: Exception) {
                         if (chain != null) {
                             chainReported = true
-                            onStatus("[Chain: ${chain.hops.indices.joinToString(" → ") { i -> chain.hops[i].name + if (i < chain.hops.size - 1) " ✓" else " ✗" }} (${profile.name}: ${e.message ?: "unreachable"})]\r\n")
+                            val route = chain.hops.indices.joinToString(text(R.string.jump_route_separator, " → ")) { i ->
+                                val state = if (i < chain.hops.size - 1) text(R.string.ssh_hop_success, "✓") else text(R.string.ssh_hop_failure, "✗")
+                                text(R.string.ssh_hop_state, "${chain.hops[i].name} $state", chain.hops[i].name, state)
+                            }
+                            val reason = reason(e) ?: text(R.string.ssh_unreachable, "unreachable")
+                            onStatus(text(R.string.ssh_chain_failure, "[Chain: $route (${profile.name}: $reason)]\r\n", route, profile.name, reason))
                         }
                         throw e
                     }
@@ -169,12 +180,12 @@ class SshConnectionManager private constructor(private val context: Context?, pr
                     user = profile.host.substringBefore("@").trim()
                 }
                 if (user.isEmpty()) {
-                    if (interactive == null) throw net.schmizz.sshj.userauth.UserAuthException("A saved SSH username is required.")
-                    onStatus("login as: ")
-                    user = interactive?.invoke(true)?.trim() ?: throw java.util.concurrent.CancellationException("SSH sign-in cancelled")
+                    if (interactive == null) throw net.schmizz.sshj.userauth.UserAuthException(text(R.string.ssh_username_required, "A saved SSH username is required."))
+                    onStatus(text(R.string.ssh_login_prompt, "login as: "))
+                    user = interactive?.invoke(true)?.trim() ?: throw java.util.concurrent.CancellationException(text(R.string.ssh_sign_in_cancelled, "SSH sign-in cancelled"))
                     if (user.isEmpty()) {
-                        onStatus("No username provided.\r\n")
-                        throw java.util.concurrent.CancellationException("SSH sign-in cancelled")
+                        onStatus(text(R.string.ssh_username_empty, "No username provided.\r\n"))
+                        throw java.util.concurrent.CancellationException(text(R.string.ssh_sign_in_cancelled, "SSH sign-in cancelled"))
                     }
                 }
 
@@ -185,7 +196,7 @@ class SshConnectionManager private constructor(private val context: Context?, pr
                     context?.let { ctx -> ProfileManager(ctx).getSshKeys().find { it.id == keyId } }
                 }
                 if (savedKey != null && savedKey.privateKey.isNotBlank()) {
-                    onStatus("[Offering SSH key '${savedKey.name}' for user '$user'...]\r\n")
+                    onStatus(text(R.string.ssh_key_offering, "[Offering SSH key '${savedKey.name}' for user '$user'...]\r\n", savedKey.name, user))
                     try {
                         ensureBouncyCastleProvider()
                         val passwordFinder = if (savedKey.passphrase.isNotEmpty()) {
@@ -196,24 +207,26 @@ class SshConnectionManager private constructor(private val context: Context?, pr
                         ssh.authPublickey(user, keyProvider)
                         authenticated = ssh.isAuthenticated
                         if (authenticated) {
-                            onStatus("[SSH key '${savedKey.name}' accepted by server]\r\n")
+                            onStatus(text(R.string.ssh_key_accepted, "[SSH key '${savedKey.name}' accepted by server]\r\n", savedKey.name))
                         } else {
                             val allowed = try { ssh.userAuth.allowedMethods } catch (e: Exception) { null }
-                            onStatus("[Server refused key '${savedKey.name}' for user '$user'${if (allowed != null) " (allowed methods: $allowed)" else ""}]\r\n")
+                            val methods = if (allowed != null) text(R.string.ssh_allowed_methods, " (allowed methods: $allowed)", allowed) else ""
+                            onStatus(text(R.string.ssh_key_refused, "[Server refused key '${savedKey.name}' for user '$user'$methods]\r\n", savedKey.name, user, methods))
                         }
                     } catch (e: Exception) {
                         val allowed = try { ssh.userAuth.allowedMethods } catch (ex: Exception) { null }
                         val reason = if (e is net.schmizz.sshj.userauth.UserAuthException) {
-                            "Key refused by server${if (allowed != null) " (allowed methods: $allowed)" else ""}"
+                            val methods = if (allowed != null) text(R.string.ssh_allowed_methods, " (allowed methods: $allowed)", allowed) else ""
+                            text(R.string.ssh_key_refused_reason, "Key refused by server$methods", methods)
                         } else {
-                            e.message ?: "Authentication failed"
+                            reason(e) ?: text(R.string.ssh_auth_failed, "Authentication failed")
                         }
-                        onStatus("[Server refused SSH key '${savedKey.name}' for user '$user': $reason]\r\n")
+                        onStatus(text(R.string.ssh_key_refused_detail, "[Server refused SSH key '${savedKey.name}' for user '$user': $reason]\r\n", savedKey.name, user, reason))
                     }
                 } else if (savedKey != null && savedKey.privateKey.isBlank()) {
-                    onStatus("[Notice: SSH key '${savedKey.name}' has no private key data]\r\n")
+                    onStatus(text(R.string.ssh_key_empty, "[Notice: SSH key '${savedKey.name}' has no private key data]\r\n", savedKey.name))
                 } else if (!profile.sshKeyId.isNullOrBlank()) {
-                    onStatus("[Notice: Configured SSH key not found in saved keys]\r\n")
+                    onStatus(text(R.string.ssh_key_missing, "[Notice: Configured SSH key not found in saved keys]\r\n"))
                 }
 
                 // 2. Try password authentication if password was provided and not yet authenticated
@@ -231,8 +244,8 @@ class SshConnectionManager private constructor(private val context: Context?, pr
                     var attempts = 0
                     while (!authenticated && attempts < 3 && !lease.closed.get()) {
                         attempts++
-                        onStatus("$user@$targetHost's password: ")
-                        val enteredPass = interactive?.invoke(false) ?: throw net.schmizz.sshj.userauth.UserAuthException("Check the saved credential or SSH key.")
+                        onStatus(text(R.string.ssh_password_prompt, "$user@$targetHost's password: ", user, targetHost))
+                        val enteredPass = interactive?.invoke(false) ?: throw net.schmizz.sshj.userauth.UserAuthException(text(R.string.ssh_credential_check, "Check the saved credential or SSH key."))
                         try {
                             ssh.authPassword(user, enteredPass)
                             authenticated = ssh.isAuthenticated
@@ -250,25 +263,35 @@ class SshConnectionManager private constructor(private val context: Context?, pr
                             }
                         }
                         if (!authenticated) {
-                            onStatus("Permission denied, please try again.\r\n")
+                            onStatus(text(R.string.ssh_permission_denied, "Permission denied, please try again.\r\n"))
                         }
                     }
                 }
 
                 if (!authenticated) {
-                    throw net.schmizz.sshj.userauth.UserAuthException("Check the saved credential or SSH key.")
+                    throw net.schmizz.sshj.userauth.UserAuthException(text(R.string.ssh_credential_check, "Check the saved credential or SSH key."))
                 }
 
 
-            check(!closed.get() && !lease.closed.get()) { "SSH connection closed" }
+            check(!closed.get() && !lease.closed.get()) { text(R.string.ssh_connection_closed, "SSH connection closed") }
             connectedProfile = profile
-            chain?.takeIf { it.jumpHosts.isNotEmpty() }?.let { onStatus("[Chain: ${it.hops.joinToString(" \u2192 ") { h -> h.name + " \u2713" }}]\r\n") }
+            chain?.takeIf { it.jumpHosts.isNotEmpty() }?.let {
+                val route = it.hops.joinToString(text(R.string.jump_route_separator, " → ")) { h ->
+                    val state = text(R.string.ssh_hop_success, "✓")
+                    text(R.string.ssh_hop_state, "${h.name} $state", h.name, state)
+                }
+                onStatus(text(R.string.ssh_chain_success, "[Chain: $route]\r\n", route))
+            }
             ssh
         } catch (error: Exception) {
             if (chainReported.not() && chainRef?.jumpHosts?.isNotEmpty() == true && error !is JumpChainException) {
                 val hops = chainRef!!.hops
-                val reason = if (error is net.schmizz.sshj.userauth.UserAuthException) "auth failed" else error.message ?: error.javaClass.simpleName
-                onStatus("[Chain: ${hops.indices.joinToString(" \u2192 ") { i -> hops[i].name + if (i < hops.size - 1) " \u2713" else " \u2717" }} (${hops.last().name}: $reason)]\r\n")
+                val reason = if (error is net.schmizz.sshj.userauth.UserAuthException) text(R.string.ssh_auth_failed_short, "auth failed") else reason(error) ?: error.javaClass.simpleName
+                val route = hops.indices.joinToString(text(R.string.jump_route_separator, " → ")) { i ->
+                    val state = if (i < hops.size - 1) text(R.string.ssh_hop_success, "✓") else text(R.string.ssh_hop_failure, "✗")
+                    text(R.string.ssh_hop_state, "${hops[i].name} $state", hops[i].name, state)
+                }
+                onStatus(text(R.string.ssh_chain_failure, "[Chain: $route (${hops.last().name}: $reason)]\r\n", route, hops.last().name, reason))
             }
             disconnect()
             sshClient = null
