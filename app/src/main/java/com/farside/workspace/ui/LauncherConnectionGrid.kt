@@ -1,5 +1,8 @@
 package com.farside.workspace.ui
 
+import com.farside.workspace.R
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
@@ -34,6 +37,7 @@ internal fun LauncherConnectionGrid(
     modifier: Modifier, onEdit: (ConnectionProfile) -> Unit, onDelete: (String) -> Unit,
     onConnect: (String) -> Unit, onToggleStar: (String) -> Unit, onMove: (String, String) -> Unit
 ) {
+    val connectionsLabel = stringResource(R.string.connections)
     val grid = rememberLazyGridState()
     val latestMove by rememberUpdatedState(onMove)
     var dragged by remember { mutableStateOf<String?>(null) }
@@ -99,7 +103,7 @@ internal fun LauncherConnectionGrid(
 
     LazyVerticalGrid(columns = GridCells.Fixed(3), state = grid,
         contentPadding = PaddingValues(8.dp), userScrollEnabled = !reordering,
-        modifier = modifier.then(reorderGesture).semantics { contentDescription = "Connections" }) {
+        modifier = modifier.then(reorderGesture).semantics { contentDescription = connectionsLabel }) {
         itemsIndexed(profiles, key = { _, profile -> profile.id }) { index, profile ->
             val starred = profile.id in starredIds
             val earlier = profiles.getOrNull(index - 1)?.takeIf { (it.id in starredIds) == starred }
@@ -109,7 +113,7 @@ internal fun LauncherConnectionGrid(
                 onToggleStar = { onToggleStar(profile.id) }, dragging = dragged == profile.id,
                 onMoveEarlier = earlier?.let { { latestMove(profile.id, it.id) } },
                 onMoveLater = later?.let { { latestMove(profile.id, it.id) } },
-                jumpLabel = profile.jumpHostProfileId?.takeIf { it.isNotBlank() }?.let { id -> profiles.find { it.id == id }?.let { "via ${it.name}" } ?: "\u26A0 jump host missing" })
+                jumpLabel = profile.jumpHostProfileId?.takeIf { it.isNotBlank() }?.let { id -> profiles.find { it.id == id }?.let { stringResource(R.string.connection_via, it.name) } ?: stringResource(R.string.jump_host_missing) })
         }
     }
 }
