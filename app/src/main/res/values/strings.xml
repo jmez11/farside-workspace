@@ -520,4 +520,12 @@
     <string name="certificate_hostname_mismatch">PC name does not match the certificate.</string>
     <string name="certificate_invalid_dates">Certificate is outside its validity dates.</string>
     <string name="certificate_untrusted_chain">Certificate chain is not trusted or could not be validated.</string>
+    <string name="save_uppercase">SAVE</string>
+    <string name="resolution_1368_x_768">1368 x 768</string>
+    <string name="resolution_1600_x_900">1600 x 900</string>
+    <string name="resolution_1920_x_1080">1920 x 1080</string>
+    <string name="resolution_2000_x_1124">2000 x 1124</string>
+    <string name="resolution_2400_x_1348">2400 x 1348</string>
+    <string name="resolution_2800_x_1572">2800 x 1572</string>
+    <string name="resolution_3200_x_1800">3200 x 1800</string>
 </resources>
