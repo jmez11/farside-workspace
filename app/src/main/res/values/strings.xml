@@ -420,4 +420,26 @@
     <string name="adb_endpoint_status">ADB %1$d; %2$s</string>
     <string name="adb_set_dashboard_route">Set dashboard route: %1$s → tcp://127.0.0.1:%2$d</string>
     <string name="cloudflare_token_rejected">Cloudflare rejected the tunnel token</string>
+    <string name="cloudflared_executable_unavailable">The bundled Cloudflared executable is unavailable.</string>
+    <string name="cloudflared_storage_failed">Could not prepare Cloudflared token storage.</string>
+    <string name="cloudflare_authenticating">Authenticating with Cloudflare… Complete sign-in in the browser if it opens.</string>
+    <string name="cloudflare_tls_failed">Cloudflare TLS certificate validation failed.</string>
+    <string name="cloudflare_dns_failed">The Cloudflare hostname could not be resolved.</string>
+    <string name="cloudflare_application_missing">This hostname did not return a Cloudflare Access application.</string>
+    <string name="cloudflare_audience_missing">Cloudflare Access did not return an application audience.</string>
+    <string name="cloudflare_domain_missing">Cloudflare Access did not return an application domain.</string>
+    <string name="cloudflared_cache_lock_failed">Cloudflared could not lock its private token cache.</string>
+    <string name="cloudflare_connection_refused">The Cloudflare endpoint refused the connection.</string>
+    <string name="cloudflare_endpoint_timeout">The Cloudflare endpoint did not respond in time.</string>
+    <string name="cloudflared_cancelled">Cloudflared connection cancelled.</string>
+    <string name="cloudflare_browser_failed">Could not open the browser for Cloudflare authentication.</string>
+    <string name="cloudflare_auth_timeout">Cloudflare authentication timed out. Try connecting again.</string>
+    <string name="cloudflared_invalid_port">Invalid local Cloudflared port.</string>
+    <string name="cloudflared_listener_exited">Cloudflared exited before its local listener was ready.</string>
+    <string name="cloudflared_listener_timeout">Cloudflared listener startup timed out.</string>
+    <string name="connecting_remote_desktop">Connecting to the remote desktop…</string>
+    <string name="cloudflare_cache_read_failed">Could not read Cloudflare login cache.</string>
+    <string name="cloudflare_sign_in_busy">Cloudflare sign-in is in progress. Close Cloudflare sessions and try again.</string>
+    <string name="cloudflare_clear_logins_failed">Could not clear all Cloudflare logins. Try again.</string>
+    <string name="cloudflare_auth_failed_exit">Cloudflare authentication failed (exit %1$d). Check the hostname, Access policy and credentials.</string>
 </resources>
