@@ -278,4 +278,6 @@
         <item quantity="one">Don\'t reprompt for %1$d minutes</item>
         <item quantity="other">Don\'t reprompt for %1$d minutes</item>
     </plurals>
+    <string name="connection_via">via %1$s</string>
+    <string name="jump_host_missing">\u26A0 jump host missing</string>
 </resources>
