@@ -47,7 +47,17 @@ internal class VncVerification(private val test: Instrumentation) {
         val clipboard = test.targetContext.getSystemService(android.content.ClipboardManager::class.java)
         val originalClip = clipboard.primaryClip
         try {
-            if (mode == "create") {
+            if (mode == "macSetup") {
+                val pm = ProfileManager(test.targetContext)
+                val profile = pm.getProfiles().single { it.name == "Test MacBook Pro" && it.type == ConnectionType.VNC }
+                val credential = pm.getCredentials().single { it.name == "James Kasyan Mac" }
+                check(credential.user.isNotBlank() && credential.pass.isNotEmpty())
+                pm.updateProfile(profile.copy(credentialId = credential.id, vncAuthMode = VncAuthMode.MAC_USER))
+                check(pm.getProfiles().single { it.id == profile.id }.let {
+                    it.credentialId == credential.id && it.vncAuthMode == VncAuthMode.MAC_USER
+                })
+                record("PASS: saved Mac profile linked to named credential in Apple account mode")
+            } else if (mode == "create") {
                 require(!password.isNullOrEmpty()) { "VNC password missing" }
                 val found = runBlocking { NetworkScanner.scanLocalNetworkForVnc(test.targetContext) }
                 require(found.size == 1) { "Expected one Mac advertisement, found: ${found.joinToString { it.name }}" }
