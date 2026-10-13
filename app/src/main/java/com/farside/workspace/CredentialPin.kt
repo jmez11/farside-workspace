@@ -73,7 +73,7 @@ object CredentialPin {
         val prefs = context.getSharedPreferences("farside_profiles", Context.MODE_PRIVATE)
         val prefix = "app-pin-"
         val until = prefs.getLong(prefix + "until", 0)
-        if (until > now) return "Too many attempts. Try again in ${(until - now + 999) / 1000} seconds."
+        if (until > now) return context.resources.getQuantityString(R.plurals.pin_retry_seconds, ((until - now + 999) / 1000).coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), (until - now + 999) / 1000)
         if (matches(pin, verifier)) {
             check(prefs.edit().remove(prefix + "attempts").remove(prefix + "until").commit())
             return null
@@ -81,6 +81,6 @@ object CredentialPin {
         val attempts = (prefs.getInt(prefix + "attempts", 0) + 1).coerceAtMost(30)
         val delay = if (attempts >= 5) (30_000L shl ((attempts - 5).coerceAtMost(4))).coerceAtMost(300_000L) else 0L
         check(prefs.edit().putInt(prefix + "attempts", attempts).putLong(prefix + "until", now + delay).commit())
-        return if (delay == 0L) "Incorrect PIN." else "Too many attempts. Try again in ${delay / 1000} seconds."
+        return if (delay == 0L) context.getString(R.string.incorrect_pin) else context.resources.getQuantityString(R.plurals.pin_retry_seconds, (delay / 1000).toInt(), delay / 1000)
     }
 }
