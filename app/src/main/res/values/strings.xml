@@ -528,4 +528,6 @@
     <string name="resolution_2400_x_1348">2400 x 1348</string>
     <string name="resolution_2800_x_1572">2800 x 1572</string>
     <string name="resolution_3200_x_1800">3200 x 1800</string>
+    <string name="vnc_discovery_failed">Local VNC discovery could not start (%1$d).</string>
+    <string name="unknown_pc">Unknown PC (%1$s)</string>
 </resources>
