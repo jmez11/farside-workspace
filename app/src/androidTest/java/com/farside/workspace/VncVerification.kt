@@ -86,7 +86,7 @@ internal class VncVerification(private val test: Instrumentation) {
                 test.targetContext.getSharedPreferences("farside_profiles", 0).edit().commit()
                 record("Created saved VNC profile: ${profile.name} ${host.ip}:${host.port}; password stored only in encrypted SavedCredential")
                 session(profile, null)
-            } else if (mode == "live" || mode == "macPicker" || mode == "pointer" || mode == "login") {
+            } else if (mode == "live" || mode == "macPicker" || mode == "pointer" || mode == "login" || mode == "macLogin") {
                 var profile = ProfileManager(test.targetContext).getProfiles().firstOrNull {
                     it.type == ConnectionType.VNC && (profileId == null || it.id == profileId || it.name == profileId)
                 } ?: error("Save a VNC Mac profile and pass -e vncProfile <name/id>.")
@@ -97,9 +97,11 @@ internal class VncVerification(private val test: Instrumentation) {
                     check(profile.host == host.ip && profile.port == host.port)
                     record("PASS: real Mac ${host.name} selected in actual VNC picker; host/port saved with existing encrypted credential link")
                 }
-                session(profile, null, probePointer = mode == "pointer", loginPassword = if (mode == "login") requireNotNull(password) else null)
-                record(if (mode == "login") "LIVE LOGIN PASS: desktop/window updates and synthetic Command keys verified; clean close. Physical gestures/keys and real Mac clipboard remain pending."
-                    else "LIVE PASS: saved VNC password connect, nonblank actual surface, pointer event, clean close. Mac-visible input/clipboard and physical gestures require wearer checks.")
+                val loginPassword = if (mode == "macLogin") ProfileManager(test.targetContext).getCredentials()
+                    .single { it.id == profile.credentialId }.pass else if (mode == "login") requireNotNull(password) else null
+                session(profile, null, probePointer = mode == "pointer", loginPassword = loginPassword)
+                record(if (loginPassword != null) "LIVE LOGIN PASS: desktop/window updates and synthetic Command keys verified; clean close. Physical gestures/keys and real Mac clipboard remain pending."
+                    else "LIVE PASS: saved VNC credential connect, nonblank actual surface, pointer event, clean close. Mac-visible input/clipboard and physical gestures require wearer checks.")
             } else if (mode == "discovery") {
                 val found = runBlocking { NetworkScanner.scanLocalNetworkForVnc(test.targetContext) }
                 record("Real _rfb._tcp browse: ${found.joinToString { "${it.name} ${it.ip}:${it.port}" }}")
