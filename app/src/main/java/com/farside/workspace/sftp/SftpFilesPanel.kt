@@ -4,9 +4,12 @@ import android.content.*
 import android.os.Environment
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -14,6 +17,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.farside.workspace.data.*
@@ -25,6 +30,40 @@ import java.text.DateFormat
 import java.util.Date
 
 private data class HeadsetFile(val file: File, val directory: Boolean)
+
+@Composable
+private fun SftpListScrollbar(state: LazyListState, modifier: Modifier = Modifier) {
+    val scope = rememberCoroutineScope()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val layout = state.layoutInfo
+    val total = layout.totalItemsCount
+    val visible = layout.visibleItemsInfo.size.coerceAtLeast(1)
+    if (total <= visible) return
+    val fraction = (state.firstVisibleItemIndex.toFloat() / (total - visible).coerceAtLeast(1)).coerceIn(0f, 1f)
+    val trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.22f)
+    val thumbColor = MaterialTheme.colorScheme.primary
+    BoxWithConstraints(modifier.width(24.dp).fillMaxHeight().pointerInput(state, total) {
+        fun scrollTo(y: Float) {
+            val target = ((y / size.height) * total).toInt().coerceIn(0, total - 1)
+            scope.launch { state.scrollToItem(target) }
+        }
+        detectDragGestures(onDragStart = { scrollTo(it.y) }) { change, _ ->
+            change.consume()
+            scrollTo(change.position.y)
+        }
+    }, contentAlignment = Alignment.TopCenter) {
+        val trackHeight = constraints.maxHeight.toFloat()
+        val thumbHeight = (trackHeight * visible / total).coerceAtLeast(with(density) { 32.dp.toPx() }).coerceAtMost(trackHeight)
+        val thumbTop = (trackHeight - thumbHeight) * fraction
+        androidx.compose.foundation.Canvas(Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 3.dp)) {
+            val inset = size.width / 2f
+            drawLine(trackColor, Offset(inset, 0f), Offset(inset, size.height), strokeWidth = 2.dp.toPx())
+            val normalizedTop = (thumbTop / trackHeight * size.height).coerceIn(0f, size.height)
+            val normalizedHeight = (thumbHeight / trackHeight * size.height).coerceAtLeast(2.dp.toPx())
+            drawLine(thumbColor, Offset(inset, normalizedTop), Offset(inset, (normalizedTop + normalizedHeight).coerceAtMost(size.height)), strokeWidth = 4.dp.toPx())
+        }
+    }
+}
 
 @Composable
 internal fun SftpFilesEntry(onClose: () -> Unit, profileId: String? = null) {
@@ -50,6 +89,7 @@ internal fun SftpFilesEntry(onClose: () -> Unit, profileId: String? = null) {
 private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val fileListState = rememberLazyListState()
     var profiles by remember { mutableStateOf<List<ConnectionProfile>>(emptyList()) }
     var session by remember { mutableStateOf<SftpSession?>(null) }
     var selectedId by remember { mutableStateOf<String?>(null) }
@@ -191,7 +231,8 @@ private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?) {
             Text(message, Modifier.weight(1f), color = MaterialTheme.colorScheme.error)
             selectedId?.let { id -> TextButton(onClick = { connect(id) }, enabled = operation == null) { Text("Reconnect") } }
         } } }
-        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+        LazyColumn(Modifier.weight(1f), state = fileListState, verticalArrangement = Arrangement.spacedBy(6.dp)) {
             if (selectedId == null) {
                 if (profiles.isEmpty()) item { Text("Enable SFTP file access in an SSH connection’s settings to see it here.") }
                 items(profiles, key = { it.id }) { profile -> Card(Modifier.fillMaxWidth().clickable(enabled = operation == null) { connect(profile.id) }) {
@@ -222,6 +263,8 @@ private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?) {
                     }
                 } }
             }
+        }
+        if (selectedId != null) SftpListScrollbar(fileListState, Modifier.fillMaxHeight())
         }
     }
     edit?.let { action -> AlertDialog(onDismissRequest = { edit = null }, title = { Text(action.first) }, text = {
