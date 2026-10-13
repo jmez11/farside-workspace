@@ -393,4 +393,9 @@
     <string name="mute_camera_recording">Mute camera (recording)</string>
     <string name="mute_camera">Mute camera</string>
     <string name="camera_redirection_unavailable_help">This host does not support camera redirection.</string>
+    <string name="microphone_redirection_unsupported">Microphone redirection unsupported</string>
+    <string name="unmute_microphone">Unmute microphone</string>
+    <string name="mute_microphone_recording">Mute microphone (recording)</string>
+    <string name="mute_microphone">Mute microphone</string>
+    <string name="microphone_redirection_unavailable_help">This host does not support microphone redirection.</string>
 </resources>
