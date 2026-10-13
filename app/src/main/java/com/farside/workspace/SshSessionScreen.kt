@@ -361,7 +361,7 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                 val copyTextToClipboard: (String) -> Unit = { text ->
                     try {
                         val clipboard = viewContext.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-                        clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("ssh-clipboard", text))
+                        clipboard?.setPrimaryClip(android.content.ClipData.newPlainText(context.getString(R.string.ssh_clipboard_label), text))
                     } catch (e: Exception) {
                         Log.e("SshSession", "Error copying text to clipboard: ${e.message}")
                     }
