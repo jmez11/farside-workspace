@@ -109,6 +109,11 @@ class RdpResizeInstrumentation : Instrumentation() {
     override fun onStart() {
         val results = Bundle()
         try {
+            if (jumpArgs?.getString("rdpDiscoveryOnly") == "true") {
+                results.putString("stream", RdpDiscoveryVerification(this).run())
+                finish(0, results)
+                return
+            }
             if (jumpArgs?.getString("localizationOnly") == "true") {
                 results.putString("stream", LocalizationVerification(this).run())
                 finish(0, results)

@@ -131,7 +131,8 @@ object NetworkScanner {
 
     private suspend fun getNetBiosName(ip: String): String? = withContext(Dispatchers.IO) {
         try {
-            val socket = DatagramSocket()
+            DatagramSocket().use { socket ->
+            socket.connect(InetAddress.getByName(ip), 137)
             socket.soTimeout = 500
             val request = byteArrayOf(
                 0x82.toByte(), 0x28.toByte(), 0x00.toByte(), 0x00.toByte(),
@@ -154,12 +155,63 @@ object NetworkScanner {
             val response = ByteArray(1024)
             val rxPacket = DatagramPacket(response, response.size)
             socket.receive(rxPacket)
-            socket.close()
-            
-            val nameBytes = response.copyOfRange(57, 57 + 15)
-            String(nameBytes, Charsets.US_ASCII).trim()
+            parseNetBiosName(response, rxPacket.length)
+            }
         } catch (e: Exception) {
             null
         }
     }
+    /** Node-status names have a service suffix and flags; group names are not PCs. */
+    internal fun parseNetBiosName(response: ByteArray, length: Int = response.size): String? {
+        if (length !in 12..response.size) return null
+        fun byte(offset: Int) = response[offset].toInt() and 0xff
+        fun word(offset: Int) = (byte(offset) shl 8) or byte(offset + 1)
+        fun skipName(start: Int): Int? {
+            var offset = start
+            while (offset < length) {
+                val size = byte(offset++)
+                if (size == 0) return offset
+                if (size and 0xc0 == 0xc0) return if (offset < length) offset + 1 else null
+                if (size > 63 || offset + size > length) return null
+                offset += size
+            }
+            return null
+        }
+        if (word(0) != 0x8228 || word(2) and 0x800f != 0x8000) return null
+        var offset = 12
+        repeat(word(4)) {
+            offset = skipName(offset) ?: return null
+            if (offset + 4 > length) return null
+            offset += 4
+        }
+        repeat(word(6)) {
+            offset = skipName(offset) ?: return null
+            if (offset + 10 > length) return null
+            val type = word(offset)
+            val recordClass = word(offset + 2)
+            val dataLength = word(offset + 8)
+            offset += 10
+            if (offset + dataLength > length) return null
+            if (type == 0x21 && recordClass == 1 && dataLength > 0) {
+                val count = byte(offset)
+                if (1 + count * 18 > dataLength) return null
+                var workstation: String? = null
+                var server: String? = null
+                repeat(count) { index ->
+                    val entry = offset + 1 + index * 18
+                    val suffix = byte(entry + 15)
+                    val flags = word(entry + 16)
+                    val name = String(response, entry, 15, Charsets.US_ASCII).trim(' ', '\u0000')
+                    if (flags and 0x8000 == 0 && name.isNotBlank()) {
+                        if (suffix == 0x00 && workstation == null) workstation = name
+                        if (suffix == 0x20 && server == null) server = name
+                    }
+                }
+                return workstation ?: server
+            }
+            offset += dataLength
+        }
+        return null
+    }
+
 }
