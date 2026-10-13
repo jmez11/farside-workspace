@@ -172,13 +172,13 @@ fun ProfileCard(profile: ConnectionProfile, onEdit: () -> Unit, onDelete: () -> 
     } else Modifier
     
     Card(
-        modifier = Modifier.padding(8.dp).fillMaxWidth().height(if (reordering) 180.dp else 140.dp).then(launchModifier),
+        modifier = Modifier.padding(8.dp).fillMaxWidth().heightIn(min = if (reordering) 180.dp else 140.dp).then(launchModifier),
         shape = RoundedCornerShape(12.dp),
         border = if (dragging) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             Column(
-                modifier = Modifier.fillMaxSize().padding(start = 16.dp, top = 16.dp, end = 16.dp,
+                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, top = 16.dp, end = 16.dp,
                     bottom = if (reordering) 48.dp else 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
@@ -194,10 +194,10 @@ fun ProfileCard(profile: ConnectionProfile, onEdit: () -> Unit, onDelete: () -> 
                     Text(profile.type.name, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 1.dp))
                 }
-                Text(profile.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                Text(profile.name, style = MaterialTheme.typography.titleMedium)
                 Text("${profile.host}:${profile.port}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (jumpLabel != null) Text(jumpLabel, style = MaterialTheme.typography.labelSmall, maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, color = if (jumpLabel.startsWith("\u26A0")) Color(0xFFFFB300) else MaterialTheme.colorScheme.primary)
+                if (jumpLabel != null) Text(jumpLabel, style = MaterialTheme.typography.labelSmall,
+                    color = if (jumpLabel.startsWith("\u26A0")) Color(0xFFFFB300) else MaterialTheme.colorScheme.primary)
             }
             
             IconButton(onClick = onToggleStar, modifier = Modifier.align(Alignment.TopStart)) {

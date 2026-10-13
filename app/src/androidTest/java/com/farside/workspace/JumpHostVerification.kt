@@ -21,6 +21,7 @@ class JumpHostVerification(private val test: Instrumentation) {
             when (mode) {
                 "resolver" -> resolver()
                 "live" -> live(keyName, hop1Host, hop2Host, deadHost)
+                "seed" -> seed(keyName, hop1Host, hop2Host, deadHost)
                 else -> error("Unknown jumpMode $mode")
             }
         } catch (e: Throwable) {
@@ -102,4 +103,20 @@ class JumpHostVerification(private val test: Instrumentation) {
             record("Cleanup: owned profiles removed")
         }
     }
-}
+
+    /** Saves persistent, idempotent demo profiles (fixed ids) so the jump chain can be tried from the launcher. */
+    private fun seed(keyName: String?, hop1Host: String, hop2Host: String, deadHost: String) {
+        val pm = ProfileManager(context)
+        val keys = pm.getSshKeys()
+        val key = checkNotNull(if (keyName != null) keys.find { it.name == keyName } else keys.singleOrNull()) { "Saved SSH key not found; pass -e jumpKey <name>" }
+        fun profile(id: String, name: String, host: String, user: String, jump: String?, cf: Boolean) = ConnectionProfile(
+            id = id, name = name, type = ConnectionType.SSH, host = host, port = 22, user = user, pass = "", sshKeyId = key.id,
+            useCloudflare = cf, proxyType = if (cf) ProxyType.CLOUDFLARED else ProxyType.NONE, jumpHostProfileId = jump)
+        val bastion = profile("jumptest-bastion", "NanoKVM (jump test)", hop1Host, "root", null, true)
+        val seeded = listOf(bastion,
+            profile("jumptest-target", "plex-max via NanoKVM", hop2Host, "ubuntu", bastion.id, false),
+            profile("jumptest-dead", "dead host via NanoKVM", deadHost, "ubuntu", bastion.id, false))
+        pm.saveProfiles(pm.getProfiles().filterNot { it.id.startsWith("jumptest-") } + seeded)
+        context.getSharedPreferences("farside_profiles", android.content.Context.MODE_PRIVATE).edit().commit()
+        record("PASS: seeded ${seeded.joinToString { it.name }}")
+    }}
