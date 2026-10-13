@@ -408,4 +408,14 @@
     <string name="persistent_tunnels_description">Maintains Cloudflare tunnels in the background</string>
     <string name="tunneling_to_host">Tunneling to %1$s</string>
     <string name="stopped">Stopped</string>
+    <string name="adb_tunnel_paused_debugging">Paused: enable developer mode and wireless debugging</string>
+    <string name="adb_tunnel_paused_unavailable">Paused: wireless ADB endpoint unavailable</string>
+    <string name="checking_wireless_debugging">Checking wireless debugging</string>
+    <string name="connecting_cloudflare">connecting to Cloudflare</string>
+    <string name="cloudflare_check_adb_route">Cloudflare connected; check dashboard ADB route</string>
+    <string name="cloudflare_adb_route_ready">Cloudflare connected; ADB route configured</string>
+    <string name="adb_tunnel_start_failed">Stopped: tunnel could not start; check token and local port</string>
+    <string name="stop">Stop</string>
+    <string name="adb_connecting_cloudflare">ADB %1$d; connecting to Cloudflare</string>
+    <string name="adb_endpoint_status">ADB %1$d; %2$s</string>
 </resources>
