@@ -30,6 +30,8 @@ enum class SoundRedirection {
     PLAY_ON_DEVICE, PLAY_ON_REMOTE, DO_NOT_PLAY
 }
 
+enum class VncAuthMode { VNC_PASSWORD, MAC_USER }
+
 enum class CameraResolution(@StringRes val labelResId: Int, val maxDim: Int) {
     SD(R.string.camera_resolution_sd, 480),
     HD_720(R.string.camera_resolution_720, 720),
@@ -78,6 +80,8 @@ data class ConnectionProfile(
     val sshKeyId: String? = null,
     val jumpHostProfileId: String? = null,
     val enableSftp: Boolean = false,
+    val vncAuthMode: VncAuthMode = VncAuthMode.VNC_PASSWORD,
+    val sftpPairProfileId: String? = null,
     val sshForwards: List<SshForward> = emptyList(),
     val terminalScrollback: Int = 2000,
     val terminalFontSize: Int = 14,
@@ -98,6 +102,10 @@ data class ConnectionProfile(
         json.put("sshKeyId", sshKeyId)
         json.put("jumpHostProfileId", if (type == ConnectionType.SSH) jumpHostProfileId else null)
         json.put("enableSftp", type == ConnectionType.SSH && enableSftp)
+        if (type == ConnectionType.VNC) {
+            json.put("vncAuthMode", vncAuthMode.name)
+            json.put("sftpPairProfileId", sftpPairProfileId)
+        }
         json.put("remoteApp", remoteApp)
         json.put("useCloudflare", useCloudflare)
         json.put("enableCamera", enableCamera)
@@ -151,6 +159,11 @@ data class ConnectionProfile(
                 sshKeyId = if (json.has("sshKeyId") && !json.isNull("sshKeyId")) json.getString("sshKeyId") else null,
                 jumpHostProfileId = if (json.getString("type") == "SSH" && json.has("jumpHostProfileId") && !json.isNull("jumpHostProfileId")) json.getString("jumpHostProfileId") else null,
                 enableSftp = json.getString("type") == "SSH" && json.optBoolean("enableSftp", false),
+                vncAuthMode = if (json.getString("type") == "VNC")
+                    runCatching { VncAuthMode.valueOf(json.optString("vncAuthMode", VncAuthMode.VNC_PASSWORD.name)) }.getOrDefault(VncAuthMode.VNC_PASSWORD)
+                    else VncAuthMode.VNC_PASSWORD,
+                sftpPairProfileId = if (json.getString("type") == "VNC" && json.has("sftpPairProfileId") && !json.isNull("sftpPairProfileId"))
+                    json.getString("sftpPairProfileId") else null,
                 remoteApp = if (json.has("remoteApp") && !json.isNull("remoteApp")) json.getString("remoteApp") else null,
                 useCloudflare = if (json.has("useCloudflare")) json.getBoolean("useCloudflare") else false,
                 enableCamera = if (json.has("enableCamera")) json.getBoolean("enableCamera") else false,
