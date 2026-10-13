@@ -3,6 +3,8 @@ package com.termux.terminal
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import com.farside.workspace.R
+import com.farside.workspace.localizedMessage
 import com.farside.workspace.data.ConnectionProfile
 import com.farside.workspace.data.ProxyType
 import java.io.OutputStream
@@ -13,8 +15,9 @@ import kotlin.concurrent.thread
 class SshTerminalSession(
     val sshSessionInfo: ConnectionProfile,
     client: TerminalSessionClient,
-    val context: Context? = null
+    context: Context? = null
 ) : TerminalSession("dummy", "/", emptyArray(), emptyArray(), sshSessionInfo.terminalScrollback, client) {
+    val context: Context? = context?.applicationContext
     val forwarding = com.farside.workspace.SshForwarding { statuses ->
         Handler(Looper.getMainLooper()).post { onForwardStatus?.invoke(statuses) }
     }
@@ -103,7 +106,7 @@ class SshTerminalSession(
                     interactive = { echo -> readInteractiveLine(echo) },
                     onExit = {
                         if (!isFinished) {
-                            printToTerminal("\r\n[Cloudflared tunnel process exited]\r\n")
+                            printToTerminal(context?.getString(R.string.ssh_tunnel_process_exited) ?: "\r\n[Cloudflared tunnel process exited]\r\n")
                             finishIfRunning()
                         }
                     })
@@ -123,7 +126,9 @@ class SshTerminalSession(
                 val buffer = ByteArray(4096)
                 val mainHandler = Handler(Looper.getMainLooper())
                 
-                val connectedBytes = "\r\n[SSH Connected to ${if (sshSessionInfo.useCloudflare || sshSessionInfo.proxyType == ProxyType.CLOUDFLARED) "127.0.0.1" else sshSessionInfo.host}]\r\n".toByteArray()
+                val connectedHost = if (sshSessionInfo.useCloudflare || sshSessionInfo.proxyType == ProxyType.CLOUDFLARED) "127.0.0.1" else sshSessionInfo.host
+                val connectedBytes = (context?.getString(R.string.ssh_connected_host, connectedHost)
+                    ?: "\r\n[SSH Connected to $connectedHost]\r\n").toByteArray()
                 mainHandler.post {
                     mEmulator.append(connectedBytes, connectedBytes.size)
                     mClient.onTextChanged(this)
@@ -144,7 +149,9 @@ class SshTerminalSession(
                 }
             } catch (e: Exception) {
                 val mainHandler = Handler(Looper.getMainLooper())
-                val errorBytes = "\r\n[SSH Error: ${e.message}]\r\n".toByteArray()
+                val reason = context?.let { e.localizedMessage(it) } ?: e.message
+                val errorBytes = (context?.getString(R.string.ssh_terminal_error, reason)
+                    ?: "\r\n[SSH Error: $reason]\r\n").toByteArray()
                 mainHandler.post {
                     if (mEmulator != null) {
                         mEmulator.append(errorBytes, errorBytes.size)
