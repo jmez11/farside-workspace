@@ -388,4 +388,9 @@
     <string name="certificate_validity">Valid from: %1$s\nValid until: %2$s</string>
     <string name="certificate_fingerprint">SHA-256 fingerprint:\n%1$s</string>
     <string name="certificate_previous_fingerprint">Previously saved SHA-256 fingerprint:\n%1$s</string>
+    <string name="camera_redirection_unsupported">Camera redirection unsupported</string>
+    <string name="unmute_camera">Unmute camera</string>
+    <string name="mute_camera_recording">Mute camera (recording)</string>
+    <string name="mute_camera">Mute camera</string>
+    <string name="camera_redirection_unavailable_help">This host does not support camera redirection.</string>
 </resources>
