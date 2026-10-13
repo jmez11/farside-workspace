@@ -404,4 +404,7 @@
     <string name="system_pin_connect_profile">Confirm your headset passcode to connect to %1$s.</string>
     <string name="app_pin_connect_profile">Enter the App PIN to connect to %1$s.</string>
     <string name="window_launch_failed">Couldn\'t open a new window. Try again, or close another window and retry.</string>
+    <string name="persistent_tunnels">Persistent Tunnels</string>
+    <string name="persistent_tunnels_description">Maintains Cloudflare tunnels in the background</string>
+    <string name="tunneling_to_host">Tunneling to %1$s</string>
 </resources>
