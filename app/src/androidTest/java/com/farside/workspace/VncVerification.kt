@@ -53,6 +53,7 @@ internal class VncVerification(private val test: Instrumentation) {
                 val credential = pm.getCredentials().single { it.name == "James Kasyan Mac" }
                 check(credential.user.isNotBlank() && credential.pass.isNotEmpty())
                 pm.updateProfile(profile.copy(credentialId = credential.id, vncAuthMode = VncAuthMode.MAC_USER))
+                check(test.targetContext.getSharedPreferences("farside_profiles", 0).edit().commit())
                 check(pm.getProfiles().single { it.id == profile.id }.let {
                     it.credentialId == credential.id && it.vncAuthMode == VncAuthMode.MAC_USER
                 })
@@ -78,7 +79,8 @@ internal class VncVerification(private val test: Instrumentation) {
                 try {
                     val done = CountDownLatch(1)
                     var reason: String? = null
-                    val owner = VncSessionConnection(test.targetContext, profile.copy(credentialId = wrong.id), VncBridge(),
+                    val owner = VncSessionConnection(test.targetContext, profile.copy(credentialId = wrong.id,
+                        vncAuthMode = VncAuthMode.MAC_USER), VncBridge(),
                         onDisconnected = { text, _ -> reason = text; done.countDown() }, onConnected = {})
                     val uiTexture = android.graphics.SurfaceTexture(0)
                     try {
@@ -90,15 +92,34 @@ internal class VncVerification(private val test: Instrumentation) {
                         record("PASS: session callback emitted localized Mac authentication failure")
                     } finally { owner.close(); uiTexture.release() }
                 } finally { pm.deleteCredential(wrong.id) }
+            } else if (mode == "macShortUser") {
+                val pm = ProfileManager(test.targetContext)
+                val profile = pm.getProfiles().single { it.name == "Test MacBook Pro" && it.type == ConnectionType.VNC }
+                val credential = pm.getCredentials().single { it.name == "James Kasyan Mac" }
+                val texture = android.graphics.SurfaceTexture(0)
+                val surface = android.view.Surface(texture)
+                val bridge = VncBridge()
+                try {
+                    val handle = bridge.connect(profile.host, profile.port, credential.pass, surface,
+                        "jameskasyan", VncAuthMode.MAC_USER)
+                    check(handle != 0L) { "Mac rejected short account name" }
+                    bridge.disconnect(handle)
+                    record("PASS: Apple VNC accepted the Mac SSH short username with the saved password")
+                } finally { surface.release(); texture.release() }
             } else if (mode == "danglingPair") {
                 val pm = ProfileManager(test.targetContext)
                 val original = pm.getProfiles().single { it.name == "Test MacBook Pro" && it.type == ConnectionType.VNC }
-                val orphan = original.copy(sftpPairProfileId = "deleted-ssh-profile")
-                pm.updateProfile(orphan)
+                val orphan = original.copy(id = java.util.UUID.randomUUID().toString(),
+                    sftpPairProfileId = "deleted-ssh-profile")
+                pm.addProfile(orphan)
+                check(test.targetContext.getSharedPreferences("farside_profiles", 0).edit().commit())
                 try {
                     session(orphan, null)
                     record("PASS: VNC opened with deleted SSH pair; no crash")
-                } finally { pm.updateProfile(original) }
+                } finally {
+                    pm.deleteProfile(orphan.id)
+                    check(test.targetContext.getSharedPreferences("farside_profiles", 0).edit().commit())
+                }
             } else if (mode == "create") {
                 require(!password.isNullOrEmpty()) { "VNC password missing" }
                 val found = runBlocking { NetworkScanner.scanLocalNetworkForVnc(test.targetContext) }
