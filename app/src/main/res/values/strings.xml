@@ -341,4 +341,16 @@
         <item quantity="one">%1$d bytes</item>
         <item quantity="other">%1$d bytes</item>
     </plurals>
+    <string name="sftp_auth_failed">Authentication failed. Check the saved credential or SSH key.</string>
+    <string name="sftp_subsystem_unavailable">This server does not provide an SFTP subsystem.</string>
+    <string name="sftp_permission_denied">Permission denied by the server.</string>
+    <string name="sftp_file_missing">The file no longer exists. Refresh and try again.</string>
+    <string name="sftp_local_file_unavailable">The local file is unavailable or permission was denied.</string>
+    <string name="sftp_invalid_file_name">Invalid file name.</string>
+    <string name="sftp_storage_permission_help">Allow all files access in the connection settings to use SFTP.</string>
+    <string name="sftp_credential_removed_help">The saved credential was removed. Choose a credential in connection settings.</string>
+    <string name="sftp_file_exists">A file with this name already exists. Choose a different name or confirm replacement.</string>
+    <string name="sftp_cloudflare_failed">Cloudflare tunnel failed or exited. Reconnect and complete browser sign-in.</string>
+    <string name="sftp_operation_failed">Connection lost or file operation failed. Reconnect and try again.</string>
+    <string name="sftp_file_name_help">Use a file name without slashes or control characters.</string>
 </resources>
