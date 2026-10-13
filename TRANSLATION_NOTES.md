@@ -1,5 +1,18 @@
 # Translation notes
 
+- `protocol_ssh`: Preserve SSH, the Secure Shell protocol identifier in selectors and badges.
+
+- `proxy_none`: No proxy or tunnel is used for this connection.
+- `proxy_cloudflared`: Preserve Cloudflared, the Cloudflare tunnel client name and original capitalization.
+- `proxy_socks4`: Preserve the SOCKS4 protocol identifier (legacy profile).
+- `proxy_socks5`: Preserve the SOCKS5 protocol identifier.
+- `proxy_http`: Preserve the HTTP protocol identifier.
+- `proxy_local`: Preserve the original LOCAL legacy proxy label.
+- `proxy_telnet`: Preserve the TELNET legacy protocol label.
+- `camera_resolution_sd`: SD means standard definition, 480 pixels on the maximum dimension.
+- `camera_resolution_720`: Preserve the conventional 720p capture resolution label.
+- `camera_resolution_native`: Highest capture resolution offered natively by the selected camera.
+
 - `forward_disabled`: Saved SSH port forwarding rule is switched off.
 - `forward_after_login`: SSH port forwarding starts after SSH authentication succeeds.
 - `forward_listening`: Network listener is ready for forwarded connections.

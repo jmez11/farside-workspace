@@ -54,7 +54,7 @@ internal class RdpSessionConnection(
                     next.release()
                     ended.set(true)
                     main.post { if (!closed.get()) {
-                        onDisconnected(context.getString(R.string.proxy_connection_not_supported, profile.proxyType.displayName), false)
+                        onDisconnected(context.getString(R.string.proxy_connection_not_supported, context.getString(profile.proxyType.labelResId)), false)
                         onConnected(0L)
                     } }
                     return@execute

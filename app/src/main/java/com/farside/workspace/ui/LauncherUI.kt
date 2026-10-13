@@ -194,7 +194,7 @@ fun ProfileCard(profile: ConnectionProfile, onEdit: () -> Unit, onDelete: () -> 
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Surface(shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)) {
-                    Text(profile.type.name, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary,
+                    Text(stringResource(profile.type.labelResId), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 1.dp))
                 }
                 Text(profile.name, style = MaterialTheme.typography.titleMedium)
@@ -884,7 +884,7 @@ fun SettingsSegmentedControl(selectedType: ConnectionType, onTypeSelected: (Conn
         horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally)) {
         ConnectionType.entries.forEach { type ->
             FilterChip(selected = selectedType == type, onClick = { onTypeSelected(type) },
-                label = { Text(type.name) }, colors = FilterChipDefaults.filterChipColors(
+                label = { Text(stringResource(type.labelResId)) }, colors = FilterChipDefaults.filterChipColors(
                     selectedContainerColor = Color(0xFF1E88E5), selectedLabelColor = Color.White))
         }
     }
@@ -917,7 +917,7 @@ fun CameraResolutionSelector(
                     selected = selectedResolution == res,
                     onClick = { if (enabled) onResolutionSelected(res) },
                     enabled = enabled,
-                    label = { Text(res.displayName) },
+                    label = { Text(stringResource(res.labelResId)) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = Color(0xFF1E88E5),
                         selectedLabelColor = Color.White,
@@ -943,7 +943,7 @@ fun ProxyTypeSelector(selectedType: com.farside.workspace.data.ProxyType, onType
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
     ) {
         TextField(
-            value = if (selectedType in com.farside.workspace.data.ProxyType.choices) selectedType.displayName else stringResource(R.string.unsupported_saved_proxy),
+            value = if (selectedType in com.farside.workspace.data.ProxyType.choices) stringResource(selectedType.labelResId) else stringResource(R.string.unsupported_saved_proxy),
             onValueChange = {},
             readOnly = true,
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
@@ -963,7 +963,7 @@ fun ProxyTypeSelector(selectedType: com.farside.workspace.data.ProxyType, onType
         ) {
             com.farside.workspace.data.ProxyType.choices.forEach { selectionOption ->
                 DropdownMenuItem(
-                    text = { Text(selectionOption.displayName) },
+                    text = { Text(stringResource(selectionOption.labelResId)) },
                     onClick = {
                         onTypeSelected(selectionOption)
                         expanded = false
@@ -1245,7 +1245,7 @@ fun AddProfileForm(
                                 } finally { isScanning = false }
                             }
                         }) {
-                            Text(if (isScanning) stringResource(R.string.finding_local_sessions, type.name) else if (type == ConnectionType.VNC) stringResource(R.string.find_screen_sharing) else stringResource(R.string.find_local_pcs), color = Color(0xFF1E88E5))
+                            Text(if (isScanning) stringResource(R.string.finding_local_sessions, stringResource(type.labelResId)) else if (type == ConnectionType.VNC) stringResource(R.string.find_screen_sharing) else stringResource(R.string.find_local_pcs), color = Color(0xFF1E88E5))
                         }
                     }
                     if (discoveredHosts.isNotEmpty()) {
@@ -1480,7 +1480,7 @@ fun AddProfileForm(
                     Text(stringResource(R.string.allowed_service_token_id_and_service_token_secret_or_header_h_fo), color = Color.Gray, modifier = Modifier.padding(horizontal = 16.dp))
                     cloudflaredError?.let { Text(it, color = Color.Red, modifier = Modifier.padding(16.dp)) }
                 } else if (proxyType == com.farside.workspace.data.ProxyType.SOCKS5 || proxyType == com.farside.workspace.data.ProxyType.HTTP) {
-                    Text(stringResource(R.string.proxy_connections_unavailable, proxyType.displayName), color = Color.Gray, modifier = Modifier.padding(16.dp))
+                    Text(stringResource(R.string.proxy_connections_unavailable, stringResource(proxyType.labelResId)), color = Color.Gray, modifier = Modifier.padding(16.dp))
                     SettingsTextField(proxyHost, { proxyHost = it }, stringResource(R.string.proxy_hostname_or_ip))
                     SettingsTextField(proxyPort, { proxyPort = it }, stringResource(R.string.proxy_port))
                     SettingsTextField(proxyUser, { proxyUser = it }, stringResource(R.string.proxy_username_optional))
