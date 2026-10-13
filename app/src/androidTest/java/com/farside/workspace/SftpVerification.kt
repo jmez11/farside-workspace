@@ -121,12 +121,12 @@ class SftpVerification(private val test: Instrumentation) {
             record("PASS: closing panel during upload cancels data, cleans staging before final disconnect, and reconnects")
             SftpSession(context, profile.copy(id = UUID.randomUUID().toString(), port = 22023)).use {
                 val error = runCatching { it.connect({}, {}) }.exceptionOrNull()
-                check(error != null && sftpError(error).contains("SFTP subsystem")) { "Missing-subsystem error not classified: ${error?.javaClass?.simpleName}" }
+                check(error != null && sftpError(context, error).contains("SFTP subsystem")) { "Missing-subsystem error not classified: ${error?.javaClass?.simpleName}" }
             }
             record("PASS: no-SFTP server clean inline error classification")
             SftpSession(context, profile.copy(id = UUID.randomUUID().toString(), sshKeyId = null, pass = "incorrect")).use {
                 val error = runCatching { it.connect({}, {}) }.exceptionOrNull()
-                check(error != null && sftpError(error).contains("Authentication failed"))
+                check(error != null && sftpError(context, error).contains("Authentication failed"))
             }
             record("PASS: auth rejection; all owned local/remote fixture artifacts cleaned")
         } finally {
