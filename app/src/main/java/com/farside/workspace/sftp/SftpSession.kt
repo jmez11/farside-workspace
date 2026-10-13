@@ -46,25 +46,10 @@ internal data class SftpEntry(val name: String, val path: String, val directory:
     val size: Long, val modified: Long, val link: String? = null, val unavailable: Boolean = false)
 
 internal fun sftpName(name: String): String {
-    require(name.isNotBlank() && name != "." && name != ".." && name.none { it == '/' || it == '\\' || it == '\u0000' || it.isISOControl() }) { "Use a file name without slashes or control characters." }
+    require(name.isNotBlank() && name != "." && name != ".." && name.none { it == '/' || it == '\\' || it == '\u0000' || it.isISOControl() }) { "invalid_sftp_name" }
     return name
 }
 internal fun remoteChild(parent: String, name: String) = parent.trimEnd('/') + "/" + sftpName(name)
-internal fun sftpError(error: Throwable): String = when {
-    error is CancellationException -> "Cancelled."
-    error is net.schmizz.sshj.userauth.UserAuthException -> "Authentication failed. Check the saved credential or SSH key."
-    error is SftpUnavailable -> "This server does not provide an SFTP subsystem."
-    error is SFTPException && error.statusCode == Response.StatusCode.PERMISSION_DENIED -> "Permission denied by the server."
-    error is SFTPException && error.statusCode == Response.StatusCode.NO_SUCH_FILE -> "The file no longer exists. Refresh and try again."
-    error is FileNotFoundException -> "The local file is unavailable or permission was denied."
-    error is IllegalArgumentException -> error.message ?: "Invalid file name."
-    error is IllegalStateException && error.message == "Storage permission required" -> "Allow all files access in the connection settings to use SFTP."
-    error is IllegalStateException && error.message == "Saved credential removed" -> "The saved credential was removed. Choose a credential in connection settings."
-    error is IllegalStateException && error.message?.contains("already exists") == true -> "A file with this name already exists. Choose a different name or confirm replacement."
-    error is IllegalStateException && error.message?.contains("Cloudflare", true) == true -> "Cloudflare tunnel failed or exited. Reconnect and complete browser sign-in."
-    else -> "Connection lost or file operation failed. Reconnect and try again."
-}
-
 internal fun sftpError(context: Context, error: Throwable): String = when {
     error is CancellationException -> context.getString(R.string.cancelled)
     error is net.schmizz.sshj.userauth.UserAuthException -> context.getString(R.string.sftp_auth_failed)
