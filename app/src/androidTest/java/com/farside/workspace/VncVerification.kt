@@ -57,6 +57,21 @@ internal class VncVerification(private val test: Instrumentation) {
                     it.credentialId == credential.id && it.vncAuthMode == VncAuthMode.MAC_USER
                 })
                 record("PASS: saved Mac profile linked to named credential in Apple account mode")
+            } else if (mode == "macWrong") {
+                val pm = ProfileManager(test.targetContext)
+                val profile = pm.getProfiles().single { it.name == "Test MacBook Pro" && it.type == ConnectionType.VNC }
+                val credential = pm.getCredentials().single { it.name == "James Kasyan Mac" }
+                val texture = android.graphics.SurfaceTexture(0)
+                val surface = android.view.Surface(texture)
+                val started = SystemClock.uptimeMillis()
+                try {
+                    val bridge = VncBridge()
+                    val error = runCatching { bridge.connect(profile.host, profile.port, credential.pass + "wrong",
+                        surface, credential.user, VncAuthMode.MAC_USER) }.exceptionOrNull()
+                    check(error is VncAuthenticationException) { "Expected Apple SecurityResult failure, got ${error?.javaClass?.simpleName}" }
+                    check(SystemClock.uptimeMillis() - started < 15000) { "Authentication hung" }
+                    record("PASS: Apple server rejected wrong password with SecurityResult; no native session or hang")
+                } finally { surface.release(); texture.release() }
             } else if (mode == "create") {
                 require(!password.isNullOrEmpty()) { "VNC password missing" }
                 val found = runBlocking { NetworkScanner.scanLocalNetworkForVnc(test.targetContext) }
