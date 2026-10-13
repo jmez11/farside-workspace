@@ -74,6 +74,6 @@ fun AdbTunnelSection(discovery: (suspend () -> AdbState)? = null) {
         }
         error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp)) }
     }
-    Text(status, color = Color.White, modifier = Modifier.padding(16.dp))
+    Text(if (status.isEmpty()) stringResource(R.string.stopped) else status, color = Color.White, modifier = Modifier.padding(16.dp))
     if (active && !state.wireless) TextButton(onClick = { AdbTunnelService.stop(context); active = false }) { Text(stringResource(R.string.stop_tunnel)) }
 }
