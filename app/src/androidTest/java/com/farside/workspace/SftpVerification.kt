@@ -37,7 +37,7 @@ class SftpVerification(private val test: Instrumentation) {
             val mac = pm.getProfiles().single { it.name == "Test MacBook Pro" && it.type == ConnectionType.VNC }
             val credential = pm.getCredentials().single { it.name == "James Kasyan Mac" }
             val ssh = ConnectionProfile(UUID.randomUUID().toString(), "Mac SFTP validation", ConnectionType.SSH,
-                mac.host, 22, "", "", credentialId = credential.id, enableSftp = false)
+                mac.host, 22, credential.user, "", credentialId = credential.id, enableSftp = false)
             val source = File(context.cacheDir, "mac-sftp-${UUID.randomUUID()}.txt")
             source.writeText("Farside Mac SFTP validation\n")
             try {
