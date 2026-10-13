@@ -47,7 +47,26 @@ internal class VncVerification(private val test: Instrumentation) {
         val clipboard = test.targetContext.getSystemService(android.content.ClipboardManager::class.java)
         val originalClip = clipboard.primaryClip
         try {
-            if (mode == "macSetup") {
+            if (mode == "macPairSetup") {
+                val pm = ProfileManager(test.targetContext)
+                val mac = pm.getProfiles().single { it.name == "Test MacBook Pro" && it.type == ConnectionType.VNC }
+                val credential = pm.getCredentials().single { it.name == "James Kasyan Mac" }
+                pm.updateCredential(credential.copy(user = "jameskasyan"))
+                val ssh = pm.getProfiles().firstOrNull { it.name == "Test MacBook Pro SSH" && it.type == ConnectionType.SSH }
+                    ?: ConnectionProfile(java.util.UUID.randomUUID().toString(), "Test MacBook Pro SSH", ConnectionType.SSH,
+                        mac.host, 22, "", "", credentialId = credential.id, enableSftp = false)
+                pm.addProfile(ssh.copy(host = mac.host, port = 22, credentialId = credential.id, enableSftp = false))
+                pm.updateProfile(mac.copy(credentialId = credential.id, vncAuthMode = VncAuthMode.MAC_USER,
+                    sftpPairProfileId = ssh.id))
+                check(test.targetContext.getSharedPreferences("farside_profiles", 0).edit().commit())
+                check(pm.getProfiles().let { profiles ->
+                    val vnc = profiles.single { it.id == mac.id }
+                    val paired = profiles.single { it.id == ssh.id }
+                    vnc.sftpPairProfileId == paired.id && vnc.vncAuthMode == VncAuthMode.MAC_USER &&
+                        paired.user == "jameskasyan" && paired.pass.isNotEmpty() && !paired.enableSftp
+                })
+                record("PASS: saved credential now uses SSH short name; Mac VNC and SSH profiles share it, with explicit Files pairing")
+            } else if (mode == "macSetup") {
                 val pm = ProfileManager(test.targetContext)
                 val profile = pm.getProfiles().single { it.name == "Test MacBook Pro" && it.type == ConnectionType.VNC }
                 val credential = pm.getCredentials().single { it.name == "James Kasyan Mac" }
