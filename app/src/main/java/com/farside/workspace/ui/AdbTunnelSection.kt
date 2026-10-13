@@ -1,5 +1,8 @@
 package com.farside.workspace.ui
 
+import com.farside.workspace.R
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -33,24 +36,24 @@ fun AdbTunnelSection(discovery: (suspend () -> AdbState)? = null) {
     }
     if (!state.developer) return
     Spacer(Modifier.height(16.dp))
-    SettingsHeader("Wireless ADB Cloudflare Tunnel")
+    SettingsHeader(stringResource(R.string.wireless_adb_cloudflare_tunnel))
     if (!state.wireless) {
-        Text("Enable wireless debugging on the headset to set up the tunnel.", color = Color.Gray, modifier = Modifier.padding(16.dp))
+        Text(stringResource(R.string.enable_wireless_debugging_help), color = Color.Gray, modifier = Modifier.padding(16.dp))
     } else {
-        Text(state.port?.let { "Wireless ADB detected on port $it" } ?: "Discovering this headset's wireless ADB endpoint…",
+        Text(state.port?.let { stringResource(R.string.wireless_adb_detected, it) } ?: stringResource(R.string.discovering_wireless_adb),
             color = Color.White, modifier = Modifier.padding(horizontal = 16.dp))
-        SettingsTextField(token, { token = it; error = null }, if (saved == null) "Cloudflare tunnel token" else "New tunnel token (blank keeps saved token)",
+        SettingsTextField(token, { token = it; error = null }, if (saved == null) stringResource(R.string.cloudflare_tunnel_token) else stringResource(R.string.new_tunnel_token),
             visualTransformation = PasswordVisualTransformation())
-        SettingsTextField(hostname, { hostname = it; error = null }, "Published hostname (e.g. quest-adb.example.com)")
-        SettingsTextField(port, { port = it; error = null }, "Bridge port (e.g. 5555)",
+        SettingsTextField(hostname, { hostname = it; error = null }, stringResource(R.string.published_hostname_hint))
+        SettingsTextField(port, { port = it; error = null }, stringResource(R.string.bridge_port_hint),
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number))
-        Text("In Cloudflare's tunnel dashboard, publish this hostname as TCP to 127.0.0.1:$port. The headset keeps that bridge connected to the current wireless ADB port.",
+        Text(stringResource(R.string.adb_bridge_help, port),
             color = Color.Gray, modifier = Modifier.padding(16.dp))
         Row(Modifier.padding(horizontal = 16.dp)) {
             Button(enabled = state.port != null && !active, onClick = {
                 try {
                     val config = AdbTunnelConfig(token.ifBlank { store.load()?.token ?: "" }, hostname, port.toIntOrNull() ?: 0).validate()
-                    require(config.port != state.port) { "Bridge port must differ from the wireless ADB port." }
+                    require(config.port != state.port) { context.getString(R.string.adb_bridge_port_conflict) }
                     store.save(config)
                     saved = config
                     preview = config.yaml()
@@ -58,19 +61,19 @@ fun AdbTunnelSection(discovery: (suspend () -> AdbState)? = null) {
                     AdbTunnelService.start(context)
                     active = true
                     error = null
-                } catch (failure: Exception) { error = failure.message ?: "Could not start the tunnel." }
-            }) { Text("Save & start tunnel") }
-            if (active) TextButton(onClick = { AdbTunnelService.stop(context); active = false }) { Text("Stop tunnel") }
+                } catch (failure: Exception) { error = failure.message ?: context.getString(R.string.tunnel_start_failed) }
+            }) { Text(stringResource(R.string.save_start_tunnel)) }
+            if (active) TextButton(onClick = { AdbTunnelService.stop(context); active = false }) { Text(stringResource(R.string.stop_tunnel)) }
         }
         preview?.let { yaml ->
-            Text("config.yml (mirror this ingress in the Cloudflare dashboard):\n$yaml", color = Color.Gray, modifier = Modifier.padding(16.dp))
+            Text(stringResource(R.string.adb_tunnel_config_preview, yaml), color = Color.Gray, modifier = Modifier.padding(16.dp))
             saved?.let { config ->
-                Text("On your computer:\n${config.clientCommand()}\nadb connect 127.0.0.1:${config.port}",
+                Text(stringResource(R.string.adb_tunnel_client_instructions, config.clientCommand(), config.port),
                     color = Color.White, modifier = Modifier.padding(16.dp))
             }
         }
         error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp)) }
     }
     Text(status, color = Color.White, modifier = Modifier.padding(16.dp))
-    if (active && !state.wireless) TextButton(onClick = { AdbTunnelService.stop(context); active = false }) { Text("Stop tunnel") }
+    if (active && !state.wireless) TextButton(onClick = { AdbTunnelService.stop(context); active = false }) { Text(stringResource(R.string.stop_tunnel)) }
 }
