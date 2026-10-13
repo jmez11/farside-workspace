@@ -53,6 +53,7 @@ class RdpCertificateVerifier internal constructor(
     private val show: (RdpCertificateRequest?) -> Unit,
     private val trust: X509TrustManagerExtensions = platformCertificateTrust(),
 ) {
+    private val context = context.applicationContext
     private val store = RdpCertificateStore(context)
     private val main = Handler(Looper.getMainLooper())
     private val gate = Any()
@@ -73,14 +74,14 @@ class RdpCertificateVerifier internal constructor(
         val fingerprint = MessageDigest.getInstance("SHA-256").digest(leaf.encoded)
             .joinToString(":") { "%02X".format(it.toInt() and 255) }
         val reasons = mutableListOf<String>()
-        if (!hostnameMatches) reasons += "PC name does not match the certificate."
+        if (!hostnameMatches) reasons += context.getString(R.string.certificate_hostname_mismatch)
         try {
             leaf.checkValidity()
-        } catch (e: Exception) { reasons += e.message ?: "Certificate is outside its validity dates." }
+        } catch (e: Exception) { reasons += e.message ?: context.getString(R.string.certificate_invalid_dates) }
         try {
             trust.checkServerTrusted(chain, leaf.publicKey.algorithm, host)
         } catch (e: Exception) {
-            reasons += "Certificate chain is not trusted or could not be validated."
+            reasons += context.getString(R.string.certificate_untrusted_chain)
             Log.i("RdpCertificate", "Chain validation failed for $host:$port: ${e.javaClass.simpleName}")
         }
         if (reasons.isEmpty()) {
