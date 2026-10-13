@@ -72,6 +72,24 @@ internal class VncVerification(private val test: Instrumentation) {
                     check(SystemClock.uptimeMillis() - started < 15000) { "Authentication hung" }
                     record("PASS: Apple server rejected wrong password with SecurityResult; no native session or hang")
                 } finally { surface.release(); texture.release() }
+                val wrong = SavedCredential(name = "Temporary Mac wrong password", user = credential.user,
+                    pass = credential.pass + "wrong")
+                pm.addCredential(wrong)
+                try {
+                    val done = CountDownLatch(1)
+                    var reason: String? = null
+                    val owner = VncSessionConnection(test.targetContext, profile.copy(credentialId = wrong.id), VncBridge(),
+                        onDisconnected = { text, _ -> reason = text; done.countDown() }, onConnected = {})
+                    val uiTexture = android.graphics.SurfaceTexture(0)
+                    try {
+                        owner.attach(android.view.Surface(uiTexture))
+                        check(done.await(15, TimeUnit.SECONDS)) { "Localized authentication error hung" }
+                        check(reason == test.targetContext.getString(R.string.vnc_mac_auth_failed)) {
+                            "Wrong localized error: $reason"
+                        }
+                        record("PASS: session callback emitted localized Mac authentication failure")
+                    } finally { owner.close(); uiTexture.release() }
+                } finally { pm.deleteCredential(wrong.id) }
             } else if (mode == "danglingPair") {
                 val pm = ProfileManager(test.targetContext)
                 val original = pm.getProfiles().single { it.name == "Test MacBook Pro" && it.type == ConnectionType.VNC }
