@@ -58,12 +58,20 @@ class SftpVerification(private val test: Instrumentation) {
                 find(scratchName); click(scratchName); find(source.name)
                 click(source.name); find("Confirm file operation"); click("Continue")
                 repeat(50) { if (SftpDownloads(context).existing(source.name) != null) return@repeat; Thread.sleep(100) }
-                check(SftpDownloads(context).existing(source.name) != null)
+                val download = checkNotNull(SftpDownloads(context).existing(source.name))
+                check(context.contentResolver.openInputStream(download)!!.use { it.readBytes() }.contentEquals(source.readBytes()))
                 click("Upload"); click("Download/"); click(local.name)
                 find("Confirm file operation"); click("Continue"); find(local.name)
                 click("Actions for ${source.name}"); click("Delete"); click("Continue")
                 click("Actions for ${local.name}"); click("Delete"); click("Continue")
-                record("PASS: VNC toolbar Files opened paired SSH without enableSftp; listed scratch, downloaded, uploaded and deleted both files")
+                Thread.sleep(700)
+                SftpSession(context, paired).use { verify ->
+                    verify.connect({}, {})
+                    check(verify.list(scratch, SftpOperation()).isEmpty()) { "Files panel did not delete both scratch files" }
+                }
+                repeat(3) { click("Back in Files") }
+                find("/")
+                record("PASS: VNC toolbar Files opened paired SSH without enableSftp; listed / and scratch, downloaded exact bytes, uploaded and deleted both files")
             } finally {
                 activity?.let { test.runOnMainSync { it.finish() } }
                 if (scratch.isNotEmpty()) runCatching { SftpSession(context, paired).use { session ->
