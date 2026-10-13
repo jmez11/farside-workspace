@@ -130,7 +130,7 @@ private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?) {
         operation = op; status = label; error = null; progress = null
         scope.launch {
             try { task(op); op.check(); status = context.getString(R.string.done) }
-            catch (e: Exception) { error = try { op.check(); sftpError(e) } catch (_: java.util.concurrent.CancellationException) { context.getString(R.string.cancelled) } }
+            catch (e: Exception) { error = try { op.check(); sftpError(context, e) } catch (_: java.util.concurrent.CancellationException) { context.getString(R.string.cancelled) } }
             finally { operation = null; progress = null }
         }
     }
