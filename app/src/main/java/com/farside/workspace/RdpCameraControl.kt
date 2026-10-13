@@ -1,5 +1,8 @@
 package com.farside.workspace
 
+import com.farside.workspace.R
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -35,10 +38,10 @@ internal fun RdpCameraControl(
 ) {
     var showUnsupportedDialog by remember { mutableStateOf(false) }
     val description = when {
-        hostUnsupported -> "Camera redirection unsupported"
-        muted -> "Unmute camera"
-        recording -> "Mute camera (recording)"
-        else -> "Mute camera"
+        hostUnsupported -> stringResource(R.string.camera_redirection_unsupported)
+        muted -> stringResource(R.string.unmute_camera)
+        recording -> stringResource(R.string.mute_camera_recording)
+        else -> stringResource(R.string.mute_camera)
     }
     IconButton(onClick = {
         onInteraction()
@@ -66,10 +69,10 @@ internal fun RdpCameraControl(
     if (showUnsupportedDialog) {
         AlertDialog(
             onDismissRequest = { showUnsupportedDialog = false },
-            title = { Text("Camera redirection unavailable") },
-            text = { Text("This host does not support camera redirection.") },
+            title = { Text(stringResource(R.string.camera_redirection_unavailable)) },
+            text = { Text(stringResource(R.string.camera_redirection_unavailable_help)) },
             confirmButton = {
-                TextButton(onClick = { showUnsupportedDialog = false; onInteraction() }) { Text("OK") }
+                TextButton(onClick = { showUnsupportedDialog = false; onInteraction() }) { Text(stringResource(R.string.ok)) }
             },
         )
     }
