@@ -1,0 +1,380 @@
+# Translation notes
+
+English extraction only; no locale directories were created. Extraction gaps are listed in PROGRESS.md.
+Preserve positional placeholders, XML/Android escaping, brand names, protocol identifiers, command flags and literal keyboard symbols. Keep the source plurals as written: their English wording intentionally matches the previous UI.
+
+- `add_new_credential`: Credential means a saved username/password record linked to a connection.
+- `add_new_ssh_key`: Key means a saved SSH cryptographic private key, not a keyboard key; retain OpenSSH private-key delimiters. SSH terminal/SFTP file-transfer terminology; jump hosts are intermediate SSH machines.
+- `about`: App information and open-source license tab.
+- `about_open_source_licenses`: App information and dependency licensing page.
+- `account_display_name`: User-chosen name for the saved credential record; distinct from the login username.
+- `add_tunnel`: Network tunnel/listener; local/remote directions refer to the SSH endpoints.
+- `admin_mode`: RDP administrative-session flag; does not mean Android device administrator.
+- `app_pin_active`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS.
+- `auto_copy_selection_to_clipboard`: Android/remote copy-paste or headset Downloads/storage-access terminology.
+- `back`: Navigate to the previous app screen; keyboard Backspace has separate resources.
+- `begin_openssh_private_key_n`: Key means a saved SSH cryptographic private key, not a keyboard key; retain OpenSSH private-key delimiters. Keep command/configuration syntax, literal network addresses, PEM markers and GatewayPorts unchanged.
+- `allowed_service_token_id_and_service_token_secret_or_header_h_fo`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity. Keep command/configuration syntax, literal network addresses, PEM markers and GatewayPorts unchanged.
+- `camera_redirection_unavailable`: RDP device/clipboard sharing with a remote PC; RemoteApp is a published Windows application.
+- `camera_resolution`: Redirected camera capture size in pixels; separate from window/display resolution.
+- `change_app_pin`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS.
+- `change_pin`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS.
+- `clear_cloudflare_logins`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity.
+- `clear_trusted_certificates`: TLS certificate identity/trust; fingerprint is a cryptographic digest, not biometrics.
+- `cloudflare_tunnel_active`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity. Network tunnel/listener; local/remote directions refer to the SSH endpoints.
+- `cloudflare_tunnel_token`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity. Network tunnel/listener; local/remote directions refer to the SSH endpoints.
+- `cloudflared`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity.
+- `configure_tunnel`: Network tunnel/listener; local/remote directions refer to the SSH endpoints.
+- `confirm_pin`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS.
+- `connection_name`: User label for a saved connection, not hostname or login username.
+- `close_cloudflare_sessions_first_clears_cached_access_tokens_brow`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity.
+- `connections`: Accessibility label for the connection-card grid.
+- `credentials`: Credential means a saved username/password record linked to a connection.
+- `destination_host`: Host is a network computer; port is a TCP endpoint number; LAN is the local network.
+- `destination_port`: Host is a network computer; port is a TCP endpoint number; LAN is the local network.
+- `device_audio_redirection`: RDP device/clipboard sharing with a remote PC; RemoteApp is a published Windows application.
+- `edit_tunnel`: Network tunnel/listener; local/remote directions refer to the SSH endpoints.
+- `enable_sftp_file_access`: SSH terminal/SFTP file-transfer terminology; jump hosts are intermediate SSH machines.
+- `enter_display_name`: User-chosen connection-card name, not the server network address.
+- `enter_the_app_pin_to_remove_pin_requirement`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS.
+- `enter_the_current_app_pin_to_remove_it`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS.
+- `enter_the_current_app_pin`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS.
+- `farside_connections`: Farside Workspace is the app brand; retain Farside.
+- `farside_workspace`: Farside Workspace is the app brand; retain Farside.
+- `files`: SSH file-browser entry, not local Android Files alone.
+- `general`: Connection options section heading.
+- `headset_display_sharing`: Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites.
+- `headset_passcode_active`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS. Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites.
+- `host_server`: Host is a network computer; port is a TCP endpoint number; LAN is the local network.
+- `hostname_or_ip_address`: Destination network hostname or numeric IP address. Host is a network computer; port is a TCP endpoint number; LAN is the local network.
+- `jump_host`: SSH terminal/SFTP file-transfer terminology; jump hosts are intermediate SSH machines. Host is a network computer; port is a TCP endpoint number; LAN is the local network.
+- `key_display_name`: User-chosen name for a saved SSH private-key record. Key means a saved SSH cryptographic private key, not a keyboard key; retain OpenSSH private-key delimiters.
+- `leave_passphrase_blank_to_keep_the_saved_passphrase`: Passphrase unlocks an SSH private key; it is separate from the server login password.
+- `licenses_in_use`: Licenses of bundled dependencies, not purchased license activations.
+- `listener_address_family`: Network tunnel/listener; local/remote directions refer to the SSH endpoints.
+- `microphone_redirection_unavailable`: RDP device/clipboard sharing with a remote PC; RemoteApp is a published Windows application.
+- `manage_your_passcode_in_quest_settings_security_protected_connec`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS. Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites.
+- `passphrase_optional`: Passphrase unlocks an SSH private key; it is separate from the server login password.
+- `password`: Saved connection password: SSH/RDP login password or VNC shared password; separate from App PIN and key passphrase.
+- `pin`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS.
+- `pin_required`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS.
+- `port_forwarding`: Network tunnel/listener; local/remote directions refer to the SSH endpoints. Host is a network computer; port is a TCP endpoint number; LAN is the local network.
+- `port_rdp_3389_ssh_22_vnc_5900`: SSH terminal/SFTP file-transfer terminology; jump hosts are intermediate SSH machines. RDP device/clipboard sharing with a remote PC; RemoteApp is a published Windows application. VNC shared-password access; ARD is Apple Remote Desktop login. Latin-1 is a character encoding. Host is a network computer; port is a TCP endpoint number; LAN is the local network.
+- `on_mac_enable_screen_sharing_then_enable_vnc_viewers_with_a_pass`: VNC shared-password access; ARD is Apple Remote Desktop login. Latin-1 is a character encoding.
+- `options_for_testing_sign_in_trust_store_prompts_and_permission_r`: TLS certificate identity/trust; fingerprint is a cryptographic digest, not biometrics. Android/remote copy-paste or headset Downloads/storage-access terminology. Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites.
+- `proxy_hostname_or_ip`: Network tunnel/listener; local/remote directions refer to the SSH endpoints. Host is a network computer; port is a TCP endpoint number; LAN is the local network.
+- `proxy_password_optional`: Network tunnel/listener; local/remote directions refer to the SSH endpoints.
+- `proxy_port`: Network tunnel/listener; local/remote directions refer to the SSH endpoints. Host is a network computer; port is a TCP endpoint number; LAN is the local network.
+- `proxy_settings`: Network tunnel/listener; local/remote directions refer to the SSH endpoints.
+- `proxy_username_optional`: Network tunnel/listener; local/remote directions refer to the SSH endpoints.
+- `rdp_capture_notice`: RDP device/clipboard sharing with a remote PC; RemoteApp is a published Windows application.
+- `redirect_camera`: RDP device/clipboard sharing with a remote PC; RemoteApp is a published Windows application.
+- `redirect_clipboard`: RDP device/clipboard sharing with a remote PC; RemoteApp is a published Windows application. Android/remote copy-paste or headset Downloads/storage-access terminology.
+- `redirect_microphone`: RDP device/clipboard sharing with a remote PC; RemoteApp is a published Windows application.
+- `redirect_storage`: RDP device/clipboard sharing with a remote PC; RemoteApp is a published Windows application. Android/remote copy-paste or headset Downloads/storage-access terminology.
+- `release_to_open_here`: Drag-preview instruction: release the controller/hand drag to create a spatial window.
+- `remoteapp_alias_e_g_cmd`: Published Windows RemoteApp identifier; preserve the ||cmd alias syntax. RDP device/clipboard sharing with a remote PC; RemoteApp is a published Windows application.
+- `remove_app_pin`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS.
+- `remove_pin`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS.
+- `remove_pin_requirement`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS.
+- `remove_tunnel`: Network tunnel/listener; local/remote directions refer to the SSH endpoints.
+- `require_pin`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS.
+- `revoke_granted_permissions`: Android/remote copy-paste or headset Downloads/storage-access terminology.
+- `save_pin`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS.
+- `save_start_tunnel`: Network tunnel/listener; local/remote directions refer to the SSH endpoints.
+- `save_tunnel`: Network tunnel/listener; local/remote directions refer to the SSH endpoints.
+- `saved_credential_deleted`: Credential means a saved username/password record linked to a connection.
+- `screen_sharing`: VNC shared-password access; ARD is Apple Remote Desktop login. Latin-1 is a character encoding.
+- `secures_credentials_with_require_pin_enabled`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS. Credential means a saved username/password record linked to a connection.
+- `select_none_cloudflared_socks5_or_http_before_saving`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity. Network tunnel/listener; local/remote directions refer to the SSH endpoints.
+- `routes_the_connection_through_cloudflare_access_browser_sign_in`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity. Android/remote copy-paste or headset Downloads/storage-access terminology.
+- `select_a_saved_vnc_password_1_to_8_latin_1_characters_and_a_vali`: VNC shared-password access; ARD is Apple Remote Desktop login. Latin-1 is a character encoding. Host is a network computer; port is a TCP endpoint number; LAN is the local network.
+- `show_cloudflared_parameters`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity.
+- `source_port`: Host is a network computer; port is a TCP endpoint number; LAN is the local network.
+- `ssh_key`: Key means a saved SSH cryptographic private key, not a keyboard key; retain OpenSSH private-key delimiters. SSH terminal/SFTP file-transfer terminology; jump hosts are intermediate SSH machines.
+- `ssh_key_management`: Key means a saved SSH cryptographic private key, not a keyboard key; retain OpenSSH private-key delimiters. SSH terminal/SFTP file-transfer terminology; jump hosts are intermediate SSH machines.
+- `ssh_key_panel_input`: Key means a saved SSH cryptographic private key, not a keyboard key; retain OpenSSH private-key delimiters. SSH terminal/SFTP file-transfer terminology; jump hosts are intermediate SSH machines.
+- `ssh_keyboard_input`: Key means a saved SSH cryptographic private key, not a keyboard key; retain OpenSSH private-key delimiters. SSH terminal/SFTP file-transfer terminology; jump hosts are intermediate SSH machines.
+- `ssh_keys`: Key means a saved SSH cryptographic private key, not a keyboard key; retain OpenSSH private-key delimiters. SSH terminal/SFTP file-transfer terminology; jump hosts are intermediate SSH machines.
+- `stop_tunnel`: Network tunnel/listener; local/remote directions refer to the SSH endpoints.
+- `terminal_clipboard`: Command-line terminal; zoom scales desktop content or text, not camera optics. Android/remote copy-paste or headset Downloads/storage-access terminology.
+- `terminal_settings`: Command-line terminal; zoom scales desktop content or text, not camera optics.
+- `starting_cloudflared`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity.
+- `switch_protected_connections_to_the_quest_headset_passcode_after`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS. Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites.
+- `tunnels_global`: Network tunnel/listener; local/remote directions refer to the SSH endpoints.
+- `up`: Navigate to the parent headset folder; keyboard Up has a separate resource.
+- `upload_from_headset`: Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites.
+- `use_headset_passcode`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS. Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites.
+- `use_headset_passcode_instead`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS. Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites.
+- `user_account_optional_for_ssh`: SSH terminal/SFTP file-transfer terminology; jump hosts are intermediate SSH machines.
+- `username_optional_for_vnc`: VNC shared-password access; ARD is Apple Remote Desktop login. Latin-1 is a character encoding.
+- `wireless_adb_cloudflare_tunnel`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity. Network tunnel/listener; local/remote directions refer to the SSH endpoints. ADB is Android Debug Bridge; wireless debugging and Developer Mode are headset OS settings.
+- `wireless_adb_tunnel`: Network tunnel/listener; local/remote directions refer to the SSH endpoints. ADB is Android Debug Bridge; wireless debugging and Developer Mode are headset OS settings.
+- `reorder_hint`: Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites.
+- `open_or_place_hint`: Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites.
+- `done_reordering`: Leave the card-reordering mode. Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites.
+- `reorder`: Rearrange saved connection cards. Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites.
+- `saved_to_downloads`: Android/remote copy-paste or headset Downloads/storage-access terminology.
+- `headset_folder_unreadable`: Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites.
+- `enter_new_app_pin`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS.
+- `set_app_pin_help`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS. Credential means a saved username/password record linked to a connection.
+- `new_credential`: Credential means a saved username/password record linked to a connection.
+- `edit_credential`: Credential means a saved username/password record linked to a connection.
+- `save_credential`: Credential means a saved username/password record linked to a connection.
+- `new_ssh_key`: Key means a saved SSH cryptographic private key, not a keyboard key; retain OpenSSH private-key delimiters. SSH terminal/SFTP file-transfer terminology; jump hosts are intermediate SSH machines.
+- `edit_ssh_key`: Key means a saved SSH cryptographic private key, not a keyboard key; retain OpenSSH private-key delimiters. SSH terminal/SFTP file-transfer terminology; jump hosts are intermediate SSH machines.
+- `private_key`: Saved SSH cryptographic private key, not a keyboard key. Key means a saved SSH cryptographic private key, not a keyboard key; retain OpenSSH private-key delimiters.
+- `save_ssh_key`: Key means a saved SSH cryptographic private key, not a keyboard key; retain OpenSSH private-key delimiters. SSH terminal/SFTP file-transfer terminology; jump hosts are intermediate SSH machines.
+- `unsupported_saved_proxy`: Network tunnel/listener; local/remote directions refer to the SSH endpoints.
+- `find_screen_sharing`: VNC shared-password access; ARD is Apple Remote Desktop login. Latin-1 is a character encoding. Host is a network computer; port is a TCP endpoint number; LAN is the local network.
+- `select_screen_sharing_server`: VNC shared-password access; ARD is Apple Remote Desktop login. Latin-1 is a character encoding.
+- `vnc_password_credential`: Credential means a saved username/password record linked to a connection. VNC shared-password access; ARD is Apple Remote Desktop login. Latin-1 is a character encoding.
+- `select_saved_credential`: Credential means a saved username/password record linked to a connection.
+- `trusted_certificates_cleared`: TLS certificate identity/trust; fingerprint is a cryptographic digest, not biometrics.
+- `permissions_revoke_scheduled`: Android/remote copy-paste or headset Downloads/storage-access terminology.
+- `permissions_revoke_requires_android_13`: Android/remote copy-paste or headset Downloads/storage-access terminology.
+- `set_app_pin_first`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS. Network tunnel/listener; local/remote directions refer to the SSH endpoints.
+- `cloudflare_logins_cleared`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity.
+- `cloudflare_logins_clear_failed`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity.
+- `discovery_no_services`: VNC shared-password access; ARD is Apple Remote Desktop login. Latin-1 is a character encoding. Host is a network computer; port is a TCP endpoint number; LAN is the local network.
+- `new_pin_hint`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS.
+- `pin_length_error`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS.
+- `license_freerdp`: Software/project and license identifiers; retain their official spelling.
+- `license_sshj`: Software/project and license identifiers; retain their official spelling.
+- `license_termux`: Software/project and license identifiers; retain their official spelling. Command-line terminal; zoom scales desktop content or text, not camera optics.
+- `license_compose`: Software/project and license identifiers; retain their official spelling.
+- `license_meta`: Software/project and license identifiers; retain their official spelling.
+- `connection_address`: Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `unstar_connection`: Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites. Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `star_connection`: Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites. Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `move_connection_earlier`: Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `move_connection_later`: Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `finding_local_sessions`: Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `proxy_connections_unavailable`: Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `edit_named_item`: Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `delete_named_item`: Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `jump_route_preview`: Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `saved_port_forward_count`: Network tunnel/listener; local/remote directions refer to the SSH endpoints. Host is a network computer; port is a TCP endpoint number; LAN is the local network. Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted. Plural quantity is the displayed count/interval; do not remove or reorder positional arguments.
+- `enable_wireless_debugging_help`: Network tunnel/listener; local/remote directions refer to the SSH endpoints. ADB is Android Debug Bridge; wireless debugging and Developer Mode are headset OS settings. Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites.
+- `wireless_adb_detected`: Host is a network computer; port is a TCP endpoint number; LAN is the local network. ADB is Android Debug Bridge; wireless debugging and Developer Mode are headset OS settings. Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `discovering_wireless_adb`: ADB is Android Debug Bridge; wireless debugging and Developer Mode are headset OS settings. Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites.
+- `new_tunnel_token`: Network tunnel/listener; local/remote directions refer to the SSH endpoints.
+- `published_hostname_hint`: Host is a network computer; port is a TCP endpoint number; LAN is the local network. ADB is Android Debug Bridge; wireless debugging and Developer Mode are headset OS settings. Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites.
+- `bridge_port_hint`: Network tunnel/listener; local/remote directions refer to the SSH endpoints. Host is a network computer; port is a TCP endpoint number; LAN is the local network.
+- `adb_bridge_help`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity. Keep command/configuration syntax, literal network addresses, PEM markers and GatewayPorts unchanged. Network tunnel/listener; local/remote directions refer to the SSH endpoints. Host is a network computer; port is a TCP endpoint number; LAN is the local network. ADB is Android Debug Bridge; wireless debugging and Developer Mode are headset OS settings. Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites. Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `adb_bridge_port_conflict`: Network tunnel/listener; local/remote directions refer to the SSH endpoints. Host is a network computer; port is a TCP endpoint number; LAN is the local network. ADB is Android Debug Bridge; wireless debugging and Developer Mode are headset OS settings.
+- `tunnel_start_failed`: Network tunnel/listener; local/remote directions refer to the SSH endpoints.
+- `adb_tunnel_config_preview`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity. Keep command/configuration syntax, literal network addresses, PEM markers and GatewayPorts unchanged. Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `adb_tunnel_client_instructions`: Keep command/configuration syntax, literal network addresses, PEM markers and GatewayPorts unchanged. Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `unlock_credential`: Credential means a saved username/password record linked to a connection.
+- `enter_app_pin`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS.
+- `pin_remember_minutes`: Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted. Plural quantity is the displayed count/interval; do not remove or reorder positional arguments.
+- `connection_via`: Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `jump_host_missing`: SSH terminal/SFTP file-transfer terminology; jump hosts are intermediate SSH machines. Host is a network computer; port is a TCP endpoint number; LAN is the local network.
+- `ssh_forwarding_help`: SSH terminal/SFTP file-transfer terminology; jump hosts are intermediate SSH machines. Network tunnel/listener; local/remote directions refer to the SSH endpoints.
+- `no_saved_tunnels`: Network tunnel/listener; local/remote directions refer to the SSH endpoints. Host is a network computer; port is a TCP endpoint number; LAN is the local network.
+- `other_hosts_allowed`: The SSH listener accepts remote network clients.
+- `loopback_only`: Listener accepts only connections from its own machine.
+- `saved`: Tunnel configuration is saved; this does not mean its listener is running.
+- `disabled`: A saved SSH tunnel is disabled.
+- `local_forward_help`: SSH terminal/SFTP file-transfer terminology; jump hosts are intermediate SSH machines. Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites.
+- `remote_forward_help`: SSH terminal/SFTP file-transfer terminology; jump hosts are intermediate SSH machines. Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites.
+- `dynamic_forward_help`: SSH terminal/SFTP file-transfer terminology; jump hosts are intermediate SSH machines. Network tunnel/listener; local/remote directions refer to the SSH endpoints. Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites.
+- `local_forward_localhost_help`: Keep command/configuration syntax, literal network addresses, PEM markers and GatewayPorts unchanged. SSH terminal/SFTP file-transfer terminology; jump hosts are intermediate SSH machines.
+- `remote_forward_localhost_help`: Keep command/configuration syntax, literal network addresses, PEM markers and GatewayPorts unchanged. Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites.
+- `remote_forward_server_help`: Keep command/configuration syntax, literal network addresses, PEM markers and GatewayPorts unchanged. Network tunnel/listener; local/remote directions refer to the SSH endpoints. Host is a network computer; port is a TCP endpoint number; LAN is the local network.
+- `forwarding_rule_status`: Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `confirm_headset_passcode`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS. Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites.
+- `system_auth_requires_window`: Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites.
+- `unlock_with_headset_passcode`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS. Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites.
+- `confirm_headset_files`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS. SSH terminal/SFTP file-transfer terminology; jump hosts are intermediate SSH machines. Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites.
+- `files_title`: Farside Workspace is the app brand; retain Farside.
+- `ssh_files_root`: SSH terminal/SFTP file-transfer terminology; jump hosts are intermediate SSH machines. Farside Workspace is the app brand; retain Farside.
+- `enable_sftp_help`: SSH terminal/SFTP file-transfer terminology; jump hosts are intermediate SSH machines.
+- `file_unavailable`: Android/remote copy-paste or headset Downloads/storage-access terminology.
+- `storage_permission_required`: Android/remote copy-paste or headset Downloads/storage-access terminology.
+- `saved_credential_removed`: Credential means a saved username/password record linked to a connection.
+- `cloudflare_tunnel_exited`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity. Network tunnel/listener; local/remote directions refer to the SSH endpoints.
+- `checking_downloads`: Android/remote copy-paste or headset Downloads/storage-access terminology.
+- `sftp_downloading`: Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `sftp_uploading`: Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `sftp_replace_download`: Android/remote copy-paste or headset Downloads/storage-access terminology. Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `sftp_confirm_download`: Android/remote copy-paste or headset Downloads/storage-access terminology. Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `sftp_cached_path`: Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `sftp_transfer_megabytes`: Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `sftp_link_target`: Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `sftp_entry_actions`: Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `sftp_confirm_delete`: Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `sftp_replace_upload`: Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `sftp_confirm_upload`: Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `sftp_folder_name`: Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `sftp_entry_details`: Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `sftp_loading_found`: Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted. Plural quantity is the displayed count/interval; do not remove or reorder positional arguments.
+- `sftp_loading_details`: Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted. Plural quantity is the displayed count/interval; do not remove or reorder positional arguments.
+- `sftp_file_bytes`: Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted. Plural quantity is the displayed count/interval; do not remove or reorder positional arguments.
+- `sftp_auth_failed`: Key means a saved SSH cryptographic private key, not a keyboard key; retain OpenSSH private-key delimiters. Credential means a saved username/password record linked to a connection. SSH terminal/SFTP file-transfer terminology; jump hosts are intermediate SSH machines.
+- `sftp_subsystem_unavailable`: SSH terminal/SFTP file-transfer terminology; jump hosts are intermediate SSH machines.
+- `sftp_permission_denied`: Android/remote copy-paste or headset Downloads/storage-access terminology.
+- `sftp_local_file_unavailable`: Android/remote copy-paste or headset Downloads/storage-access terminology.
+- `sftp_storage_permission_help`: SSH terminal/SFTP file-transfer terminology; jump hosts are intermediate SSH machines. Android/remote copy-paste or headset Downloads/storage-access terminology.
+- `sftp_credential_removed_help`: Credential means a saved username/password record linked to a connection.
+- `sftp_cloudflare_failed`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity. Network tunnel/listener; local/remote directions refer to the SSH endpoints.
+- `waiting_microphone_permission`: Android/remote copy-paste or headset Downloads/storage-access terminology.
+- `waiting_camera_permission`: Android/remote copy-paste or headset Downloads/storage-access terminology.
+- `waiting_storage_permission`: Android/remote copy-paste or headset Downloads/storage-access terminology.
+- `unpin_toolbar`: Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites.
+- `keep_toolbar_visible`: Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites.
+- `zoom`: Command-line terminal; zoom scales desktop content or text, not camera optics.
+- `reset_zoom`: Command-line terminal; zoom scales desktop content or text, not camera optics.
+- `protocol_connection_failed`: Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `session_disconnected`: Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `session_disconnected_reason`: Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `zoom_percent`: Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `scrollback_help`: Terminal scrollback is retained line history; opacity/transparency controls the window background; sp is Android text size.
+- `scrollback_lines_hint`: Terminal scrollback is retained line history; opacity/transparency controls the window background; sp is Android text size.
+- `terminal_settings_saved_help`: Command-line terminal; zoom scales desktop content or text, not camera optics.
+- `transparency`: Terminal scrollback is retained line history; opacity/transparency controls the window background; sp is Android text size.
+- `terminal_font_opacity`: Command-line terminal; zoom scales desktop content or text, not camera optics. Terminal scrollback is retained line history; opacity/transparency controls the window background; sp is Android text size. Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `terminal_font_size`: Terminal scrollback is retained line history; opacity/transparency controls the window background; sp is Android text size. Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `terminal_opacity_percent`: Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `certificate_changed`: TLS certificate identity/trust; fingerprint is a cryptographic digest, not biometrics.
+- `certificate_unverified`: TLS certificate identity/trust; fingerprint is a cryptographic digest, not biometrics.
+- `certificate_changed_help`: TLS certificate identity/trust; fingerprint is a cryptographic digest, not biometrics.
+- `remember_certificate`: TLS certificate identity/trust; fingerprint is a cryptographic digest, not biometrics.
+- `certificate_target`: Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `certificate_subject`: TLS certificate identity/trust; fingerprint is a cryptographic digest, not biometrics. Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `certificate_issuer`: TLS certificate identity/trust; fingerprint is a cryptographic digest, not biometrics. Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `certificate_validity`: Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `certificate_fingerprint`: TLS certificate identity/trust; fingerprint is a cryptographic digest, not biometrics. Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `certificate_previous_fingerprint`: TLS certificate identity/trust; fingerprint is a cryptographic digest, not biometrics. Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `camera_redirection_unsupported`: RDP device/clipboard sharing with a remote PC; RemoteApp is a published Windows application.
+- `camera_redirection_unavailable_help`: RDP device/clipboard sharing with a remote PC; RemoteApp is a published Windows application. Host is a network computer; port is a TCP endpoint number; LAN is the local network.
+- `microphone_redirection_unsupported`: RDP device/clipboard sharing with a remote PC; RemoteApp is a published Windows application.
+- `microphone_redirection_unavailable_help`: RDP device/clipboard sharing with a remote PC; RemoteApp is a published Windows application. Host is a network computer; port is a TCP endpoint number; LAN is the local network.
+- `sftp_files_unsupported`: SSH terminal/SFTP file-transfer terminology; jump hosts are intermediate SSH machines.
+- `sftp_connection_unavailable_help`: SSH terminal/SFTP file-transfer terminology; jump hosts are intermediate SSH machines.
+- `system_pin_connect_profile`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS. Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites. Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `app_pin_connect_profile`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS. Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `window_launch_failed`: Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites.
+- `persistent_tunnels`: Network tunnel/listener; local/remote directions refer to the SSH endpoints.
+- `persistent_tunnels_description`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity. Network tunnel/listener; local/remote directions refer to the SSH endpoints.
+- `tunneling_to_host`: Network tunnel/listener; local/remote directions refer to the SSH endpoints. Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `adb_tunnel_paused_debugging`: ADB is Android Debug Bridge; wireless debugging and Developer Mode are headset OS settings.
+- `adb_tunnel_paused_unavailable`: ADB is Android Debug Bridge; wireless debugging and Developer Mode are headset OS settings.
+- `checking_wireless_debugging`: ADB is Android Debug Bridge; wireless debugging and Developer Mode are headset OS settings.
+- `connecting_cloudflare`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity.
+- `cloudflare_check_adb_route`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity. ADB is Android Debug Bridge; wireless debugging and Developer Mode are headset OS settings.
+- `cloudflare_adb_route_ready`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity. ADB is Android Debug Bridge; wireless debugging and Developer Mode are headset OS settings.
+- `adb_tunnel_start_failed`: Network tunnel/listener; local/remote directions refer to the SSH endpoints. Host is a network computer; port is a TCP endpoint number; LAN is the local network.
+- `adb_connecting_cloudflare`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity. ADB is Android Debug Bridge; wireless debugging and Developer Mode are headset OS settings. Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `adb_endpoint_status`: ADB is Android Debug Bridge; wireless debugging and Developer Mode are headset OS settings. Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `adb_set_dashboard_route`: Keep command/configuration syntax, literal network addresses, PEM markers and GatewayPorts unchanged. Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `cloudflare_token_rejected`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity. Network tunnel/listener; local/remote directions refer to the SSH endpoints.
+- `cloudflared_executable_unavailable`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity.
+- `cloudflared_storage_failed`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity. Android/remote copy-paste or headset Downloads/storage-access terminology.
+- `cloudflare_authenticating`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity.
+- `cloudflare_tls_failed`: TLS certificate identity/trust; fingerprint is a cryptographic digest, not biometrics. Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity.
+- `cloudflare_dns_failed`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity. Host is a network computer; port is a TCP endpoint number; LAN is the local network.
+- `cloudflare_application_missing`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity. Host is a network computer; port is a TCP endpoint number; LAN is the local network.
+- `cloudflare_audience_missing`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity.
+- `cloudflare_domain_missing`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity.
+- `cloudflared_cache_lock_failed`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity.
+- `cloudflare_connection_refused`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity.
+- `cloudflare_endpoint_timeout`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity.
+- `cloudflared_cancelled`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity.
+- `cloudflare_browser_failed`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity.
+- `cloudflare_auth_timeout`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity.
+- `cloudflared_invalid_port`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity. Host is a network computer; port is a TCP endpoint number; LAN is the local network.
+- `cloudflared_listener_exited`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity. Network tunnel/listener; local/remote directions refer to the SSH endpoints.
+- `cloudflared_listener_timeout`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity. Network tunnel/listener; local/remote directions refer to the SSH endpoints.
+- `cloudflare_cache_read_failed`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity.
+- `cloudflare_sign_in_busy`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity.
+- `cloudflare_clear_logins_failed`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity.
+- `cloudflare_auth_failed_exit`: Credential means a saved username/password record linked to a connection. Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity. Host is a network computer; port is a TCP endpoint number; LAN is the local network. Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `incorrect_pin`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS.
+- `pin_retry_seconds`: Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted. Plural quantity is the displayed count/interval; do not remove or reorder positional arguments.
+- `headset_passcode_required`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS. Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites.
+- `headset_auth_timeout`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS. Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites.
+- `headset_auth_description`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS. Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites. Farside Workspace is the app brand; retain Farside.
+- `headset_auth_unverified`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS.
+- `headset_auth_rejected`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS. Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites.
+- `headset_auth_unavailable`: App PIN protects Farside credentials; headset passcode authenticates through Horizon OS. Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites.
+- `key_win`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_shift`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_ctrl`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_alt`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_altgr`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_del`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_esc`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_tab`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_backspace`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_7`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_8`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_9`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_4`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_5`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_6`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_1`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_2`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_3`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_0`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_decimal`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_home`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_up`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_page_up`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_left`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_right`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_end`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_down`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_page_down`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_insert`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_delete`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_enter`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_f1`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_f2`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_f3`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_f4`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_f5`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_f6`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_f7`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_f8`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_f9`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_f10`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_f11`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_f12`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_print_screen`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_slash`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_multiply`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_minus`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_plus`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_backspace_symbol`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_up_symbol`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_left_symbol`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_right_symbol`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_down_symbol`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_held`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `key_released`: Remote keyboard legend/state; preserve standard abbreviations, function-key numbers and glyphs.
+- `cloudflared_tunnel_exited`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity. Network tunnel/listener; local/remote directions refer to the SSH endpoints.
+- `cloudflared_connection_failed`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity.
+- `choose_another_credential`: Credential means a saved username/password record linked to a connection.
+- `proxy_connection_not_supported`: Cloudflare Access authentication; Cloudflared is its tunnel client. Tokens/audiences are application credentials/identity. Network tunnel/listener; local/remote directions refer to the SSH endpoints. Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `choose_vnc_password_credential`: Credential means a saved username/password record linked to a connection. VNC shared-password access; ARD is Apple Remote Desktop login. Latin-1 is a character encoding.
+- `invalid_vnc_password`: VNC shared-password access; ARD is Apple Remote Desktop login. Latin-1 is a character encoding.
+- `vnc_connection_failed_help`: VNC shared-password access; ARD is Apple Remote Desktop login. Latin-1 is a character encoding.
+- `certificate_hostname_mismatch`: TLS certificate identity/trust; fingerprint is a cryptographic digest, not biometrics.
+- `certificate_invalid_dates`: TLS certificate identity/trust; fingerprint is a cryptographic digest, not biometrics.
+- `certificate_untrusted_chain`: TLS certificate identity/trust; fingerprint is a cryptographic digest, not biometrics.
+- `save_uppercase`: All-capitals connection-editor save action; keep its casing intent.
+- `resolution_1368_x_768`: Width x height in pixels; preserve the numeric identifier and x separator.
+- `resolution_1600_x_900`: Width x height in pixels; preserve the numeric identifier and x separator.
+- `resolution_1920_x_1080`: Width x height in pixels; preserve the numeric identifier and x separator.
+- `resolution_2000_x_1124`: Width x height in pixels; preserve the numeric identifier and x separator.
+- `resolution_2400_x_1348`: Width x height in pixels; preserve the numeric identifier and x separator.
+- `resolution_2800_x_1572`: Width x height in pixels; preserve the numeric identifier and x separator.
+- `resolution_3200_x_1800`: Width x height in pixels; preserve the numeric identifier and x separator.
+- `vnc_discovery_failed`: VNC shared-password access; ARD is Apple Remote Desktop login. Latin-1 is a character encoding. Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `unknown_pc`: Fallback discovered-computer label; %1$s is its address when DNS/NetBIOS cannot supply a name. Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
+- `protocol_vnc`: VNC shared-password access; ARD is Apple Remote Desktop login. Latin-1 is a character encoding.
+- `protocol_rdp`: RDP device/clipboard sharing with a remote PC; RemoteApp is a published Windows application.
+- `rdp_clipboard_label`: RDP device/clipboard sharing with a remote PC; RemoteApp is a published Windows application. Android/remote copy-paste or headset Downloads/storage-access terminology.
+- `ssh_clipboard_label`: SSH terminal/SFTP file-transfer terminology; jump hosts are intermediate SSH machines. Android/remote copy-paste or headset Downloads/storage-access terminology.
