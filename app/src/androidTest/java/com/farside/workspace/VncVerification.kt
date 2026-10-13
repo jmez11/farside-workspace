@@ -99,7 +99,8 @@ internal class VncVerification(private val test: Instrumentation) {
                 }
                 val loginPassword = if (mode == "macLogin") ProfileManager(test.targetContext).getCredentials()
                     .single { it.id == profile.credentialId }.pass else if (mode == "login") requireNotNull(password) else null
-                session(profile, null, probePointer = mode == "pointer", loginPassword = loginPassword)
+                session(profile, null, probePointer = mode == "pointer", loginPassword = loginPassword,
+                    loginAccountX = if (mode == "macLogin") 280 else 400)
                 record(if (loginPassword != null) "LIVE LOGIN PASS: desktop/window updates and synthetic Command keys verified; clean close. Physical gestures/keys and real Mac clipboard remain pending."
                     else "LIVE PASS: saved VNC credential connect, nonblank actual surface, pointer event, clean close. Mac-visible input/clipboard and physical gestures require wearer checks.")
             } else if (mode == "discovery") {
@@ -132,7 +133,8 @@ internal class VncVerification(private val test: Instrumentation) {
             test.uiAutomation.dropShellPermissionIdentity()
         }
     }
-    private fun session(profile: ConnectionProfile, server: Fixture?, probePointer: Boolean = false, loginPassword: String? = null) {
+    private fun session(profile: ConnectionProfile, server: Fixture?, probePointer: Boolean = false,
+        loginPassword: String? = null, loginAccountX: Int = 400) {
         val activity = test.startActivitySync(Intent(test.targetContext, SessionActivity::class.java)
             .putExtra("profileId", profile.id).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as SessionActivity
         var instance = 0L
@@ -163,7 +165,7 @@ internal class VncVerification(private val test: Instrumentation) {
                     bridge!!.sendPointerEvent(instance, x, y, 1); Thread.sleep(100)
                     bridge!!.sendPointerEvent(instance, x, y, 0); Thread.sleep(800)
                 }
-                click(400, 280); click(640, 400)
+                click(loginAccountX, 280); click(640, 400)
                 loginPassword.forEach { c ->
                     bridge!!.sendUnicodeKeyEvent(instance, c.code, true)
                     bridge!!.sendUnicodeKeyEvent(instance, c.code, false)
