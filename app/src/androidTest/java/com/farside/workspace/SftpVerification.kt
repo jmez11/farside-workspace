@@ -49,7 +49,7 @@ class SftpVerification(private val test: Instrumentation) {
             SftpSession(context, profile).use { session ->
                 check(session.connect({}, {}) == "/")
                 var entries = session.list("/", SftpOperation())
-                check(entries.first().directory)
+                check(entries.first().directory) { "Unexpected SFTP rows: ${entries.map { it.name to it.directory }}" }
                 check(entries.single { it.name == "link" }.link == "/hello.txt")
                 check(entries.single { it.name == "broken" }.unavailable)
                 check(entries.single { it.name == "denied" }.unavailable)
