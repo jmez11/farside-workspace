@@ -293,4 +293,8 @@
     <string name="remote_forward_localhost_help">localhost means Quest</string>
     <string name="remote_forward_server_help">The server must permit remote forwarding. Other-host access also requires its GatewayPorts setting.</string>
     <string name="forwarding_rule_status">%1$s · %2$s · %3$s</string>
+    <string name="confirm_headset_passcode">Confirm your headset passcode.</string>
+    <string name="system_auth_requires_window">System authentication requires an active window.</string>
+    <string name="waiting_for_system">Waiting for system</string>
+    <string name="unlock_with_headset_passcode">Unlock with headset passcode</string>
 </resources>
