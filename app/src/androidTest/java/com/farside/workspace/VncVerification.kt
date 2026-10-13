@@ -133,8 +133,8 @@ internal class VncVerification(private val test: Instrumentation) {
                 pm.addProfile(orphan)
                 check(test.targetContext.getSharedPreferences("farside_profiles", 0).edit().commit())
                 try {
-                    session(orphan, null)
-                    record("PASS: VNC opened with deleted SSH pair; no crash")
+                    session(orphan, null, expectedFiles = false)
+                    record("PASS: VNC opened with deleted SSH pair; Files action absent and no crash")
                 } finally {
                     pm.deleteProfile(orphan.id)
                     check(test.targetContext.getSharedPreferences("farside_profiles", 0).edit().commit())
@@ -201,7 +201,8 @@ internal class VncVerification(private val test: Instrumentation) {
         }
     }
     private fun session(profile: ConnectionProfile, server: Fixture?, probePointer: Boolean = false,
-        loginPassword: String? = null, loginAccountX: Int = 400, verifyFinder: Boolean = true) {
+        loginPassword: String? = null, loginAccountX: Int = 400, verifyFinder: Boolean = true,
+        expectedFiles: Boolean? = null) {
         val activity = test.startActivitySync(Intent(test.targetContext, SessionActivity::class.java)
             .putExtra("profileId", profile.id).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as SessionActivity
         var instance = 0L
@@ -222,6 +223,21 @@ internal class VncVerification(private val test: Instrumentation) {
                 }.getOrDefault(false)
             }
             capture(activity, "vnc-frame-${server?.encoding ?: "live"}.png").recycle()
+            if (expectedFiles != null) {
+                val info = test.uiAutomation.serviceInfo
+                info.flags = info.flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+                test.uiAutomation.serviceInfo = info
+                test.uiAutomation.clearCache()
+                fun descend(node: android.view.accessibility.AccessibilityNodeInfo): List<android.view.accessibility.AccessibilityNodeInfo> =
+                    listOf(node) + (0 until node.childCount).flatMap { node.getChild(it)?.let(::descend).orEmpty() }
+                val windows = test.uiAutomation.windowsOnAllDisplays.let { all ->
+                    (0 until all.size()).flatMap { all.valueAt(it) }
+                }
+                val hasFiles = windows.filter { it.root?.packageName == test.targetContext.packageName }
+                    .flatMap { it.root?.let(::descend).orEmpty() }
+                    .any { it.contentDescription?.toString() == test.targetContext.getString(R.string.browse_files) }
+                check(hasFiles == expectedFiles) { "Unexpected paired Files toolbar action: $hasFiles" }
+            }
             check(bridge!!.getDesktopWidth(instance) > 0 && bridge!!.getDesktopHeight(instance) > 0)
             // Opt-in diagnostic for this Mac's known login screen. The account password
             // is a transient instrumentation argument, never saved or included in results.
