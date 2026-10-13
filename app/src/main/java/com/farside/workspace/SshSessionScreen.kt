@@ -1,5 +1,8 @@
 package com.farside.workspace
 
+import com.farside.workspace.R
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import android.os.Bundle
 import android.util.Log
 import android.graphics.SurfaceTexture
@@ -167,20 +170,20 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
             sshSessionRef?.forwarding?.update(next)
         }, onDismiss = { showForwards = false })
     if (showTerminalSettings) AlertDialog(onDismissRequest = { showTerminalSettings = false },
-        title = { Text("Terminal settings") }, text = {
+        title = { Text(stringResource(R.string.terminal_settings)) }, text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Scrollback stores previous lines locally. Lowering the limit discards older history.")
+                Text(stringResource(R.string.scrollback_help))
                 OutlinedTextField(scrollbackText, { scrollbackText = it; scrollbackError = null },
-                    label = { Text("Scrollback lines (100–50,000)") }, singleLine = true,
+                    label = { Text(stringResource(R.string.scrollback_lines_hint)) }, singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number))
-                Text("Font: ${fontSize}sp · Opacity: ${(terminalAlpha * 100).roundToInt()}%", style = MaterialTheme.typography.bodySmall)
-                Text("All terminal settings save to this connection.", style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.terminal_font_opacity, fontSize, (terminalAlpha * 100).roundToInt()), style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.terminal_settings_saved_help), style = MaterialTheme.typography.bodySmall)
                 scrollbackError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             }
-        }, dismissButton = { TextButton(onClick = { showTerminalSettings = false }) { Text("Cancel") } },
+        }, dismissButton = { TextButton(onClick = { showTerminalSettings = false }) { Text(stringResource(R.string.cancel)) } },
         confirmButton = { TextButton(onClick = {
             val count = scrollbackText.toIntOrNull()
-            if (count == null || count !in 100..50000) scrollbackError = "Enter 100–50,000 lines"
+            if (count == null || count !in 100..50000) scrollbackError = context.getString(R.string.scrollback_lines_validation)
             else {
                 scrollback = count
                 terminalViewRef?.mEmulator?.setScrollbackRows(count)
@@ -188,7 +191,7 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                 saveTerminalSettings()
                 showTerminalSettings = false
             }
-        }) { Text("Save settings") } })
+        }) { Text(stringResource(R.string.save_settings)) } })
 
 
     SideEffect {
@@ -500,7 +503,7 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                         IconButton(onClick = { toolbarPinned = !toolbarPinned; revealToolbar() }) {
                             Icon(
                                 Icons.Default.PushPin,
-                                if (toolbarPinned) "Unpin toolbar" else "Keep toolbar visible",
+                                if (toolbarPinned) stringResource(R.string.unpin_toolbar) else stringResource(R.string.keep_toolbar_visible),
                                 tint = if (toolbarPinned) MaterialTheme.colorScheme.primary else Color.White
                             )
                         }
@@ -509,7 +512,7 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                             if (showZoomSlider) showTransparencySlider = false
                             revealToolbar()
                         }) {
-                            Icon(Icons.Default.Search, "Zoom", tint = Color.White)
+                            Icon(Icons.Default.Search, stringResource(R.string.zoom), tint = Color.White)
                         }
                         if (fontSize != defaultFontSize) {
                             IconButton(onClick = {
@@ -517,7 +520,7 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                                 terminalViewRef?.setTextSize(defaultFontSize)
                                 revealToolbar()
                             }) {
-                                Icon(Icons.Default.FullscreenExit, "Reset Zoom", tint = Color.White)
+                                Icon(Icons.Default.FullscreenExit, stringResource(R.string.reset_zoom), tint = Color.White)
                             }
                         }
                         IconButton(onClick = {
@@ -527,7 +530,7 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                         }) {
                             Icon(
                                 Icons.Default.Opacity,
-                                "Transparency",
+                                stringResource(R.string.transparency),
                                 tint = if (terminalAlpha < 1.0f) MaterialTheme.colorScheme.primary else Color.White
                             )
                         }
@@ -535,19 +538,19 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                             SftpFilesControl(unsupported = !works, onOpen = { showFiles = true }, onInteraction = { revealToolbar() })
                         }
                         IconButton(onClick = { showForwards = true; revealToolbar() }) {
-                            Icon(Icons.Default.SwapHoriz, "Port forwarding", tint = Color.White)
+                            Icon(Icons.Default.SwapHoriz, stringResource(R.string.port_forwarding), tint = Color.White)
                         }
                         IconButton(onClick = {
                             revealToolbar()
                             showSoftKeyboard = !showSoftKeyboard
                             if (!showSoftKeyboard) { keyboardController?.hide() }
                         }) {
-                            Icon(Icons.Default.Keyboard, "Keyboard", tint = if (showSoftKeyboard) MaterialTheme.colorScheme.primary else Color.White)
+                            Icon(Icons.Default.Keyboard, stringResource(R.string.keyboard), tint = if (showSoftKeyboard) MaterialTheme.colorScheme.primary else Color.White)
                         }
                     }
 
                     if (showZoomSlider) {
-                        Text("${fontSize}sp", color = Color.White, modifier = Modifier.padding(bottom = 4.dp))
+                        Text(stringResource(R.string.terminal_font_size, fontSize), color = Color.White, modifier = Modifier.padding(bottom = 4.dp))
                         Slider(
                             value = fontSize.toFloat(),
                             onValueChange = { newSize ->
@@ -564,7 +567,7 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                     }
 
                     if (showTransparencySlider) {
-                        Text("${(terminalAlpha * 100).roundToInt()}%", color = Color.White, modifier = Modifier.padding(bottom = 4.dp))
+                        Text(stringResource(R.string.terminal_opacity_percent, (terminalAlpha * 100).roundToInt()), color = Color.White, modifier = Modifier.padding(bottom = 4.dp))
                         Slider(
                             value = terminalAlpha,
                             onValueChange = { newAlpha ->
@@ -586,7 +589,7 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
         // Soft Keyboard Input Handlers
         if (showSoftKeyboard) {
             RemoteImeEditor(
-                label = "SSH keyboard input",
+                label = stringResource(R.string.ssh_keyboard_input),
                 activation = desktopKeyboardActivation,
                 showInitially = true,
                 keyboardVisible = keyboardVisible,
@@ -609,7 +612,7 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
         ) {
             if (showSoftKeyboard) {
                 RemoteImeEditor(
-                    label = "SSH key panel input",
+                    label = stringResource(R.string.ssh_key_panel_input),
                     activation = panelKeyboardActivation,
                     showInitially = false,
                     keyboardVisible = keyboardVisible,
