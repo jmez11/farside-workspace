@@ -297,4 +297,48 @@
     <string name="system_auth_requires_window">System authentication requires an active window.</string>
     <string name="waiting_for_system">Waiting for system</string>
     <string name="unlock_with_headset_passcode">Unlock with headset passcode</string>
+    <string name="confirm_headset_files">Confirm your headset passcode to browse SSH files.</string>
+    <string name="back_in_files">Back in Files</string>
+    <string name="files_title">Farside Files</string>
+    <string name="close_files">Close Files</string>
+    <string name="ssh_files_root">Farside SSH</string>
+    <string name="enable_sftp_help">Enable SFTP file access in an SSH connection’s settings to see it here.</string>
+    <string name="empty_folder">This folder is empty.</string>
+    <string name="file_unavailable">Unavailable or permission denied</string>
+    <string name="loading">Loading…</string>
+    <string name="connecting">Connecting…</string>
+    <string name="storage_permission_required">Storage permission required</string>
+    <string name="saved_credential_removed">Saved credential removed</string>
+    <string name="cloudflare_tunnel_exited">Cloudflare tunnel exited. Reconnect to continue.</string>
+    <string name="checking_downloads">Checking Downloads…</string>
+    <string name="cannot_read_folder">Cannot read folder</string>
+    <string name="refreshing">Refreshing…</string>
+    <string name="deleting">Deleting…</string>
+    <string name="checking_destination">Checking destination…</string>
+    <string name="sftp_downloading">Downloading %1$s…</string>
+    <string name="sftp_uploading">Uploading %1$s…</string>
+    <string name="sftp_replace_download">Replace %1$s in Downloads?</string>
+    <string name="sftp_confirm_download">Download %1$s to Downloads?</string>
+    <string name="sftp_cached_path">%1$s · cached (Refresh for latest)</string>
+    <string name="sftp_transfer_megabytes">%1$d / %2$d MB</string>
+    <string name="sftp_link_target">→ %1$s</string>
+    <string name="sftp_entry_actions">Actions for %1$s</string>
+    <string name="sftp_confirm_delete">Delete %1$s? Folders must be empty.</string>
+    <string name="sftp_replace_upload">Replace %1$s on the server?</string>
+    <string name="sftp_confirm_upload">Upload %1$s to this folder?</string>
+    <string name="sftp_folder_name">%1$s/</string>
+    <string name="sftp_entry_details">%1$s · %2$s</string>
+    <string name="folder">Folder</string>
+    <plurals name="sftp_loading_found">
+        <item quantity="one">Loading… (Found %1$d items)</item>
+        <item quantity="other">Loading… (Found %1$d items)</item>
+    </plurals>
+    <plurals name="sftp_loading_details">
+        <item quantity="one">Loading… (Found %1$d items, read details %2$d/%1$d)</item>
+        <item quantity="other">Loading… (Found %1$d items, read details %2$d/%1$d)</item>
+    </plurals>
+    <plurals name="sftp_file_bytes">
+        <item quantity="one">%1$d bytes</item>
+        <item quantity="other">%1$d bytes</item>
+    </plurals>
 </resources>
