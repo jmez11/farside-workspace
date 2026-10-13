@@ -289,7 +289,7 @@ internal class RdpCameraVerification(private val test: RdpResizeInstrumentation,
         val verifier = RdpCertificateVerifier(test.targetContext, laptop.host, laptop.port, { request -> request?.respond(true) })
         val instance = bridge.connect(
             laptop.host, laptop.port, laptop.user, laptop.pass, null,
-            enableCamera = true, enableMicrophone = false, enableStorage = false,
+            adminMode = false, enableCamera = true, enableMicrophone = false, enableStorage = false,
             surface = android.view.Surface(android.graphics.SurfaceTexture(0)),
             certificateHost = laptop.host, certificateVerifier = verifier
         )
@@ -381,7 +381,7 @@ internal class RdpCameraVerification(private val test: RdpResizeInstrumentation,
                     secondaryTexture = android.graphics.SurfaceTexture(0)
                     secondarySurface = android.view.Surface(secondaryTexture)
                     secondary = bridge.connect(laptop.host, laptop.port, laptop.user, laptop.pass, null,
-                        enableCamera = true, enableMicrophone = false, enableStorage = false,
+                        adminMode = false, enableCamera = true, enableMicrophone = false, enableStorage = false,
                         surface = secondarySurface, certificateHost = laptop.host,
                         certificateVerifier = RdpCertificateVerifier(test.targetContext, laptop.host, laptop.port,
                             { request -> request?.respond(true) }))
