@@ -1,6 +1,23 @@
 package com.farside.workspace
 
 import android.view.Surface
+import android.os.ParcelFileDescriptor
+import android.util.Log
+import com.farside.workspace.data.VncAuthMode
+import java.math.BigInteger
+import java.net.InetSocketAddress
+import java.net.Socket
+import java.security.KeyFactory
+import java.security.KeyPairGenerator
+import java.security.MessageDigest
+import java.security.SecureRandom
+import javax.crypto.Cipher
+import javax.crypto.KeyAgreement
+import javax.crypto.spec.DHParameterSpec
+import javax.crypto.spec.DHPublicKeySpec
+import javax.crypto.spec.SecretKeySpec
+
+internal class VncAuthenticationException : Exception()
 
 /** Per-session LibVNCClient owner. The monitor serializes native handles with teardown. */
 class VncBridge : DesktopSessionBridge {
@@ -10,13 +27,79 @@ class VncBridge : DesktopSessionBridge {
     private val callbacks = android.os.Handler(android.os.Looper.getMainLooper())
     private val heldPrintable = mutableMapOf<Int, Int>()
 
-    @Synchronized fun connect(host: String, port: Int, password: String, surface: Surface): Long {
+    @Synchronized fun connect(host: String, port: Int, password: String, surface: Surface,
+        username: String = "", authMode: VncAuthMode = VncAuthMode.VNC_PASSWORD): Long {
         check(active == 0L)
         require(port in 1..65535)
-        if (!(password.isNotEmpty() && password.toByteArray(Charsets.ISO_8859_1).size <= 8 && password.all { it.code in 1..255 }))
-            throw LocalizableException(R.string.vnc_password_latin1)
-        active = nativeConnect(host.removeSurrounding("[", "]"), port, password.toByteArray(Charsets.ISO_8859_1), surface)
+        if (authMode == VncAuthMode.VNC_PASSWORD) {
+            if (!(password.isNotEmpty() && password.toByteArray(Charsets.ISO_8859_1).size <= 8 && password.all { it.code in 1..255 }))
+                throw LocalizableException(R.string.vnc_password_latin1)
+            active = nativeConnect(host.removeSurrounding("[", "]"), port, password.toByteArray(Charsets.ISO_8859_1), surface)
+        } else {
+            require(username.isNotBlank() && password.isNotEmpty())
+            val fd = authenticateApple(host.removeSurrounding("[", "]"), port, username, password)
+            active = nativeConnectAuthenticated(host.removeSurrounding("[", "]"), port, fd, surface)
+        }
         return active
+    }
+    private fun authenticateApple(host: String, port: Int, username: String, password: String): Int {
+        val socket = Socket()
+        try {
+            socket.connect(InetSocketAddress(host, port), 5000)
+            socket.soTimeout = 10000
+            val input = java.io.DataInputStream(socket.getInputStream())
+            val output = java.io.DataOutputStream(socket.getOutputStream())
+            val version = ByteArray(12).also { input.readFully(it) }.toString(Charsets.US_ASCII)
+            require(version.startsWith("RFB 003."))
+            output.write("RFB 003.008\n".toByteArray(Charsets.US_ASCII)); output.flush()
+            val count = input.readUnsignedByte()
+            if (count == 0) throw VncAuthenticationException()
+            val offered = ByteArray(count).also { input.readFully(it) }
+            Log.i("VncSession", "Mac security types: ${offered.joinToString { (it.toInt() and 255).toString() }}")
+            if (offered.none { (it.toInt() and 255) == 30 }) throw VncAuthenticationException()
+            output.writeByte(30); output.flush()
+            val generator = input.readUnsignedShort()
+            val keyLength = input.readUnsignedShort()
+            require(generator > 1 && keyLength in 128..512)
+            val primeBytes = ByteArray(keyLength).also { input.readFully(it) }
+            val serverBytes = ByteArray(keyLength).also { input.readFully(it) }
+            val prime = BigInteger(1, primeBytes)
+            val serverPublic = BigInteger(1, serverBytes)
+            require(prime.bitLength() >= 1024 && serverPublic > BigInteger.ONE && serverPublic < prime.subtract(BigInteger.ONE))
+            val spec = DHParameterSpec(prime, BigInteger.valueOf(generator.toLong()))
+            val pair = KeyPairGenerator.getInstance("DH").apply { initialize(spec) }.generateKeyPair()
+            val peer = KeyFactory.getInstance("DH").generatePublic(DHPublicKeySpec(serverPublic, spec.p, spec.g))
+            val agreement = KeyAgreement.getInstance("DH").apply { init(pair.private); doPhase(peer, true) }
+            val shared = agreement.generateSecret().let { if (it.size == keyLength) it else ByteArray(keyLength).also { dest ->
+                require(it.size <= keyLength); it.copyInto(dest, keyLength - it.size)
+            } }
+            val key = MessageDigest.getInstance("MD5").digest(shared)
+            val plain = ByteArray(128).also { SecureRandom().nextBytes(it) }
+            fun putCredential(value: String, offset: Int) {
+                val bytes = value.toByteArray(Charsets.UTF_8)
+                require(bytes.size in 1..63)
+                bytes.copyInto(plain, offset)
+                plain[offset + bytes.size] = 0
+            }
+            putCredential(username, 0); putCredential(password, 64)
+            val encrypted = Cipher.getInstance("AES/ECB/NoPadding").apply {
+                init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"))
+            }.doFinal(plain)
+            plain.fill(0); shared.fill(0); key.fill(0)
+            output.write(encrypted)
+            val publicBytes = (pair.public as javax.crypto.interfaces.DHPublicKey).y.toByteArray()
+                .let { if (it.size > keyLength) it.copyOfRange(it.size - keyLength, it.size) else it }
+            output.write(ByteArray(keyLength - publicBytes.size)); output.write(publicBytes); output.flush()
+            val result = input.readInt()
+            if (result != 0) throw VncAuthenticationException()
+            val descriptor = ParcelFileDescriptor.fromSocket(socket)
+            val fd = descriptor.detachFd()
+            socket.close()
+            return fd
+        } catch (error: Exception) {
+            socket.close()
+            throw error
+        }
     }
     @Synchronized fun disconnect(instance: Long) {
         if (instance == 0L || instance != active) return
@@ -66,6 +149,7 @@ class VncBridge : DesktopSessionBridge {
         callbacks.post { clipboardListener?.invoke(text) }
     }
     private external fun nativeConnect(host: String, port: Int, password: ByteArray, surface: Surface): Long
+    private external fun nativeConnectAuthenticated(host: String, port: Int, fd: Int, surface: Surface): Long
     private external fun nativeDisconnect(instance: Long)
     private external fun nativeSetSurface(instance: Long, surface: Surface?)
     private external fun nativePointer(instance: Long, x: Int, y: Int, mask: Int)
