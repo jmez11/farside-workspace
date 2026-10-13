@@ -18,7 +18,7 @@ class SshTerminalSession(
     context: Context? = null
 ) : TerminalSession("dummy", "/", emptyArray(), emptyArray(), sshSessionInfo.terminalScrollback, client) {
     val context: Context? = context?.applicationContext
-    val forwarding = com.farside.workspace.SshForwarding { statuses ->
+    val forwarding = com.farside.workspace.SshForwarding(this.context) { statuses ->
         Handler(Looper.getMainLooper()).post { onForwardStatus?.invoke(statuses) }
     }
     var onForwardStatus: ((Map<String, String>) -> Unit)? = null

@@ -494,4 +494,10 @@
     <string name="adb_tunnel_port_invalid">Use a port between 1024 and 65535.</string>
     <string name="adb_tunnel_token_only">Enter only the tunnel token, without the command.</string>
     <string name="adb_tunnel_token_invalid">Invalid Cloudflare tunnel token.</string>
+    <string name="forward_disabled">Disabled</string>
+    <string name="forward_after_login">Starts after login</string>
+    <string name="forward_listening">Listening</string>
+    <string name="forward_open_failed">Could not open tunnel</string>
+    <string name="forward_failed">Failed: %1$s</string>
+    <string name="forward_listener_stopped">Failed: listener stopped</string>
 </resources>

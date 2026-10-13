@@ -1,5 +1,12 @@
 # Translation notes
 
+- `forward_disabled`: Saved SSH port forwarding rule is switched off.
+- `forward_after_login`: SSH port forwarding starts after SSH authentication succeeds.
+- `forward_listening`: Network listener is ready for forwarded connections.
+- `forward_open_failed`: SSH port forwarding could not start, with no underlying error detail.
+- `forward_failed`: Placeholder is the forwarding error, possibly supplied by SSHJ or the OS.
+- `forward_listener_stopped`: A previously active forwarding listener stopped unexpectedly.
+
 - `adb_tunnel_port_invalid`: Local bridge listener port, separate from the discovered wireless ADB port.
 - `adb_tunnel_token_only`: Paste the Cloudflare tunnel token value, without shell command syntax.
 - `adb_tunnel_token_invalid`: Cloudflare tunnel token structure is invalid; never include its secret value.
