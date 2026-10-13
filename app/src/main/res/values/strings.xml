@@ -442,4 +442,9 @@
     <string name="cloudflare_sign_in_busy">Cloudflare sign-in is in progress. Close Cloudflare sessions and try again.</string>
     <string name="cloudflare_clear_logins_failed">Could not clear all Cloudflare logins. Try again.</string>
     <string name="cloudflare_auth_failed_exit">Cloudflare authentication failed (exit %1$d). Check the hostname, Access policy and credentials.</string>
+    <string name="incorrect_pin">Incorrect PIN.</string>
+    <plurals name="pin_retry_seconds">
+        <item quantity="one">Too many attempts. Try again in %1$d seconds.</item>
+        <item quantity="other">Too many attempts. Try again in %1$d seconds.</item>
+    </plurals>
 </resources>
