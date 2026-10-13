@@ -77,9 +77,10 @@ class VncBridge : DesktopSessionBridge {
             val plain = ByteArray(128).also { SecureRandom().nextBytes(it) }
             fun putCredential(value: String, offset: Int) {
                 val bytes = value.toByteArray(Charsets.UTF_8)
-                require(bytes.size in 1..63)
-                bytes.copyInto(plain, offset)
-                plain[offset + bytes.size] = 0
+                var length = bytes.size.coerceAtMost(63)
+                if (length < bytes.size) while (length > 0 && (bytes[length].toInt() and 0xc0) == 0x80) length--
+                bytes.copyInto(plain, offset, 0, length)
+                plain[offset + length] = 0
             }
             putCredential(username, 0); putCredential(password, 64)
             val encrypted = Cipher.getInstance("AES/ECB/NoPadding").apply {
