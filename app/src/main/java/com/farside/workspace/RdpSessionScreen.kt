@@ -103,7 +103,7 @@ fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Un
 internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Unit, onClose: () -> Unit,
     windowInteraction: Long = 0L, onBridgeCreated: ((DesktopSessionBridge) -> Unit)? = null) {
     val isVnc = session.type == ConnectionType.VNC
-    val protocolName = if (isVnc) "VNC" else "RDP"
+    val protocolName = stringResource(if (isVnc) R.string.protocol_vnc else R.string.protocol_rdp)
     val permissionContext = LocalContext.current
     var microphoneReady by remember(session.id) {
         mutableStateOf(!session.redirectMicrophone || hasMicrophonePermission(permissionContext))
@@ -231,7 +231,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                     lastReceivedClipText = remoteText
                     android.os.Handler(android.os.Looper.getMainLooper()).post {
                         try {
-                            clipboardManager?.setPrimaryClip(android.content.ClipData.newPlainText("rdp-clipboard", remoteText))
+                            clipboardManager?.setPrimaryClip(android.content.ClipData.newPlainText(context.getString(R.string.rdp_clipboard_label), remoteText))
                         } catch (e: Exception) {
                             Log.e("RdpClipboard", "Failed to set primary clip: ${e.message}")
                         }
