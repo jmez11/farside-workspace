@@ -32,6 +32,50 @@ class SftpVerification(private val test: Instrumentation) {
         if (mode == "fresh-auth") return freshAuth(checkNotNull(liveProfile))
         if (mode == "ui") return ui()
         if (mode == "security") return security()
+        if (mode == "macPairedUi") {
+            val info = test.uiAutomation.serviceInfo
+            info.flags = info.flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+            test.uiAutomation.serviceInfo = info
+            val mac = ProfileManager(context).getProfiles().single { it.name == "Test MacBook Pro" && it.type == ConnectionType.VNC }
+            val paired = ProfileManager(context).getProfiles().single { it.id == mac.sftpPairProfileId }
+            check(!paired.enableSftp)
+            val scratchName = "farside-validation-${UUID.randomUUID()}"
+            val source = File(context.cacheDir, "remote-${UUID.randomUUID()}.txt").apply { writeText("Mac paired Files download\n") }
+            val local = File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS),
+                "upload-${UUID.randomUUID()}.txt").apply { writeText("Mac paired Files upload\n") }
+            var scratch = ""
+            var activity: SessionActivity? = null
+            try {
+                SftpSession(context, paired).use { session ->
+                    val home = session.connect({}, {})
+                    scratch = home.trimEnd('/') + "/" + scratchName
+                    session.mkdir(scratch, SftpOperation())
+                    session.upload(source, "$scratch/${source.name}", false, SftpOperation()) { _, _ -> }
+                }
+                activity = test.startActivitySync(Intent(context, SessionActivity::class.java)
+                    .putExtra("profileId", mac.id).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as SessionActivity
+                find("Browse files"); click("Browse files")
+                find(scratchName); click(scratchName); find(source.name)
+                click(source.name); find("Confirm file operation"); click("Continue")
+                repeat(50) { if (SftpDownloads(context).existing(source.name) != null) return@repeat; Thread.sleep(100) }
+                check(SftpDownloads(context).existing(source.name) != null)
+                click("Upload"); click("Download/"); click(local.name)
+                find("Confirm file operation"); click("Continue"); find(local.name)
+                click("Actions for ${source.name}"); click("Delete"); click("Continue")
+                click("Actions for ${local.name}"); click("Delete"); click("Continue")
+                record("PASS: VNC toolbar Files opened paired SSH without enableSftp; listed scratch, downloaded, uploaded and deleted both files")
+            } finally {
+                activity?.let { test.runOnMainSync { it.finish() } }
+                if (scratch.isNotEmpty()) runCatching { SftpSession(context, paired).use { session ->
+                    session.connect({}, {})
+                    session.list(scratch, SftpOperation()).forEach { session.delete(it, SftpOperation()) }
+                    session.delete(SftpEntry(scratchName, scratch, true, 0, 0, null, false), SftpOperation())
+                } }
+                SftpDownloads(context).existing(source.name)?.let { context.contentResolver.delete(it, null, null) }
+                source.delete(); local.delete()
+            }
+            return report.toString()
+        }
         if (mode == "macSftp") {
             val pm = ProfileManager(context)
             val mac = pm.getProfiles().single { it.name == "Test MacBook Pro" && it.type == ConnectionType.VNC }
