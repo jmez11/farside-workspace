@@ -401,4 +401,6 @@
     <string name="sftp_files_unsupported">SFTP files unsupported</string>
     <string name="browse_files">Browse files</string>
     <string name="sftp_connection_unavailable_help">SFTP file access is turned on for this connection, but the server did not accept an SFTP connection.</string>
+    <string name="system_pin_connect_profile">Confirm your headset passcode to connect to %1$s.</string>
+    <string name="app_pin_connect_profile">Enter the App PIN to connect to %1$s.</string>
 </resources>
