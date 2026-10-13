@@ -54,6 +54,14 @@ string(REPLACE "\tSendFramebufferUpdateRequest(client, 0, 0, rect.r.w, rect.r.h,
     vnc_source "${vnc_source}")
 string(REPLACE "  client->authScheme = authScheme;"
     "  client->authScheme = authScheme;\n  if (authScheme != rfbVncAuth) return FALSE;" vnc_source "${vnc_source}")
+# Kotlin completes Apple type-30 authentication with platform crypto. When it
+# passes the authenticated socket, start LibVNCClient at ClientInit.
+string(REPLACE "  rfbClientInitMsg ci;"
+    "  rfbClientInitMsg ci;\n  if (client->authScheme == rfbARD) { DefaultSupportedMessages(client); goto farside_after_auth; }"
+    vnc_source "${vnc_source}")
+string(REPLACE "  ci.shared = (client->appData.shareDesktop ? 1 : 0);"
+    "farside_after_auth:\n  ci.shared = (client->appData.shareDesktop ? 1 : 0);"
+    vnc_source "${vnc_source}")
 string(REPLACE "      case rfbEncodingZlib:" "      case rfbEncodingZlibHex: {\n        extern rfbBool farsideZlibHex(rfbClient*, int, int, int, int);\n        if (!farsideZlibHex(client, rect.r.x, rect.r.y, rect.r.w, rect.r.h)) return FALSE;\n        break;\n      }\n      case rfbEncodingZlib:" vnc_source "${vnc_source}")
 # Upstream silently accepts zero-sized cursor shapes without notifying the viewer.
 string(REPLACE "if (!HandleCursorShape(client,"
