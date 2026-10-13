@@ -353,4 +353,18 @@
     <string name="sftp_cloudflare_failed">Cloudflare tunnel failed or exited. Reconnect and complete browser sign-in.</string>
     <string name="sftp_operation_failed">Connection lost or file operation failed. Reconnect and try again.</string>
     <string name="sftp_file_name_help">Use a file name without slashes or control characters.</string>
+    <string name="waiting_microphone_permission">Waiting for microphone permission…</string>
+    <string name="waiting_camera_permission">Waiting for camera permission…</string>
+    <string name="waiting_storage_permission">Waiting for storage permission…</string>
+    <string name="unpin_toolbar">Unpin toolbar</string>
+    <string name="keep_toolbar_visible">Keep toolbar visible</string>
+    <string name="unmute_speakers">Unmute speakers</string>
+    <string name="mute_speakers">Mute speakers</string>
+    <string name="zoom">Zoom</string>
+    <string name="reset_zoom">Reset Zoom</string>
+    <string name="keyboard">Keyboard</string>
+    <string name="protocol_connection_failed">The %1$s connection could not be established.</string>
+    <string name="session_disconnected">The %1$s session has disconnected.</string>
+    <string name="session_disconnected_reason">The %1$s session has disconnected.\n\n%2$s</string>
+    <string name="zoom_percent">%1$d%%</string>
 </resources>
