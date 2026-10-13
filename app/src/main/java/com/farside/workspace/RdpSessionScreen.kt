@@ -1,5 +1,8 @@
 package com.farside.workspace
 
+import com.farside.workspace.R
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import android.os.Bundle
 import android.util.Log
 import android.graphics.SurfaceTexture
@@ -154,9 +157,9 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
 
     if (!microphoneReady || !cameraReady || !storageReady) {
         val statusText = when {
-            !microphoneReady -> "Waiting for microphone permission…"
-            !cameraReady -> "Waiting for camera permission…"
-            else -> "Waiting for storage permission…"
+            !microphoneReady -> stringResource(R.string.waiting_microphone_permission)
+            !cameraReady -> stringResource(R.string.waiting_camera_permission)
+            else -> stringResource(R.string.waiting_storage_permission)
         }
         Text(statusText, color = Color.White)
         return
@@ -261,22 +264,22 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
     certificateRequest?.let { RdpCertificateDialog(it) }
     if (tunnelStatus.isNotEmpty() && !connectionFailed && disconnectedReason == null) AlertDialog(
         onDismissRequest = {},
-        title = { Text("Cloudflared") },
+        title = { Text(stringResource(R.string.cloudflared)) },
         text = { Text(tunnelStatus) },
-        confirmButton = { TextButton(onClick = onClose) { Text("Cancel") } },
+        confirmButton = { TextButton(onClick = onClose) { Text(stringResource(R.string.cancel)) } },
     )
     if (connectionFailed) AlertDialog(
         onDismissRequest = { (context as? android.app.Activity)?.finish() },
-        title = { Text("Connection failed") },
-        text = { Text(connectFailureReason.ifBlank { "The $protocolName connection could not be established." }) },
-        confirmButton = { TextButton(onClick = { (context as? android.app.Activity)?.finish() }) { Text("Close") } },
+        title = { Text(stringResource(R.string.connection_failed)) },
+        text = { Text(connectFailureReason.ifBlank { stringResource(R.string.protocol_connection_failed, protocolName) }) },
+        confirmButton = { TextButton(onClick = { (context as? android.app.Activity)?.finish() }) { Text(stringResource(R.string.close)) } },
     )
     disconnectedReason?.let { reason ->
         AlertDialog(
             onDismissRequest = {},
-            title = { Text("Disconnected") },
-            text = { Text(if (reason.isBlank()) "The $protocolName session has disconnected." else "The $protocolName session has disconnected.\n\n$reason") },
-            confirmButton = { TextButton(onClick = onClose) { Text("OK") } },
+            title = { Text(stringResource(R.string.disconnected)) },
+            text = { Text(if (reason.isBlank()) stringResource(R.string.session_disconnected, protocolName) else stringResource(R.string.session_disconnected_reason, protocolName, reason)) },
+            confirmButton = { TextButton(onClick = onClose) { Text(stringResource(R.string.ok)) } },
         )
     }
     val focusRequester = remember { FocusRequester() }
@@ -654,12 +657,12 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                             maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     }
                     IconButton(onClick = { toolbarPinned = !toolbarPinned; revealToolbar() }) {
-                        Icon(Icons.Default.PushPin, if (toolbarPinned) "Unpin toolbar" else "Keep toolbar visible",
+                        Icon(Icons.Default.PushPin, if (toolbarPinned) stringResource(R.string.unpin_toolbar) else stringResource(R.string.keep_toolbar_visible),
                             tint = if (toolbarPinned) MaterialTheme.colorScheme.primary else Color.White)
                     }
                     if (!isVnc) IconButton(onClick = { speakerMuted = !speakerMuted; revealToolbar() }) {
                         Icon(if (speakerMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
-                            if (speakerMuted) "Unmute speakers" else "Mute speakers", tint = Color.White)
+                            if (speakerMuted) stringResource(R.string.unmute_speakers) else stringResource(R.string.mute_speakers), tint = Color.White)
                     }
                     if (effectiveSession.redirectMicrophone) {
                         RdpMicrophoneControl(
@@ -680,20 +683,20 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                         )
                     }
                     IconButton(onClick = { showZoomSlider = !showZoomSlider }) {
-                        Icon(Icons.Default.Search, "Zoom", tint = Color.White)
+                        Icon(Icons.Default.Search, stringResource(R.string.zoom), tint = Color.White)
                     }
                     if (zoom > 1.0f) {
                         IconButton(onClick = { zoom = 1f; panX = 0f; panY = 0f }) {
-                            Icon(Icons.Default.FullscreenExit, "Reset Zoom", tint = androidx.compose.ui.graphics.Color.White)
+                            Icon(Icons.Default.FullscreenExit, stringResource(R.string.reset_zoom), tint = androidx.compose.ui.graphics.Color.White)
                         }
                     }
                     IconButton(onClick = { revealToolbar(); showSoftKeyboard = !showSoftKeyboard; if (!showSoftKeyboard) { keyboardController?.hide() } }) {
-                        Icon(Icons.Default.Keyboard, "Keyboard", tint = Color.White)
+                        Icon(Icons.Default.Keyboard, stringResource(R.string.keyboard), tint = Color.White)
                     }
                 }
                 
                 if (showZoomSlider) {
-                    Text("${(zoom * 100).toInt()}%", color = androidx.compose.ui.graphics.Color.White, modifier = Modifier.padding(bottom = 4.dp))
+                    Text(stringResource(R.string.zoom_percent, (zoom * 100).toInt()), color = androidx.compose.ui.graphics.Color.White, modifier = Modifier.padding(bottom = 4.dp))
                     Slider(
                         value = zoom,
                         onValueChange = { zoom = it },
@@ -743,7 +746,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
         }
 
         if (showSoftKeyboard) RemoteImeEditor(
-            label = "Remote keyboard input", activation = desktopKeyboardActivation, showInitially = true,
+            label = stringResource(R.string.remote_keyboard_input), activation = desktopKeyboardActivation, showInitially = true,
             keyboardVisible = keyboardVisible, onActions = { (context as? SessionActivity)?.keyboardEditorActions = it },
             onFocus = { (context as? SessionActivity)?.keyboardEditorHasFocus = it },
             onView = { (context as? SessionActivity)?.keyboardEditorView = it },
@@ -756,7 +759,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                 panelKeyboardActivation = keyboardInteraction
             }) {
         if (showSoftKeyboard) RemoteImeEditor(
-            label = "Remote key panel input", activation = panelKeyboardActivation, showInitially = false,
+            label = stringResource(R.string.remote_key_panel_input), activation = panelKeyboardActivation, showInitially = false,
             keyboardVisible = keyboardVisible, onActions = { (context as? SessionActivity)?.let { activity -> activity.keyboardPanelEditorActions = it } },
             onImeVisibility = { panelImeVisible = it },
             onFocus = { (context as? SessionActivity)?.let { activity -> activity.keyboardPanelEditorHasFocus = it } },
