@@ -2,9 +2,12 @@ package com.farside.workspace.data
 
 import org.json.JSONObject
 import java.util.UUID
+import androidx.annotation.StringRes
+import com.farside.workspace.LocalizableException
+import com.farside.workspace.R
 
-enum class ForwardKind(val label: String) { LOCAL("Local"), REMOTE("Remote"), DYNAMIC("Dynamic SOCKS") }
-enum class ForwardFamily(val label: String) { AUTO("Auto"), IPV4("IPv4"), IPV6("IPv6") }
+enum class ForwardKind(@StringRes val labelResId: Int) { LOCAL(R.string.forward_kind_local), REMOTE(R.string.forward_kind_remote), DYNAMIC(R.string.forward_kind_dynamic) }
+enum class ForwardFamily(@StringRes val labelResId: Int) { AUTO(R.string.forward_family_auto), IPV4(R.string.forward_family_ipv4), IPV6(R.string.forward_family_ipv6) }
 
 data class SshForward(
     val id: String = UUID.randomUUID().toString(),
@@ -21,13 +24,18 @@ data class SshForward(
         ForwardFamily.IPV4 -> if (allowOtherHosts) "0.0.0.0" else "127.0.0.1"
         ForwardFamily.IPV6 -> if (allowOtherHosts) "::" else "::1"
     }
-    val route: String get() = if (kind == ForwardKind.DYNAMIC) "Quest :$sourcePort → SOCKS5 proxy"
-        else "${if (kind == ForwardKind.LOCAL) "Quest" else "Server"} :$sourcePort → $destinationHost:$destinationPort"
+    @get:StringRes val routeResId: Int get() = when (kind) {
+        ForwardKind.DYNAMIC -> R.string.forward_route_dynamic
+        ForwardKind.LOCAL -> R.string.forward_route_local
+        ForwardKind.REMOTE -> R.string.forward_route_remote
+    }
+    val routeFormatArgs: Array<out Any> get() = if (kind == ForwardKind.DYNAMIC) arrayOf(sourcePort)
+        else arrayOf(sourcePort, destinationHost, destinationPort)
     fun validate() {
-        require(sourcePort in 1..65535) { "Source port must be 1–65535" }
+        if (sourcePort !in 1..65535) throw LocalizableException(R.string.forward_source_port_invalid)
         if (kind != ForwardKind.DYNAMIC) {
-            require(destinationHost.isNotBlank() && destinationHost.none { it.isWhitespace() }) { "Enter a destination host without spaces" }
-            require(destinationPort in 1..65535) { "Destination port must be 1–65535" }
+            if (!(destinationHost.isNotBlank() && destinationHost.none { it.isWhitespace() })) throw LocalizableException(R.string.forward_host_invalid)
+            if (destinationPort !in 1..65535) throw LocalizableException(R.string.forward_destination_port_invalid)
         }
     }
     fun toJson() = JSONObject().put("id", id).put("kind", kind.name).put("sourcePort", sourcePort)
@@ -40,9 +48,8 @@ data class SshForward(
         fun validateList(rules: List<SshForward>) {
             rules.forEach { it.validate() }
             val active = rules.filter { it.enabled }
-            require(active.map { Pair(it.kind == ForwardKind.REMOTE, it.sourcePort) }.distinct().size == active.size) {
-                "Enabled tunnels on the same side need different source ports"
-            }
+            if (active.map { Pair(it.kind == ForwardKind.REMOTE, it.sourcePort) }.distinct().size != active.size)
+                throw LocalizableException(R.string.forward_port_conflict)
         }
     }
 }
