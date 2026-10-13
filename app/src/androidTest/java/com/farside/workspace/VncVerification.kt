@@ -101,7 +101,7 @@ internal class VncVerification(private val test: Instrumentation) {
                     .single { it.id == profile.credentialId }.pass else if (mode == "login") requireNotNull(password) else null
                 session(profile, null, probePointer = mode == "pointer", loginPassword = loginPassword,
                     loginAccountX = if (mode == "macLogin") 280 else 400, verifyFinder = mode != "macLogin")
-                record(if (loginPassword != null) "LIVE LOGIN PASS: desktop/window updates and synthetic Command keys verified; clean close. Physical gestures/keys and real Mac clipboard remain pending."
+                record(if (loginPassword != null) "LIVE LOGIN PASS: Mac desktop rendered after saved account login; clean close. Physical gestures/keys and real Mac clipboard remain pending."
                     else "LIVE PASS: saved VNC credential connect, nonblank actual surface, pointer event, clean close. Mac-visible input/clipboard and physical gestures require wearer checks.")
             } else if (mode == "discovery") {
                 val found = runBlocking { NetworkScanner.scanLocalNetworkForVnc(test.targetContext) }
@@ -340,7 +340,7 @@ internal class VncVerification(private val test: Instrumentation) {
                 server.failure?.let { throw AssertionError("Fixture failed", it) }
             }
             record(if (server != null) "PASS: ${server.encoding} nonblank ANativeWindow frame, shared drag/mapping, key/clipboard callbacks and stop/join/socket teardown"
-                else if (loginPassword != null) "PASS: logged-in Mac framebuffer/window redraw, synthetic Command keys, pointer dispatch and clean native disconnect"
+                else if (loginPassword != null) "PASS: logged-in Mac framebuffer, pointer dispatch and clean native disconnect"
                 else "PASS: live nonblank ANativeWindow frame, shared pointer dispatch and clean native disconnect; Mac-visible input/clipboard not asserted")
         } finally { main { if (!activity.isFinishing) activity.finish() }; Thread.sleep(400) }
     }
