@@ -447,4 +447,10 @@
         <item quantity="one">Too many attempts. Try again in %1$d seconds.</item>
         <item quantity="other">Too many attempts. Try again in %1$d seconds.</item>
     </plurals>
+    <string name="headset_passcode_required">Set a headset passcode in Quest Settings &gt; Security before unlocking this connection.</string>
+    <string name="headset_auth_timeout">Quest did not provide passcode authentication. This OS may restrict system prompts to approved apps. Your security settings have not changed.</string>
+    <string name="headset_auth_description">Confirm your headset passcode to continue in Farside Workspace.</string>
+    <string name="headset_auth_unverified">System passcode authentication could not be verified.</string>
+    <string name="headset_auth_rejected">Quest did not allow system passcode authentication.</string>
+    <string name="headset_auth_unavailable">System passcode authentication is unavailable. Try again from Quest Home.</string>
 </resources>
