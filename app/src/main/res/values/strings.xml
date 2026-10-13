@@ -280,4 +280,17 @@
     </plurals>
     <string name="connection_via">via %1$s</string>
     <string name="jump_host_missing">\u26A0 jump host missing</string>
+    <string name="ssh_forwarding_help">Tunnels start with this SSH connection. Changes in a session apply now and are saved for next time.</string>
+    <string name="no_saved_tunnels">No saved tunnels. Add a port or a SOCKS proxy.</string>
+    <string name="other_hosts_allowed">Other hosts allowed</string>
+    <string name="loopback_only">Loopback only</string>
+    <string name="saved">Saved</string>
+    <string name="disabled">Disabled</string>
+    <string name="local_forward_help">Listen on Quest. The SSH server connects to the destination.</string>
+    <string name="remote_forward_help">Listen on the SSH server. Quest connects to the destination.</string>
+    <string name="dynamic_forward_help">Listen on Quest as a SOCKS5 proxy. Each app chooses its destination through SSH (TCP only).</string>
+    <string name="local_forward_localhost_help">localhost means the SSH server</string>
+    <string name="remote_forward_localhost_help">localhost means Quest</string>
+    <string name="remote_forward_server_help">The server must permit remote forwarding. Other-host access also requires its GatewayPorts setting.</string>
+    <string name="forwarding_rule_status">%1$s · %2$s · %3$s</string>
 </resources>
