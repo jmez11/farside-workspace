@@ -511,4 +511,11 @@
     <string name="camera_resolution_720">720p</string>
     <string name="camera_resolution_native">Highest native resolution</string>
     <string name="protocol_ssh">SSH</string>
+    <string name="jump_host_deleted">Jump host no longer exists; connecting directly.</string>
+    <string name="jump_host_cycle">Jump host cycle: %1$s appears twice in the chain.</string>
+    <string name="jump_host_wrong_type">Jump host %1$s is not an SSH profile.</string>
+    <plurals name="jump_chain_too_long">
+        <item quantity="one">Jump chain is longer than %1$d hops (%2$s).</item>
+        <item quantity="other">Jump chain is longer than %1$d hops (%2$s).</item>
+    </plurals>
 </resources>

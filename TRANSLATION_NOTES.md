@@ -1,5 +1,10 @@
 # Translation notes
 
+- `jump_host_deleted`: Saved intermediate SSH profile was deleted; connection falls back to the resolved chain.
+- `jump_host_cycle`: Profile name appears twice in a chain of intermediate SSH connections.
+- `jump_host_wrong_type`: Jump hosts must use SSH rather than RDP or VNC.
+- `jump_chain_too_long`: Count is the permitted total SSH connections, including the target; second placeholder lists the route. Preserve original English hops wording for all quantities.
+
 - `protocol_ssh`: Preserve SSH, the Secure Shell protocol identifier in selectors and badges.
 
 - `proxy_none`: No proxy or tunnel is used for this connection.

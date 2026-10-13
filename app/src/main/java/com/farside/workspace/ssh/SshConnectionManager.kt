@@ -117,7 +117,7 @@ class SshConnectionManager private constructor(private val context: Context?, pr
                 if (resolveJumps && context != null && !profile.jumpHostProfileId.isNullOrBlank()) {
                     chain = JumpChains.resolveChain(profile, ProfileManager(context).getProfiles())
                     chainRef = chain
-                    chain.warning?.let { onStatus("[Warning: $it]\r\n") }
+                    chain.warning?.let { onStatus("[Warning: ${context.getString(it)}]\r\n") }
                     if (chain.jumpHosts.isNotEmpty()) via = connectJumpHosts(chain, onStatus)
                 }
                 var targetHost = profile.host

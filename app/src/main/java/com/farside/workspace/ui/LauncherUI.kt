@@ -1438,7 +1438,7 @@ fun AddProfileForm(
                             }
                         }
                     }
-                    val (chainPreview, chainProblem) = com.farside.workspace.ssh.JumpChains.preview(editedProfile, allProfiles)
+                    val (chainPreview, chainProblem) = com.farside.workspace.ssh.JumpChains.preview(context, editedProfile, allProfiles)
                     val previewText = chainProblem ?: chainPreview?.takeIf { it.jumpHosts.isNotEmpty() }?.let {
                         context.getString(R.string.jump_route_preview, editedProfile.name.ifBlank { context.getString(R.string.this_profile) }, it.jumpHosts.joinToString(context.getString(R.string.jump_route_separator)) { h -> h.name })
                     }

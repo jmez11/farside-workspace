@@ -142,7 +142,7 @@ class SessionActivity : ComponentActivity() {
         intent.putExtra(SessionWindowSlots.EXTRA_SLOT, sessionSlot)
         SessionWindowSlots.claim(profile.id, sessionSlot)
         val headerTitle = if (profile.jumpHostProfileId.isNullOrBlank()) profile.name else runCatching {
-            com.farside.workspace.ssh.JumpChains.resolveChain(profile, com.farside.workspace.data.ProfileManager(this).getProfiles()).describe()
+            com.farside.workspace.ssh.JumpChains.resolveChain(profile, com.farside.workspace.data.ProfileManager(this).getProfiles()).describe(this)
         }.getOrDefault(profile.name)
         setTitle(headerTitle)
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
