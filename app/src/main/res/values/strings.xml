@@ -375,4 +375,17 @@
     <string name="terminal_font_opacity">Font: %1$dsp · Opacity: %2$d%%</string>
     <string name="terminal_font_size">%1$dsp</string>
     <string name="terminal_opacity_percent">%1$d%%</string>
+    <string name="certificate_changed">Certificate has changed</string>
+    <string name="certificate_unverified">Certificate can\'t be verified</string>
+    <string name="certificate_changed_help">This certificate differs from the one you saved. Review it before connecting. Saving replaces the previous certificate.</string>
+    <string name="certificate_connect_anyway">Do you want to connect anyway?</string>
+    <string name="remember_certificate">Remember this certificate for this PC</string>
+    <string name="less_details">Less details</string>
+    <string name="more_details">More details</string>
+    <string name="certificate_target">You are connecting to: %1$s:%2$d</string>
+    <string name="certificate_subject">Name in certificate from the remote PC: %1$s</string>
+    <string name="certificate_issuer">Issuer: %1$s</string>
+    <string name="certificate_validity">Valid from: %1$s\nValid until: %2$s</string>
+    <string name="certificate_fingerprint">SHA-256 fingerprint:\n%1$s</string>
+    <string name="certificate_previous_fingerprint">Previously saved SHA-256 fingerprint:\n%1$s</string>
 </resources>
