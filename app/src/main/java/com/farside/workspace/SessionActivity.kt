@@ -1,5 +1,8 @@
 package com.farside.workspace
 
+import com.farside.workspace.R
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -127,7 +130,7 @@ class SessionActivity : ComponentActivity() {
         sessionProfile = profile.id
         sessionCredential = profile.credentialId
         if (profile.credentialId != null && profileManager.getCredentials().none { it.id == profile.credentialId }) {
-            android.widget.Toast.makeText(this, "Saved credential was deleted. Choose another credential for this connection.", android.widget.Toast.LENGTH_LONG).show()
+            android.widget.Toast.makeText(this, getString(R.string.saved_credential_deleted), android.widget.Toast.LENGTH_LONG).show()
             finish()
             return
         }
@@ -161,13 +164,13 @@ class SessionActivity : ComponentActivity() {
                 ) {
                     if (!unlocked) {
                         if (systemPin) com.farside.workspace.ui.SystemCredentialDialog(
-                            title = "Unlock connection",
-                            message = "Confirm your headset passcode to connect to ${profile.name}.",
+                            title = stringResource(R.string.unlock_connection),
+                            message = stringResource(R.string.system_pin_connect_profile, profile.name),
                             onUnlocked = { unlocked = true }, onCancel = { finish() }
                         ) else
                         com.farside.workspace.ui.CredentialPinDialog(
-                            title = "Unlock connection",
-                            message = "Enter the App PIN to connect to ${profile.name}.",
+                            title = stringResource(R.string.unlock_connection),
+                            message = stringResource(R.string.app_pin_connect_profile, profile.name),
                             onUnlocked = { unlocked = true },
                             onCancel = { finish() }
                         )
