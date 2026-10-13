@@ -517,4 +517,7 @@
     <string name="choose_vnc_password_credential">Choose a saved VNC password credential.</string>
     <string name="invalid_vnc_password">Invalid VNC password.</string>
     <string name="vnc_connection_failed_help">VNC connection failed. Enable Screen Sharing and VNC password access (1 to 8 characters); ARD login is not supported.</string>
+    <string name="certificate_hostname_mismatch">PC name does not match the certificate.</string>
+    <string name="certificate_invalid_dates">Certificate is outside its validity dates.</string>
+    <string name="certificate_untrusted_chain">Certificate chain is not trusted or could not be validated.</string>
 </resources>
