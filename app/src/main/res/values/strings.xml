@@ -398,4 +398,7 @@
     <string name="mute_microphone_recording">Mute microphone (recording)</string>
     <string name="mute_microphone">Mute microphone</string>
     <string name="microphone_redirection_unavailable_help">This host does not support microphone redirection.</string>
+    <string name="sftp_files_unsupported">SFTP files unsupported</string>
+    <string name="browse_files">Browse files</string>
+    <string name="sftp_connection_unavailable_help">SFTP file access is turned on for this connection, but the server did not accept an SFTP connection.</string>
 </resources>
