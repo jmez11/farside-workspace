@@ -39,7 +39,7 @@ class Files(paramiko.SFTPServerInterface):
     a=paramiko.SFTPAttributes.from_stat(q.stat());a.filename=q.name;result.append(a)
    if self.path(p)==DATA:
     for name in ['link','broken','denied']:
-     a=paramiko.SFTPAttributes();a.filename=name;a.st_mode=(stat.S_IFREG if name=='denied' else stat.S_IFLNK)|0o444;a.st_size=0;a.st_mtime=0;a.st_atime=0;result.append(a)
+     a=paramiko.SFTPAttributes();a.filename=name;a.st_mode=stat.S_IFLNK|0o444;a.st_size=0;a.st_mtime=0;a.st_atime=0;result.append(a)
    return result
   except OSError as e:return paramiko.SFTPServer.convert_errno(e.errno)
  def stat(self,p):
@@ -48,10 +48,10 @@ class Files(paramiko.SFTPServerInterface):
   try:return paramiko.SFTPAttributes.from_stat(self.path(p).stat())
   except OSError as e:return paramiko.SFTPServer.convert_errno(e.errno)
  def lstat(self,p):
-  if p in ['/link','/broken']:
+  if p in ['/link','/broken','/denied']:
    a=paramiko.SFTPAttributes();a.st_mode=stat.S_IFLNK|0o777;a.st_size=0;return a
   return self.stat(p)
- def readlink(self,p):return '/hello.txt' if p=='/link' else '/missing'
+ def readlink(self,p):return paramiko.SFTP_PERMISSION_DENIED if p=='/denied' else ('/hello.txt' if p=='/link' else '/missing')
  def open(self,p,flags,attr):
   try:
    fd=os.open(self.path(p),flags|os.O_BINARY,0o600)
