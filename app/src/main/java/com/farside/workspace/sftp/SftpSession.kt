@@ -1,5 +1,6 @@
 package com.farside.workspace.sftp
 
+import com.farside.workspace.R
 import android.content.ContentValues
 import android.content.Context
 import android.os.Environment
@@ -62,6 +63,22 @@ internal fun sftpError(error: Throwable): String = when {
     error is IllegalStateException && error.message?.contains("already exists") == true -> "A file with this name already exists. Choose a different name or confirm replacement."
     error is IllegalStateException && error.message?.contains("Cloudflare", true) == true -> "Cloudflare tunnel failed or exited. Reconnect and complete browser sign-in."
     else -> "Connection lost or file operation failed. Reconnect and try again."
+}
+
+internal fun sftpError(context: Context, error: Throwable): String = when {
+    error is CancellationException -> context.getString(R.string.cancelled)
+    error is net.schmizz.sshj.userauth.UserAuthException -> context.getString(R.string.sftp_auth_failed)
+    error is SftpUnavailable -> context.getString(R.string.sftp_subsystem_unavailable)
+    error is SFTPException && error.statusCode == Response.StatusCode.PERMISSION_DENIED -> context.getString(R.string.sftp_permission_denied)
+    error is SFTPException && error.statusCode == Response.StatusCode.NO_SUCH_FILE -> context.getString(R.string.sftp_file_missing)
+    error is FileNotFoundException -> context.getString(R.string.sftp_local_file_unavailable)
+    error is IllegalArgumentException && error.message == "invalid_sftp_name" -> context.getString(R.string.sftp_file_name_help)
+    error is IllegalArgumentException -> error.message ?: context.getString(R.string.sftp_invalid_file_name)
+    error is IllegalStateException && error.message == context.getString(R.string.storage_permission_required) -> context.getString(R.string.sftp_storage_permission_help)
+    error is IllegalStateException && error.message == context.getString(R.string.saved_credential_removed) -> context.getString(R.string.sftp_credential_removed_help)
+    error is IllegalStateException && error.message?.contains("already exists") == true -> context.getString(R.string.sftp_file_exists)
+    error is IllegalStateException && error.message?.contains("Cloudflare", true) == true -> context.getString(R.string.sftp_cloudflare_failed)
+    else -> context.getString(R.string.sftp_operation_failed)
 }
 internal class SftpUnavailable(cause: Exception) : IOException("SFTP unavailable", cause)
 
