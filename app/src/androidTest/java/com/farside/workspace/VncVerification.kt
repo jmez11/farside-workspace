@@ -72,6 +72,15 @@ internal class VncVerification(private val test: Instrumentation) {
                     check(SystemClock.uptimeMillis() - started < 15000) { "Authentication hung" }
                     record("PASS: Apple server rejected wrong password with SecurityResult; no native session or hang")
                 } finally { surface.release(); texture.release() }
+            } else if (mode == "danglingPair") {
+                val pm = ProfileManager(test.targetContext)
+                val original = pm.getProfiles().single { it.name == "Test MacBook Pro" && it.type == ConnectionType.VNC }
+                val orphan = original.copy(sftpPairProfileId = "deleted-ssh-profile")
+                pm.updateProfile(orphan)
+                try {
+                    session(orphan, null)
+                    record("PASS: VNC opened with deleted SSH pair; no crash")
+                } finally { pm.updateProfile(original) }
             } else if (mode == "create") {
                 require(!password.isNullOrEmpty()) { "VNC password missing" }
                 val found = runBlocking { NetworkScanner.scanLocalNetworkForVnc(test.targetContext) }
