@@ -518,4 +518,17 @@
         <item quantity="one">Jump chain is longer than %1$d hops (%2$s).</item>
         <item quantity="other">Jump chain is longer than %1$d hops (%2$s).</item>
     </plurals>
+    <string name="forward_kind_local">Local</string>
+    <string name="forward_kind_remote">Remote</string>
+    <string name="forward_kind_dynamic">Dynamic SOCKS</string>
+    <string name="forward_family_auto">Auto</string>
+    <string name="forward_family_ipv4">IPv4</string>
+    <string name="forward_family_ipv6">IPv6</string>
+    <string name="forward_route_dynamic">Quest :%1$d → SOCKS5 proxy</string>
+    <string name="forward_route_local">Quest :%1$d → %2$s:%3$d</string>
+    <string name="forward_route_remote">Server :%1$d → %2$s:%3$d</string>
+    <string name="forward_source_port_invalid">Source port must be 1–65535</string>
+    <string name="forward_host_invalid">Enter a destination host without spaces</string>
+    <string name="forward_destination_port_invalid">Destination port must be 1–65535</string>
+    <string name="forward_port_conflict">Enabled tunnels on the same side need different source ports</string>
 </resources>

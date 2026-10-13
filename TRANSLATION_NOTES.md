@@ -1,5 +1,19 @@
 # Translation notes
 
+- `forward_kind_local`: SSH local forwarding listens on Quest and connects from the server.
+- `forward_kind_remote`: SSH remote forwarding listens on the server and connects from Quest.
+- `forward_kind_dynamic`: SOCKS5 listener on Quest selects destinations dynamically.
+- `forward_family_auto`: Automatically selects the network address family.
+- `forward_family_ipv4`: Preserve the IPv4 protocol identifier.
+- `forward_family_ipv6`: Preserve the IPv6 protocol identifier.
+- `forward_route_dynamic`: Quest listener port points to a SOCKS5 proxy; preserve the brand and protocol.
+- `forward_route_local`: Quest listener port points to destination host and port.
+- `forward_route_remote`: Server listener port points to destination host and port reached from Quest.
+- `forward_source_port_invalid`: Listener port range; preserve the en dash and absent final period.
+- `forward_host_invalid`: Destination network host, without whitespace.
+- `forward_destination_port_invalid`: Forwarded destination port range; preserve the en dash and absent final period.
+- `forward_port_conflict`: Enabled rules listening on the same endpoint side must have unique source ports.
+
 - `jump_host_deleted`: Saved intermediate SSH profile was deleted; connection falls back to the resolved chain.
 - `jump_host_cycle`: Profile name appears twice in a chain of intermediate SSH connections.
 - `jump_host_wrong_type`: Jump hosts must use SSH rather than RDP or VNC.

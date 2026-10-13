@@ -1,6 +1,8 @@
 package com.farside.workspace.ui
 
 import com.farside.workspace.R
+import com.farside.workspace.localizedMessage
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.foundation.layout.*
@@ -18,6 +20,7 @@ import com.farside.workspace.data.*
 @Composable
 fun SshForwardingDialog(rules: List<SshForward>, statuses: Map<String, String> = emptyMap(),
     onChange: (List<SshForward>) -> Unit, onDismiss: () -> Unit) {
+    val context = LocalContext.current
     var editing by remember { mutableStateOf<SshForward?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     AlertDialog(onDismissRequest = onDismiss, title = { Text(stringResource(R.string.port_forwarding)) },
@@ -29,14 +32,14 @@ fun SshForwardingDialog(rules: List<SshForward>, statuses: Map<String, String> =
                     OutlinedCard(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(12.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(rule.kind.label, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+                                Text(stringResource(rule.kind.labelResId), Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
                                 Switch(rule.enabled, onCheckedChange = { enabled ->
                                     val next = rules.map { if (it.id == rule.id) it.copy(enabled = enabled) else it }
-                                    error = runCatching { SshForward.validateList(next); onChange(next) }.exceptionOrNull()?.message
+                                    error = runCatching { SshForward.validateList(next); onChange(next) }.exceptionOrNull()?.localizedMessage(context)
                                 })
                             }
-                            Text(rule.route)
-                            Text(stringResource(R.string.forwarding_rule_status, rule.family.label, if (rule.allowOtherHosts) stringResource(R.string.other_hosts_allowed) else stringResource(R.string.loopback_only), statuses[rule.id] ?: if (rule.enabled) stringResource(R.string.saved) else stringResource(R.string.disabled)), style = MaterialTheme.typography.bodySmall)
+                            Text(stringResource(rule.routeResId, *rule.routeFormatArgs))
+                            Text(stringResource(R.string.forwarding_rule_status, stringResource(rule.family.labelResId), if (rule.allowOtherHosts) stringResource(R.string.other_hosts_allowed) else stringResource(R.string.loopback_only), statuses[rule.id] ?: if (rule.enabled) stringResource(R.string.saved) else stringResource(R.string.disabled)), style = MaterialTheme.typography.bodySmall)
                             Row {
                                 TextButton(onClick = { editing = rule }) { Text(stringResource(R.string.edit_tunnel)) }
                                 TextButton(onClick = { onChange(rules.filterNot { it.id == rule.id }); error = null }) { Text(stringResource(R.string.remove_tunnel)) }
@@ -63,6 +66,7 @@ fun SshForwardingDialog(rules: List<SshForward>, statuses: Map<String, String> =
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 private fun ForwardEditor(original: SshForward, onCancel: () -> Unit, onSave: (SshForward) -> Unit) {
+    val context = LocalContext.current
     var kind by remember { mutableStateOf(original.kind) }
     var family by remember { mutableStateOf(original.family) }
     var source by remember { mutableStateOf(original.sourcePort.toString()) }
@@ -73,7 +77,7 @@ private fun ForwardEditor(original: SshForward, onCancel: () -> Unit, onSave: (S
     AlertDialog(onDismissRequest = onCancel, title = { Text(stringResource(R.string.configure_tunnel)) }, text = {
         Column(Modifier.width(560.dp).heightIn(max = 400.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ForwardKind.entries.forEach { FilterChip(kind == it, onClick = { kind = it }, label = { Text(it.label) }) }
+                ForwardKind.entries.forEach { FilterChip(kind == it, onClick = { kind = it }, label = { Text(stringResource(it.labelResId)) }) }
             }
             Text(when (kind) {
                 ForwardKind.LOCAL -> stringResource(R.string.local_forward_help)
@@ -87,7 +91,7 @@ private fun ForwardEditor(original: SshForward, onCancel: () -> Unit, onSave: (S
             }
             Text(stringResource(R.string.listener_address_family), style = MaterialTheme.typography.labelLarge)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ForwardFamily.entries.forEach { FilterChip(family == it, onClick = { family = it }, label = { Text(it.label) }) }
+                ForwardFamily.entries.forEach { FilterChip(family == it, onClick = { family = it }, label = { Text(stringResource(it.labelResId)) }) }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.allow_connections_from_other_hosts), Modifier.weight(1f))
@@ -102,7 +106,7 @@ private fun ForwardEditor(original: SshForward, onCancel: () -> Unit, onSave: (S
                 val rule = original.copy(kind = kind, family = family, sourcePort = source.toIntOrNull() ?: 0,
                     destinationHost = host.trim(), destinationPort = port.toIntOrNull() ?: 0, allowOtherHosts = otherHosts)
                 rule.validate(); onSave(rule)
-            }.exceptionOrNull()?.message
+            }.exceptionOrNull()?.localizedMessage(context)
         }) { Text(stringResource(R.string.save_tunnel)) }
     })
 }
