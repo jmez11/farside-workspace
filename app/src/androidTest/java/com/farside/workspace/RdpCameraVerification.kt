@@ -277,7 +277,7 @@ internal class RdpCameraVerification(private val test: RdpResizeInstrumentation,
         check(restored.cameraResolution == CameraResolution.NATIVE_MAX) { "cameraResolution must round-trip via JSON" }
         json.put("cameraResolution", "FHD_1080")
         check(ConnectionProfile.fromJson(json).cameraResolution == CameraResolution.NATIVE_MAX)
-        check(CameraResolution.entries.none { it.displayName == "1080p" })
+        check(CameraResolution.entries.none { test.targetContext.getString(it.labelResId) == "1080p" })
     }
 
     private fun verifyLiveLaptop() {
