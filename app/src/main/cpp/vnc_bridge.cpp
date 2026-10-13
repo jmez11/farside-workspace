@@ -14,6 +14,7 @@
 #include <thread>
 #include <vector>
 #include <sys/socket.h>
+#include <unistd.h>
 
 namespace {
 constexpr size_t maxPixels = 32 * 1024 * 1024, maxClip = 1024 * 1024;
@@ -277,17 +278,18 @@ extern "C" rfbBool farsideZlibHex(rfbClient* c, int rx, int ry, int rw, int rh) 
     return TRUE;
 }
 
-extern "C" JNIEXPORT jlong JNICALL Java_com_farside_workspace_VncBridge_nativeConnect(
-    JNIEnv* env, jobject bridge, jstring host, jint port, jbyteArray password, jobject surface) {
+jlong connectInternal(JNIEnv* env, jobject bridge, jstring host, jint port, jbyteArray password,
+    jobject surface, jint authenticatedFd) {
     auto s = new Session(); env->GetJavaVM(&s->vm);
     s->bridge = env->NewGlobalRef(bridge);
     auto cls = env->GetObjectClass(bridge);
     s->disconnected = env->GetMethodID(cls, "onNativeDisconnected", "()V");
     s->clipboard = env->GetMethodID(cls, "onNativeClipboardChanged", "([BZ)V");
     env->DeleteLocalRef(cls);
-    s->password = bytes(env, password);
+    if (password) s->password = bytes(env, password);
     s->window = ANativeWindow_fromSurface(env, surface);
     s->client = rfbGetClient(8, 3, 4);
+    if (!s->client && authenticatedFd >= 0) close(authenticatedFd);
     if (s->client) {
         auto c = s->client;
         rfbClientSetClientData(c, nullptr, s);
@@ -308,16 +310,25 @@ extern "C" JNIEXPORT jlong JNICALL Java_com_farside_workspace_VncBridge_nativeCo
         c->GotXCutTextUTF8 = [](rfbClient* cl, const char* text, int len) { cutText(cl, text, len, true); };
         const uint32_t auth[] = {rfbVncAuth}; SetClientAuthSchemes(c, auth, 1);
         // Split connect/init avoids rfbInitClient freeing the client behind our owner on error.
-        const bool connected = rfbClientConnect(c);
+        const bool connected = authenticatedFd >= 0 ? (c->sock = authenticatedFd, c->authScheme = rfbARD, c->major = 3, c->minor = 8, true)
+            : rfbClientConnect(c);
         const bool initialized = connected && rfbClientInitialise(c);
         __android_log_print(ANDROID_LOG_INFO, "VncSession", "connect=%d initialized=%d security=%u size=%dx%d", connected, initialized, c->authScheme, c->width, c->height);
-        if (initialized && c->authScheme == rfbVncAuth) {
+        if (initialized && c->authScheme == (authenticatedFd >= 0 ? rfbARD : rfbVncAuth)) {
             std::fill(s->password.begin(), s->password.end(), '\0'); s->password.clear();
             s->renderer = std::thread(render, s); s->worker = std::thread(work, s);
             return reinterpret_cast<jlong>(s);
         }
     }
     env->DeleteGlobalRef(s->bridge); delete s; return 0;
+}
+extern "C" JNIEXPORT jlong JNICALL Java_com_farside_workspace_VncBridge_nativeConnect(
+    JNIEnv* env, jobject bridge, jstring host, jint port, jbyteArray password, jobject surface) {
+    return connectInternal(env, bridge, host, port, password, surface, -1);
+}
+extern "C" JNIEXPORT jlong JNICALL Java_com_farside_workspace_VncBridge_nativeConnectAuthenticated(
+    JNIEnv* env, jobject bridge, jstring host, jint port, jint fd, jobject surface) {
+    return connectInternal(env, bridge, host, port, nullptr, surface, fd);
 }
 extern "C" JNIEXPORT void JNICALL Java_com_farside_workspace_VncBridge_nativeDisconnect(JNIEnv* env, jobject, jlong id) {
     auto s = reinterpret_cast<Session*>(id); if (!s) return;
