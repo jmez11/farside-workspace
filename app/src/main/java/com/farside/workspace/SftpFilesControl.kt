@@ -1,5 +1,8 @@
 package com.farside.workspace
 
+import com.farside.workspace.R
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -34,7 +37,7 @@ internal fun SftpFilesControl(unsupported: Boolean, onOpen: () -> Unit, onIntera
         Box(Modifier.size(24.dp)) {
             Icon(
                 Icons.Default.Folder,
-                contentDescription = if (unsupported) "SFTP files unsupported" else "Browse files",
+                contentDescription = if (unsupported) stringResource(R.string.sftp_files_unsupported) else stringResource(R.string.browse_files),
                 tint = Color.White,
                 modifier = Modifier.fillMaxSize(),
             )
@@ -53,9 +56,9 @@ internal fun SftpFilesControl(unsupported: Boolean, onOpen: () -> Unit, onIntera
     if (showUnsupportedDialog) {
         AlertDialog(
             onDismissRequest = { showUnsupportedDialog = false },
-            title = { Text("File access unavailable") },
-            text = { Text("SFTP file access is turned on for this connection, but the server did not accept an SFTP connection.") },
-            confirmButton = { TextButton(onClick = { showUnsupportedDialog = false; onInteraction() }) { Text("OK") } },
+            title = { Text(stringResource(R.string.file_access_unavailable)) },
+            text = { Text(stringResource(R.string.sftp_connection_unavailable_help)) },
+            confirmButton = { TextButton(onClick = { showUnsupportedDialog = false; onInteraction() }) { Text(stringResource(R.string.ok)) } },
         )
     }
 }
