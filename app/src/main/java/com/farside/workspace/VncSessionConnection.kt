@@ -33,7 +33,7 @@ internal class VncSessionConnection(
     init {
         bridge.disconnectListener = { reason, established ->
             tunnel?.close()
-            if (ended.compareAndSet(false, true)) main.post { if (!closed.get()) onDisconnected(reason, established) }
+            if (ended.compareAndSet(false, true)) main.post { if (!closed.get()) onDisconnected(context.getString(reason), established) }
         }
     }
 
@@ -98,7 +98,7 @@ internal class VncSessionConnection(
                     return@execute
                 }
                 instance = try { bridge.connect(host, port, credential.pass, next) } catch (error: IllegalArgumentException) {
-                    main.post { if (!closed.get()) onDisconnected(error.message ?: context.getString(R.string.invalid_vnc_password), false) }
+                    main.post { if (!closed.get()) onDisconnected(error.localizedMessage(context) ?: context.getString(R.string.invalid_vnc_password), false) }
                     0L
                 }
                 if (instance == 0L) {

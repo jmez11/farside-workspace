@@ -486,4 +486,6 @@
     <string name="protocol_rdp">RDP</string>
     <string name="rdp_clipboard_label">rdp-clipboard</string>
     <string name="ssh_clipboard_label">ssh-clipboard</string>
+    <string name="vnc_password_latin1">VNC password must contain 1 to 8 Latin-1 characters.</string>
+    <string name="vnc_server_disconnected">VNC server disconnected or sent an unsupported message.</string>
 </resources>

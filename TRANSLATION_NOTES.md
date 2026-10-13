@@ -1,5 +1,8 @@
 # Translation notes
 
+- `vnc_password_latin1`: Latin-1 is the VNC password character encoding; preserve the 1 to 8 limit.
+- `vnc_server_disconnected`: Unsupported refers to a VNC protocol message sent by the remote server.
+
 English extraction only; no locale directories were created. Extraction gaps are listed in PROGRESS.md.
 Preserve positional placeholders, XML/Android escaping, brand names, protocol identifiers, command flags and literal keyboard symbols. Keep the source plurals as written: their English wording intentionally matches the previous UI.
 
