@@ -32,6 +32,34 @@ class SftpVerification(private val test: Instrumentation) {
         if (mode == "fresh-auth") return freshAuth(checkNotNull(liveProfile))
         if (mode == "ui") return ui()
         if (mode == "security") return security()
+        if (mode == "macSftp") {
+            val pm = ProfileManager(context)
+            val mac = pm.getProfiles().single { it.name == "Test MacBook Pro" && it.type == ConnectionType.VNC }
+            val credential = pm.getCredentials().single { it.name == "James Kasyan Mac" }
+            val ssh = ConnectionProfile(UUID.randomUUID().toString(), "Mac SFTP validation", ConnectionType.SSH,
+                mac.host, 22, "", "", credentialId = credential.id, enableSftp = false)
+            val source = File(context.cacheDir, "mac-sftp-${UUID.randomUUID()}.txt")
+            source.writeText("Farside Mac SFTP validation\n")
+            try {
+                SftpSession(context, ssh).use { session ->
+                    val home = session.connect({}, {})
+                    val scratch = home.trimEnd('/') + "/farside-validation-${UUID.randomUUID()}"
+                    session.mkdir(scratch, SftpOperation())
+                    try {
+                        val remote = "$scratch/${source.name}"
+                        session.upload(source, remote, false, SftpOperation()) { _, _ -> }
+                        val copied = java.io.ByteArrayOutputStream()
+                        session.download(remote, copied, SftpOperation()) { _, _ -> }
+                        check(copied.toByteArray().contentEquals(source.readBytes()))
+                        session.delete(session.list(scratch, SftpOperation()).single { it.path == remote }, SftpOperation())
+                        record("PASS: Mac SSH credential, scratch upload/download and file deletion")
+                    } finally {
+                        session.delete(SftpEntry(scratch.substringAfterLast('/'), scratch, true, 0, 0, null, false), SftpOperation())
+                    }
+                }
+            } finally { source.delete() }
+            return report.toString()
+        }
         // Host sets the app-op before starting instrumentation: revocation kills the app process.
         if (mode == "permission") return permission()
         val pm = ProfileManager(context)
