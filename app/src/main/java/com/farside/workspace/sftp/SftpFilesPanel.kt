@@ -69,7 +69,7 @@ private fun SftpListScrollbar(state: LazyListState, modifier: Modifier = Modifie
 }
 
 @Composable
-internal fun SftpFilesEntry(onClose: () -> Unit, profileId: String? = null) {
+internal fun SftpFilesEntry(onClose: () -> Unit, profileId: String? = null, allowDisabledPairedProfile: Boolean = false) {
     val context = LocalContext.current
     var security by remember { mutableStateOf<Pair<Boolean, String?>?>(null) }
     var unlocked by remember { mutableStateOf(false) }
@@ -83,13 +83,13 @@ internal fun SftpFilesEntry(onClose: () -> Unit, profileId: String? = null) {
             auth == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             !unlocked && auth.first -> SystemCredentialDialog(title = stringResource(R.string.unlock_files), message = stringResource(R.string.confirm_headset_files), onUnlocked = { unlocked = true }, onCancel = onClose)
             !unlocked && auth.second != null -> CredentialPinDialog(title = stringResource(R.string.unlock_files), verifier = auth.second, onUnlocked = { unlocked = true }, onCancel = onClose)
-            else -> SftpFilesPanel(onClose, profileId)
+            else -> SftpFilesPanel(onClose, profileId, allowDisabledPairedProfile)
         }
     }
 }
 
 @Composable
-private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?) {
+private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?, allowDisabledPairedProfile: Boolean) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val fileListState = rememberLazyListState()
@@ -123,7 +123,10 @@ private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?) {
         context.registerReceiver(receiver, IntentFilter(Intent.ACTION_SCREEN_OFF))
         onDispose { context.unregisterReceiver(receiver); latestOperation?.cancel(); latestSession?.close() }
     }
-    LaunchedEffect(Unit) { profiles = withContext(Dispatchers.IO) { ProfileManager(context).getProfiles().filter { it.type == ConnectionType.SSH && it.enableSftp } } }
+    LaunchedEffect(profileId, allowDisabledPairedProfile) { profiles = withContext(Dispatchers.IO) {
+        ProfileManager(context).getProfiles().filter { it.type == ConnectionType.SSH &&
+            (it.enableSftp || (allowDisabledPairedProfile && it.id == profileId)) }
+    } }
     fun work(label: String, task: suspend (SftpOperation) -> Unit) {
         if (operation != null) return
         val op = SftpOperation()
@@ -154,7 +157,8 @@ private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?) {
             val profile = withContext(Dispatchers.IO) {
                 check(com.farside.workspace.hasStoragePermission(context)) { context.getString(R.string.storage_permission_required) }
                 val pm = ProfileManager(context)
-                val p = pm.getProfiles().single { it.id == id && it.type == ConnectionType.SSH && it.enableSftp }
+                val p = pm.getProfiles().single { it.id == id && it.type == ConnectionType.SSH &&
+                    (it.enableSftp || (allowDisabledPairedProfile && id == profileId)) }
                 check(p.credentialId == null || pm.getCredentials().any { it.id == p.credentialId }) { context.getString(R.string.saved_credential_removed) }
                 p
             }
