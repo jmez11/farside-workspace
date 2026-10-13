@@ -176,6 +176,11 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
     }
     var rdpInstance by remember { mutableStateOf(0L) }
     val context = LocalContext.current
+    val pairedSshId = remember(session.sftpPairProfileId) {
+        if (isVnc) com.farside.workspace.data.ProfileManager(context).getProfiles()
+            .firstOrNull { it.id == session.sftpPairProfileId && it.type == ConnectionType.SSH }?.id else null
+    }
+    var showVncFiles by remember { mutableStateOf(false) }
     var certificateRequest by remember { mutableStateOf<RdpCertificateRequest?>(null) }
     var connectionFailed by remember { mutableStateOf(false) }
     var connectFailureReason by remember { mutableStateOf("") }
@@ -664,6 +669,8 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                         Icon(if (speakerMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
                             if (speakerMuted) stringResource(R.string.unmute_speakers) else stringResource(R.string.mute_speakers), tint = Color.White)
                     }
+                    if (pairedSshId != null) SftpFilesControl(unsupported = false,
+                        onOpen = { showVncFiles = true }, onInteraction = revealToolbar)
                     if (effectiveSession.redirectMicrophone) {
                         RdpMicrophoneControl(
                             muted = micMuted,
@@ -773,6 +780,10 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                 if (rdpInstance != 0L) rdpBridge.sendKeyEvent(rdpInstance, code, down)
             }
         )
+        }
+        if (showVncFiles && pairedSshId != null) Box(Modifier.fillMaxSize()) {
+            com.farside.workspace.sftp.SftpFilesEntry(onClose = { showVncFiles = false },
+                profileId = pairedSshId, allowDisabledPairedProfile = true)
         }
     }
 }
