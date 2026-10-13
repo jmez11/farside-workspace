@@ -25,7 +25,7 @@ class AdbTunnelService : Service() {
         const val STOP = "com.farside.workspace.STOP_ADB_TUNNEL"
         private const val CHANNEL = "AdbTunnel"
         private const val ID = 1002
-        private val mutableStatus = MutableStateFlow("Stopped")
+        private val mutableStatus = MutableStateFlow("")
         val status = mutableStatus.asStateFlow()
         @Volatile var running = false
             private set
@@ -43,19 +43,19 @@ class AdbTunnelService : Service() {
                 relay?.update(null)
                 currentPort = null
                 connectorReady = false
-                update("Paused: enable developer mode and wireless debugging")
+                update(getString(com.farside.workspace.R.string.adb_tunnel_paused_debugging))
             }
         }
     }
     override fun onCreate() {
         super.onCreate()
-        getSystemService(NotificationManager::class.java).createNotificationChannel(NotificationChannel(CHANNEL, "Wireless ADB tunnel", NotificationManager.IMPORTANCE_LOW))
+        getSystemService(NotificationManager::class.java).createNotificationChannel(NotificationChannel(CHANNEL, getString(com.farside.workspace.R.string.wireless_adb_tunnel), NotificationManager.IMPORTANCE_LOW))
         for (key in listOf(Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, "adb_wifi_enabled"))
             contentResolver.registerContentObserver(Settings.Global.getUriFor(key), false, observer)
     }
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == STOP) { stopSelf(); return START_NOT_STICKY }
-        startForeground(ID, notification("Checking wireless debugging"))
+        startForeground(ID, notification(getString(com.farside.workspace.R.string.checking_wireless_debugging)))
         if (job?.isActive == true) return START_STICKY
         val config = AdbTunnelSettings(this).load()
         if (config == null || !AdbDiscovery.flags(this).developer) { stopSelf(); return START_NOT_STICKY }
@@ -71,27 +71,27 @@ class AdbTunnelService : Service() {
                     if (state.port == null) {
                         connectorReady = false
                         child?.close(); child = null
-                        update(if (!state.developer || !state.wireless) "Paused: enable developer mode and wireless debugging" else "Paused: wireless ADB endpoint unavailable")
+                        update(if (!state.developer || !state.wireless) getString(com.farside.workspace.R.string.adb_tunnel_paused_debugging) else getString(com.farside.workspace.R.string.adb_tunnel_paused_unavailable))
                     } else if (child?.alive() != true) {
                         connectorReady = false
                         child?.close()
-                        update("ADB ${state.port}; connecting to Cloudflare")
+                        update(getString(com.farside.workspace.R.string.adb_connecting_cloudflare, state.port))
                         child = AdbTunnelProcess(this@AdbTunnelService, config) { message ->
-                            if (currentPort != null) update("ADB $currentPort; $message")
+                            if (currentPort != null) update(getString(com.farside.workspace.R.string.adb_endpoint_status, currentPort, message))
                         }
                     } else {
                         val connector = child!!
                         connectorReady = connector.connected
-                        update("ADB ${state.port}; " + when {
-                            !connectorReady -> "connecting to Cloudflare"
-                            !connector.routeConfigured -> "Cloudflare connected; check dashboard ADB route"
-                            else -> "Cloudflare connected; ADB route configured"
-                        })
+                        update(getString(com.farside.workspace.R.string.adb_endpoint_status, state.port, when {
+                            !connectorReady -> getString(com.farside.workspace.R.string.connecting_cloudflare)
+                            !connector.routeConfigured -> getString(com.farside.workspace.R.string.cloudflare_check_adb_route)
+                            else -> getString(com.farside.workspace.R.string.cloudflare_adb_route_ready)
+                        }))
                     }
                     delay(15000)
                 }
             } catch (_: Exception) {
-                update("Stopped: tunnel could not start; check token and local port")
+                update(getString(com.farside.workspace.R.string.adb_tunnel_start_failed))
                 stopSelf()
             } finally { child?.close(); child = null; relay?.close(); relay = null; currentPort = null }
         }
@@ -105,15 +105,15 @@ class AdbTunnelService : Service() {
         val stop = PendingIntent.getService(this, 0, Intent(this, AdbTunnelService::class.java).setAction(STOP), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val open = PendingIntent.getActivity(this, 0, Intent(this, com.farside.workspace.MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         return Notification.Builder(this, CHANNEL).setSmallIcon(android.R.drawable.stat_sys_upload)
-            .setContentTitle("Wireless ADB tunnel").setContentText(message).setOngoing(true).setContentIntent(open)
-            .addAction(Notification.Action.Builder(null, "Stop", stop).build()).build()
+            .setContentTitle(getString(com.farside.workspace.R.string.wireless_adb_tunnel)).setContentText(message).setOngoing(true).setContentIntent(open)
+            .addAction(Notification.Action.Builder(null, getString(com.farside.workspace.R.string.stop), stop).build()).build()
     }
     override fun onBind(intent: Intent?): IBinder? = null
     override fun onDestroy() {
         contentResolver.unregisterContentObserver(observer)
         relay?.update(null)
         scope.cancel()
-        running = false; currentPort = null; connectorReady = false; mutableStatus.value = "Stopped"
+        running = false; currentPort = null; connectorReady = false; mutableStatus.value = getString(com.farside.workspace.R.string.stopped)
         super.onDestroy()
     }
 }
