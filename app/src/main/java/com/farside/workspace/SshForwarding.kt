@@ -13,7 +13,8 @@ import java.util.concurrent.Executors
 import kotlin.concurrent.thread
 
 /** All SSH transport/channel creation stays in SSHJ. Only SOCKS5 CONNECT framing is local. */
-class SshForwarding(private val status: (Map<String, String>) -> Unit) : Closeable {
+class SshForwarding(context: android.content.Context? = null, private val status: (Map<String, String>) -> Unit) : Closeable {
+    private val context = context?.applicationContext
     private val executor = Executors.newSingleThreadExecutor()
     private val active = mutableMapOf<String, Running>()
     private val statuses = mutableMapOf<String, String>()
@@ -51,13 +52,17 @@ class SshForwarding(private val status: (Map<String, String>) -> Unit) : Closeab
         }
         statuses.keys.retainAll(desired.map { it.id }.toSet())
         desired.forEach { rule ->
-            if (!rule.enabled) statuses[rule.id] = "Disabled"
-            else if (client == null) statuses[rule.id] = "Starts after login"
+            if (!rule.enabled) statuses[rule.id] = context?.getString(R.string.forward_disabled) ?: "Disabled"
+            else if (client == null) statuses[rule.id] = context?.getString(R.string.forward_after_login) ?: "Starts after login"
             else if (!active.containsKey(rule.id)) {
                 try {
                     active[rule.id] = start(client, rule)
-                    statuses[rule.id] = "Listening"
-                } catch (e: Exception) { statuses[rule.id] = "Failed: ${e.message ?: "Could not open tunnel"}" }
+                    statuses[rule.id] = context?.getString(R.string.forward_listening) ?: "Listening"
+                } catch (e: Exception) {
+                    val reason = context?.let { e.localizedMessage(it) } ?: e.message
+                        ?: (context?.getString(R.string.forward_open_failed) ?: "Could not open tunnel")
+                    statuses[rule.id] = context?.getString(R.string.forward_failed, reason) ?: "Failed: $reason"
+                }
             }
         }
         publish()
@@ -130,7 +135,7 @@ class SshForwarding(private val status: (Map<String, String>) -> Unit) : Closeab
             } catch (e: Exception) {
                 synchronized(this@SshForwarding) {
                 if (!running.closed && !closed) executor.execute {
-                    if (active[rule.id] === running) { active.remove(rule.id)?.close(); statuses[rule.id] = "Failed: listener stopped"; publish() }
+                    if (active[rule.id] === running) { active.remove(rule.id)?.close(); statuses[rule.id] = context?.getString(R.string.forward_listener_stopped) ?: "Failed: listener stopped"; publish() }
                 }
                 }
             }
