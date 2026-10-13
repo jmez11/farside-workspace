@@ -80,7 +80,7 @@ internal class RdpSessionConnection(
                     ended.set(true)
                     main.post { if (!closed.get()) {
                         onStatus("")
-                        onDisconnected(error.message ?: context.getString(R.string.cloudflared_connection_failed), false)
+                        onDisconnected(error.localizedMessage(context) ?: context.getString(R.string.cloudflared_connection_failed), false)
                         onConnected(0L)
                     } }
                     return@execute

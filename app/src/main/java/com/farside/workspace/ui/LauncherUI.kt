@@ -36,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import com.farside.workspace.R
+import com.farside.workspace.localizedMessage
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.platform.LocalContext
@@ -1145,7 +1146,7 @@ fun AddProfileForm(
                         cloudflaredError = runCatching {
                             com.farside.workspace.tunnel.CloudflaredOptions.hostname(host)
                             com.farside.workspace.tunnel.CloudflaredOptions.parse(cloudflaredParameters)
-                        }.exceptionOrNull()?.message
+                        }.exceptionOrNull()?.localizedMessage(context)
                         if (cloudflaredError != null) return@TextButton
                     }
                     

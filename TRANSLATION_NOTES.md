@@ -1,5 +1,19 @@
 # Translation notes
 
+- `cf_hostname_invalid`: DNS host only; exclude URL scheme, port and path.
+- `cf_parameters_too_long`: Cloudflared command-line parameter input exceeds its length limit.
+- `cf_shell_operators_invalid`: Shell metacharacters, escapes and control bytes cannot appear in argument input.
+- `cf_quote_unclosed`: Close the single or double quote enclosing an argument value.
+- `cf_option_unsupported`: Preserve all literal command option names and the -H alias.
+- `cf_option_missing_value`: Command option requires a following or equals-separated value.
+- `cf_option_invalid_value`: Command argument is empty, too long or begins with a dash.
+- `cf_header_not_allowed`: HTTP headers must be Cloudflare Access authentication headers.
+- `cf_header_empty_duplicate`: Authentication header has no value or is supplied twice.
+- `cf_token_invalid_duplicate`: Service token argument contains whitespace or is supplied twice.
+- `cf_token_pair_required`: Cloudflare service credentials require both ID and secret.
+- `cf_header_pair_required`: Cloudflare client authentication requires both ID and secret headers.
+- `cf_token_headers_exclusive`: Select command options or HTTP headers, not both credential formats.
+
 - `forward_kind_local`: SSH local forwarding listens on Quest and connects from the server.
 - `forward_kind_remote`: SSH remote forwarding listens on the server and connects from Quest.
 - `forward_kind_dynamic`: SOCKS5 listener on Quest selects destinations dynamically.

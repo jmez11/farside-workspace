@@ -531,4 +531,17 @@
     <string name="forward_host_invalid">Enter a destination host without spaces</string>
     <string name="forward_destination_port_invalid">Destination port must be 1–65535</string>
     <string name="forward_port_conflict">Enabled tunnels on the same side need different source ports</string>
+    <string name="cf_hostname_invalid">Cloudflared needs a DNS hostname without a URL, port or path.</string>
+    <string name="cf_parameters_too_long">Cloudflared parameters are too long.</string>
+    <string name="cf_shell_operators_invalid">Shell operators, escapes and control characters are not allowed.</string>
+    <string name="cf_quote_unclosed">Close the quote in Cloudflared parameters.</string>
+    <string name="cf_option_unsupported">Unsupported Cloudflared option. Allowed: --service-token-id, --service-token-secret, --header (-H).</string>
+    <string name="cf_option_missing_value">Each Cloudflared option needs a value.</string>
+    <string name="cf_option_invalid_value">Invalid Cloudflared option value.</string>
+    <string name="cf_header_not_allowed">Only Cloudflare Access authentication headers are allowed.</string>
+    <string name="cf_header_empty_duplicate">Empty or duplicate authentication header.</string>
+    <string name="cf_token_invalid_duplicate">Invalid or duplicate service token option.</string>
+    <string name="cf_token_pair_required">Supply both the service token ID and secret.</string>
+    <string name="cf_header_pair_required">Supply both Cloudflare client authentication headers.</string>
+    <string name="cf_token_headers_exclusive">Use either service token options or client headers.</string>
 </resources>

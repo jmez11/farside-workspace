@@ -1,6 +1,8 @@
 package com.farside.workspace.sftp
 
 import com.farside.workspace.R
+import com.farside.workspace.LocalizableError
+import com.farside.workspace.resolve
 import android.content.ContentValues
 import android.content.Context
 import android.os.Environment
@@ -57,6 +59,7 @@ internal fun sftpError(context: Context, error: Throwable): String = when {
     error is SFTPException && error.statusCode == Response.StatusCode.PERMISSION_DENIED -> context.getString(R.string.sftp_permission_denied)
     error is SFTPException && error.statusCode == Response.StatusCode.NO_SUCH_FILE -> context.getString(R.string.sftp_file_missing)
     error is FileNotFoundException -> context.getString(R.string.sftp_local_file_unavailable)
+    error is LocalizableError -> error.resolve(context)
     error is IllegalArgumentException && error.message == "invalid_sftp_name" -> context.getString(R.string.sftp_file_name_help)
     error is IllegalArgumentException -> error.message ?: context.getString(R.string.sftp_invalid_file_name)
     error is IllegalStateException && error.message == context.getString(R.string.storage_permission_required) -> context.getString(R.string.sftp_storage_permission_help)
