@@ -560,6 +560,7 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
         jstring username,
         jstring password,
         jstring remoteApp,
+        jboolean adminMode,
         jboolean enableCamera,
         jboolean enableMicrophone,
         jboolean enableStorage,
@@ -686,6 +687,7 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
     }
     freerdp_settings_set_string(instance->context->settings, FreeRDP_Username, user_c);
     freerdp_settings_set_string(instance->context->settings, FreeRDP_Password, pass_c);
+    freerdp_settings_set_bool(instance->context->settings, FreeRDP_RestrictedAdminModeRequired, adminMode == JNI_TRUE);
     
     LOGI("Applying performance optimizations");
     const char* opt_args[] = {

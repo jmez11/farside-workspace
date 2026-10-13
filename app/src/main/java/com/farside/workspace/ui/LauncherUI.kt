@@ -34,6 +34,7 @@ import android.hardware.camera2.CameraManager
 import android.hardware.camera2.CameraCharacteristics
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import com.farside.workspace.R
 import com.farside.workspace.localizedMessage
@@ -272,14 +273,15 @@ fun SettingsTextField(
     accessibleLabel: String? = null,
     singleLine: Boolean = true,
     minLines: Int = 1,
-    maxLines: Int = if (singleLine) 1 else Int.MAX_VALUE
+    maxLines: Int = if (singleLine) 1 else Int.MAX_VALUE,
+    modifier: Modifier = Modifier
 ) {
     TextField(
         value = value,
         onValueChange = onValueChange,
         placeholder = { Text(placeholder, color = Color.Gray) },
         label = if (accessibleLabel != null) { { Text(accessibleLabel, color = Color.Gray) } } else null,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).then(modifier)
             .semantics { if (accessibleLabel != null) contentDescription = accessibleLabel },
         colors = TextFieldDefaults.colors(
             focusedContainerColor = Color(0xFF1C1C1E),
@@ -648,7 +650,12 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(if (editingCredentialId == null) stringResource(R.string.new_credential) else stringResource(R.string.edit_credential), color = Color(0xFF1E88E5), fontSize = 14.sp)
                             SettingsTextField(newCredName, { newCredName = it }, stringResource(R.string.account_display_name))
-                            SettingsTextField(newCredUser, { newCredUser = it }, stringResource(R.string.username_optional_for_vnc))
+                            SettingsTextField(newCredUser, { newCredUser = it }, stringResource(R.string.username_optional_for_vnc),
+                                modifier = Modifier.onFocusChanged { focusState ->
+                                    if (!focusState.isFocused && editingCredentialId == null && newCredName.isBlank()) {
+                                        newCredName = newCredUser
+                                    }
+                                })
                             SettingsTextField(newCredPass, { newCredPass = it }, stringResource(R.string.password), visualTransformation = PasswordVisualTransformation())
                             if (editingCredentialId != null) Text(stringResource(R.string.leave_password_blank_to_keep_the_saved_password), color = Color.Gray, fontSize = 12.sp)
                             SettingsSwitchRow(stringResource(R.string.require_pin), requirePin, { enabled ->
@@ -669,10 +676,11 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                             })
                             pinError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                             TextButton(enabled = !savingCredential && !pendingPinDisable, onClick = {
-                                if (newCredName.isNotBlank()) {
+                                val credentialName = if (editingCredentialId == null && newCredName.isBlank()) newCredUser else newCredName
+                                if (credentialName.isNotBlank()) {
                                     val credential = com.farside.workspace.data.SavedCredential(
                                         id = editingCredentialId ?: java.util.UUID.randomUUID().toString(),
-                                        name = newCredName, user = newCredUser,
+                                        name = credentialName, user = newCredUser,
                                         pass = if (editingCredentialId != null && newCredPass.isEmpty())
                                             credentials.first { it.id == editingCredentialId }.pass else newCredPass,
                                         requirePin = requirePin)
@@ -1450,8 +1458,6 @@ fun AddProfileForm(
                 
                 if (type == ConnectionType.RDP) {
                     SettingsHeader(stringResource(R.string.general))
-                    SettingsSwitchRow(stringResource(R.string.admin_mode), adminMode, { adminMode = it })
-                    SettingsSwitchRow(stringResource(R.string.swap_mouse_buttons), swapMouseButtons, { swapMouseButtons = it })
                 } else if (type == ConnectionType.SSH) {
                     SettingsHeader(stringResource(R.string.files))
                     SettingsSwitchRow(stringResource(R.string.enable_sftp_file_access), enableSftp, { enabled ->
@@ -1492,7 +1498,6 @@ fun AddProfileForm(
                 if (type == ConnectionType.RDP) {
                     SettingsHeader(stringResource(R.string.device_audio_redirection))
                     // We can reuse ProxyTypeSelector logic for SoundRedirection dropdown if we wanted, or just a simple segmented control.
-                    SettingsTextField(remoteApp, { remoteApp = it }, stringResource(R.string.remoteapp_alias_e_g_cmd))
                     SettingsSwitchRow(stringResource(R.string.redirect_microphone), redirectMicrophone, { enabled ->
                         if (!enabled) redirectMicrophone = false
                         else if (com.farside.workspace.hasMicrophonePermission(context)) redirectMicrophone = true
@@ -1514,8 +1519,7 @@ fun AddProfileForm(
                         else com.farside.workspace.requestStoragePermission(context) { intent -> storagePermissionLauncher.launch(intent) }
                     })
                     SettingsSwitchRow(stringResource(R.string.redirect_clipboard), redirectClipboard, { redirectClipboard = it })
-                    
-                    // Display settings removed
+                    SettingsSwitchRow(stringResource(R.string.admin_mode), adminMode, { adminMode = it })
                 }
             }
         }
