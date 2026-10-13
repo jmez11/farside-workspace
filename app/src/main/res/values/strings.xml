@@ -89,7 +89,7 @@
     <string name="pin_required">PIN required</string>
     <string name="port_forwarding">Port forwarding</string>
     <string name="port_rdp_3389_ssh_22_vnc_5900">Port (RDP 3389 / SSH 22 / VNC 5900)</string>
-    <string name="on_mac_enable_screen_sharing_then_enable_vnc_viewers_with_a_pass">On Mac: enable Screen Sharing, then enable VNC viewers with a password in Computer Settings. Select a saved 1 to 8 character VNC password below. Apple username/password login is not supported.</string>
+    <string name="on_mac_enable_screen_sharing_then_enable_vnc_viewers_with_a_pass">On Mac: enable Screen Sharing, then enable VNC viewers with a password in Computer Settings.</string>
     <string name="options_for_testing_sign_in_trust_store_prompts_and_permission_r">Options for testing sign-in, trust store prompts and permission re-requests.</string>
     <string name="proxy_hostname_or_ip">Proxy Hostname or IP</string>
     <string name="proxy_password_optional">Proxy Password (Optional)</string>
@@ -578,4 +578,12 @@
     <string name="ssh_credential_check">Check the saved credential or SSH key.</string>
     <string name="ssh_permission_denied">Permission denied, please try again.\u000d\n</string>
     <string name="ssh_chain_success">[Chain: %1$s]\u000d\n</string>
+    <string name="vnc_auth_mode">Authentication</string>
+    <string name="vnc_auth_password">VNC password</string>
+    <string name="vnc_auth_mac_user">macOS user</string>
+    <string name="vnc_mac_user_hint">On Mac: enable Screen Sharing and allow this macOS user to access it.</string>
+    <string name="vnc_mac_credential_required">Select a saved credential with a macOS username and password.</string>
+    <string name="vnc_mac_auth_failed">Mac authentication failed. Check the username and password.</string>
+    <string name="vnc_sftp_pair">Pair SSH profile for file access</string>
+    <string name="vnc_sftp_unpaired">None</string>
 </resources>
