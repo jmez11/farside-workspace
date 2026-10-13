@@ -270,4 +270,12 @@
     <string name="tunnel_start_failed">Could not start the tunnel.</string>
     <string name="adb_tunnel_config_preview">config.yml (mirror this ingress in the Cloudflare dashboard):\n%1$s</string>
     <string name="adb_tunnel_client_instructions">On your computer:\n%1$s\nadb connect 127.0.0.1:%2$d</string>
+    <string name="unlock_credential">Unlock credential</string>
+    <string name="enter_app_pin">Enter the App PIN.</string>
+    <string name="checking">Checking…</string>
+    <string name="unlock">Unlock</string>
+    <plurals name="pin_remember_minutes">
+        <item quantity="one">Don\'t reprompt for %1$d minutes</item>
+        <item quantity="other">Don\'t reprompt for %1$d minutes</item>
+    </plurals>
 </resources>
