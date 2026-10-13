@@ -1,5 +1,9 @@
 # Translation notes
 
+- `adb_tunnel_port_invalid`: Local bridge listener port, separate from the discovered wireless ADB port.
+- `adb_tunnel_token_only`: Paste the Cloudflare tunnel token value, without shell command syntax.
+- `adb_tunnel_token_invalid`: Cloudflare tunnel token structure is invalid; never include its secret value.
+
 - `ssh_tunnel_process_exited`: Cloudflared child process stopped; retain terminal CR/LF and brackets.
 - `ssh_connected_host`: Host is the effective SSH destination, possibly the local tunnel address; retain CR/LF.
 - `ssh_terminal_error`: Placeholder is the connection error; retain terminal CR/LF and brackets.

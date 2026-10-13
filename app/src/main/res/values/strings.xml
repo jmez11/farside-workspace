@@ -491,4 +491,7 @@
     <string name="ssh_tunnel_process_exited">\r\n[Cloudflared tunnel process exited]\r\n</string>
     <string name="ssh_connected_host">\r\n[SSH Connected to %1$s]\r\n</string>
     <string name="ssh_terminal_error">\r\n[SSH Error: %1$s]\r\n</string>
+    <string name="adb_tunnel_port_invalid">Use a port between 1024 and 65535.</string>
+    <string name="adb_tunnel_token_only">Enter only the tunnel token, without the command.</string>
+    <string name="adb_tunnel_token_invalid">Invalid Cloudflare tunnel token.</string>
 </resources>

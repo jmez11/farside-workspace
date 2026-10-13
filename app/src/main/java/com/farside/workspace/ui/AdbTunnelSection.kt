@@ -1,6 +1,7 @@
 package com.farside.workspace.ui
 
 import com.farside.workspace.R
+import com.farside.workspace.localizedMessage
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.foundation.layout.*
@@ -61,7 +62,7 @@ fun AdbTunnelSection(discovery: (suspend () -> AdbState)? = null) {
                     AdbTunnelService.start(context)
                     active = true
                     error = null
-                } catch (failure: Exception) { error = failure.message ?: context.getString(R.string.tunnel_start_failed) }
+                } catch (failure: Exception) { error = failure.localizedMessage(context) ?: context.getString(R.string.tunnel_start_failed) }
             }) { Text(stringResource(R.string.save_start_tunnel)) }
             if (active) TextButton(onClick = { AdbTunnelService.stop(context); active = false }) { Text(stringResource(R.string.stop_tunnel)) }
         }
