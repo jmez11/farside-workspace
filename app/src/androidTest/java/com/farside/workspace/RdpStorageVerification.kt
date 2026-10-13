@@ -102,7 +102,7 @@ internal class RdpStorageVerification(private val test: RdpResizeInstrumentation
 
         val instance = bridge.connect(
             nucbox.host, nucbox.port, nucbox.user, nucbox.pass, null,
-            enableCamera = false, enableMicrophone = false, enableStorage = true,
+            adminMode = false, enableCamera = false, enableMicrophone = false, enableStorage = true,
             surface = surface,
             certificateHost = nucbox.host, certificateVerifier = verifier
         )
@@ -139,7 +139,7 @@ internal class RdpStorageVerification(private val test: RdpResizeInstrumentation
 
         val instance = bridge.connect(
             laptop.host, laptop.port, laptop.user, laptop.pass, null,
-            enableCamera = false, enableMicrophone = false, enableStorage = true,
+            adminMode = false, enableCamera = false, enableMicrophone = false, enableStorage = true,
             surface = surface,
             certificateHost = laptop.host, certificateVerifier = verifier
         )
