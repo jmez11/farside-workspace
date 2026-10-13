@@ -533,4 +533,5 @@
     <string name="protocol_vnc">VNC</string>
     <string name="protocol_rdp">RDP</string>
     <string name="rdp_clipboard_label">rdp-clipboard</string>
+    <string name="ssh_clipboard_label">ssh-clipboard</string>
 </resources>
