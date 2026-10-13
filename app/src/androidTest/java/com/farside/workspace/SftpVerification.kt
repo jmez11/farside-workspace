@@ -36,12 +36,15 @@ class SftpVerification(private val test: Instrumentation) {
             val pm = ProfileManager(context)
             val mac = pm.getProfiles().single { it.name == "Test MacBook Pro" && it.type == ConnectionType.VNC }
             val credential = pm.getCredentials().single { it.name == "James Kasyan Mac" }
+            val shortCredential = credential.copy(id = UUID.randomUUID().toString(), user = "jameskasyan")
             val ssh = ConnectionProfile(UUID.randomUUID().toString(), "Mac SFTP validation", ConnectionType.SSH,
-                mac.host, 22, credential.user, "", credentialId = credential.id, enableSftp = false)
+                mac.host, 22, "", "", credentialId = shortCredential.id, enableSftp = false)
             val source = File(context.cacheDir, "mac-sftp-${UUID.randomUUID()}.txt")
             source.writeText("Farside Mac SFTP validation\n")
+            pm.addCredential(shortCredential); pm.addProfile(ssh)
+            check(context.getSharedPreferences("farside_profiles", 0).edit().commit())
             try {
-                SftpSession(context, ssh).use { session ->
+                SftpSession(context, pm.getProfiles().single { it.id == ssh.id }).use { session ->
                     val home = session.connect({}, {})
                     val scratch = home.trimEnd('/') + "/farside-validation-${UUID.randomUUID()}"
                     session.mkdir(scratch, SftpOperation())
@@ -57,7 +60,10 @@ class SftpVerification(private val test: Instrumentation) {
                         session.delete(SftpEntry(scratch.substringAfterLast('/'), scratch, true, 0, 0, null, false), SftpOperation())
                     }
                 }
-            } finally { source.delete() }
+            } finally {
+                source.delete(); pm.deleteProfile(ssh.id); pm.deleteCredential(shortCredential.id)
+                check(context.getSharedPreferences("farside_profiles", 0).edit().commit())
+            }
             return report.toString()
         }
         // Host sets the app-op before starting instrumentation: revocation kills the app process.
