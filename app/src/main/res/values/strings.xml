@@ -407,4 +407,5 @@
     <string name="persistent_tunnels">Persistent Tunnels</string>
     <string name="persistent_tunnels_description">Maintains Cloudflare tunnels in the background</string>
     <string name="tunneling_to_host">Tunneling to %1$s</string>
+    <string name="stopped">Stopped</string>
 </resources>
