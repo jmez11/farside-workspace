@@ -52,7 +52,7 @@ internal class VncSessionConnection(
                     next.release()
                     ended.set(true)
                     main.post { if (!closed.get()) {
-                        onDisconnected("${profile.proxyType.displayName} proxy connections are not supported yet. Select None or Cloudflared.", false)
+                        onDisconnected(context.getString(R.string.proxy_connection_not_supported, profile.proxyType.displayName), false)
                         onConnected(0L)
                     } }
                     return@execute
@@ -65,7 +65,7 @@ internal class VncSessionConnection(
                         {
                             if (ended.compareAndSet(false, true)) main.post {
                                 if (!closed.get()) {
-                                    onDisconnected("Cloudflared tunnel exited.", connected.get())
+                                    onDisconnected(context.getString(R.string.cloudflared_tunnel_exited), connected.get())
                                     if (!connected.get()) onConnected(0L)
                                 }
                             }
@@ -78,7 +78,7 @@ internal class VncSessionConnection(
                     ended.set(true)
                     main.post { if (!closed.get()) {
                         onStatus("")
-                        onDisconnected(error.message ?: "Cloudflared connection failed.", false)
+                        onDisconnected(error.message ?: context.getString(R.string.cloudflared_connection_failed), false)
                         onConnected(0L)
                     } }
                     return@execute
@@ -89,22 +89,22 @@ internal class VncSessionConnection(
                 }
                 if (profile.credentialId != null && credential == null) {
                     next.release(); ended.set(true); tunnel?.close()
-                    main.post { if (!closed.get()) { onDisconnected("Saved credential was deleted. Choose another credential.", false); onConnected(0L) } }
+                    main.post { if (!closed.get()) { onDisconnected(context.getString(R.string.choose_another_credential), false); onConnected(0L) } }
                     return@execute
                 }
                 if (credential == null || credential.pass.isEmpty()) {
                     next.release(); ended.set(true); tunnel?.close()
-                    main.post { if (!closed.get()) { onDisconnected("Choose a saved VNC password credential.", false); onConnected(0L) } }
+                    main.post { if (!closed.get()) { onDisconnected(context.getString(R.string.choose_vnc_password_credential), false); onConnected(0L) } }
                     return@execute
                 }
                 instance = try { bridge.connect(host, port, credential.pass, next) } catch (error: IllegalArgumentException) {
-                    main.post { if (!closed.get()) onDisconnected(error.message ?: "Invalid VNC password.", false) }
+                    main.post { if (!closed.get()) onDisconnected(error.message ?: context.getString(R.string.invalid_vnc_password), false) }
                     0L
                 }
                 if (instance == 0L) {
                     ended.set(true)
                     main.post { if (!closed.get()) onDisconnected(
-                        "VNC connection failed. Enable Screen Sharing and VNC password access (1 to 8 characters); ARD login is not supported.", false) }
+                        context.getString(R.string.vnc_connection_failed_help), false) }
                 }
                 val connected = instance
                 this.connected.set(connected != 0L)
