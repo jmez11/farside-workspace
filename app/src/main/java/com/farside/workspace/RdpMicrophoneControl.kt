@@ -1,5 +1,8 @@
 package com.farside.workspace
 
+import com.farside.workspace.R
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -35,10 +38,10 @@ internal fun RdpMicrophoneControl(
 ) {
     var showUnsupportedDialog by remember { mutableStateOf(false) }
     val description = when {
-        hostUnsupported -> "Microphone redirection unsupported"
-        muted -> "Unmute microphone"
-        recording -> "Mute microphone (recording)"
-        else -> "Mute microphone"
+        hostUnsupported -> stringResource(R.string.microphone_redirection_unsupported)
+        muted -> stringResource(R.string.unmute_microphone)
+        recording -> stringResource(R.string.mute_microphone_recording)
+        else -> stringResource(R.string.mute_microphone)
     }
     IconButton(onClick = {
         onInteraction()
@@ -66,10 +69,10 @@ internal fun RdpMicrophoneControl(
     if (showUnsupportedDialog) {
         AlertDialog(
             onDismissRequest = { showUnsupportedDialog = false },
-            title = { Text("Microphone redirection unavailable") },
-            text = { Text("This host does not support microphone redirection.") },
+            title = { Text(stringResource(R.string.microphone_redirection_unavailable)) },
+            text = { Text(stringResource(R.string.microphone_redirection_unavailable_help)) },
             confirmButton = {
-                TextButton(onClick = { showUnsupportedDialog = false; onInteraction() }) { Text("OK") }
+                TextButton(onClick = { showUnsupportedDialog = false; onInteraction() }) { Text(stringResource(R.string.ok)) }
             },
         )
     }
