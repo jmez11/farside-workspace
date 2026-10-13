@@ -73,8 +73,8 @@ class CloudflaredService : Service() {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val name = "Persistent Tunnels"
-            val descriptionText = "Maintains Cloudflare tunnels in the background"
+            val name = getString(com.farside.workspace.R.string.persistent_tunnels)
+            val descriptionText = getString(com.farside.workspace.R.string.persistent_tunnels_description)
             val importance = NotificationManager.IMPORTANCE_LOW
             val channel = NotificationChannel(CHANNEL_ID, name, importance).apply {
                 description = descriptionText
@@ -94,8 +94,8 @@ class CloudflaredService : Service() {
         }
         
         return builder
-            .setContentTitle("Cloudflare Tunnel Active")
-            .setContentText("Tunneling to $hostname")
+            .setContentTitle(getString(com.farside.workspace.R.string.cloudflare_tunnel_active))
+            .setContentText(getString(com.farside.workspace.R.string.tunneling_to_host, hostname))
             .setSmallIcon(android.R.drawable.stat_sys_upload)
             .build()
     }
