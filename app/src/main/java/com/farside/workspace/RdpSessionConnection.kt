@@ -54,7 +54,7 @@ internal class RdpSessionConnection(
                     next.release()
                     ended.set(true)
                     main.post { if (!closed.get()) {
-                        onDisconnected("${profile.proxyType.displayName} proxy connections are not supported yet. Select None or Cloudflared.", false)
+                        onDisconnected(context.getString(R.string.proxy_connection_not_supported, profile.proxyType.displayName), false)
                         onConnected(0L)
                     } }
                     return@execute
@@ -67,7 +67,7 @@ internal class RdpSessionConnection(
                         {
                             if (ended.compareAndSet(false, true)) main.post {
                                 if (!closed.get()) {
-                                    onDisconnected("Cloudflared tunnel exited.", connected.get())
+                                    onDisconnected(context.getString(R.string.cloudflared_tunnel_exited), connected.get())
                                     if (!connected.get()) onConnected(0L)
                                 }
                             }
@@ -80,7 +80,7 @@ internal class RdpSessionConnection(
                     ended.set(true)
                     main.post { if (!closed.get()) {
                         onStatus("")
-                        onDisconnected(error.message ?: "Cloudflared connection failed.", false)
+                        onDisconnected(error.message ?: context.getString(R.string.cloudflared_connection_failed), false)
                         onConnected(0L)
                     } }
                     return@execute
@@ -91,7 +91,7 @@ internal class RdpSessionConnection(
                 }
                 if (profile.credentialId != null && credential == null) {
                     next.release(); ended.set(true); tunnel?.close()
-                    main.post { if (!closed.get()) onDisconnected("Saved credential was deleted. Choose another credential.", false) }
+                    main.post { if (!closed.get()) onDisconnected(context.getString(R.string.choose_another_credential), false) }
                     return@execute
                 }
                 bridge.setCameraMaxDimension(profile.cameraResolution.maxDim)
