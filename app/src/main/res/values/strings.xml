@@ -530,4 +530,7 @@
     <string name="resolution_3200_x_1800">3200 x 1800</string>
     <string name="vnc_discovery_failed">Local VNC discovery could not start (%1$d).</string>
     <string name="unknown_pc">Unknown PC (%1$s)</string>
+    <string name="protocol_vnc">VNC</string>
+    <string name="protocol_rdp">RDP</string>
+    <string name="rdp_clipboard_label">rdp-clipboard</string>
 </resources>
