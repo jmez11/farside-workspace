@@ -34,8 +34,8 @@ class CloudflaredTunnel(private val context: Context) : AutoCloseable {
     fun start(hostInput: String, parameters: String, onStatus: (String) -> Unit, onExit: () -> Unit, listenPort: Int = 0, accessSubcommand: String = "rdp"): Int {
         val host = CloudflaredOptions.hostname(hostInput)
         val args = CloudflaredOptions.parse(parameters)
-        check(executable.canExecute()) { "The bundled Cloudflared executable is unavailable." }
-        check(home.mkdirs() || home.isDirectory) { "Could not prepare Cloudflared token storage." }
+        check(executable.canExecute()) { context.getString(com.farside.workspace.R.string.cloudflared_executable_unavailable) }
+        check(home.mkdirs() || home.isDirectory) { context.getString(com.farside.workspace.R.string.cloudflared_storage_failed) }
         Os.chmod(home.absolutePath, 448) // 0700, even if a directory existed already.
         // Export Android's current trust anchors, including the modern Conscrypt root store.
         val trust = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm()).apply { init(null as KeyStore?) }
@@ -48,7 +48,7 @@ class CloudflaredTunnel(private val context: Context) : AutoCloseable {
         Os.rename(caFile.absolutePath, File(home, "android-ca.pem").absolutePath)
         // Authenticate before FreeRDP starts its protocol handshake timeout. The bundled login
         // patch accepts the same Access credentials and falls back to cloudflared's browser flow.
-        onStatus("Authenticating with Cloudflare… Complete sign-in in the browser if it opens.")
+        onStatus(context.getString(com.farside.workspace.R.string.cloudflare_authenticating))
         val login = launch(listOf("access", "login", "--quiet") + args + listOf("https://$host"))
         val browserFailure = AtomicBoolean(false)
         val userAuth = AtomicBoolean(false)
@@ -58,55 +58,55 @@ class CloudflaredTunnel(private val context: Context) : AutoCloseable {
             if (it == "FARSIDE_AUTH_USER") userAuth.set(true)
             if ("failed to find Access application" in it) noAccessMetadata.set(true)
             val reason = when {
-                "x509:" in it -> "Cloudflare TLS certificate validation failed."
-                "no such host" in it -> "The Cloudflare hostname could not be resolved."
-                "failed to find Access application" in it -> "This hostname did not return a Cloudflare Access application."
-                "Empty app aud" in it -> "Cloudflare Access did not return an application audience."
-                "Empty app domain" in it -> "Cloudflare Access did not return an application domain."
-                "failed to get own" in it || "failed to acquire" in it -> "Cloudflared could not lock its private token cache."
-                "connection refused" in it -> "The Cloudflare endpoint refused the connection."
-                "timeout" in it || "deadline exceeded" in it -> "The Cloudflare endpoint did not respond in time."
+                "x509:" in it -> context.getString(com.farside.workspace.R.string.cloudflare_tls_failed)
+                "no such host" in it -> context.getString(com.farside.workspace.R.string.cloudflare_dns_failed)
+                "failed to find Access application" in it -> context.getString(com.farside.workspace.R.string.cloudflare_application_missing)
+                "Empty app aud" in it -> context.getString(com.farside.workspace.R.string.cloudflare_audience_missing)
+                "Empty app domain" in it -> context.getString(com.farside.workspace.R.string.cloudflare_domain_missing)
+                "failed to get own" in it || "failed to acquire" in it -> context.getString(com.farside.workspace.R.string.cloudflared_cache_lock_failed)
+                "connection refused" in it -> context.getString(com.farside.workspace.R.string.cloudflare_connection_refused)
+                "timeout" in it || "deadline exceeded" in it -> context.getString(com.farside.workspace.R.string.cloudflare_endpoint_timeout)
                 else -> null
             }
             reason?.let(diagnostic::set)
         }
         val deadline = System.nanoTime() + TimeUnit.MINUTES.toNanos(10)
         while (!login.waitFor(100, TimeUnit.MILLISECONDS)) {
-            check(!closed.get()) { "Cloudflared connection cancelled." }
-            check(!browserFailure.get()) { "Could not open the browser for Cloudflare authentication." }
-            check(System.nanoTime() < deadline) { "Cloudflare authentication timed out. Try connecting again." }
+            check(!closed.get()) { context.getString(com.farside.workspace.R.string.cloudflared_cancelled) }
+            check(!browserFailure.get()) { context.getString(com.farside.workspace.R.string.cloudflare_browser_failed) }
+            check(System.nanoTime() < deadline) { context.getString(com.farside.workspace.R.string.cloudflare_auth_timeout) }
         }
         loginReader.join(1000)
-        check(!browserFailure.get()) { "Could not open the browser for Cloudflare authentication." }
+        check(!browserFailure.get()) { context.getString(com.farside.workspace.R.string.cloudflare_browser_failed) }
         // Public Tunnel routes need no Access JWT. Let the normal, TLS-verified WebSocket
         // handshake determine this; it still handles any actual Access redirect itself.
-        check(login.exitValue() == 0 || noAccessMetadata.get()) { diagnostic.get().ifBlank { "Cloudflare authentication failed (exit ${login.exitValue()}). Check the hostname, Access policy and credentials." } }
+        check(login.exitValue() == 0 || noAccessMetadata.get()) { diagnostic.get().ifBlank { context.getString(com.farside.workspace.R.string.cloudflare_auth_failed_exit, login.exitValue()) } }
         child.compareAndSet(login, null)
-        check(!closed.get()) { "Cloudflared connection cancelled." }
-        require(listenPort in 0..65535) { "Invalid local Cloudflared port." }
+        check(!closed.get()) { context.getString(com.farside.workspace.R.string.cloudflared_cancelled) }
+        require(listenPort in 0..65535) { context.getString(com.farside.workspace.R.string.cloudflared_invalid_port) }
         val port = ServerSocket(listenPort, 0, InetAddress.getByName("127.0.0.1")).use { it.localPort }
         val ready = CountDownLatch(1)
-        onStatus("Starting Cloudflared…")
+        onStatus(context.getString(com.farside.workspace.R.string.starting_cloudflared))
         val process = launch(listOf("access", accessSubcommand, "--hostname", host, "--url", "127.0.0.1:$port") + if (userAuth.get()) emptyList() else args)
         drain(process, host, browserFailure) { line ->
             if (line == "FARSIDE_LISTENER_READY 127.0.0.1:$port") ready.countDown()
         }
         val startupDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15)
         while (!ready.await(100, TimeUnit.MILLISECONDS)) {
-            check(!closed.get()) { "Cloudflared connection cancelled." }
-            check(process.isAlive) { "Cloudflared exited before its local listener was ready." }
-            check(System.nanoTime() < startupDeadline) { "Cloudflared listener startup timed out." }
+            check(!closed.get()) { context.getString(com.farside.workspace.R.string.cloudflared_cancelled) }
+            check(process.isAlive) { context.getString(com.farside.workspace.R.string.cloudflared_listener_exited) }
+            check(System.nanoTime() < startupDeadline) { context.getString(com.farside.workspace.R.string.cloudflared_listener_timeout) }
         }
         Thread({
             process.waitFor()
             if (!closed.get()) onExit()
         }, "cloudflared-exit").start()
-        onStatus("Connecting to the remote desktop…")
+        onStatus(context.getString(com.farside.workspace.R.string.connecting_remote_desktop))
         return port
     }
 
     private fun launch(args: List<String>): Process {
-        check(!closed.get()) { "Cloudflared connection cancelled." }
+        check(!closed.get()) { context.getString(com.farside.workspace.R.string.cloudflared_cancelled) }
         val builder = ProcessBuilder(listOf(executable.absolutePath) + args)
             .directory(home).redirectErrorStream(true)
         // Inherit Android's networking/runtime variables; remove cloudflared overrides.
@@ -117,7 +117,7 @@ class CloudflaredTunnel(private val context: Context) : AutoCloseable {
         builder.environment()["SSL_CERT_DIR"] = File(home, "empty-ca-dir").apply { mkdirs() }.absolutePath
         val process = builder.start()
         child.set(process)
-        if (closed.get()) { process.destroyForcibly(); error("Cloudflared connection cancelled.") }
+        if (closed.get()) { process.destroyForcibly(); error(context.getString(com.farside.workspace.R.string.cloudflared_cancelled)) }
         return process
     }
 
@@ -170,14 +170,14 @@ class CloudflaredTunnel(private val context: Context) : AutoCloseable {
         fun clearCachedLogins(context: Context) {
             val cache = File(context.noBackupFilesDir, "cloudflared/.cloudflared")
             if (!cache.exists()) return
-            val files = checkNotNull(cache.listFiles()) { "Could not read Cloudflare login cache." }
+            val files = checkNotNull(cache.listFiles()) { context.getString(com.farside.workspace.R.string.cloudflare_cache_read_failed) }
             val locks = files.filter { it.isFile && it.name.endsWith("-token.lock") }
             check(locks.none { isAuthenticationLockActive(it) }) {
-                "Cloudflare sign-in is in progress. Close Cloudflare sessions and try again."
+                context.getString(com.farside.workspace.R.string.cloudflare_sign_in_busy)
             }
             for (file in files.filter { it.isFile && (it.name.endsWith("-token") ||
                     it.name.endsWith("-token.lock") || it.name.endsWith("-token.url")) }) {
-                check(file.delete()) { "Could not clear all Cloudflare logins. Try again." }
+                check(file.delete()) { context.getString(com.farside.workspace.R.string.cloudflare_clear_logins_failed) }
             }
         }
 
