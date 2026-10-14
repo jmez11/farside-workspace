@@ -1,5 +1,13 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
+  <string name="ssh_public_key_title">SSH ortak anahtarı</string>
+  <string name="ssh_public_key_pin_prompt">Ortak anahtarı göstermek için PIN kodunuzu girin.</string>
+  <string name="ssh_public_key_fingerprint">Parmak izi: %1$s</string>
+  <string name="ssh_public_key_copy">Kopyala</string>
+  <string name="ssh_public_key_copied">Ortak anahtar kopyalandı</string>
+  <string name="ssh_public_key_close">Kapat</string>
+  <string name="ssh_public_key_show_named">%1$s için ortak anahtarı göster</string>
+  <string name="ssh_public_key_invalid">Bu SSH anahtarı okunamadı. Özel anahtarı ve parolayı kontrol edin.</string>
   <string name="add_new_credential">+ Yeni Kimlik Bilgisi Ekle</string>
   <string name="add_new_ssh_key">+ Yeni SSH Anahtarı Ekle</string>
   <string name="about">Hakkında</string>
@@ -66,10 +74,8 @@
   <string name="headset_passcode_active">Headset parolası etkin</string>
   <string name="host_server">Ana Bilgisayar / Sunucu</string>
   <string name="hostname_or_ip_address">Ana bilgisayar adı veya IP adresi</string>
-  <!-- UNCERTAIN: atlama ana bilgisayarı is a literal rendering; the term is usually left in English -->
   <string name="jump_host">Atlama ana bilgisayarı</string>
   <string name="key_display_name">Anahtar Görünen Adı</string>
-  <!-- UNCERTAIN: parola ifadesi vs geçiş ifadesi for passphrase; SSH docs vary -->
   <string name="leave_passphrase_blank_to_keep_the_saved_passphrase">Kaydedilen parolayı korumak için parola ifadesini boş bırakın.</string>
   <string name="leave_password_blank_to_keep_the_saved_password">Kaydedilen parolayı korumak için parolayı boş bırakın.</string>
   <string name="licenses_in_use">Kullanımdaki lisanslar:</string>
@@ -132,7 +138,6 @@
   <string name="source_port">Kaynak bağlantı noktası</string>
   <string name="ssh_key">SSH Anahtarı</string>
   <string name="ssh_key_management">SSH Anahtarı Yönetimi</string>
-  <!-- UNCERTAIN: "key panel" ambiguous — TRANSLATION_NOTES.md says cryptographic SSH key, but the name parallels remote_key_panel_input (keyboard panel); translated as keyboard panel -->
   <string name="ssh_key_panel_input">SSH tuş paneli girişi</string>
   <string name="ssh_keyboard_input">SSH klavye girişi</string>
   <string name="ssh_keys">SSH Anahtarları</string>
@@ -205,6 +210,8 @@
   <string name="move_connection_later">%1$s öğesini arkaya taşı</string>
   <string name="finding_local_sessions">Yerel %1$s oturumları aranıyor…</string>
   <string name="proxy_connections_unavailable">%1$s bağlantıları henüz kullanılamıyor.</string>
+  <string name="http_proxy_connect">Bu HTTP proxy üzerinden bağlan.</string>
+  <string name="http_proxy_host_port_required">Bir HTTP proxy ana bilgisayarı ve 1 ile 65535 arasında bir bağlantı noktası girin.</string>
   <string name="edit_named_item">%1$s öğesini düzenle</string>
   <string name="delete_named_item">%1$s öğesini sil</string>
   <string name="jump_route_preview">%1$s → %2$s üzerinden</string>
@@ -390,7 +397,6 @@
   <string name="cloudflare_tls_failed">Cloudflare TLS sertifika doğrulaması başarısız oldu.</string>
   <string name="cloudflare_dns_failed">Cloudflare ana bilgisayar adı çözümlenemedi.</string>
   <string name="cloudflare_application_missing">Bu ana bilgisayar adı bir Cloudflare Access uygulaması döndürmedi.</string>
-  <!-- UNCERTAIN: "application audience" is a Cloudflare Access token audience (aud claim); "uygulama hedef kitlesi" may not convey the token meaning -->
   <string name="cloudflare_audience_missing">Cloudflare Access bir uygulama hedef kitlesi döndürmedi.</string>
   <string name="cloudflare_domain_missing">Cloudflare Access bir uygulama etki alanı döndürmedi.</string>
   <string name="cloudflared_cache_lock_failed">Cloudflared özel jeton önbelleğini kilitleyemedi.</string>
@@ -426,7 +432,6 @@
   <string name="key_del">DEL</string>
   <string name="key_esc">ESC</string>
   <string name="key_tab">TAB</string>
-  <!-- UNCERTAIN: Turkish key legend for Backspace — Turkish keyboards print "Backspace"; "Geri Al" is the translated equivalent -->
   <string name="key_backspace">Geri Al</string>
   <string name="key_7">7</string>
   <string name="key_8">8</string>
@@ -439,13 +444,11 @@
   <string name="key_3">3</string>
   <string name="key_0">0</string>
   <string name="key_decimal">.</string>
-  <!-- UNCERTAIN: Turkish key legend for Home — Turkish keyboards print "Home"; "Ana Sayfa" is the translated equivalent -->
   <string name="key_home">Ana Sayfa</string>
   <string name="key_up">Yukarı</string>
   <string name="key_page_up">PgUp</string>
   <string name="key_left">Sol</string>
   <string name="key_right">Sağ</string>
-  <!-- UNCERTAIN: Turkish key legend for End — Turkish keyboards print "End"; "Son" is the translated equivalent -->
   <string name="key_end">Son</string>
   <string name="key_down">Aşağı</string>
   <string name="key_page_down">PgDn</string>
@@ -578,7 +581,6 @@
   <string name="ssh_status_line">[%1$s]\u000d\n</string>
   <string name="ssh_unreachable">ulaşılamaz</string>
   <string name="ssh_username_required">Kayıtlı bir SSH kullanıcı adı gereklidir.</string>
-  <!-- UNCERTAIN: "login as: " is the OpenSSH/PuTTY prompt; Turkish clients often keep it in English, but a translation is attempted here -->
   <string name="ssh_login_prompt">"oturum aç: "</string>
   <string name="ssh_sign_in_cancelled">SSH oturumu iptal edildi</string>
   <string name="ssh_username_empty">Kullanıcı adı girilmedi.\u000d\n</string>
@@ -603,4 +605,9 @@
   <string name="vnc_mac_auth_failed">Mac kimlik doğrulaması başarısız oldu. Kullanıcı adını ve parolayı kontrol edin.</string>
   <string name="vnc_sftp_pair">Dosya erişimi için SSH profili eşleştir</string>
   <string name="vnc_sftp_unpaired">Yok</string>
+  <string name="reconnect_automatically">Otomatik Olarak Yeniden Bağlan</string>
+  <string name="reconnect_auto_hint">Beş saniye sonra yeniden dene</string>
+  <string name="reconnect_prompt">%1$s öğesine yeniden bağlanılsın mı?</string>
+  <string name="reconnecting_in">%1$d içinde yeniden bağlanılıyor…</string>
+  <string name="reconnect_now">Şimdi yeniden bağlan</string>
 </resources>

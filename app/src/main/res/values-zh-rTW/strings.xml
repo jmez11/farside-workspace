@@ -1,5 +1,13 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
+  <string name="ssh_public_key_title">SSH 公開金鑰</string>
+  <string name="ssh_public_key_pin_prompt">輸入您的 PIN 以顯示公開金鑰。</string>
+  <string name="ssh_public_key_fingerprint">指紋：%1$s</string>
+  <string name="ssh_public_key_copy">複製</string>
+  <string name="ssh_public_key_copied">已複製公開金鑰</string>
+  <string name="ssh_public_key_close">關閉</string>
+  <string name="ssh_public_key_show_named">顯示 %1$s 的公開金鑰</string>
+  <string name="ssh_public_key_invalid">無法讀取此 SSH 金鑰。請檢查私密金鑰和密語。</string>
   <string name="add_new_credential">+ 新增憑證</string>
   <string name="add_new_ssh_key">+ 新增 SSH 金鑰</string>
   <string name="about">關於</string>
@@ -202,6 +210,8 @@
   <string name="move_connection_later">將 %1$s 下移</string>
   <string name="finding_local_sessions">正在尋找本機 %1$s 工作階段...</string>
   <string name="proxy_connections_unavailable">尚無法使用 %1$s 連線。</string>
+  <string name="http_proxy_connect">透過此 HTTP 代理伺服器連線。</string>
+  <string name="http_proxy_host_port_required">輸入 HTTP 代理伺服器主機和 1 到 65535 之間的連接埠。</string>
   <string name="edit_named_item">編輯 %1$s</string>
   <string name="delete_named_item">刪除 %1$s</string>
   <string name="jump_route_preview">%1$s → 經由 %2$s</string>
@@ -595,4 +605,9 @@
   <string name="vnc_mac_auth_failed">Mac 驗證失敗。請檢查使用者名稱和密碼。</string>
   <string name="vnc_sftp_pair">配對 SSH 設定檔以存取檔案</string>
   <string name="vnc_sftp_unpaired">無</string>
+  <string name="reconnect_automatically">自動重新連線</string>
+  <string name="reconnect_auto_hint">五秒後重試</string>
+  <string name="reconnect_prompt">要重新連線到 %1$s 嗎？</string>
+  <string name="reconnecting_in">將在 %1$d 秒後重新連線…</string>
+  <string name="reconnect_now">立即重新連線</string>
 </resources>

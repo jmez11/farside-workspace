@@ -1,5 +1,13 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
+  <string name="ssh_public_key_title">Offentlig SSH-nøgle</string>
+  <string name="ssh_public_key_pin_prompt">Indtast din PIN-kode for at vise den offentlige nøgle.</string>
+  <string name="ssh_public_key_fingerprint">Fingeraftryk: %1$s</string>
+  <string name="ssh_public_key_copy">Kopiér</string>
+  <string name="ssh_public_key_copied">Offentlig nøgle kopieret</string>
+  <string name="ssh_public_key_close">Luk</string>
+  <string name="ssh_public_key_show_named">Vis offentlig nøgle for %1$s</string>
+  <string name="ssh_public_key_invalid">Kunne ikke læse denne SSH-nøgle. Kontrollér den private nøgle og adgangsfrasen.</string>
   <string name="add_new_credential">+ Tilføj ny loginoplysning</string>
   <string name="add_new_ssh_key">+ Tilføj ny SSH-nøgle</string>
   <string name="about">Om</string>
@@ -66,7 +74,6 @@
   <string name="headset_passcode_active">Headsetadgangskode aktiv</string>
   <string name="host_server">Vært / Server</string>
   <string name="hostname_or_ip_address">Værtsnavn eller IP-adresse</string>
-  <!-- UNCERTAIN: jump host has no standard Danish term; guessed Jumpvært -->
   <string name="jump_host">Jumpvært</string>
   <string name="key_display_name">Nøglevisningsnavn</string>
   <string name="leave_passphrase_blank_to_keep_the_saved_passphrase">Lad adgangssætningen stå tom for at beholde den gemte adgangssætning.</string>
@@ -131,7 +138,6 @@
   <string name="source_port">Kildeport</string>
   <string name="ssh_key">SSH-nøgle</string>
   <string name="ssh_key_management">SSH-nøgleadministration</string>
-  <!-- UNCERTAIN: "key panel" ambiguous — TRANSLATION_NOTES.md says cryptographic SSH key, but the name parallels remote_key_panel_input (keyboard panel); translated as keyboard panel -->
   <string name="ssh_key_panel_input">Input i SSH-tastaturpanelet</string>
   <string name="ssh_keyboard_input">Tastaturinput til SSH</string>
   <string name="ssh_keys">SSH-nøgler</string>
@@ -204,6 +210,8 @@
   <string name="move_connection_later">Flyt %1$s senere</string>
   <string name="finding_local_sessions">Finder lokale %1$s-sessioner…</string>
   <string name="proxy_connections_unavailable">%1$s-forbindelser er ikke tilgængelige endnu.</string>
+  <string name="http_proxy_connect">Opret forbindelse via denne HTTP-proxy.</string>
+  <string name="http_proxy_host_port_required">Indtast en HTTP-proxyvært og en port mellem 1 og 65535.</string>
   <string name="edit_named_item">Rediger %1$s</string>
   <string name="delete_named_item">Slet %1$s</string>
   <string name="jump_route_preview">%1$s → via %2$s</string>
@@ -233,7 +241,6 @@
     <item quantity="other">Spørg ikke igen i %1$d minutter</item>
   </plurals>
   <string name="connection_via">via %1$s</string>
-  <!-- UNCERTAIN: "jump host" has no established Danish term; "hopvært" is a draft coinage and English "jump host" is also common in Danish IT usage -->
   <string name="jump_host_missing">⚠ hopvært mangler</string>
   <string name="ssh_forwarding_help">Tunneler starter med denne SSH-forbindelse. Ændringer i en session gælder nu og gemmes til næste gang.</string>
   <string name="no_saved_tunnels">Ingen gemte tunneler. Tilføj en port eller en SOCKS-proxy.</string>
@@ -390,7 +397,6 @@
   <string name="cloudflare_tls_failed">Cloudflares TLS-certifikatvalidering mislykkedes.</string>
   <string name="cloudflare_dns_failed">Cloudflare-værtsnavnet kunne ikke løses.</string>
   <string name="cloudflare_application_missing">Dette værtsnavn returnerede ikke en Cloudflare Access-applikation.</string>
-  <!-- UNCERTAIN: "application audience" is a Cloudflare Access token audience (aud claim); "applikationsgruppe" may not match the intended token term -->
   <string name="cloudflare_audience_missing">Cloudflare Access returnerede ikke en applikationsgruppe.</string>
   <string name="cloudflare_domain_missing">Cloudflare Access returnerede ikke et applikationsdomæne.</string>
   <string name="cloudflared_cache_lock_failed">Cloudflared kunne ikke låse sin private tokencache.</string>
@@ -443,11 +449,9 @@
   <string name="key_page_up">PgUp</string>
   <string name="key_left">Venstre</string>
   <string name="key_right">Højre</string>
-  <!-- UNCERTAIN: Danish key legend for End — physical keyboards print "End"; "Slut" is the translated equivalent -->
   <string name="key_end">Slut</string>
   <string name="key_down">Ned</string>
   <string name="key_page_down">PgDn</string>
-  <!-- UNCERTAIN: Danish key legend for Insert — physical keyboards print "Insert"; "Indsæt" is the translated equivalent -->
   <string name="key_insert">Indsæt</string>
   <string name="key_delete">Slet</string>
   <string name="key_enter">Enter</string>
@@ -599,7 +603,11 @@
   <string name="vnc_mac_user_hint">På Mac: aktivér Skærmdeling, og giv denne macOS-bruger adgang til den.</string>
   <string name="vnc_mac_credential_required">Vælg en gemt legitimationsoplysning med et macOS-brugernavn og en adgangskode.</string>
   <string name="vnc_mac_auth_failed">Mac-godkendelse mislykkedes. Kontrollér brugernavnet og adgangskoden.</string>
-  <!-- UNCERTAIN: "Par" vs "Forbind" for pairing an SSH profile -->
   <string name="vnc_sftp_pair">Par SSH-profil til filadgang</string>
   <string name="vnc_sftp_unpaired">Ingen</string>
+  <string name="reconnect_automatically">Genopret forbindelse automatisk</string>
+  <string name="reconnect_auto_hint">Prøv igen efter fem sekunder</string>
+  <string name="reconnect_prompt">Genoprette forbindelse til %1$s?</string>
+  <string name="reconnecting_in">Genopretter forbindelse om %1$d…</string>
+  <string name="reconnect_now">Genopret forbindelse nu</string>
 </resources>

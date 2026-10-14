@@ -1,5 +1,13 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
+  <string name="ssh_public_key_title">Clé publique SSH</string>
+  <string name="ssh_public_key_pin_prompt">Saisissez votre PIN pour afficher la clé publique.</string>
+  <string name="ssh_public_key_fingerprint">Empreinte : %1$s</string>
+  <string name="ssh_public_key_copy">Copier</string>
+  <string name="ssh_public_key_copied">Clé publique copiée</string>
+  <string name="ssh_public_key_close">Fermer</string>
+  <string name="ssh_public_key_show_named">Afficher la clé publique de %1$s</string>
+  <string name="ssh_public_key_invalid">Impossible de lire cette clé SSH. Vérifiez la clé privée et la phrase secrète.</string>
   <string name="add_new_credential">+ Ajouter un identifiant</string>
   <string name="add_new_ssh_key">+ Ajouter une clé SSH</string>
   <string name="about">À propos</string>
@@ -66,7 +74,6 @@
   <string name="headset_passcode_active">Code du casque actif</string>
   <string name="host_server">Hôte / Serveur</string>
   <string name="hostname_or_ip_address">Nom d\'hôte ou adresse IP</string>
-  <!-- UNCERTAIN: "jump host" French options are "hôte relais" / "hôte de rebond" / "machine relais"; picked "hôte relais" for conciseness -->
   <string name="jump_host">Hôte relais</string>
   <string name="key_display_name">Nom d\'affichage de la clé</string>
   <string name="leave_passphrase_blank_to_keep_the_saved_passphrase">Laissez la phrase de passe vide pour conserver la phrase de passe enregistrée.</string>
@@ -140,11 +147,9 @@
   <string name="terminal_settings">Paramètres du terminal</string>
   <string name="starting_cloudflared">Démarrage de Cloudflared…</string>
   <string name="switch_protected_connections_to_the_quest_headset_passcode_after">Basculez les connexions protégées vers le code du casque Quest après une authentification système réussie. Votre PIN d\'application reste actif si Quest n\'autorise pas l\'invite.</string>
-  <!-- UNCERTAIN: "Global" here means the global-settings section; "Tunnels et global" keeps it terse but "global" as a noun is an Englishism — alternatives "Tunnels et paramètres généraux" -->
   <string name="tunnels_global">Tunnels et global</string>
   <string name="unlock_files">Déverrouiller les fichiers</string>
   <string name="unlock_connection">Déverrouiller la connexion</string>
-  <!-- UNCERTAIN: file-browser "Up" (go to parent folder); alternatives "Haut" or "Parent" — picked "Niveau supérieur" to avoid confusion with the keyboard Up key -->
   <string name="up">Niveau supérieur</string>
   <string name="upload">Téléverser</string>
   <string name="upload_from_headset">Téléverser depuis le casque</string>
@@ -205,6 +210,8 @@
   <string name="move_connection_later">Déplacer %1$s plus tard</string>
   <string name="finding_local_sessions">Recherche de sessions %1$s locales…</string>
   <string name="proxy_connections_unavailable">Les connexions %1$s ne sont pas encore disponibles.</string>
+  <string name="http_proxy_connect">Se connecter via ce proxy HTTP.</string>
+  <string name="http_proxy_host_port_required">Saisissez un hôte proxy HTTP et un port compris entre 1 et 65535.</string>
   <string name="edit_named_item">Modifier %1$s</string>
   <string name="delete_named_item">Supprimer %1$s</string>
   <string name="jump_route_preview">%1$s \u2192 via %2$s</string>
@@ -472,7 +479,6 @@
   <string name="key_left_symbol">\u2190</string>
   <string name="key_right_symbol">\u2192</string>
   <string name="key_down_symbol">\u2193</string>
-  <!-- UNCERTAIN: key held/released state labels; French keyboard terms could also be "Maintenue"/"Relâchée" -->
   <string name="key_held">Enfoncée</string>
   <string name="key_released">Relâchée</string>
   <string name="cloudflared_tunnel_exited">Le tunnel Cloudflared s\'est arrêté.</string>
@@ -524,7 +530,6 @@
   <string name="camera_resolution_720">720p</string>
   <string name="camera_resolution_native">Résolution native maximale</string>
   <string name="protocol_ssh">SSH</string>
-  <!-- UNCERTAIN: "hôte de saut" is a literal rendering; "hôte relais"/"hôte de rebond" are also used in French IT -->
   <string name="jump_host_deleted">L\'hôte de saut n\'existe plus ; connexion directe.</string>
   <string name="jump_host_cycle">Cycle d\'hôte de saut : %1$s apparaît deux fois dans la chaîne.</string>
   <string name="jump_host_wrong_type">L\'hôte de saut %1$s n\'est pas un profil SSH.</string>
@@ -600,4 +605,9 @@
   <string name="vnc_mac_auth_failed">Échec de l\'authentification Mac. Vérifiez le nom d\'utilisateur et le mot de passe.</string>
   <string name="vnc_sftp_pair">Associer un profil SSH pour l\'accès aux fichiers</string>
   <string name="vnc_sftp_unpaired">Aucun</string>
+  <string name="reconnect_automatically">Reconnexion automatique</string>
+  <string name="reconnect_auto_hint">Nouvelle tentative dans cinq secondes</string>
+  <string name="reconnect_prompt">Se reconnecter à %1$s ?</string>
+  <string name="reconnecting_in">Reconnexion dans %1$d…</string>
+  <string name="reconnect_now">Reconnecter maintenant</string>
 </resources>

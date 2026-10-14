@@ -1,5 +1,13 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
+  <string name="ssh_public_key_title">Offentlig SSH-nøkkel</string>
+  <string name="ssh_public_key_pin_prompt">Skriv inn PIN-koden din for å vise den offentlige nøkkelen.</string>
+  <string name="ssh_public_key_fingerprint">Fingeravtrykk: %1$s</string>
+  <string name="ssh_public_key_copy">Kopier</string>
+  <string name="ssh_public_key_copied">Offentlig nøkkel kopiert</string>
+  <string name="ssh_public_key_close">Lukk</string>
+  <string name="ssh_public_key_show_named">Vis offentlig nøkkel for %1$s</string>
+  <string name="ssh_public_key_invalid">Kunne ikke lese denne SSH-nøkkelen. Kontroller den private nøkkelen og passfrasen.</string>
   <string name="add_new_credential">+ Legg til nye påloggingsopplysninger</string>
   <string name="add_new_ssh_key">+ Legg til ny SSH-nøkkel</string>
   <string name="about">Om</string>
@@ -66,7 +74,6 @@
   <string name="headset_passcode_active">Passord for headset aktiv</string>
   <string name="host_server">Vert / Server</string>
   <string name="hostname_or_ip_address">Vertsnavn eller IP-adresse</string>
-  <!-- UNCERTAIN: jump host has no standard Norwegian term; guessed Jump-vert -->
   <string name="jump_host">Jump-vert</string>
   <string name="key_display_name">Nøkkelvisningsnavn</string>
   <string name="leave_passphrase_blank_to_keep_the_saved_passphrase">La passfrasen stå tom for å beholde den lagrede passfrasen.</string>
@@ -131,7 +138,6 @@
   <string name="source_port">Kildeport</string>
   <string name="ssh_key">SSH-nøkkel</string>
   <string name="ssh_key_management">SSH-nøkkeladministrasjon</string>
-  <!-- UNCERTAIN: "key panel" ambiguous — TRANSLATION_NOTES.md says cryptographic SSH key, but the name parallels remote_key_panel_input (keyboard panel); translated as keyboard panel -->
   <string name="ssh_key_panel_input">Inndata i SSH-tastpanelet</string>
   <string name="ssh_keyboard_input">Tastaturinndata for SSH</string>
   <string name="ssh_keys">SSH-nøkler</string>
@@ -204,6 +210,8 @@
   <string name="move_connection_later">Flytt %1$s senere</string>
   <string name="finding_local_sessions">Finner lokale %1$s-økter…</string>
   <string name="proxy_connections_unavailable">%1$s-tilkoblinger er ikke tilgjengelige ennå.</string>
+  <string name="http_proxy_connect">Koble til via denne HTTP-proxyen.</string>
+  <string name="http_proxy_host_port_required">Skriv inn en HTTP-proxyvert og en port mellom 1 og 65535.</string>
   <string name="edit_named_item">Rediger %1$s</string>
   <string name="delete_named_item">Slett %1$s</string>
   <string name="jump_route_preview">%1$s → via %2$s</string>
@@ -233,7 +241,6 @@
     <item quantity="other">Ikke spør igjen på %1$d minutter</item>
   </plurals>
   <string name="connection_via">via %1$s</string>
-  <!-- UNCERTAIN: "jump host" has no established Norwegian term; "hoppevert" is a draft coinage and English "jump host" is also common in Norwegian IT usage -->
   <string name="jump_host_missing">⚠ hoppevert mangler</string>
   <string name="ssh_forwarding_help">Tunneler starter med denne SSH-tilkoblingen. Endringer i en økt gjelder nå og lagres til neste gang.</string>
   <string name="no_saved_tunnels">Ingen lagrede tunneler. Legg til en port eller en SOCKS-proxy.</string>
@@ -390,7 +397,6 @@
   <string name="cloudflare_tls_failed">Cloudflares TLS-sertifikatvalidering mislyktes.</string>
   <string name="cloudflare_dns_failed">Cloudflare-vertsnavnet kunne ikke løses.</string>
   <string name="cloudflare_application_missing">Dette vertsnavnet returnerte ingen Cloudflare Access-applikasjon.</string>
-  <!-- UNCERTAIN: "application audience" is a Cloudflare Access token audience (aud claim); "applikasjonspublikum" may not be the right term -->
   <string name="cloudflare_audience_missing">Cloudflare Access returnerte ingen applikasjonspublikum.</string>
   <string name="cloudflare_domain_missing">Cloudflare Access returnerte ingen applikasjonsdomene.</string>
   <string name="cloudflared_cache_lock_failed">Cloudflared kunne ikke låse sin private tokencache.</string>
@@ -443,11 +449,9 @@
   <string name="key_page_up">PgUp</string>
   <string name="key_left">Venstre</string>
   <string name="key_right">Høyre</string>
-  <!-- UNCERTAIN: Norwegian key legend for End — physical keyboards print "End"; "Slutt" is the translated equivalent -->
   <string name="key_end">Slutt</string>
   <string name="key_down">Ned</string>
   <string name="key_page_down">PgDn</string>
-  <!-- UNCERTAIN: Norwegian key legend for Insert — physical keyboards print "Insert"; "Sett inn" is the translated equivalent -->
   <string name="key_insert">Sett inn</string>
   <string name="key_delete">Slett</string>
   <string name="key_enter">Enter</string>
@@ -601,4 +605,9 @@
   <string name="vnc_mac_auth_failed">Mac-autentisering mislyktes. Kontroller brukernavnet og passordet.</string>
   <string name="vnc_sftp_pair">Koble SSH-profil for filtilgang</string>
   <string name="vnc_sftp_unpaired">Ingen</string>
+  <string name="reconnect_automatically">Koble til automatisk på nytt</string>
+  <string name="reconnect_auto_hint">Prøv igjen etter fem sekunder</string>
+  <string name="reconnect_prompt">Koble til %1$s på nytt?</string>
+  <string name="reconnecting_in">Kobler til på nytt om %1$d…</string>
+  <string name="reconnect_now">Koble til på nytt nå</string>
 </resources>

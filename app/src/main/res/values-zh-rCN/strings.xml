@@ -1,5 +1,13 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
+  <string name="ssh_public_key_title">SSH 公钥</string>
+  <string name="ssh_public_key_pin_prompt">输入您的 PIN 以显示公钥。</string>
+  <string name="ssh_public_key_fingerprint">指纹：%1$s</string>
+  <string name="ssh_public_key_copy">复制</string>
+  <string name="ssh_public_key_copied">公钥已复制</string>
+  <string name="ssh_public_key_close">关闭</string>
+  <string name="ssh_public_key_show_named">显示 %1$s 的公钥</string>
+  <string name="ssh_public_key_invalid">无法读取此 SSH 密钥。请检查私钥和密码。</string>
   <string name="add_new_credential">+ 添加新凭据</string>
   <string name="add_new_ssh_key">+ 添加新 SSH 密钥</string>
   <string name="about">关于</string>
@@ -130,7 +138,6 @@
   <string name="source_port">源端口</string>
   <string name="ssh_key">SSH 密钥</string>
   <string name="ssh_key_management">SSH 密钥管理</string>
-  <!-- UNCERTAIN: "key panel" ambiguous — TRANSLATION_NOTES.md says cryptographic SSH key, but the name parallels remote_key_panel_input (keyboard panel); translated as keyboard panel -->
   <string name="ssh_key_panel_input">SSH 按键面板输入</string>
   <string name="ssh_keyboard_input">SSH 键盘输入</string>
   <string name="ssh_keys">SSH 密钥</string>
@@ -203,6 +210,8 @@
   <string name="move_connection_later">将 %1$s 下移</string>
   <string name="finding_local_sessions">正在查找本地 %1$s 会话…</string>
   <string name="proxy_connections_unavailable">%1$s 连接尚不可用。</string>
+  <string name="http_proxy_connect">通过此 HTTP 代理连接。</string>
+  <string name="http_proxy_host_port_required">输入 HTTP 代理主机和 1 到 65535 之间的端口。</string>
   <string name="edit_named_item">编辑 %1$s</string>
   <string name="delete_named_item">删除 %1$s</string>
   <string name="jump_route_preview">%1$s → 经由 %2$s</string>
@@ -414,7 +423,6 @@
   <string name="headset_auth_description">请确认头显密码以继续使用 Farside Workspace。</string>
   <string name="headset_auth_unverified">无法验证系统密码身份验证。</string>
   <string name="headset_auth_rejected">Quest 不允许系统密码身份验证。</string>
-  <!-- UNCERTAIN: "Quest Home" — kept as the OS location name; Meta's official zh translation of the Home location may differ -->
   <string name="headset_auth_unavailable">系统密码身份验证不可用。请从 Quest Home 重试。</string>
   <string name="key_win">WIN</string>
   <string name="key_shift">SHIFT</string>
@@ -597,4 +605,9 @@
   <string name="vnc_mac_auth_failed">Mac 身份验证失败。请检查用户名和密码。</string>
   <string name="vnc_sftp_pair">配对用于文件访问的 SSH 配置</string>
   <string name="vnc_sftp_unpaired">无</string>
+  <string name="reconnect_automatically">自动重新连接</string>
+  <string name="reconnect_auto_hint">五秒后重试</string>
+  <string name="reconnect_prompt">重新连接到 %1$s？</string>
+  <string name="reconnecting_in">%1$d 秒后重新连接…</string>
+  <string name="reconnect_now">立即重新连接</string>
 </resources>

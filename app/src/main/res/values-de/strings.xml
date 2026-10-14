@@ -1,5 +1,13 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
+  <string name="ssh_public_key_title">Öffentlicher SSH-Schlüssel</string>
+  <string name="ssh_public_key_pin_prompt">Geben Sie Ihre PIN ein, um den öffentlichen Schlüssel anzuzeigen.</string>
+  <string name="ssh_public_key_fingerprint">Fingerabdruck: %1$s</string>
+  <string name="ssh_public_key_copy">Kopieren</string>
+  <string name="ssh_public_key_copied">Öffentlicher Schlüssel kopiert</string>
+  <string name="ssh_public_key_close">Schließen</string>
+  <string name="ssh_public_key_show_named">Öffentlichen Schlüssel für %1$s anzeigen</string>
+  <string name="ssh_public_key_invalid">Dieser SSH-Schlüssel konnte nicht gelesen werden. Überprüfen Sie den privaten Schlüssel und die Passphrase.</string>
   <string name="add_new_credential">+ Neue Anmeldedaten</string>
   <string name="add_new_ssh_key">+ Neuer SSH-Schlüssel</string>
   <string name="about">Über</string>
@@ -66,7 +74,6 @@
   <string name="headset_passcode_active">Headset-Passcode aktiv</string>
   <string name="host_server">Host / Server</string>
   <string name="hostname_or_ip_address">Hostname oder IP-Adresse</string>
-  <!-- UNCERTAIN: "Jump-Host" is the common German IT loanword; the formal German term would be "Sprungknoten". -->
   <string name="jump_host">Jump-Host</string>
   <string name="key_display_name">Anzeigename des Schlüssels</string>
   <string name="leave_passphrase_blank_to_keep_the_saved_passphrase">Passphrase leer lassen, um die gespeicherte Passphrase zu behalten.</string>
@@ -203,6 +210,8 @@
   <string name="move_connection_later">%1$s nach hinten verschieben</string>
   <string name="finding_local_sessions">Lokale %1$s-Sitzungen werden gesucht…</string>
   <string name="proxy_connections_unavailable">%1$s-Verbindungen sind noch nicht verfügbar.</string>
+  <string name="http_proxy_connect">Über diesen HTTP-Proxy verbinden.</string>
+  <string name="http_proxy_host_port_required">Geben Sie einen HTTP-Proxy-Host und einen Port von 1 bis 65535 ein.</string>
   <string name="edit_named_item">%1$s bearbeiten</string>
   <string name="delete_named_item">%1$s löschen</string>
   <string name="jump_route_preview">%1$s \u2192 via %2$s</string>
@@ -470,7 +479,6 @@
   <string name="key_left_symbol">\u2190</string>
   <string name="key_right_symbol">\u2192</string>
   <string name="key_down_symbol">\u2193</string>
-  <!-- UNCERTAIN: "Held" is a key-state legend meaning the key is being held down; translated as "Gehalten". -->
   <string name="key_held">Gehalten</string>
   <string name="key_released">Losgelassen</string>
   <string name="cloudflared_tunnel_exited">Cloudflared-Tunnel beendet.</string>
@@ -522,7 +530,6 @@
   <string name="camera_resolution_720">720p</string>
   <string name="camera_resolution_native">Höchste native Auflösung</string>
   <string name="protocol_ssh">SSH</string>
-  <!-- UNCERTAIN: "Jump-Host" is common in German IT usage, but "Sprungknoten"/"Zwischenhost" are alternatives; kept Jump-Host for consistency -->
   <string name="jump_host_deleted">Jump-Host existiert nicht mehr; direkte Verbindung wird hergestellt.</string>
   <string name="jump_host_cycle">Jump-Host-Zyklus: %1$s kommt zweimal in der Kette vor.</string>
   <string name="jump_host_wrong_type">Jump-Host %1$s ist kein SSH-Profil.</string>
@@ -598,4 +605,9 @@
   <string name="vnc_mac_auth_failed">Mac-Authentifizierung fehlgeschlagen. Überprüfe Benutzername und Passwort.</string>
   <string name="vnc_sftp_pair">SSH-Profil für Dateizugriff koppeln</string>
   <string name="vnc_sftp_unpaired">Keine</string>
+  <string name="reconnect_automatically">Automatisch erneut verbinden</string>
+  <string name="reconnect_auto_hint">Erneut versuchen nach fünf Sekunden</string>
+  <string name="reconnect_prompt">Erneut mit %1$s verbinden?</string>
+  <string name="reconnecting_in">Erneutes Verbinden in %1$d…</string>
+  <string name="reconnect_now">Jetzt erneut verbinden</string>
 </resources>

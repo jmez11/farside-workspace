@@ -1,5 +1,13 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
+  <string name="ssh_public_key_title">SSH 공개 키</string>
+  <string name="ssh_public_key_pin_prompt">공개 키를 표시하려면 PIN을 입력하세요.</string>
+  <string name="ssh_public_key_fingerprint">지문: %1$s</string>
+  <string name="ssh_public_key_copy">복사</string>
+  <string name="ssh_public_key_copied">공개 키가 복사되었습니다</string>
+  <string name="ssh_public_key_close">닫기</string>
+  <string name="ssh_public_key_show_named">%1$s의 공개 키 표시</string>
+  <string name="ssh_public_key_invalid">이 SSH 키를 읽을 수 없습니다. 개인 키와 암호를 확인하세요.</string>
   <string name="add_new_credential">+ 새 자격 증명 추가</string>
   <string name="add_new_ssh_key">+ 새 SSH 키 추가</string>
   <string name="about">정보</string>
@@ -202,6 +210,8 @@
   <string name="move_connection_later">%1$s 뒤로 이동</string>
   <string name="finding_local_sessions">로컬 %1$s 세션 검색 중...</string>
   <string name="proxy_connections_unavailable">%1$s 연결을 아직 사용할 수 없습니다.</string>
+  <string name="http_proxy_connect">이 HTTP 프록시를 통해 연결합니다.</string>
+  <string name="http_proxy_host_port_required">HTTP 프록시 호스트와 1~65535 사이의 포트를 입력하세요.</string>
   <string name="edit_named_item">%1$s 편집</string>
   <string name="delete_named_item">%1$s 삭제</string>
   <string name="jump_route_preview">%1$s → %2$s 경유</string>
@@ -595,4 +605,9 @@
   <string name="vnc_mac_auth_failed">Mac 인증에 실패했습니다. 사용자 이름과 비밀번호를 확인하세요.</string>
   <string name="vnc_sftp_pair">파일 액세스용 SSH 프로필 페어링</string>
   <string name="vnc_sftp_unpaired">없음</string>
+  <string name="reconnect_automatically">자동 다시 연결</string>
+  <string name="reconnect_auto_hint">5초 후 다시 시도</string>
+  <string name="reconnect_prompt">%1$s에 다시 연결하시겠습니까?</string>
+  <string name="reconnecting_in">%1$d초 후 다시 연결 중…</string>
+  <string name="reconnect_now">지금 다시 연결</string>
 </resources>

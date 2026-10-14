@@ -1,5 +1,13 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
+  <string name="ssh_public_key_title">Clave pública SSH</string>
+  <string name="ssh_public_key_pin_prompt">Introduce tu PIN para mostrar la clave pública.</string>
+  <string name="ssh_public_key_fingerprint">Huella: %1$s</string>
+  <string name="ssh_public_key_copy">Copiar</string>
+  <string name="ssh_public_key_copied">Clave pública copiada</string>
+  <string name="ssh_public_key_close">Cerrar</string>
+  <string name="ssh_public_key_show_named">Mostrar la clave pública de %1$s</string>
+  <string name="ssh_public_key_invalid">No se pudo leer esta clave SSH. Comprueba la clave privada y la frase de contraseña.</string>
   <string name="add_new_credential">+ Añadir nueva credencial</string>
   <string name="add_new_ssh_key">+ Añadir nueva clave SSH</string>
   <string name="about">Acerca de</string>
@@ -202,6 +210,8 @@
   <string name="move_connection_later">Mover %1$s después</string>
   <string name="finding_local_sessions">Buscando sesiones %1$s locales…</string>
   <string name="proxy_connections_unavailable">Las conexiones %1$s aún no están disponibles.</string>
+  <string name="http_proxy_connect">Conectar a través de este proxy HTTP.</string>
+  <string name="http_proxy_host_port_required">Introduce un host proxy HTTP y un puerto del 1 al 65535.</string>
   <string name="edit_named_item">Editar %1$s</string>
   <string name="delete_named_item">Eliminar %1$s</string>
   <string name="jump_route_preview">%1$s \u2192 vía %2$s</string>
@@ -469,7 +479,6 @@
   <string name="key_left_symbol">\u2190</string>
   <string name="key_right_symbol">\u2192</string>
   <string name="key_down_symbol">\u2193</string>
-  <!-- UNCERTAIN: Held/Released = latched modifier-key state in the remote key panel; "Pulsada/Soltada" may read as momentary presses -->
   <string name="key_held">Pulsada</string>
   <string name="key_released">Soltada</string>
   <string name="cloudflared_tunnel_exited">El túnel de Cloudflared terminó.</string>
@@ -596,4 +605,9 @@
   <string name="vnc_mac_auth_failed">Falló la autenticación del Mac. Comprueba el nombre de usuario y la contraseña.</string>
   <string name="vnc_sftp_pair">Vincular perfil SSH para el acceso a archivos</string>
   <string name="vnc_sftp_unpaired">Ninguno</string>
+  <string name="reconnect_automatically">Reconectar automáticamente</string>
+  <string name="reconnect_auto_hint">Reintentar después de cinco segundos</string>
+  <string name="reconnect_prompt">¿Reconectar a %1$s?</string>
+  <string name="reconnecting_in">Reconectando en %1$d…</string>
+  <string name="reconnect_now">Reconectar ahora</string>
 </resources>

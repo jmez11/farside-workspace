@@ -1,5 +1,13 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
+  <string name="ssh_public_key_title">Cheie publică SSH</string>
+  <string name="ssh_public_key_pin_prompt">Introduceți codul PIN pentru a afișa cheia publică.</string>
+  <string name="ssh_public_key_fingerprint">Amprentă: %1$s</string>
+  <string name="ssh_public_key_copy">Copiere</string>
+  <string name="ssh_public_key_copied">Cheia publică a fost copiată</string>
+  <string name="ssh_public_key_close">Închidere</string>
+  <string name="ssh_public_key_show_named">Afișați cheia publică pentru %1$s</string>
+  <string name="ssh_public_key_invalid">Nu s-a putut citi această cheie SSH. Verificați cheia privată și fraza de acces.</string>
   <string name="add_new_credential">+ Adaugă credențiale noi</string>
   <string name="add_new_ssh_key">+ Adaugă cheie SSH nouă</string>
   <string name="about">Despre</string>
@@ -71,7 +79,6 @@
   <string name="leave_passphrase_blank_to_keep_the_saved_passphrase">Lăsați fraza de acces goală pentru a păstra fraza salvată.</string>
   <string name="leave_password_blank_to_keep_the_saved_password">Lăsați parola goală pentru a păstra parola salvată.</string>
   <string name="licenses_in_use">Licențe utilizate:</string>
-  <!-- UNCERTAIN: "listener" kept as IT loanword; verify preferred Romanian term -->
   <string name="listener_address_family">Familia de adrese (listener)</string>
   <string name="microphone_redirection_unavailable">Redirecționarea microfonului indisponibilă</string>
   <string name="more_options">Mai multe opțiuni</string>
@@ -203,6 +210,8 @@
   <string name="move_connection_later">Mută %1$s mai jos</string>
   <string name="finding_local_sessions">Se caută sesiuni %1$s locale...</string>
   <string name="proxy_connections_unavailable">Conexiunile %1$s nu sunt încă disponibile.</string>
+  <string name="http_proxy_connect">Conectați-vă prin acest proxy HTTP.</string>
+  <string name="http_proxy_host_port_required">Introduceți o gazdă proxy HTTP și un port între 1 și 65535.</string>
   <string name="edit_named_item">Editează %1$s</string>
   <string name="delete_named_item">Șterge %1$s</string>
   <string name="jump_route_preview">%1$s \u2192 prin %2$s</string>
@@ -388,7 +397,6 @@
   <string name="cloudflare_tls_failed">Validarea certificatului TLS Cloudflare a eșuat.</string>
   <string name="cloudflare_dns_failed">Numele host Cloudflare nu a putut fi rezolvat.</string>
   <string name="cloudflare_application_missing">Acest nume host nu a returnat o aplicație Cloudflare Access.</string>
-  <!-- UNCERTAIN: "audience" kept untranslated (Cloudflare Access JWT claim term); confirm preferred Romanian term -->
   <string name="cloudflare_audience_missing">Cloudflare Access nu a returnat audience-ul aplicației.</string>
   <string name="cloudflare_domain_missing">Cloudflare Access nu a returnat domeniul aplicației.</string>
   <string name="cloudflared_cache_lock_failed">Cloudflared nu a putut bloca cache-ul privat de tokenuri.</string>
@@ -597,4 +605,9 @@
   <string name="vnc_mac_auth_failed">Autentificarea Mac a eșuat. Verificați numele de utilizator și parola.</string>
   <string name="vnc_sftp_pair">Asociați profilul SSH pentru acces la fișiere</string>
   <string name="vnc_sftp_unpaired">Niciunul</string>
+  <string name="reconnect_automatically">Reconectare automată</string>
+  <string name="reconnect_auto_hint">Reîncercați după cinci secunde</string>
+  <string name="reconnect_prompt">Vă reconectați la %1$s?</string>
+  <string name="reconnecting_in">Reconectare în %1$d…</string>
+  <string name="reconnect_now">Reconectați-vă acum</string>
 </resources>

@@ -1,5 +1,13 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
+  <string name="ssh_public_key_title">Открытый ключ SSH</string>
+  <string name="ssh_public_key_pin_prompt">Введите PIN-код, чтобы показать открытый ключ.</string>
+  <string name="ssh_public_key_fingerprint">Отпечаток: %1$s</string>
+  <string name="ssh_public_key_copy">Копировать</string>
+  <string name="ssh_public_key_copied">Открытый ключ скопирован</string>
+  <string name="ssh_public_key_close">Закрыть</string>
+  <string name="ssh_public_key_show_named">Показать открытый ключ для %1$s</string>
+  <string name="ssh_public_key_invalid">Не удалось прочитать этот ключ SSH. Проверьте закрытый ключ и кодовую фразу.</string>
   <string name="add_new_credential">+ Добавить учётные данные</string>
   <string name="add_new_ssh_key">+ Добавить SSH-ключ</string>
   <string name="about">О приложении</string>
@@ -202,6 +210,8 @@
   <string name="move_connection_later">Переместить %1$s ниже</string>
   <string name="finding_local_sessions">Поиск локальных сессий %1$s...</string>
   <string name="proxy_connections_unavailable">Подключения %1$s пока недоступны.</string>
+  <string name="http_proxy_connect">Подключиться через этот HTTP-прокси.</string>
+  <string name="http_proxy_host_port_required">Введите хост HTTP-прокси и порт от 1 до 65535.</string>
   <string name="edit_named_item">Изменить %1$s</string>
   <string name="delete_named_item">Удалить %1$s</string>
   <string name="jump_route_preview">%1$s \u2192 через %2$s</string>
@@ -387,7 +397,6 @@
   <string name="cloudflare_tls_failed">Не удалось проверить TLS-сертификат Cloudflare.</string>
   <string name="cloudflare_dns_failed">Не удалось разрешить имя хоста Cloudflare.</string>
   <string name="cloudflare_application_missing">Это имя хоста не вернуло приложение Cloudflare Access.</string>
-  <!-- UNCERTAIN: "audience" kept untranslated (Cloudflare Access JWT claim term); confirm preferred Russian term -->
   <string name="cloudflare_audience_missing">Cloudflare Access не вернул audience приложения.</string>
   <string name="cloudflare_domain_missing">Cloudflare Access не вернул домен приложения.</string>
   <string name="cloudflared_cache_lock_failed">Cloudflared не смог заблокировать приватный кэш токенов.</string>
@@ -596,4 +605,9 @@
   <string name="vnc_mac_auth_failed">Не удалось выполнить проверку подлинности Mac. Проверьте имя пользователя и пароль.</string>
   <string name="vnc_sftp_pair">Связать профиль SSH для доступа к файлам</string>
   <string name="vnc_sftp_unpaired">Нет</string>
+  <string name="reconnect_automatically">Переподключаться автоматически</string>
+  <string name="reconnect_auto_hint">Повторить через пять секунд</string>
+  <string name="reconnect_prompt">Переподключиться к %1$s?</string>
+  <string name="reconnecting_in">Переподключение через %1$d…</string>
+  <string name="reconnect_now">Переподключиться сейчас</string>
 </resources>

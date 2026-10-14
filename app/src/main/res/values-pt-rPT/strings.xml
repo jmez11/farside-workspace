@@ -1,5 +1,13 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
+  <string name="ssh_public_key_title">Chave pública SSH</string>
+  <string name="ssh_public_key_pin_prompt">Introduza o seu PIN para mostrar a chave pública.</string>
+  <string name="ssh_public_key_fingerprint">Impressão digital: %1$s</string>
+  <string name="ssh_public_key_copy">Copiar</string>
+  <string name="ssh_public_key_copied">Chave pública copiada</string>
+  <string name="ssh_public_key_close">Fechar</string>
+  <string name="ssh_public_key_show_named">Mostrar a chave pública de %1$s</string>
+  <string name="ssh_public_key_invalid">Não foi possível ler esta chave SSH. Verifique a chave privada e a palavra-passe.</string>
   <string name="add_new_credential">+ Adicionar nova credencial</string>
   <string name="add_new_ssh_key">+ Adicionar nova chave SSH</string>
   <string name="about">Acerca de</string>
@@ -77,7 +85,6 @@
   <string name="name">Nome</string>
   <string name="new_connection">Nova ligação</string>
   <string name="new_folder">Nova pasta</string>
-  <!-- UNCERTAIN: kept English to mirror the SSH client prompt convention; unclear whether this is UI label text or terminal-style prompt -->
   <string name="login_as">login as: </string>
   <string name="manage_your_passcode_in_quest_settings_security_protected_connec">Gira o seu código de acesso em Definições do Quest &gt; Segurança. As ligações protegidas requerem autenticação do sistema.</string>
   <string name="none_connect_directly">Nenhum (ligar diretamente)</string>
@@ -105,7 +112,6 @@
   <string name="redirect_storage">Redirecionar armazenamento</string>
   <string name="refresh">Atualizar</string>
   <string name="release_to_open_here">Solte para abrir aqui</string>
-  <!-- UNCERTAIN: meaning of "key panel" is ambiguous (on-screen key panel vs keyboard input panel) -->
   <string name="remote_key_panel_input">Entrada do painel de teclas remoto</string>
   <string name="remote_keyboard_input">Entrada de teclado remoto</string>
   <string name="remoteapp_alias_e_g_cmd">Pseudónimo RemoteApp (p. ex. ||cmd)</string>
@@ -200,12 +206,12 @@
   <string name="connection_address">%1$s:%2$d</string>
   <string name="unstar_connection">Remover estrela de %1$s</string>
   <string name="star_connection">Marcar %1$s com estrela</string>
-  <!-- UNCERTAIN: "earlier/later" list-position semantics are ambiguous (could mean higher/lower in the list) -->
   <string name="move_connection_earlier">Mover %1$s para uma posição anterior</string>
-  <!-- UNCERTAIN: "earlier/later" list-position semantics are ambiguous (could mean higher/lower in the list) -->
   <string name="move_connection_later">Mover %1$s para uma posição posterior</string>
   <string name="finding_local_sessions">A localizar sessões %1$s locais...</string>
   <string name="proxy_connections_unavailable">As ligações %1$s ainda não estão disponíveis.</string>
+  <string name="http_proxy_connect">Ligar através deste proxy HTTP.</string>
+  <string name="http_proxy_host_port_required">Introduza um anfitrião de proxy HTTP e uma porta de 1 a 65535.</string>
   <string name="edit_named_item">Editar %1$s</string>
   <string name="delete_named_item">Eliminar %1$s</string>
   <string name="jump_route_preview">%1$s \u2192 via %2$s</string>
@@ -599,4 +605,9 @@
   <string name="vnc_mac_auth_failed">Falha na autenticação do Mac. Verifique o nome de utilizador e a palavra-passe.</string>
   <string name="vnc_sftp_pair">Emparelhar perfil SSH para acesso a ficheiros</string>
   <string name="vnc_sftp_unpaired">Nenhum</string>
+  <string name="reconnect_automatically">Voltar a ligar automaticamente</string>
+  <string name="reconnect_auto_hint">Tentar novamente após cinco segundos</string>
+  <string name="reconnect_prompt">Voltar a ligar a %1$s?</string>
+  <string name="reconnecting_in">A voltar a ligar em %1$d…</string>
+  <string name="reconnect_now">Voltar a ligar agora</string>
 </resources>

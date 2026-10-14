@@ -1,5 +1,13 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
+  <string name="ssh_public_key_title">SSH公開鍵</string>
+  <string name="ssh_public_key_pin_prompt">公開鍵を表示するにはPINを入力してください。</string>
+  <string name="ssh_public_key_fingerprint">フィンガープリント: %1$s</string>
+  <string name="ssh_public_key_copy">コピー</string>
+  <string name="ssh_public_key_copied">公開鍵をコピーしました</string>
+  <string name="ssh_public_key_close">閉じる</string>
+  <string name="ssh_public_key_show_named">%1$sの公開鍵を表示</string>
+  <string name="ssh_public_key_invalid">このSSH鍵を読み取れませんでした。秘密鍵とパスフレーズを確認してください。</string>
   <string name="add_new_credential">+ 認証情報を追加</string>
   <string name="add_new_ssh_key">+ SSHキーを追加</string>
   <string name="about">アプリについて</string>
@@ -139,7 +147,6 @@
   <string name="terminal_settings">ターミナル設定</string>
   <string name="starting_cloudflared">Cloudflaredを起動中…</string>
   <string name="switch_protected_connections_to_the_quest_headset_passcode_after">システム認証に成功したら、保護された接続をQuestヘッドセットのパスコードに切り替えます。Questがプロンプトを許可しない場合、アプリPINは有効なままです。</string>
-  <!-- UNCERTAIN: "Tunnels &amp; Global" is a settings section combining two areas; 全般 for "Global" may be better phrased differently on review -->
   <string name="tunnels_global">トンネル &amp; 全般</string>
   <string name="unlock_files">ファイルをロック解除</string>
   <string name="unlock_connection">接続をロック解除</string>
@@ -203,9 +210,10 @@
   <string name="move_connection_later">%1$sを後ろへ移動</string>
   <string name="finding_local_sessions">ローカルの%1$sセッションを検索中…</string>
   <string name="proxy_connections_unavailable">%1$s接続はまだ利用できません。</string>
+  <string name="http_proxy_connect">このHTTPプロキシ経由で接続します。</string>
+  <string name="http_proxy_host_port_required">HTTPプロキシホストと1〜65535のポートを入力してください。</string>
   <string name="edit_named_item">%1$sを編集</string>
   <string name="delete_named_item">%1$sを削除</string>
-  <!-- UNCERTAIN: natural Japanese word order may instead be "%2$s経由の%1$s"; kept source order with 経由 before the jump host -->
   <string name="jump_route_preview">%1$s \u2192 経由 %2$s</string>
   <string name="this_profile">このプロファイル</string>
   <string name="jump_route_separator">" \u2192 "</string>
@@ -367,11 +375,9 @@
   <string name="system_pin_connect_profile">%1$sに接続するにはヘッドセットのパスコードを確認してください。</string>
   <string name="app_pin_connect_profile">%1$sに接続するにはアプリPINを入力してください。</string>
   <string name="window_launch_failed">新しいウィンドウを開けませんでした。再試行するか、別のウィンドウを閉じて再試行してください。</string>
-  <!-- UNCERTAIN: 常駐トンネル renders "persistent" as an always-on background service; alternative phrasing could be 永続トンネル -->
   <string name="persistent_tunnels">常駐トンネル</string>
   <string name="persistent_tunnels_description">Cloudflareトンネルをバックグラウンドで維持します</string>
   <string name="tunneling_to_host">%1$sへトンネル接続中</string>
-  <!-- UNCERTAIN: 停止済み chosen as a settled stopped state; 停止中 (currently stopped) would also be defensible -->
   <string name="stopped">停止済み</string>
   <string name="adb_tunnel_paused_debugging">一時停止中: 開発者モードとワイヤレスデバッグを有効にしてください</string>
   <string name="adb_tunnel_paused_unavailable">一時停止中: ワイヤレスADBエンドポイントが利用できません</string>
@@ -599,4 +605,9 @@
   <string name="vnc_mac_auth_failed">Macの認証に失敗しました。ユーザー名とパスワードを確認してください。</string>
   <string name="vnc_sftp_pair">ファイルアクセス用にSSHプロファイルをペアリング</string>
   <string name="vnc_sftp_unpaired">なし</string>
+  <string name="reconnect_automatically">自動再接続</string>
+  <string name="reconnect_auto_hint">5秒後に再試行</string>
+  <string name="reconnect_prompt">%1$sに再接続しますか？</string>
+  <string name="reconnecting_in">%1$d秒後に再接続…</string>
+  <string name="reconnect_now">今すぐ再接続</string>
 </resources>

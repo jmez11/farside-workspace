@@ -1,5 +1,13 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
+  <string name="ssh_public_key_title">Chiave pubblica SSH</string>
+  <string name="ssh_public_key_pin_prompt">Inserisci il PIN per mostrare la chiave pubblica.</string>
+  <string name="ssh_public_key_fingerprint">Impronta: %1$s</string>
+  <string name="ssh_public_key_copy">Copia</string>
+  <string name="ssh_public_key_copied">Chiave pubblica copiata</string>
+  <string name="ssh_public_key_close">Chiudi</string>
+  <string name="ssh_public_key_show_named">Mostra la chiave pubblica di %1$s</string>
+  <string name="ssh_public_key_invalid">Impossibile leggere questa chiave SSH. Controlla la chiave privata e la passphrase.</string>
   <string name="add_new_credential">+ Aggiungi nuova credenziale</string>
   <string name="add_new_ssh_key">+ Aggiungi nuova chiave SSH</string>
   <string name="about">Informazioni</string>
@@ -104,7 +112,6 @@
   <string name="redirect_storage">Reindirizza archiviazione</string>
   <string name="refresh">Aggiorna</string>
   <string name="release_to_open_here">Rilascia per aprire qui</string>
-  <!-- UNCERTAIN: exact UI context unclear (label for an on-screen remote-key panel input method?); phrasing is a best guess -->
   <string name="remote_key_panel_input">Input pannello tasti remoto</string>
   <string name="remote_keyboard_input">Input tastiera remota</string>
   <string name="remoteapp_alias_e_g_cmd">Alias RemoteApp (es. ||cmd)</string>
@@ -131,7 +138,6 @@
   <string name="source_port">Porta di origine</string>
   <string name="ssh_key">Chiave SSH</string>
   <string name="ssh_key_management">Gestione chiavi SSH</string>
-  <!-- UNCERTAIN: exact UI context unclear (label for an on-screen SSH-key panel input method?); phrasing is a best guess -->
   <string name="ssh_key_panel_input">Input pannello chiavi SSH</string>
   <string name="ssh_keyboard_input">Input tastiera SSH</string>
   <string name="ssh_keys">Chiavi SSH</string>
@@ -141,7 +147,6 @@
   <string name="terminal_settings">Impostazioni terminale</string>
   <string name="starting_cloudflared">Avvio di Cloudflared…</string>
   <string name="switch_protected_connections_to_the_quest_headset_passcode_after">Passa le connessioni protette al codice del visore Quest dopo l\'autenticazione di sistema riuscita. Il tuo PIN dell\'app resta attivo se Quest non consente la richiesta.</string>
-  <!-- UNCERTAIN: English elides "settings" (the screen is referenced as "Tunnels and Global settings" elsewhere); mirrored as "Tunnel e globali" -->
   <string name="tunnels_global">Tunnel e globali</string>
   <string name="unlock_files">Sblocca file</string>
   <string name="unlock_connection">Sblocca connessione</string>
@@ -205,6 +210,8 @@
   <string name="move_connection_later">Sposta %1$s dopo</string>
   <string name="finding_local_sessions">Ricerca sessioni %1$s locali...</string>
   <string name="proxy_connections_unavailable">Connessioni %1$s non ancora disponibili.</string>
+  <string name="http_proxy_connect">Connetti tramite questo proxy HTTP.</string>
+  <string name="http_proxy_host_port_required">Inserisci un host proxy HTTP e una porta compresa tra 1 e 65535.</string>
   <string name="edit_named_item">Modifica %1$s</string>
   <string name="delete_named_item">Elimina %1$s</string>
   <string name="jump_route_preview">%1$s \u2192 via %2$s</string>
@@ -523,7 +530,6 @@
   <string name="camera_resolution_720">720p</string>
   <string name="camera_resolution_native">Risoluzione nativa massima</string>
   <string name="protocol_ssh">SSH</string>
-  <!-- UNCERTAIN: kept English "jump host" (common in Italian IT usage); "host di salto" is the literal alternative -->
   <string name="jump_host_deleted">Il jump host non esiste più; connessione diretta in corso.</string>
   <string name="jump_host_cycle">Ciclo di jump host: %1$s appare due volte nella catena.</string>
   <string name="jump_host_wrong_type">Il jump host %1$s non è un profilo SSH.</string>
@@ -599,4 +605,9 @@
   <string name="vnc_mac_auth_failed">Autenticazione Mac non riuscita. Controlla nome utente e password.</string>
   <string name="vnc_sftp_pair">Abbina un profilo SSH per l\'accesso ai file</string>
   <string name="vnc_sftp_unpaired">Nessuno</string>
+  <string name="reconnect_automatically">Riconnessione automatica</string>
+  <string name="reconnect_auto_hint">Riprova dopo cinque secondi</string>
+  <string name="reconnect_prompt">Riconnettersi a %1$s?</string>
+  <string name="reconnecting_in">Riconnessione tra %1$d…</string>
+  <string name="reconnect_now">Riconnetti ora</string>
 </resources>

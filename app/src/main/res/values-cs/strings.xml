@@ -1,5 +1,13 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
+  <string name="ssh_public_key_title">Veřejný klíč SSH</string>
+  <string name="ssh_public_key_pin_prompt">Zadejte PIN pro zobrazení veřejného klíče.</string>
+  <string name="ssh_public_key_fingerprint">Otisk: %1$s</string>
+  <string name="ssh_public_key_copy">Kopírovat</string>
+  <string name="ssh_public_key_copied">Veřejný klíč zkopírován</string>
+  <string name="ssh_public_key_close">Zavřít</string>
+  <string name="ssh_public_key_show_named">Zobrazit veřejný klíč pro %1$s</string>
+  <string name="ssh_public_key_invalid">Tento klíč SSH nelze přečíst. Zkontrolujte soukromý klíč a heslovou frázi.</string>
   <string name="add_new_credential">+ Přidat nové přihlašovací údaje</string>
   <string name="add_new_ssh_key">+ Přidat nový klíč SSH</string>
   <string name="about">O aplikaci</string>
@@ -66,7 +74,6 @@
   <string name="headset_passcode_active">Přístupový kód headsetu aktivní</string>
   <string name="host_server">Hostitel / Server</string>
   <string name="hostname_or_ip_address">Název hostitele nebo IP adresa</string>
-  <!-- UNCERTAIN: "Skokový hostitel" (leap host) may sound odd; native-speaker review recommended -->
   <string name="jump_host">Skokový hostitel</string>
   <string name="key_display_name">Zobrazovaný název klíče</string>
   <string name="leave_passphrase_blank_to_keep_the_saved_passphrase">Ponechte heslovou frázi prázdnou pro zachování uložené heslové fráze.</string>
@@ -203,6 +210,8 @@
   <string name="move_connection_later">Přesunout %1$s později</string>
   <string name="finding_local_sessions">Hledám místní relace %1$s...</string>
   <string name="proxy_connections_unavailable">Připojení %1$s zatím nejsou k dispozici.</string>
+  <string name="http_proxy_connect">Připojit přes tento HTTP proxy.</string>
+  <string name="http_proxy_host_port_required">Zadejte hostitele HTTP proxy a port v rozsahu 1 až 65535.</string>
   <string name="edit_named_item">Upravit %1$s</string>
   <string name="delete_named_item">Odstranit %1$s</string>
   <string name="jump_route_preview">%1$s \u2192 přes %2$s</string>
@@ -596,4 +605,9 @@
   <string name="vnc_mac_auth_failed">Ověření na Macu se nezdařilo. Zkontrolujte uživatelské jméno a heslo.</string>
   <string name="vnc_sftp_pair">Spárovat profil SSH pro přístup k souborům</string>
   <string name="vnc_sftp_unpaired">Žádný</string>
+  <string name="reconnect_automatically">Automaticky znovu připojit</string>
+  <string name="reconnect_auto_hint">Opakovat po pěti sekundách</string>
+  <string name="reconnect_prompt">Znovu se připojit k %1$s?</string>
+  <string name="reconnecting_in">Opětovné připojení za %1$d…</string>
+  <string name="reconnect_now">Připojit znovu</string>
 </resources>

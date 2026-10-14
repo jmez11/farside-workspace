@@ -1,5 +1,13 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
+  <string name="ssh_public_key_title">SSH-julkinen avain</string>
+  <string name="ssh_public_key_pin_prompt">Anna PIN-koodisi nähdäksesi julkisen avaimen.</string>
+  <string name="ssh_public_key_fingerprint">Sormenjälki: %1$s</string>
+  <string name="ssh_public_key_copy">Kopioi</string>
+  <string name="ssh_public_key_copied">Julkinen avain kopioitu</string>
+  <string name="ssh_public_key_close">Sulje</string>
+  <string name="ssh_public_key_show_named">Näytä julkinen avain kohteelle %1$s</string>
+  <string name="ssh_public_key_invalid">Tätä SSH-avainta ei voitu lukea. Tarkista yksityinen avain ja tunnuslause.</string>
   <string name="add_new_credential">+ Lisää uudet tunnistetiedot</string>
   <string name="add_new_ssh_key">+ Lisää uusi SSH-avain</string>
   <string name="about">Tietoja</string>
@@ -66,7 +74,6 @@
   <string name="headset_passcode_active">Headsetin pääsykoodi käytössä</string>
   <string name="host_server">Isäntä / palvelin</string>
   <string name="hostname_or_ip_address">Isäntänimi tai IP-osoite</string>
-  <!-- UNCERTAIN: "Hyppypalvelin" is a calque; Finnish SSH docs tend to use välipalvelin; worth review -->
   <string name="jump_host">Hyppypalvelin</string>
   <string name="key_display_name">Avaimen näyttönimi</string>
   <string name="leave_passphrase_blank_to_keep_the_saved_passphrase">Jätä tunnuslause tyhjäksi säilyttääksesi tallennetun tunnuslauseen.</string>
@@ -203,6 +210,8 @@
   <string name="move_connection_later">Siirrä %1$s myöhemmäksi</string>
   <string name="finding_local_sessions">Etsitään paikallisia %1$s-istuntoja...</string>
   <string name="proxy_connections_unavailable">%1$s-yhteydet eivät ole vielä käytettävissä.</string>
+  <string name="http_proxy_connect">Yhdistä tämän HTTP-välityspalvelimen kautta.</string>
+  <string name="http_proxy_host_port_required">Anna HTTP-välityspalvelimen isäntä ja portti väliltä 1–65535.</string>
   <string name="edit_named_item">Muokkaa %1$s</string>
   <string name="delete_named_item">Poista %1$s</string>
   <string name="jump_route_preview">%1$s \u2192 kautta %2$s</string>
@@ -594,7 +603,11 @@
   <string name="vnc_mac_user_hint">Macissa: ota käyttöön Näytön jakaminen ja salli tämän macOS-käyttäjän käyttää sitä.</string>
   <string name="vnc_mac_credential_required">Valitse tallennettu tunnistetieto, jossa on macOS-käyttäjätunnus ja salasana.</string>
   <string name="vnc_mac_auth_failed">Mac-todennus epäonnistui. Tarkista käyttäjätunnus ja salasana.</string>
-  <!-- UNCERTAIN: "Yhdistä" (connect) vs "Parita" (pair) for SSH profile pairing -->
   <string name="vnc_sftp_pair">Yhdistä SSH-profiili tiedostojen käyttöä varten</string>
   <string name="vnc_sftp_unpaired">Ei mitään</string>
+  <string name="reconnect_automatically">Yhdistä uudelleen automaattisesti</string>
+  <string name="reconnect_auto_hint">Yritä uudelleen viiden sekunnin kuluttua</string>
+  <string name="reconnect_prompt">Yhdistetäänkö uudelleen kohteeseen %1$s?</string>
+  <string name="reconnecting_in">Yhdistetään uudelleen %1$d…</string>
+  <string name="reconnect_now">Yhdistä uudelleen nyt</string>
 </resources>

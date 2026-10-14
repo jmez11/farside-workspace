@@ -1,5 +1,13 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
+  <string name="ssh_public_key_title">Publik SSH-nyckel</string>
+  <string name="ssh_public_key_pin_prompt">Ange din PIN-kod för att visa den publika nyckeln.</string>
+  <string name="ssh_public_key_fingerprint">Fingeravtryck: %1$s</string>
+  <string name="ssh_public_key_copy">Kopiera</string>
+  <string name="ssh_public_key_copied">Publik nyckel kopierad</string>
+  <string name="ssh_public_key_close">Stäng</string>
+  <string name="ssh_public_key_show_named">Visa publik nyckel för %1$s</string>
+  <string name="ssh_public_key_invalid">Kunde inte läsa denna SSH-nyckel. Kontrollera den privata nyckeln och lösenfrasen.</string>
   <string name="add_new_credential">+ Lägg till ny inloggningsuppgift</string>
   <string name="add_new_ssh_key">+ Lägg till ny SSH-nyckel</string>
   <string name="about">Om</string>
@@ -66,13 +74,11 @@
   <string name="headset_passcode_active">Lösenkod för headset aktiv</string>
   <string name="host_server">Värd / Server</string>
   <string name="hostname_or_ip_address">Värdnamn eller IP-adress</string>
-  <!-- UNCERTAIN: jump host has no standard Swedish term; guessed Hoppvärd -->
   <string name="jump_host">Hoppvärd</string>
   <string name="key_display_name">Visningsnamn för nyckel</string>
   <string name="leave_passphrase_blank_to_keep_the_saved_passphrase">Lämna lösenfrasen tom för att behålla den sparade lösenfrasen.</string>
   <string name="leave_password_blank_to_keep_the_saved_password">Lämna lösenordet tomt för att behålla det sparade lösenordet.</string>
   <string name="licenses_in_use">Licenser i bruk:</string>
-  <!-- UNCERTAIN: lyssnare is a literal translation; networking UIs often keep English listener -->
   <string name="listener_address_family">Adressfamilj för lyssnare</string>
   <string name="microphone_redirection_unavailable">Mikrofonombdirigering är inte tillgänglig</string>
   <string name="more_options">Fler alternativ</string>
@@ -132,7 +138,6 @@
   <string name="source_port">Källport</string>
   <string name="ssh_key">SSH-nyckel</string>
   <string name="ssh_key_management">SSH-nyckelhantering</string>
-  <!-- UNCERTAIN: "key panel" ambiguous — TRANSLATION_NOTES.md says cryptographic SSH key, but the name parallels remote_key_panel_input (keyboard panel); translated as keyboard panel -->
   <string name="ssh_key_panel_input">Inmatning i SSH-tangentpanelen</string>
   <string name="ssh_keyboard_input">Tangentbordsinmatning för SSH</string>
   <string name="ssh_keys">SSH-nycklar</string>
@@ -205,6 +210,8 @@
   <string name="move_connection_later">Flytta %1$s senare</string>
   <string name="finding_local_sessions">Hittar lokala %1$s-sessioner…</string>
   <string name="proxy_connections_unavailable">%1$s-anslutningar är inte tillgängliga ännu.</string>
+  <string name="http_proxy_connect">Anslut via denna HTTP-proxy.</string>
+  <string name="http_proxy_host_port_required">Ange en HTTP-proxyvärd och en port mellan 1 och 65535.</string>
   <string name="edit_named_item">Redigera %1$s</string>
   <string name="delete_named_item">Ta bort %1$s</string>
   <string name="jump_route_preview">%1$s → via %2$s</string>
@@ -234,7 +241,6 @@
     <item quantity="other">Fråga inte igen på %1$d minuter</item>
   </plurals>
   <string name="connection_via">via %1$s</string>
-  <!-- UNCERTAIN: "jump host" has no established Swedish term; "hoppvärd" is a draft coinage and English "jump host" is also common in Swedish IT usage -->
   <string name="jump_host_missing">⚠ hoppvärd saknas</string>
   <string name="ssh_forwarding_help">Tunnlar startar med den här SSH-anslutningen. Ändringar i en session tillämpas nu och sparas till nästa gång.</string>
   <string name="no_saved_tunnels">Inga sparade tunnlar. Lägg till en port eller en SOCKS-proxy.</string>
@@ -391,7 +397,6 @@
   <string name="cloudflare_tls_failed">Cloudflares TLS-certifikatvalidering misslyckades.</string>
   <string name="cloudflare_dns_failed">Cloudflares värdnamn kunde inte lösas upp.</string>
   <string name="cloudflare_application_missing">Det här värdnamnet returnerade ingen Cloudflare Access-applikation.</string>
-  <!-- UNCERTAIN: "application audience" is a Cloudflare Access token audience (aud claim), not a human audience; "applikationspublik" may read oddly -->
   <string name="cloudflare_audience_missing">Cloudflare Access returnerade ingen applikationspublik.</string>
   <string name="cloudflare_domain_missing">Cloudflare Access returnerade ingen applikationsdomän.</string>
   <string name="cloudflared_cache_lock_failed">Cloudflared kunde inte låsa sin privata tokencache.</string>
@@ -444,11 +449,9 @@
   <string name="key_page_up">PgUp</string>
   <string name="key_left">Vänster</string>
   <string name="key_right">Höger</string>
-  <!-- UNCERTAIN: Swedish key legend for End — physical keyboards print "End"; "Slut" is the translated equivalent -->
   <string name="key_end">Slut</string>
   <string name="key_down">Ned</string>
   <string name="key_page_down">PgDn</string>
-  <!-- UNCERTAIN: Swedish key legend for Insert — physical keyboards print "Insert"; "Infoga" is the translated equivalent -->
   <string name="key_insert">Infoga</string>
   <string name="key_delete">Delete</string>
   <string name="key_enter">Enter</string>
@@ -466,7 +469,6 @@
   <string name="key_f12">F12</string>
   <string name="key_print_screen">Print Screen</string>
   <string name="function_keys">Funktionstangenter</string>
-  <!-- UNCERTAIN: "Number Keys" heading — "Siffertangenter" vs "Nummertangenter" for the numeric keypad -->
   <string name="number_keys">Siffertangenter</string>
   <string name="key_slash">/</string>
   <string name="key_multiply">*</string>
@@ -601,7 +603,11 @@
   <string name="vnc_mac_user_hint">På Mac: aktivera Skärmdelning och tillåt den här macOS-användaren att komma åt den.</string>
   <string name="vnc_mac_credential_required">Välj en sparad inloggningsuppgift med ett macOS-användarnamn och lösenord.</string>
   <string name="vnc_mac_auth_failed">Mac-autentiseringen misslyckades. Kontrollera användarnamnet och lösenordet.</string>
-  <!-- UNCERTAIN: "Para" vs "Koppla" for pairing an SSH profile -->
   <string name="vnc_sftp_pair">Para SSH-profil för filåtkomst</string>
   <string name="vnc_sftp_unpaired">Ingen</string>
+  <string name="reconnect_automatically">Återanslut automatiskt</string>
+  <string name="reconnect_auto_hint">Försök igen efter fem sekunder</string>
+  <string name="reconnect_prompt">Återansluta till %1$s?</string>
+  <string name="reconnecting_in">Återansluter om %1$d…</string>
+  <string name="reconnect_now">Återanslut nu</string>
 </resources>

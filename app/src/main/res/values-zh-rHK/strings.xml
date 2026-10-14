@@ -1,5 +1,13 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
+  <string name="ssh_public_key_title">SSH 公開金鑰</string>
+  <string name="ssh_public_key_pin_prompt">輸入您的 PIN 以顯示公開金鑰。</string>
+  <string name="ssh_public_key_fingerprint">指紋：%1$s</string>
+  <string name="ssh_public_key_copy">複製</string>
+  <string name="ssh_public_key_copied">公開金鑰已複製</string>
+  <string name="ssh_public_key_close">關閉</string>
+  <string name="ssh_public_key_show_named">顯示 %1$s 的公開金鑰</string>
+  <string name="ssh_public_key_invalid">無法讀取此 SSH 金鑰。請檢查私密金鑰和密碼。</string>
   <string name="add_new_credential">+ 新增憑證</string>
   <string name="add_new_ssh_key">+ 新增 SSH 密鑰</string>
   <string name="about">關於</string>
@@ -202,6 +210,8 @@
   <string name="move_connection_later">將 %1$s 下移</string>
   <string name="finding_local_sessions">正在尋找本機 %1$s 工作階段…</string>
   <string name="proxy_connections_unavailable">%1$s 連接暫時無法使用。</string>
+  <string name="http_proxy_connect">透過此 HTTP 代理伺服器連接。</string>
+  <string name="http_proxy_host_port_required">輸入 HTTP 代理伺服器主機和 1 到 65535 之間的連接埠。</string>
   <string name="edit_named_item">編輯 %1$s</string>
   <string name="delete_named_item">刪除 %1$s</string>
   <string name="jump_route_preview">%1$s \u2192 經由 %2$s</string>
@@ -387,7 +397,6 @@
   <string name="cloudflare_tls_failed">Cloudflare TLS 憑證驗證失敗。</string>
   <string name="cloudflare_dns_failed">無法解析 Cloudflare 主機名稱。</string>
   <string name="cloudflare_application_missing">此主機名稱未傳回 Cloudflare Access 應用程式。</string>
-  <!-- UNCERTAIN: Cloudflare Access JWT 'audience' term rendered as 對象 — verify against Cloudflare's Chinese docs -->
   <string name="cloudflare_audience_missing">Cloudflare Access 未傳回應用程式對象。</string>
   <string name="cloudflare_domain_missing">Cloudflare Access 未傳回應用程式網域。</string>
   <string name="cloudflared_cache_lock_failed">Cloudflared 無法鎖定其私人權杖快取。</string>
@@ -524,7 +533,6 @@
   <string name="jump_host_deleted">跳板機已不存在；將直接連接。</string>
   <string name="jump_host_cycle">跳板機循環：%1$s 在鏈中出現了兩次。</string>
   <string name="jump_host_wrong_type">跳板機 %1$s 不是 SSH 設定檔。</string>
-  <!-- UNCERTAIN: kept English word 'hops' per translation notes instruction — confirm this matches intended UX -->
   <plurals name="jump_chain_too_long">
     <item quantity="one">跳板鏈超過 %1$d hops（%2$s）。</item>
     <item quantity="other">跳板鏈超過 %1$d hops（%2$s）。</item>
@@ -556,7 +564,6 @@
   <string name="cf_header_pair_required">請同時提供兩個 Cloudflare 用戶端驗證標頭。</string>
   <string name="cf_token_headers_exclusive">請使用服務權杖選項或用戶端標頭其中之一。</string>
   <string name="ssh_connection_closed">SSH 連接已關閉</string>
-  <!-- UNCERTAIN: 'IO' kept as English abbreviation — expand to 輸入/輸出 if preferred -->
   <string name="ssh_io_main_thread">SSH IO 必須在主執行緒之外執行</string>
   <string name="ssh_settings_changed">連接設定已變更。請關閉現有工作階段後重新連接。</string>
   <string name="ssh_hop_pending">…</string>
@@ -586,7 +593,6 @@
   <string name="ssh_key_refused_detail">[伺服器拒絕了 SSH 密鑰「%1$s」（使用者「%2$s」）：%3$s]\u000d\n</string>
   <string name="ssh_key_empty">[注意：SSH 密鑰「%1$s」沒有私人密鑰數據]\u000d\n</string>
   <string name="ssh_key_missing">[注意：在已儲存的密鑰中找不到已設定的 SSH 密鑰]\u000d\n</string>
-  <!-- UNCERTAIN: dropped the English possessive \'s (translation notes ask to preserve it); Chinese has no possessive suffix, used 的密碼： instead — confirm -->
   <string name="ssh_password_prompt">%1$s@%2$s 的密碼： </string>
   <string name="ssh_credential_check">請檢查已儲存的憑證或 SSH 密鑰。</string>
   <string name="ssh_permission_denied">權限被拒絕，請再試一次。\u000d\n</string>
@@ -599,4 +605,9 @@
   <string name="vnc_mac_auth_failed">Mac 驗證失敗。請檢查使用者名稱和密碼。</string>
   <string name="vnc_sftp_pair">配對用於檔案存取的 SSH 設定檔</string>
   <string name="vnc_sftp_unpaired">無</string>
+  <string name="reconnect_automatically">自動重新連接</string>
+  <string name="reconnect_auto_hint">五秒後重試</string>
+  <string name="reconnect_prompt">重新連接到 %1$s？</string>
+  <string name="reconnecting_in">%1$d 秒後重新連接…</string>
+  <string name="reconnect_now">立即重新連接</string>
 </resources>

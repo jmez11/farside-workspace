@@ -1,5 +1,13 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
+  <string name="ssh_public_key_title">Chave pública SSH</string>
+  <string name="ssh_public_key_pin_prompt">Digite seu PIN para mostrar a chave pública.</string>
+  <string name="ssh_public_key_fingerprint">Impressão digital: %1$s</string>
+  <string name="ssh_public_key_copy">Copiar</string>
+  <string name="ssh_public_key_copied">Chave pública copiada</string>
+  <string name="ssh_public_key_close">Fechar</string>
+  <string name="ssh_public_key_show_named">Mostrar a chave pública de %1$s</string>
+  <string name="ssh_public_key_invalid">Não foi possível ler esta chave SSH. Verifique a chave privada e a frase secreta.</string>
   <string name="add_new_credential">+ Adicionar nova credencial</string>
   <string name="add_new_ssh_key">+ Adicionar nova chave SSH</string>
   <string name="about">Sobre</string>
@@ -202,6 +210,8 @@
   <string name="move_connection_later">Mover %1$s para depois</string>
   <string name="finding_local_sessions">Localizando sessões %1$s locais...</string>
   <string name="proxy_connections_unavailable">Conexões %1$s ainda não estão disponíveis.</string>
+  <string name="http_proxy_connect">Conectar por meio deste proxy HTTP.</string>
+  <string name="http_proxy_host_port_required">Digite um host de proxy HTTP e uma porta de 1 a 65535.</string>
   <string name="edit_named_item">Editar %1$s</string>
   <string name="delete_named_item">Excluir %1$s</string>
   <string name="jump_route_preview">%1$s → via %2$s</string>
@@ -595,4 +605,9 @@
   <string name="vnc_mac_auth_failed">Falha na autenticação do Mac. Verifique o nome de usuário e a senha.</string>
   <string name="vnc_sftp_pair">Emparelhar perfil SSH para acesso a arquivos</string>
   <string name="vnc_sftp_unpaired">Nenhum</string>
+  <string name="reconnect_automatically">Reconectar automaticamente</string>
+  <string name="reconnect_auto_hint">Tentar novamente após cinco segundos</string>
+  <string name="reconnect_prompt">Reconectar a %1$s?</string>
+  <string name="reconnecting_in">Reconectando em %1$d…</string>
+  <string name="reconnect_now">Reconectar agora</string>
 </resources>

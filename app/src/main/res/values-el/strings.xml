@@ -1,5 +1,13 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
+  <string name="ssh_public_key_title">Δημόσιο κλειδί SSH</string>
+  <string name="ssh_public_key_pin_prompt">Εισαγάγετε το PIN σας για να εμφανιστεί το δημόσιο κλειδί.</string>
+  <string name="ssh_public_key_fingerprint">Αποτύπωμα: %1$s</string>
+  <string name="ssh_public_key_copy">Αντιγραφή</string>
+  <string name="ssh_public_key_copied">Το δημόσιο κλειδί αντιγράφηκε</string>
+  <string name="ssh_public_key_close">Κλείσιμο</string>
+  <string name="ssh_public_key_show_named">Εμφάνιση δημόσιου κλειδιού για %1$s</string>
+  <string name="ssh_public_key_invalid">Δεν ήταν δυνατή η ανάγνωση αυτού του κλειδιού SSH. Ελέγξτε το ιδιωτικό κλειδί και τη φράση πρόσβασης.</string>
   <string name="add_new_credential">+ Προσθήκη νέων διαπιστευτηρίων</string>
   <string name="add_new_ssh_key">+ Προσθήκη νέου κλειδιού SSH</string>
   <string name="about">Σχετικά</string>
@@ -66,7 +74,6 @@
   <string name="headset_passcode_active">Ο κωδικός πρόσβασης του headset είναι ενεργός</string>
   <string name="host_server">Κεντρικός υπολογιστής / Διακομιστής</string>
   <string name="hostname_or_ip_address">Όνομα κεντρικού υπολογιστή ή διεύθυνση IP</string>
-  <!-- UNCERTAIN: "Ενδιάμεσος διακομιστής" (intermediary server); review whether to keep English "jump host" -->
   <string name="jump_host">Ενδιάμεσος διακομιστής</string>
   <string name="key_display_name">Εμφανιζόμενο όνομα κλειδιού</string>
   <string name="leave_passphrase_blank_to_keep_the_saved_passphrase">Αφήστε κενή τη φράση πρόσβασης για διατήρηση της αποθηκευμένης φράσης πρόσβασης.</string>
@@ -203,6 +210,8 @@
   <string name="move_connection_later">Μετακίνηση %1$s αργότερα</string>
   <string name="finding_local_sessions">Εύρεση τοπικών συνεδριών %1$s...</string>
   <string name="proxy_connections_unavailable">Οι συνδέσεις %1$s δεν είναι ακόμη διαθέσιμες.</string>
+  <string name="http_proxy_connect">Σύνδεση μέσω αυτού του διακομιστή μεσολάβησης HTTP.</string>
+  <string name="http_proxy_host_port_required">Εισαγάγετε έναν κεντρικό υπολογιστή μεσολάβησης HTTP και μια θύρα από 1 έως 65535.</string>
   <string name="edit_named_item">Επεξεργασία %1$s</string>
   <string name="delete_named_item">Διαγραφή %1$s</string>
   <string name="jump_route_preview">%1$s \u2192 μέσω %2$s</string>
@@ -596,4 +605,9 @@
   <string name="vnc_mac_auth_failed">Ο έλεγχος ταυτότητας Mac απέτυχε. Ελέγξτε το όνομα χρήστη και τον κωδικό.</string>
   <string name="vnc_sftp_pair">Σύζευξη προφίλ SSH για πρόσβαση σε αρχεία</string>
   <string name="vnc_sftp_unpaired">Κανένα</string>
+  <string name="reconnect_automatically">Αυτόματη επανασύνδεση</string>
+  <string name="reconnect_auto_hint">Επανάληψη μετά από πέντε δευτερόλεπτα</string>
+  <string name="reconnect_prompt">Επανασύνδεση στο %1$s;</string>
+  <string name="reconnecting_in">Επανασύνδεση σε %1$d…</string>
+  <string name="reconnect_now">Επανασύνδεση τώρα</string>
 </resources>

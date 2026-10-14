@@ -1,5 +1,13 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
+  <string name="ssh_public_key_title">Klucz publiczny SSH</string>
+  <string name="ssh_public_key_pin_prompt">Wprowadź kod PIN, aby pokazać klucz publiczny.</string>
+  <string name="ssh_public_key_fingerprint">Odcisk: %1$s</string>
+  <string name="ssh_public_key_copy">Kopiuj</string>
+  <string name="ssh_public_key_copied">Skopiowano klucz publiczny</string>
+  <string name="ssh_public_key_close">Zamknij</string>
+  <string name="ssh_public_key_show_named">Pokaż klucz publiczny dla %1$s</string>
+  <string name="ssh_public_key_invalid">Nie można odczytać tego klucza SSH. Sprawdź klucz prywatny i hasło.</string>
   <string name="add_new_credential">+ Dodaj nowe poświadczenie</string>
   <string name="add_new_ssh_key">+ Dodaj nowy klucz SSH</string>
   <string name="about">Informacje</string>
@@ -63,13 +71,11 @@
   <string name="files">Pliki</string>
   <string name="general">Ogólne</string>
   <string name="headset_display_sharing">Udostępnianie ekranu gogli</string>
-  <!-- UNCERTAIN: "gogle" is the common Polish VR term for headset; alternatives: "zestaw VR" -->
   <string name="headset_passcode_active">Kod gogli aktywny</string>
   <string name="host_server">Host / Serwer</string>
   <string name="hostname_or_ip_address">Nazwa hosta lub adres IP</string>
   <string name="jump_host">Host pośredniczący</string>
   <string name="key_display_name">Nazwa wyświetlana klucza</string>
-  <!-- UNCERTAIN: "fraza dostępu" for SSH key passphrase; Polish docs also use "hasło do klucza" -->
   <string name="leave_passphrase_blank_to_keep_the_saved_passphrase">Pozostaw frazę dostępu pustą, aby zachować zapisaną frazę dostępu.</string>
   <string name="leave_password_blank_to_keep_the_saved_password">Pozostaw hasło puste, aby zachować zapisane hasło.</string>
   <string name="licenses_in_use">Używane licencje:</string>
@@ -204,6 +210,8 @@
   <string name="move_connection_later">Przenieś %1$s niżej</string>
   <string name="finding_local_sessions">Wyszukiwanie lokalnych sesji %1$s...</string>
   <string name="proxy_connections_unavailable">Połączenia %1$s nie są jeszcze dostępne.</string>
+  <string name="http_proxy_connect">Połącz przez ten serwer proxy HTTP.</string>
+  <string name="http_proxy_host_port_required">Wprowadź host serwera proxy HTTP i port z zakresu od 1 do 65535.</string>
   <string name="edit_named_item">Edytuj %1$s</string>
   <string name="delete_named_item">Usuń %1$s</string>
   <string name="jump_route_preview">%1$s → przez %2$s</string>
@@ -597,4 +605,9 @@
   <string name="vnc_mac_auth_failed">Uwierzytelnianie Mac nie powiodło się. Sprawdź nazwę użytkownika i hasło.</string>
   <string name="vnc_sftp_pair">Sparuj profil SSH, aby uzyskać dostęp do plików</string>
   <string name="vnc_sftp_unpaired">Brak</string>
+  <string name="reconnect_automatically">Ponowne łączenie automatyczne</string>
+  <string name="reconnect_auto_hint">Ponów próbę po pięciu sekundach</string>
+  <string name="reconnect_prompt">Połączyć ponownie z %1$s?</string>
+  <string name="reconnecting_in">Ponowne łączenie za %1$d…</string>
+  <string name="reconnect_now">Połącz ponownie teraz</string>
 </resources>
