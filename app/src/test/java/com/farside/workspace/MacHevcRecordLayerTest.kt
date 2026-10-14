@@ -133,4 +133,42 @@ class MacHevcRecordLayerTest {
             receiver.decryptRecord(ByteArray(0))
         }
     }
+
+    @Test
+    fun testStreamingInputAndOutputStreamAcrossRecords() {
+        val random = SecureRandom()
+        val key = ByteArray(16).also { random.nextBytes(it) }
+        val iv = ByteArray(16).also { random.nextBytes(it) }
+
+        val sender = MacHevcRecordLayer(key.clone(), iv.clone())
+        val receiver = MacHevcRecordLayer(key.clone(), iv.clone())
+
+        val pipeOut = java.io.ByteArrayOutputStream()
+        val dataOut = java.io.DataOutputStream(pipeOut)
+        val streamOut = sender.createOutputStream(dataOut)
+
+        val largePayload = ByteArray(100_000).also { random.nextBytes(it) }
+        var written = 0
+        while (written < largePayload.size) {
+            val chunk = minOf(7319, largePayload.size - written)
+            streamOut.write(largePayload, written, chunk)
+            written += chunk
+        }
+        streamOut.flush()
+
+        val pipeIn = java.io.ByteArrayInputStream(pipeOut.toByteArray())
+        val dataIn = java.io.DataInputStream(pipeIn)
+        val streamIn = receiver.createInputStream(dataIn)
+
+        val received = ByteArray(largePayload.size)
+        var totalRead = 0
+        while (totalRead < received.size) {
+            val n = streamIn.read(received, totalRead, received.size - totalRead)
+            if (n < 0) break
+            totalRead += n
+        }
+
+        assertEquals(largePayload.size, totalRead)
+        assertArrayEquals(largePayload, received)
+    }
 }

@@ -3,6 +3,8 @@ package com.farside.workspace
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.IOException
+import java.io.InputStream
+import java.io.OutputStream
 import java.security.MessageDigest
 import java.security.SecureRandom
 import javax.crypto.Cipher
@@ -139,6 +141,68 @@ class MacHevcRecordLayer(
         val ciphertext = ByteArray(ciphertextLen)
         input.readFully(ciphertext)
         return decryptRecord(ciphertext)
+    }
+
+    /**
+     * Creates an InputStream that reassembles continuous higher-level RFB stream
+     * by decrypting successive records (§6.4.6).
+     */
+    fun createInputStream(rawInput: DataInputStream): InputStream {
+        return object : InputStream() {
+            private var currentRecord: ByteArray? = null
+            private var recordPos = 0
+
+            override fun read(): Int {
+                if (!ensureData()) return -1
+                return currentRecord!![recordPos++].toInt() and 0xff
+            }
+
+            override fun read(b: ByteArray, off: Int, len: Int): Int {
+                if (len == 0) return 0
+                if (!ensureData()) return -1
+                val available = currentRecord!!.size - recordPos
+                val toRead = minOf(len, available)
+                System.arraycopy(currentRecord!!, recordPos, b, off, toRead)
+                recordPos += toRead
+                return toRead
+            }
+
+            private fun ensureData(): Boolean {
+                while (currentRecord == null || recordPos >= currentRecord!!.size) {
+                    val rec = try {
+                        readRecord(rawInput)
+                    } catch (e: java.io.EOFException) {
+                        return false
+                    }
+                    currentRecord = rec
+                    recordPos = 0
+                    if (rec.isNotEmpty()) return true
+                }
+                return true
+            }
+        }
+    }
+
+    /**
+     * Creates an OutputStream that encrypts higher-level RFB payloads into records.
+     */
+    fun createOutputStream(rawOutput: DataOutputStream): OutputStream {
+        return object : OutputStream() {
+            override fun write(b: Int) {
+                write(byteArrayOf(b.toByte()), 0, 1)
+            }
+
+            override fun write(b: ByteArray, off: Int, len: Int) {
+                if (len <= 0) return
+                val chunk = ByteArray(len)
+                System.arraycopy(b, off, chunk, 0, len)
+                writeRecord(rawOutput, chunk)
+            }
+
+            override fun flush() {
+                rawOutput.flush()
+            }
+        }
     }
 
     companion object {
