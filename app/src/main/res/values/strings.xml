@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="ssh_public_key_invalid">Could not read this SSH key. Check the private key and passphrase.</string>
     <string name="add_new_credential">+ Add New Credential</string>
     <string name="add_new_ssh_key">+ Add New SSH Key</string>
     <string name="about">About</string>
