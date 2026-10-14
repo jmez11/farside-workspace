@@ -197,6 +197,34 @@ internal class VncVerification(private val test: Instrumentation) {
 
                     record("PASS: Mac HEVC Phase 2 Gate - reached steady state (S9) on framebuffer path over encrypted record layer, decoded desktop frames, handled vendor encodings")
                 }
+            } else if (mode == "macHevcPhase3") {
+                val pm = ProfileManager(test.targetContext)
+                val profile = pm.getProfiles().firstOrNull {
+                    it.type == ConnectionType.VNC && (profileId == null || it.id == profileId || it.name == profileId)
+                } ?: pm.getProfiles().first { it.type == ConnectionType.VNC }
+                val credential = pm.getCredentials().single { it.id == profile.credentialId }
+                MacHevcSession(profile.host, profile.port, credential.user, credential.pass) { logLine ->
+                    record(logLine)
+                }.use { session ->
+                    val firstRecord = session.start()
+                    check(session.stage == "S8") { "Did not reach S8: ${session.stage}" }
+                    session.initStreamingLayer(firstRecord)
+                    check(session.stage == "S9") { "Did not reach S9: ${session.stage}" }
+
+                    val update1 = session.readNextFramebufferUpdate()
+                    record("S9 Framebuffer baseline: ${update1.decompressedBytes} bytes, encodings=${update1.encodingsSeen}")
+
+                    // Send 0x1c MediaStreamOptions offer
+                    session.sendMediaStreamOffer()
+
+                    // Attempt to read server response
+                    try {
+                        val response = session.readNextFramebufferUpdate()
+                        record("S9 Media response: msgType=${response.messageType}, encodings=${response.encodingsSeen}")
+                    } catch (e: Exception) {
+                        record("S9 Media exchange result: server terminated stream with ${e.javaClass.simpleName}: ${e.message}")
+                    }
+                }
             } else if (mode == "danglingPair") {
                 val pm = ProfileManager(test.targetContext)
                 val original = pm.getProfiles().single { it.name == "Test MacBook Pro" && it.type == ConnectionType.VNC }
