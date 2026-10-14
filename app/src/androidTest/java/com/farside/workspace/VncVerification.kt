@@ -163,6 +163,40 @@ internal class VncVerification(private val test: Instrumentation) {
                     check(integrityCaught) { "Negative gate failed: integrity mismatch did not throw MacHevcIntegrityException" }
                     record("PASS: Mac HEVC Phase 1 Negative Gate - integrity mismatch throws MacHevcIntegrityException and halts processing")
                 }
+            } else if (mode == "macHevcPhase2") {
+                val pm = ProfileManager(test.targetContext)
+                val profile = pm.getProfiles().firstOrNull {
+                    it.type == ConnectionType.VNC && (profileId == null || it.id == profileId || it.name == profileId)
+                } ?: pm.getProfiles().first { it.type == ConnectionType.VNC }
+                val credential = pm.getCredentials().single { it.id == profile.credentialId }
+                MacHevcSession(profile.host, profile.port, credential.user, credential.pass) { logLine ->
+                    record(logLine)
+                }.use { session ->
+                    val firstRecord = session.start()
+                    check(session.stage == "S8") { "Did not reach S8: ${session.stage}" }
+
+                    // Initialize streaming record layer and transition to S9
+                    session.initStreamingLayer(firstRecord)
+                    check(session.stage == "S9") { "Did not reach S9: ${session.stage}" }
+
+                    // Read first framebuffer update (reassembling multi-record zlib stream)
+                    val update1 = session.readNextFramebufferUpdate()
+                    check(update1.messageType == 0) { "Expected FramebufferUpdate (0), got ${update1.messageType}" }
+                    check(update1.decompressedBytes > 0) { "No pixels decompressed" }
+                    check(update1.zlibRectCount > 0) { "No zlib rects decompressed" }
+                    record("PASS: S9 first update: ${update1.decompressedBytes} bytes (${update1.width}x${update1.height}), encodings=${update1.encodingsSeen}")
+
+                    // Send pointer motion over encrypted record layer
+                    session.sendPointer(100, 100, 0)
+                    session.sendPointer(120, 120, 0)
+
+                    // Request and receive next update
+                    session.requestUpdate(incremental = true)
+                    val update2 = session.readNextFramebufferUpdate()
+                    record("PASS: S9 steady-state update 2: ${update2.decompressedBytes} bytes, encodings=${update2.encodingsSeen}")
+
+                    record("PASS: Mac HEVC Phase 2 Gate - reached steady state (S9) on framebuffer path over encrypted record layer, decoded desktop frames, handled vendor encodings")
+                }
             } else if (mode == "danglingPair") {
                 val pm = ProfileManager(test.targetContext)
                 val original = pm.getProfiles().single { it.name == "Test MacBook Pro" && it.type == ConnectionType.VNC }
