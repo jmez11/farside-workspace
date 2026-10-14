@@ -89,7 +89,7 @@ class ProfileManager(private val context: Context) {
         val profiles = getProfiles().toMutableList()
         val index = profiles.indexOfFirst { it.id == profile.id }
         if (index >= 0) {
-            profiles[index] = profile
+            profiles[index] = if (profile.cardBackground == null) profile.copy(cardBackground = profiles[index].cardBackground) else profile
         } else {
             profiles.add(profile)
         }
@@ -107,6 +107,9 @@ class ProfileManager(private val context: Context) {
     
     fun deleteProfile(id: String) {
         val profiles = getProfiles().toMutableList()
+        profiles.firstOrNull { it.id == id }?.cardBackground?.let {
+            java.io.File(context.filesDir, "card-backgrounds/$it").delete()
+        }
         profiles.removeAll { it.id == id }
         saveProfiles(profiles)
     }

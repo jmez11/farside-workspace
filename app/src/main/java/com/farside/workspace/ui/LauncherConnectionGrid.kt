@@ -9,6 +9,8 @@ import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -23,6 +25,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.farside.workspace.data.ConnectionProfile
+import com.farside.workspace.SessionCardActions
 import kotlinx.coroutines.delay
 
 private fun LazyGridState.profileAt(point: Offset): String? = layoutInfo.visibleItemsInfo.firstOrNull {
@@ -35,7 +38,8 @@ private fun LazyGridState.profileAt(point: Offset): String? = layoutInfo.visible
 internal fun LauncherConnectionGrid(
     profiles: List<ConnectionProfile>, starredIds: Set<String>, reordering: Boolean,
     modifier: Modifier, onEdit: (ConnectionProfile) -> Unit, onDelete: (String) -> Unit,
-    onConnect: (String) -> Unit, onToggleStar: (String) -> Unit, onMove: (String, String) -> Unit
+    onConnect: (String) -> Unit, onToggleStar: (String) -> Unit, onMove: (String, String) -> Unit,
+    onCapture: (String) -> Unit = {}
 ) {
     val connectionsLabel = stringResource(R.string.connections)
     val grid = rememberLazyGridState()
@@ -101,9 +105,15 @@ internal fun LauncherConnectionGrid(
         }
     } else Modifier
 
-    LazyVerticalGrid(columns = GridCells.Fixed(3), state = grid,
+    BoxWithConstraints(modifier) {
+    val columns = when {
+        maxWidth >= 840.dp -> 3
+        maxWidth >= 440.dp -> 2
+        else -> 1
+    }
+    LazyVerticalGrid(columns = GridCells.Fixed(columns), state = grid,
         contentPadding = PaddingValues(8.dp), userScrollEnabled = !reordering,
-        modifier = modifier.then(reorderGesture).semantics { contentDescription = connectionsLabel }) {
+        modifier = Modifier.fillMaxSize().then(reorderGesture).semantics { contentDescription = connectionsLabel }) {
         itemsIndexed(profiles, key = { _, profile -> profile.id }) { index, profile ->
             val starred = profile.id in starredIds
             val earlier = profiles.getOrNull(index - 1)?.takeIf { (it.id in starredIds) == starred }
@@ -111,9 +121,12 @@ internal fun LauncherConnectionGrid(
             ProfileCard(profile, onEdit = { onEdit(profile) }, onDelete = { onDelete(profile.id) },
                 onConnect = { onConnect(profile.id) }, reordering = reordering, starred = starred,
                 onToggleStar = { onToggleStar(profile.id) }, dragging = dragged == profile.id,
+                connected = (SessionCardActions.connectedCounts[profile.id] ?: 0) > 0,
+                onCapture = { onCapture(profile.id) },
                 onMoveEarlier = earlier?.let { { latestMove(profile.id, it.id) } },
                 onMoveLater = later?.let { { latestMove(profile.id, it.id) } },
                 jumpLabel = profile.jumpHostProfileId?.takeIf { it.isNotBlank() }?.let { id -> profiles.find { it.id == id }?.let { stringResource(R.string.connection_via, it.name) } ?: stringResource(R.string.jump_host_missing) })
         }
+    }
     }
 }

@@ -235,6 +235,7 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
         onDispose {
             saveTerminalSettings()
             (context as? SessionActivity)?.sshHistoryScroll = null
+            (context as? SessionActivity)?.sshCaptureView = null
             sshSessionRef?.finishIfRunning()
         }
     }
@@ -378,6 +379,7 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                     }
                     override fun onTitleChanged(changedSession: com.termux.terminal.TerminalSession) {}
                     override fun onSessionFinished(finishedSession: com.termux.terminal.TerminalSession) {
+                        (context as? SessionActivity)?.let { SessionCardActions.connected(it, false) }
                         if (sshHasConnected) sshDisconnected = true else onClose()
                     }
                     override fun onCopyTextToClipboard(session: com.termux.terminal.TerminalSession, text: String) {
@@ -456,11 +458,15 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
 
                 val sshTerm = com.termux.terminal.SshTerminalSession(session, sessionClient, viewContext)
                 sshTerm.onForwardStatus = { forwardStatuses = it }
-                sshTerm.onConnectionFailed = { if (sshHasConnected) sshDisconnected = true }
+                sshTerm.onConnectionFailed = {
+                    if (sshHasConnected) sshDisconnected = true
+                    (context as? SessionActivity)?.let { SessionCardActions.connected(it, false) }
+                }
                 sshTerm.onConnected = {
                     android.os.Handler(android.os.Looper.getMainLooper()).post {
                         sshHasConnected = true
                         sshDisconnected = false
+                        (context as? SessionActivity)?.let { SessionCardActions.connected(it, true) }
                     }
                     if (session.enableSftp) kotlin.concurrent.thread(name = "sftp-probe", isDaemon = true) {
                     // Minimal background probe over the shared SSH transport; never blocks the terminal.
@@ -475,6 +481,7 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                 (context as? SessionActivity)?.sshHistoryScroll = { terminalView.scrollHistory(it) }
 
                 terminalViewRef = terminalView
+                (context as? SessionActivity)?.sshCaptureView = terminalView
                 sshSessionRef = sshTerm
 
                 terminalView

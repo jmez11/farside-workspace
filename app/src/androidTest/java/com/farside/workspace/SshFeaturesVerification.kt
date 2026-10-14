@@ -210,6 +210,20 @@ class SshFeaturesVerification(private val test: Instrumentation, private val ime
             click("Keep toolbar visible")
             val view = checkNotNull(terminal(activity.window.decorView))
             waitFor("Saved forwarding did not start with SSH login") { runCatching { Socket("127.0.0.1", initialForward.sourcePort).use { it.soTimeout = 1000; it.getOutputStream().write(65); it.getInputStream().read() == 65 } }.getOrDefault(false) }
+            check(activity.cardConnected && activity.sshCaptureView === view)
+            val cardLauncher = test.startActivitySync(Intent(test.targetContext, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
+            try {
+                val cardCaptured = java.util.concurrent.CountDownLatch(1)
+                var cardSaved = false
+                main { SessionCardActions.capture(profile.id) { cardSaved = it; cardCaptured.countDown() } }
+                check(cardCaptured.await(10, java.util.concurrent.TimeUnit.SECONDS) && cardSaved) { "Connected SSH terminal card capture failed" }
+                val cardImage = java.io.File(test.targetContext.filesDir, "card-backgrounds/${pm.getProfiles().single { it.id == profile.id }.cardBackground}")
+                check(cardImage.exists() && cardImage.length() > 1000L)
+                cardImage.copyTo(java.io.File(test.targetContext.cacheDir, "ssh-card-capture.jpg"), overwrite = true)
+            } finally { main { cardLauncher.finish() } }
+            check(!activity.isDestroyed && activity.cardConnected)
+            record("PASS: connected Termux view captured to card JPEG")
             record("PASS: saved forwarding starts automatically in actual SshTerminalSession with fixture shell")
             com.farside.workspace.ssh.SshConnectionManager.acquire(test.targetContext, profile.id).use { first ->
                 val shared = first.connect(profile)

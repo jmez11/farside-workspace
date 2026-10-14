@@ -194,6 +194,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
     }
     val connection: DesktopSessionConnection = remember(session.id, reconnectAttempt) {
         val ended: (String, Boolean) -> Unit = { reason, established ->
+            (context as? SessionActivity)?.let { SessionCardActions.connected(it, false) }
             if (established || hasConnected) { disconnectedReason = reason; connectionFailed = false }
             else connectFailureReason = reason
         }

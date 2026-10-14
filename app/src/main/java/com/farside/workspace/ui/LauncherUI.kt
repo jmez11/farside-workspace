@@ -23,6 +23,21 @@ import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
+import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
+import androidx.compose.ui.window.PopupProperties
+import android.graphics.BitmapFactory
+import java.io.File
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.foundation.BorderStroke
@@ -51,6 +66,8 @@ import androidx.compose.ui.semantics.onClick
 import com.farside.workspace.ConnectionSpatialDrag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -58,6 +75,7 @@ import com.farside.workspace.data.ConnectionProfile
 import androidx.compose.material.icons.filled.DesktopMac
 import com.farside.workspace.data.ConnectionType
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import java.util.UUID
 
 
@@ -71,7 +89,8 @@ fun LauncherScreen(
     profileManager: com.farside.workspace.data.ProfileManager,
     starredIds: Set<String> = emptySet(),
     onToggleStar: (String) -> Unit = {},
-    onMoveProfile: (String, String) -> Unit = { _, _ -> }
+    onMoveProfile: (String, String) -> Unit = { _, _ -> },
+    onCaptureProfile: (String) -> Unit = {}
 ) {
     var isAdding by rememberSaveable { mutableStateOf(false) }
     var editingProfile by remember { mutableStateOf<ConnectionProfile?>(null) }
@@ -112,9 +131,14 @@ fun LauncherScreen(
                 modifier = Modifier.fillMaxSize().padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    Text(stringResource(R.string.farside_connections), style = MaterialTheme.typography.headlineLarge)
-                    IconButton(onClick = { filesOpen = true }, modifier = Modifier.align(Alignment.CenterEnd).padding(end = 48.dp)) {
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                    val compact = maxWidth < 600.dp
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (!compact) Spacer(Modifier.width(96.dp))
+                    Text(stringResource(R.string.farside_connections), style = MaterialTheme.typography.headlineLarge,
+                        modifier = Modifier.weight(1f), textAlign = TextAlign.Center,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    IconButton(onClick = { filesOpen = true }) {
                         Icon(androidx.compose.material.icons.Icons.Default.Folder, contentDescription = stringResource(R.string.files), tint = Color.White)
                     }
                     IconButton(
@@ -122,9 +146,9 @@ fun LauncherScreen(
                             settingsInitialTab = 0
                             isSettingsOpen = true 
                         },
-                        modifier = Modifier.align(Alignment.CenterEnd)
                     ) {
                         Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.settings), tint = Color.White)
+                    }
                     }
                 }
                 Spacer(modifier = Modifier.height(24.dp))
@@ -140,7 +164,8 @@ fun LauncherScreen(
                 Spacer(Modifier.height(8.dp))
                 LauncherConnectionGrid(profiles = profiles, starredIds = starredIds, reordering = reordering,
                     modifier = Modifier.weight(1f), onEdit = { editingProfile = it }, onDelete = onDeleteProfile,
-                    onConnect = onConnectProfile, onToggleStar = onToggleStar, onMove = onMoveProfile)
+                    onConnect = onConnectProfile, onToggleStar = onToggleStar, onMove = onMoveProfile,
+                    onCapture = onCaptureProfile)
 
                 Spacer(modifier = Modifier.height(16.dp))
                 ExtendedFloatingActionButton(
@@ -169,10 +194,17 @@ fun LauncherScreen(
 fun ProfileCard(profile: ConnectionProfile, onEdit: () -> Unit, onDelete: () -> Unit, onConnect: () -> Unit,
     reordering: Boolean = false, starred: Boolean = false, onToggleStar: () -> Unit = {},
     dragging: Boolean = false, onMoveEarlier: (() -> Unit)? = null, onMoveLater: (() -> Unit)? = null,
-    jumpLabel: String? = null) {
+    jumpLabel: String? = null, connected: Boolean = false,
+    onCapture: () -> Unit = {}) {
     var menuExpanded by remember { mutableStateOf(false) }
     val view = LocalView.current
     val latestProfile by rememberUpdatedState(profile)
+    val context = LocalContext.current
+    val background = remember(profile.cardBackground) {
+        profile.cardBackground?.let { name ->
+            runCatching { BitmapFactory.decodeFile(File(context.filesDir, "card-backgrounds/$name").path)?.asImageBitmap() }.getOrNull()
+        }
+    }
     val launchModifier = if (!reordering) Modifier
         .semantics { onClick { onConnect(); true } }
         .pointerInput(profile.id, view) {
@@ -182,39 +214,66 @@ fun ProfileCard(profile: ConnectionProfile, onEdit: () -> Unit, onDelete: () -> 
             )
         } else Modifier
     
+    val cardHeight = if (reordering) 196.dp else 220.dp
     Card(
-        modifier = Modifier.padding(8.dp).fillMaxWidth().heightIn(min = if (reordering) 180.dp else 140.dp).then(launchModifier),
+        modifier = Modifier.padding(8.dp).fillMaxWidth().height(cardHeight).then(launchModifier),
         shape = RoundedCornerShape(12.dp),
         border = if (dragging) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.fillMaxWidth().height(cardHeight)) {
+            if (background != null) {
+                Image(background, contentDescription = null, alignment = Alignment.Center, contentScale = ContentScale.Crop,
+                    modifier = Modifier.matchParentSize().graphicsLayer { alpha = 0.5f })
+                Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.15f)))
+            }
             Column(
-                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, top = 16.dp, end = 16.dp,
-                    bottom = if (reordering) 48.dp else 16.dp),
+                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, top = 52.dp, end = 16.dp,
+                    bottom = if (reordering) 44.dp else 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
                 Icon(
                     imageVector = when (profile.type) { ConnectionType.RDP -> Icons.Default.Computer; ConnectionType.SSH -> Icons.Default.Terminal; ConnectionType.VNC -> Icons.Default.DesktopMac },
                     contentDescription = null,
-                    modifier = Modifier.size(40.dp),
+                    modifier = Modifier.size(32.dp),
                     tint = MaterialTheme.colorScheme.primary
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 Surface(shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)) {
                     Text(stringResource(profile.type.labelResId), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 1.dp))
                 }
-                Text(profile.name, style = MaterialTheme.typography.titleMedium)
-                Text(stringResource(R.string.connection_address, profile.host, profile.port), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (jumpLabel != null) Text(jumpLabel, style = MaterialTheme.typography.labelSmall,
-                    color = if (jumpLabel.startsWith("\u26A0")) Color(0xFFFFB300) else MaterialTheme.colorScheme.primary)
+                Text(profile.name, style = MaterialTheme.typography.titleMedium,
+                    maxLines = if (reordering) 1 else 2,
+                    overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+                Text(stringResource(R.string.connection_address, profile.host, profile.port), style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = if (reordering) 1 else 2,
+                    overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+                if (jumpLabel != null && !reordering) Text(jumpLabel, style = MaterialTheme.typography.labelSmall,
+                    color = if (jumpLabel.startsWith("\u26A0")) Color(0xFFFFB300) else MaterialTheme.colorScheme.primary,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             
-            IconButton(onClick = onToggleStar, modifier = Modifier.align(Alignment.TopStart)) {
-                Icon(if (starred) Icons.Default.Star else Icons.Default.StarBorder,
-                    contentDescription = if (starred) stringResource(R.string.unstar_connection, profile.name) else stringResource(R.string.star_connection, profile.name),
-                    tint = if (starred) Color(0xFFFFD166) else MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(modifier = Modifier.align(Alignment.TopStart).padding(start = 8.dp, top = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                val starLabel = if (starred) stringResource(R.string.unstar_connection, profile.name)
+                    else stringResource(R.string.star_connection, profile.name)
+                val starTooltip = if (starred) stringResource(R.string.unfavorite)
+                    else stringResource(R.string.favorite)
+                CardActionTooltip(starTooltip) {
+                    IconButton(onClick = onToggleStar) {
+                        Icon(if (starred) Icons.Default.Star else Icons.Default.StarBorder,
+                            contentDescription = starLabel,
+                            tint = if (starred) Color(0xFFFFD166) else MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                if (connected && !reordering) {
+                    val captureLabel = stringResource(R.string.capture_connection, profile.name)
+                    CardActionTooltip(captureLabel) {
+                        IconButton(onClick = onCapture) { Icon(Icons.Default.PhotoCamera, captureLabel) }
+                    }
+                }
             }
             if (reordering) {
                 Row(modifier = Modifier.align(Alignment.BottomCenter)) {
@@ -226,7 +285,7 @@ fun ProfileCard(profile: ConnectionProfile, onEdit: () -> Unit, onDelete: () -> 
                     }
                 }
             }
-            Box(modifier = Modifier.align(Alignment.TopEnd)) {
+            Box(modifier = Modifier.align(Alignment.TopEnd).padding(end = 8.dp, top = 4.dp)) {
                 IconButton(onClick = { menuExpanded = true }) {
                     Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.more_options))
                 }
@@ -249,6 +308,45 @@ fun ProfileCard(profile: ConnectionProfile, onEdit: () -> Unit, onDelete: () -> 
                         }
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CardActionTooltip(label: String, content: @Composable () -> Unit) {
+    var hovering by remember { mutableStateOf(false) }
+    var visible by remember { mutableStateOf(false) }
+    val gap = with(androidx.compose.ui.platform.LocalDensity.current) { 6.dp.roundToPx() }
+    LaunchedEffect(hovering) {
+        visible = false
+        if (hovering) {
+            delay(450)
+            visible = true
+        }
+    }
+    Box(Modifier.pointerInput(Unit) {
+        awaitPointerEventScope {
+            while (true) when (awaitPointerEvent().type) {
+                PointerEventType.Enter -> hovering = true
+                PointerEventType.Exit -> hovering = false
+                PointerEventType.Press -> visible = false
+                else -> Unit
+            }
+        }
+    }) {
+        content()
+        if (visible) Popup(popupPositionProvider = remember(gap) { object : PopupPositionProvider {
+            override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize,
+                layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset = IntOffset(
+                (anchorBounds.left + (anchorBounds.width - popupContentSize.width) / 2)
+                    .coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0)),
+                (anchorBounds.bottom + gap).coerceAtMost((windowSize.height - popupContentSize.height).coerceAtLeast(0)))
+        } }, properties = PopupProperties(focusable = false), onDismissRequest = { visible = false }) {
+            Surface(shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.inverseSurface,
+                shadowElevation = 6.dp) {
+                Text(label, color = MaterialTheme.colorScheme.inverseOnSurface,
+                    style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(8.dp))
             }
         }
     }

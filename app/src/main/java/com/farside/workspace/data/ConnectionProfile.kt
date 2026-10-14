@@ -86,7 +86,8 @@ data class ConnectionProfile(
     val terminalScrollback: Int = 2000,
     val terminalFontSize: Int = 14,
     val terminalOpacity: Float = 1f,
-    val reconnectAutomatically: Boolean = false
+    val reconnectAutomatically: Boolean = false,
+    val cardBackground: String? = null
 ) {
     fun toJson(): JSONObject {
         val json = JSONObject()
@@ -140,6 +141,7 @@ data class ConnectionProfile(
         json.put("terminalFontSize", terminalFontSize)
         json.put("terminalOpacity", terminalOpacity)
         json.put("reconnectAutomatically", reconnectAutomatically)
+        json.put("cardBackground", cardBackground)
         json.put("adminMode", adminMode)
         return json
     }
@@ -200,6 +202,7 @@ data class ConnectionProfile(
                 terminalFontSize = json.optInt("terminalFontSize", 14).coerceIn(8, 32),
                 terminalOpacity = json.optDouble("terminalOpacity", 1.0).toFloat().let { if (it.isFinite()) it.coerceIn(0.2f, 1f) else 1f },
                 reconnectAutomatically = json.optBoolean("reconnectAutomatically", false),
+                cardBackground = json.optString("cardBackground").takeIf { it.isNotBlank() },
                 adminMode = json.optBoolean("adminMode", false)
             )
         }

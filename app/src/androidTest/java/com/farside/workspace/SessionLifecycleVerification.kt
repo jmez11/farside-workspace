@@ -13,6 +13,13 @@ import android.view.ViewGroup
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.inspector.WindowInspector
 import androidx.compose.ui.window.DialogWindowProvider
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.Text
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import com.farside.workspace.data.ConnectionProfile
 import com.farside.workspace.data.ConnectionType
 import com.farside.workspace.data.ProfileManager
@@ -56,6 +63,10 @@ internal class SessionLifecycleVerification(private val test: Instrumentation) {
                 "manipulation" -> manipulation()
                 "back" -> launcherBack()
                 "backLive" -> launcherBack(true)
+                "card" -> cardActions(profiles.firstOrNull { it.name == "LAPTOP-DDJV33M6" && it.type == ConnectionType.RDP }
+                    ?: error("Saved LAPTOP-DDJV33M6 profile unavailable"), false)
+                "cardSynthetic" -> cardActions(ConnectionProfile("verification-card-template", "Card verification",
+                    ConnectionType.RDP, "127.0.0.1", 1, "", ""), true)
                 else -> error("Unknown lifecycle mode $mode")
             }
         } finally {
@@ -107,6 +118,93 @@ internal class SessionLifecycleVerification(private val test: Instrumentation) {
         if (view is TextureView) return view
         if (view is ViewGroup) for (i in 0 until view.childCount) texture(view.getChildAt(i))?.let { return it }
         return null
+    }
+    private fun cardActions(original: ConnectionProfile, synthetic: Boolean) {
+        val profile = original.copy(id = "verification-card-background", name = "Card verification",
+            cardBackground = null, redirectMicrophone = false, enableCamera = false)
+        ProfileManager(context).addProfile(profile)
+        var picture: File? = null
+        try {
+            val session = launch(profile.id)
+            var selected = session
+            if (synthetic) {
+                Thread.sleep(1500)
+                val second = launch(profile.id)
+                Thread.sleep(1500)
+                selected = second
+                test.runOnMainSync {
+                    second.setContent {
+                        Box(Modifier.fillMaxSize().background(Color(0xFF2376B5))) {
+                            Text("Card capture fixture", color = Color.White)
+                        }
+                    }
+                    SessionCardActions.connected(session, true)
+                    SessionCardActions.connected(second, true)
+                    SessionCardActions.focused(session)
+                    check(SessionCardActions.selectedTask(profile.id) == session.taskId)
+                    SessionCardActions.focused(second)
+                    check(SessionCardActions.selectedTask(profile.id) == second.taskId)
+                }
+            } else connected(session)
+            val launcher = test.startActivitySync(android.content.Intent(context, MainActivity::class.java)
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
+            if (synthetic) test.runOnMainSync { SessionCardActions.connected(session, true) }
+            check((SessionCardActions.connectedCounts[profile.id] ?: 0) > 0) { "Session card registry did not mark the window connected" }
+            repeat(12) {
+                if (find("Use screenshot of Card verification as card background") != null) return@repeat
+                find("Connections")?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+                Thread.sleep(150)
+            }
+            await("Use screenshot of Card verification as card background")
+            click("Use screenshot of Card verification as card background")
+            var saved: String? = null
+            for (attempt in 0 until 100) {
+                saved = ProfileManager(context).getProfiles().firstOrNull { it.id == profile.id }?.cardBackground
+                if (saved != null) break
+                Thread.sleep(100)
+            }
+            val name = checkNotNull(saved) { "Card screenshot was not saved" }
+            picture = File(context.filesDir, "card-backgrounds/$name")
+            check(picture.exists() && picture.length() > 1000L) { "Card background file is missing or empty" }
+            val bitmap = checkNotNull(android.graphics.BitmapFactory.decodeFile(picture.path))
+            check(bitmap.width > 0 && bitmap.height > 0)
+            if (synthetic) check(bitmap.getPixel(bitmap.width / 2, bitmap.height / 2) and 0x00ffffff != 0)
+            bitmap.recycle()
+            if (synthetic) {
+                test.runOnMainSync {
+                    selected.sshCaptureView = object : View(context) {
+                        override fun onDraw(canvas: android.graphics.Canvas) {
+                            canvas.drawColor(android.graphics.Color.rgb(12, 144, 72))
+                            canvas.drawText("SSH capture fixture", 20f, 40f,
+                                android.graphics.Paint().apply { color = android.graphics.Color.WHITE; textSize = 24f })
+                        }
+                    }.apply { layout(0, 0, 640, 400) }
+                }
+                click("Use screenshot of Card verification as card background")
+                var next: String? = null
+                for (attempt in 0 until 100) {
+                    next = ProfileManager(context).getProfiles().firstOrNull { it.id == profile.id }?.cardBackground
+                    if (next != null && next != name) break
+                    Thread.sleep(100)
+                }
+                check(next != null && next != name) { "Terminal view capture was not saved" }
+                picture = File(context.filesDir, "card-backgrounds/$next")
+                val terminalImage = checkNotNull(android.graphics.BitmapFactory.decodeFile(picture.path))
+                val center = terminalImage.getPixel(terminalImage.width / 2, terminalImage.height / 2)
+                check(android.graphics.Color.green(center) > android.graphics.Color.red(center) + 80 &&
+                    android.graphics.Color.green(center) > android.graphics.Color.blue(center) + 40)
+                terminalImage.recycle()
+            }
+            check(!selected.isDestroyed && selected.cardConnected)
+            check(SessionCardActions.selectedTask(profile.id) == selected.taskId)
+            if (synthetic) checkNotNull(picture).copyTo(File(context.cacheDir, "card-synthetic.jpg"), overwrite = true)
+            File(context.cacheDir, "card-actions-results.json").writeText(JSONObject()
+                .put("captured", true).put("width", session.window.decorView.width)
+                .put("task", selected.taskId).put("syntheticConnection", synthetic).toString(2))
+            test.runOnMainSync { launcher.finish() }
+        } finally {
+            picture?.delete()
+        }
     }
     private fun connected(activity: Activity) {
         repeat(100) {

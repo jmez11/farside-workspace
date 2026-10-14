@@ -206,6 +206,10 @@
     <string name="connection_address">%1$s:%2$d</string>
     <string name="unstar_connection">Unstar %1$s</string>
     <string name="star_connection">Star %1$s</string>
+    <string name="favorite">Favorite</string>
+    <string name="unfavorite">Unfavorite</string>
+    <string name="capture_connection">Use screenshot of %1$s as card background</string>
+    <string name="card_capture_failed">Could not capture the connected window.</string>
     <string name="move_connection_earlier">Move %1$s earlier</string>
     <string name="move_connection_later">Move %1$s later</string>
     <string name="finding_local_sessions">Finding local %1$s sessions...</string>

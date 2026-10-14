@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.farside.workspace.data.*
@@ -94,6 +95,7 @@ internal fun SftpFilesEntry(onClose: () -> Unit, profileId: String? = null, allo
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?, allowDisabledPairedProfile: Boolean) {
     val context = LocalContext.current
@@ -238,10 +240,14 @@ private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?, allowDisable
             Text(stringResource(R.string.files_title), style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
             IconButton(onClick = onClose) { Icon(Icons.Default.Close, stringResource(R.string.close_files)) }
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = ::root, enabled = operation == null) { Text(stringResource(R.string.ssh_files_root)) }
-            Text(session?.profile?.name.orEmpty(), Modifier.weight(1f))
-            if (session != null) {
+            Text(session?.profile?.name.orEmpty(), Modifier.weight(1f), maxLines = 1,
+                overflow = TextOverflow.Ellipsis)
+        }
+        if (session != null) {
+            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Box {
                     TextButton(onClick = { sortMenu = true }, enabled = operation == null) {
                         Icon(Icons.Default.Sort, null)
@@ -258,7 +264,8 @@ private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?, allowDisable
                 TextButton(onClick = { localFolder = Environment.getExternalStorageDirectory() }, enabled = operation == null) { Text(stringResource(R.string.upload)) }
             }
         }
-        if (path.isNotEmpty()) Text(if (cachedView && operation == null) stringResource(R.string.sftp_cached_path, path) else path, style = MaterialTheme.typography.bodyMedium)
+        if (path.isNotEmpty()) Text(if (cachedView && operation == null) stringResource(R.string.sftp_cached_path, path) else path,
+            style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (operation != null) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(status, Modifier.weight(1f)); TextButton(onClick = { operation?.cancel(); if (path.isEmpty()) session?.close() }) { Text(stringResource(R.string.cancel)) }

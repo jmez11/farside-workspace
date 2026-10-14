@@ -12,10 +12,15 @@ import android.view.MotionEvent
 import android.view.PixelCopy
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.farside.workspace.data.ConnectionProfile
 import com.farside.workspace.data.ConnectionType
 import com.farside.workspace.data.LauncherArrangementStore
@@ -41,7 +46,9 @@ internal class LauncherArrangementVerification(private val test: Instrumentation
     }
     private fun find(label: String): AccessibilityNodeInfo {
         repeat(40) {
-            nodes().firstOrNull { it.text?.toString() == label || it.contentDescription?.toString() == label }?.let { return it }
+            val current = nodes()
+            (current.firstOrNull { it.contentDescription?.toString() == label }
+                ?: current.firstOrNull { it.text?.toString() == label })?.let { return it }
             Thread.sleep(100)
         }
         error("Missing $label")
@@ -58,8 +65,17 @@ internal class LauncherArrangementVerification(private val test: Instrumentation
         val prefs = context.getSharedPreferences(preferenceName, Context.MODE_PRIVATE)
         check(prefs.edit().clear().commit())
         val store = LauncherArrangementStore(context, preferenceName)
+        val backgroundFile = File(context.filesDir, "card-backgrounds/verification-launcher-crop.jpg")
+        backgroundFile.parentFile?.mkdirs()
+        Bitmap.createBitmap(80, 160, Bitmap.Config.ARGB_8888).also { sample ->
+            sample.eraseColor(android.graphics.Color.rgb(200, 40, 60))
+            backgroundFile.outputStream().use { sample.compress(Bitmap.CompressFormat.JPEG, 95, it) }
+            sample.recycle()
+        }
         val fixture = ('A'..'F').map { letter -> ConnectionProfile(letter.toString(), "Fixture $letter",
             if (letter == 'F') ConnectionType.SSH else ConnectionType.RDP, "127.0.0.1", 1, "", "") }
+            .map { if (it.id == "A") it.copy(cardBackground = backgroundFile.name) else it }
+        check(ConnectionProfile.fromJson(fixture[0].copy(cardBackground = "fixture.jpg").toJson()).cardBackground == "fixture.jpg")
         fun ids(profiles: List<ConnectionProfile> = fixture) = LauncherArrangementStore(context, preferenceName).load().arrange(profiles).map { it.id }
         check(ids() == listOf("A", "B", "C", "D", "E", "F"))
         store.toggleStar("C")
@@ -82,8 +98,10 @@ internal class LauncherArrangementVerification(private val test: Instrumentation
         }
         val activity = test.startActivitySync(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
         val opens = CopyOnWriteArrayList<String>()
+        val captures = CopyOnWriteArrayList<String>()
         val shown = mutableStateOf(fixture)
         try {
+            test.runOnMainSync { SessionCardActions.connectedCounts["A"] = 1 }
             test.runOnMainSync {
                 activity.setContent {
                     var arrangement by remember { mutableStateOf(store.load()) }
@@ -93,15 +111,62 @@ internal class LauncherArrangementVerification(private val test: Instrumentation
                             onConnectProfile = { opens.add(it) }, profileManager = ProfileManager(context),
                             starredIds = arrangement.starred,
                             onToggleStar = { arrangement = store.toggleStar(it) },
-                            onMoveProfile = { source, target -> arrangement = store.move(shown.value, source, target) })
+                            onMoveProfile = { source, target -> arrangement = store.move(shown.value, source, target) },
+                            onCaptureProfile = { captures.add(it) })
                         }
                     }
                 }
             }
             find("Click to open, or drag into space to place a window.")
+            var lastHover: Rect? = null
+            fun hover(targetLabel: String, tooltipLabel: String = targetLabel) {
+                val target = bounds(targetLabel)
+                test.runOnMainSync {
+                    val decor = activity.window.decorView
+                    val origin = IntArray(2).also { decor.getLocationOnScreen(it) }
+                    fun send(action: Int, area: Rect) {
+                        val event = MotionEvent.obtain(SystemClock.uptimeMillis(), SystemClock.uptimeMillis(),
+                            action, area.exactCenterX() - origin[0], area.exactCenterY() - origin[1], 0)
+                            .apply { source = android.view.InputDevice.SOURCE_MOUSE }
+                        try { decor.dispatchGenericMotionEvent(event) } finally { event.recycle() }
+                    }
+                    lastHover?.let { send(MotionEvent.ACTION_HOVER_EXIT, it) }
+                    send(MotionEvent.ACTION_HOVER_ENTER, target)
+                }
+                lastHover = target
+                Thread.sleep(650)
+                check(nodes().any { it.text?.toString() == tooltipLabel }) { "Hover tooltip missing for $tooltipLabel" }
+            }
+            hover("Star Fixture A", "Favorite")
+            hover("Use screenshot of Fixture A as card background")
+            check(nodes().none { it.contentDescription?.toString() == "Open another Fixture A window here" })
+            val actionsImage = Bitmap.createBitmap(activity.window.decorView.width,
+                activity.window.decorView.height, Bitmap.Config.ARGB_8888)
+            val actionsCopied = CountDownLatch(1)
+            var actionsResult = -1
+            test.runOnMainSync { PixelCopy.request(activity.window, actionsImage,
+                { actionsResult = it; actionsCopied.countDown() }, Handler(Looper.getMainLooper())) }
+            check(actionsCopied.await(5, TimeUnit.SECONDS) && actionsResult == PixelCopy.SUCCESS)
+            File(context.cacheDir, "launcher-actions.png").outputStream().use {
+                actionsImage.compress(Bitmap.CompressFormat.PNG, 100, it)
+            }
+            val nameNode = find("Fixture A")
+            val cardNode = generateSequence(nameNode) { it.parent }.first { it.isClickable && it != nameNode }
+            val card = Rect().also { cardNode.getBoundsInScreen(it) }
+            val edge = actionsImage.getPixel(card.left + 4, card.bottom - 5)
+            check(android.graphics.Color.red(edge) > android.graphics.Color.green(edge) + 35) {
+                "Card background did not cover the bottom edge (pixel=$edge, card=$card)"
+            }
+            actionsImage.recycle()
+            click("Use screenshot of Fixture A as card background")
+            check(captures.toList() == listOf("A") && opens.isEmpty())
+            test.runOnMainSync { SessionCardActions.connectedCounts["A"] = 0 }
+            Thread.sleep(200)
+            check(nodes().none { it.contentDescription?.toString() == "Use screenshot of Fixture A as card background" })
             check(nodes().none { it.text?.toString() in listOf("Click to open", "Drag to place") })
             click("Star Fixture C")
             click("Star Fixture E")
+            hover("Unstar Fixture C", "Unfavorite")
             check(ids().take(2) == listOf("C", "E") && opens.isEmpty())
             check(bounds("Fixture C").centerY() <= bounds("Fixture A").centerY())
 
@@ -199,10 +264,53 @@ internal class LauncherArrangementVerification(private val test: Instrumentation
                 .put("starred", JSONArray(store.load().starred.toList())).put("order", JSONArray(ids(shown.value)))
                 .put("opens", JSONArray(opens.toList())).put("visibleBeforeEdgeScroll", visibleBefore).put("visibleAfterEdgeScroll", visibleAfter)
                 .put("isolatedArrangementPreferences", true).toString(2))
+            test.runOnMainSync {
+                activity.setContent {
+                    MaterialTheme(colorScheme = darkColorScheme()) {
+                        Surface(color = MaterialTheme.colorScheme.background,
+                            contentColor = MaterialTheme.colorScheme.onBackground) {
+                            Box(Modifier.width(520.dp).height(620.dp)) {
+                                LauncherScreen(profiles = fixture, onAddProfile = {}, onDeleteProfile = {},
+                                    onConnectProfile = {}, profileManager = ProfileManager(context))
+                            }
+                        }
+                    }
+                }
+            }
+            Thread.sleep(500)
+            val first = bounds("Fixture A")
+            val second = bounds("Fixture B")
+            check(first.centerY() == second.centerY() && second.left > first.right) {
+                "Compact launcher did not use two readable columns"
+            }
+            fun cardBounds(name: String): Rect {
+                val label = find(name)
+                val card = generateSequence(label) { it.parent }.first { it.isClickable && it != label }
+                return Rect().also { card.getBoundsInScreen(it) }
+            }
+            check(cardBounds("Fixture A").height() == cardBounds("Fixture B").height()) {
+                "Compact cards have different heights"
+            }
+            check(bounds("Farside Connections").right <= bounds("Files").left) {
+                "Compact launcher title overlaps its actions"
+            }
+            val compactImage = Bitmap.createBitmap(activity.window.decorView.width,
+                activity.window.decorView.height, Bitmap.Config.ARGB_8888)
+            val compactCopied = CountDownLatch(1)
+            var compactResult = -1
+            test.runOnMainSync { PixelCopy.request(activity.window, compactImage,
+                { compactResult = it; compactCopied.countDown() }, Handler(Looper.getMainLooper())) }
+            check(compactCopied.await(5, TimeUnit.SECONDS) && compactResult == PixelCopy.SUCCESS)
+            File(context.cacheDir, "launcher-compact.png").outputStream().use {
+                compactImage.compress(Bitmap.CompressFormat.PNG, 100, it)
+            }
+            compactImage.recycle()
             return "click with jitter, star touch without launch, persisted starred-first order, reorder buttons/grid drag, group boundaries, return to normal click and edge scrolling with 46 connections"
         } finally {
+            test.runOnMainSync { SessionCardActions.connectedCounts.remove("A") }
             test.runOnMainSync { activity.finish() }
             check(prefs.edit().clear().commit())
+            backgroundFile.delete()
         }
     }
 }

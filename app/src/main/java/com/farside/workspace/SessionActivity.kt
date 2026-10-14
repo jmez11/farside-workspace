@@ -17,6 +17,8 @@ import com.farside.workspace.data.ProfileManager
 import metavrx.layout.compose.SpatialScene
 
 class SessionActivity : ComponentActivity() {
+    internal var cardConnected = false
+    internal var sshCaptureView: android.view.View? = null
     internal val displayCapture = DisplayCapturePermission(this)
     internal var keyboardPanelState: metavrx.layout.window.compose.state.WindowState? = null
     internal var keyboardBankState: metavrx.layout.window.compose.state.WindowState? = null
@@ -79,6 +81,7 @@ class SessionActivity : ComponentActivity() {
 
     override fun onPostResume() {
         super.onPostResume()
+        SessionCardActions.focused(this)
         window.decorView.post {
             if (!isDestroyed) {
                 movementObserver.start()
@@ -88,6 +91,7 @@ class SessionActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        SessionCardActions.unregister(this)
         sshControllerScroll.stop()
         credentialPrefs?.unregisterOnSharedPreferenceChangeListener(credentialListener)
         displayCapture.close()
@@ -98,6 +102,7 @@ class SessionActivity : ComponentActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) SessionCardActions.focused(this)
         if (!hasFocus) controllerScroll.stop()
         if (!hasFocus) sshControllerScroll.stop()
         if (keyboardPanelState?.lifecycle?.value == metavrx.layout.window.compose.state.WindowLifecycle.Active) return
@@ -128,6 +133,7 @@ class SessionActivity : ComponentActivity() {
             return
         }
         sessionProfile = profile.id
+        SessionCardActions.register(this, profile.id)
         sessionCredential = profile.credentialId
         if (profile.credentialId != null && profileManager.getCredentials().none { it.id == profile.credentialId }) {
             android.widget.Toast.makeText(this, getString(R.string.saved_credential_deleted), android.widget.Toast.LENGTH_LONG).show()
@@ -179,14 +185,14 @@ class SessionActivity : ComponentActivity() {
                         RdpSessionScreen(
                             session = profile.copy(reconnectAutomatically = profileManager.getProfiles().firstOrNull { it.id == profile.id }?.reconnectAutomatically ?: false),
                             windowInteraction = windowInteraction.value,
-                            onInstanceCreated = { rdpInstance = it },
+                            onInstanceCreated = { rdpInstance = it; SessionCardActions.connected(this, it != 0L) },
                             onBridgeCreated = { rdpBridge = it; it.displayCapture = displayCapture },
                             onClose = { finish() }
                         )
                         }
                     } else if (profile.type == ConnectionType.VNC) {
                         SpatialScene {
-                            VncSessionScreen(profile.copy(reconnectAutomatically = profileManager.getProfiles().firstOrNull { it.id == profile.id }?.reconnectAutomatically ?: false), onInstanceCreated = { vncInstance = it },
+                            VncSessionScreen(profile.copy(reconnectAutomatically = profileManager.getProfiles().firstOrNull { it.id == profile.id }?.reconnectAutomatically ?: false), onInstanceCreated = { vncInstance = it; SessionCardActions.connected(this, it != 0L) },
                                 onBridgeCreated = { vncBridge = it }, onClose = { finish() },
                                 windowInteraction = windowInteraction.value)
                         }
