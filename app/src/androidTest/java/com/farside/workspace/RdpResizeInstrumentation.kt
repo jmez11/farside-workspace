@@ -43,7 +43,6 @@ class RdpResizeInstrumentation : Instrumentation() {
     private var rdpHttpLive = false
     private var windowCapacityOnly = false
     private var windowLaunchOnly = false
-    private var keyboardFadeOnly = false
     private var sshFeaturesOnly = false
     private var sshOnly = false
     private var sshToolbarOnly = false
@@ -88,7 +87,6 @@ class RdpResizeInstrumentation : Instrumentation() {
         rdpHttpLive = arguments?.getString("rdpHttpLive") == "true"
         windowCapacityOnly = arguments?.getString("windowCapacityOnly") == "true"
         windowLaunchOnly = arguments?.getString("windowLaunchOnly") == "true"
-        keyboardFadeOnly = arguments?.getString("keyboardFadeOnly") == "true"
         sshFeaturesOnly = arguments?.getString("sshFeaturesOnly") == "true"
         sshOnly = arguments?.getString("sshOnly") == "true"
         sshToolbarOnly = arguments?.getString("sshToolbarOnly") == "true"
@@ -165,12 +163,6 @@ class RdpResizeInstrumentation : Instrumentation() {
             }
             if (windowCapacityOnly) {
                 results.putString("stream", "PASS: ${WindowCapacityVerification(this).run()}\n")
-                finish(0, results)
-                return
-            }
-            if (keyboardFadeOnly) {
-                val report = KeyboardCropVerification(this).run(rapid = true, fadeOnly = true)
-                results.putString("stream", "PASS: $report\n")
                 finish(0, results)
                 return
             }
