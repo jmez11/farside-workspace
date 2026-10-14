@@ -95,6 +95,7 @@ fun LauncherScreen(
                     editingProfile = null
                 },
                 profileManager = profileManager,
+                savedProfiles = profiles,
                 credentialRevision = credentialRevision,
                 onNavigateToSettings = { tab ->
                     settingsInitialTab = tab
@@ -1037,6 +1038,7 @@ fun AddProfileForm(
     onSave: (ConnectionProfile) -> Unit, 
     onCancel: () -> Unit, 
     profileManager: com.farside.workspace.data.ProfileManager,
+    savedProfiles: List<ConnectionProfile> = profileManager.getProfiles(),
     onNavigateToSettings: (Int) -> Unit = {},
     credentialRevision: Int = 0
 ) {
@@ -1193,7 +1195,7 @@ fun AddProfileForm(
                         enableSftp = type == ConnectionType.SSH && enableSftp,
                         vncAuthMode = vncAuthMode,
                         sftpPairProfileId = if (type == ConnectionType.VNC) sftpPairProfileId.takeIf { id ->
-                            profileManager.getProfiles().any { it.id == id && it.type == ConnectionType.SSH }
+                            savedProfiles.any { it.id == id && it.type == ConnectionType.SSH && it.enableSftp }
                         } else null,
                         redirectClipboard = redirectClipboard,
                         customResolution = initialProfile?.customResolution ?: false,
@@ -1381,7 +1383,7 @@ fun AddProfileForm(
                         color = Color.Red, modifier = Modifier.padding(16.dp))
                 }
                 if (type == ConnectionType.VNC) {
-                    val sshProfiles = remember(profileManager) { profileManager.getProfiles().filter { it.type == ConnectionType.SSH } }
+                    val sshProfiles = savedProfiles.filter { it.type == ConnectionType.SSH && it.enableSftp }
                     var expandedPair by rememberSaveable { mutableStateOf(false) }
                     SettingsHeader(stringResource(R.string.vnc_sftp_pair))
                     ExposedDropdownMenuBox(expanded = expandedPair, onExpandedChange = { expandedPair = !expandedPair },
