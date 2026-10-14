@@ -3,6 +3,7 @@ package com.farside.workspace.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -15,6 +16,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Terminal
@@ -38,6 +40,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import com.farside.workspace.R
 import com.farside.workspace.localizedMessage
+import com.farside.workspace.resolve
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.platform.LocalContext
@@ -46,6 +49,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectDragGestures
 import com.farside.workspace.ConnectionSpatialDrag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -341,6 +345,17 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
     var savingSshKey by remember { mutableStateOf(false) }
     var pendingKeyPinDisable by remember { mutableStateOf(false) }
     val sshKeyScope = rememberCoroutineScope()
+    var publicKeyPending by remember { mutableStateOf<com.farside.workspace.data.SavedSshKey?>(null) }
+    var publicKeyShown by remember { mutableStateOf<Pair<String, com.farside.workspace.data.SshPublicKey>?>(null) }
+    var publicKeyError by remember { mutableStateOf<String?>(null) }
+
+    fun showPublicKey(key: com.farside.workspace.data.SavedSshKey) {
+        try {
+            publicKeyShown = key.name to com.farside.workspace.data.deriveSshPublicKey(key.privateKey, key.passphrase, key.name)
+        } catch (error: com.farside.workspace.LocalizableException) {
+            publicKeyError = error.resolve(context.applicationContext)
+        }
+    }
 
     fun sshKeyAction(key: com.farside.workspace.data.SavedSshKey, action: String) {
         if (action == "edit") {
@@ -397,6 +412,39 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
             },
             onCancel = { pendingKeyPinDisable = false }
         )
+    }
+    publicKeyPending?.let { key ->
+        if (systemPinEnabled) SystemCredentialDialog(
+            title = stringResource(R.string.ssh_public_key_title), allowRemembered = false,
+            onUnlocked = { publicKeyPending = null; showPublicKey(key) },
+            onCancel = { publicKeyPending = null }
+        ) else CredentialPinDialog(
+            title = stringResource(R.string.ssh_public_key_title),
+            message = stringResource(R.string.ssh_public_key_pin_prompt),
+            onUnlocked = { publicKeyPending = null; showPublicKey(key) },
+            onCancel = { publicKeyPending = null }
+        )
+    }
+    publicKeyError?.let { message ->
+        AlertDialog(onDismissRequest = { publicKeyError = null },
+            title = { Text(stringResource(R.string.ssh_public_key_title)) },
+            text = { Text(message) },
+            confirmButton = { TextButton(onClick = { publicKeyError = null }) { Text(stringResource(R.string.ssh_public_key_close)) } })
+    }
+    publicKeyShown?.let { (name, publicKey) ->
+        AlertDialog(onDismissRequest = { publicKeyShown = null },
+            title = { Text(name) },
+            text = { Column {
+                Text(stringResource(R.string.ssh_public_key_fingerprint, publicKey.fingerprint))
+                Spacer(Modifier.height(12.dp))
+                SelectionContainer { Text(publicKey.line, fontFamily = FontFamily.Monospace) }
+            } },
+            confirmButton = { TextButton(onClick = {
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                clipboard.setPrimaryClip(android.content.ClipData.newPlainText(context.getString(R.string.ssh_public_key_title), publicKey.line))
+                android.widget.Toast.makeText(context.applicationContext, context.getString(R.string.ssh_public_key_copied), android.widget.Toast.LENGTH_SHORT).show()
+            }) { Text(stringResource(R.string.ssh_public_key_copy)) } },
+            dismissButton = { TextButton(onClick = { publicKeyShown = null }) { Text(stringResource(R.string.ssh_public_key_close)) } })
     }
     if (pendingPinDisable) {
         if (systemPinEnabled) SystemCredentialDialog(title = stringResource(R.string.remove_pin_requirement), allowRemembered = false,
@@ -731,6 +779,11 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                                         if (key.requirePin) Text(stringResource(R.string.pin_required), color = Color.Gray, fontSize = 12.sp)
                                     }
                                     Row {
+                                        IconButton(
+                                            modifier = Modifier.semantics { contentDescription = context.getString(R.string.ssh_public_key_show_named, key.name) },
+                                            enabled = !savingSshKey,
+                                            onClick = { if (key.requirePin) publicKeyPending = key else showPublicKey(key) }
+                                        ) { Icon(Icons.Default.VpnKey, contentDescription = null, tint = Color(0xFF1E88E5)) }
                                         TextButton(
                                             modifier = Modifier.semantics { contentDescription = context.getString(R.string.edit_named_item, key.name) },
                                             enabled = !savingSshKey,

@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="ssh_public_key_title">SSH public key</string>
+    <string name="ssh_public_key_pin_prompt">Enter your PIN to show the public key.</string>
+    <string name="ssh_public_key_fingerprint">Fingerprint: %1$s</string>
+    <string name="ssh_public_key_copy">Copy</string>
+    <string name="ssh_public_key_copied">Public key copied</string>
+    <string name="ssh_public_key_close">Close</string>
+    <string name="ssh_public_key_show_named">Show public key for %1$s</string>
     <string name="ssh_public_key_invalid">Could not read this SSH key. Check the private key and passphrase.</string>
     <string name="add_new_credential">+ Add New Credential</string>
     <string name="add_new_ssh_key">+ Add New SSH Key</string>
