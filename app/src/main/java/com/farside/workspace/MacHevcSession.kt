@@ -14,11 +14,22 @@ import java.security.KeyFactory
 import java.security.KeyPairGenerator
 import java.security.MessageDigest
 import java.security.SecureRandom
+import java.io.InputStream
+import java.util.zip.Inflater
 import javax.crypto.Cipher
 import javax.crypto.KeyAgreement
 import javax.crypto.spec.DHParameterSpec
 import javax.crypto.spec.DHPublicKeySpec
 import javax.crypto.spec.SecretKeySpec
+
+data class FramebufferUpdateResult(
+    val messageType: Int,
+    val encodingsSeen: List<Int>,
+    val decompressedBytes: Int,
+    val zlibRectCount: Int,
+    val width: Int,
+    val height: Int
+)
 
 data class MacHevcServerInit(
     val width: Int,
@@ -43,12 +54,24 @@ class MacHevcSession(
 ) : Closeable {
 
     private var socket: Socket? = null
+    private var rawInput: DataInputStream? = null
+    private var rawOutput: DataOutputStream? = null
     var recordLayer: MacHevcRecordLayer? = null
         private set
     var serverInit: MacHevcServerInit? = null
         private set
     var stage: String = "S0"
         private set
+    var width: Int = 0
+        private set
+    var height: Int = 0
+        private set
+
+    var recordIn: DataInputStream? = null
+        private set
+    var recordOut: DataOutputStream? = null
+        private set
+    private val zlibInflater = Inflater()
 
     private fun log(message: String) {
         Log.i("MacHevcSession", message)
@@ -68,6 +91,8 @@ class MacHevcSession(
             s.soTimeout = 10000
             val input = DataInputStream(s.getInputStream())
             val output = DataOutputStream(java.io.BufferedOutputStream(s.getOutputStream()))
+            rawInput = input
+            rawOutput = output
 
             // S0: Server ProtocolVersion
             val serverBanner = ByteArray(12).also { input.readFully(it) }.toString(Charsets.US_ASCII)
@@ -154,8 +179,8 @@ class MacHevcSession(
             output.writeByte(0xc1) // Apple enhanced shared flag
             output.flush()
 
-            val width = input.readUnsignedShort()
-            val height = input.readUnsignedShort()
+            width = input.readUnsignedShort()
+            height = input.readUnsignedShort()
             val pixelFormat = ByteArray(16).also { input.readFully(it) }
             val nameLen = input.readInt()
             check(nameLen in 0..65536) { "ServerInit name length $nameLen out of bounds" }
@@ -238,7 +263,9 @@ class MacHevcSession(
             // Decrypt first record from server
             val record = layer.readRecord(input)
             val recType = record[0].toInt() and 0xff
+            val preview = record.take(64).joinToString(" ") { "%02x".format(it) }
             log("S8 GATE PASS: Decrypted first record (type=0x${Integer.toHexString(recType)}, len=${record.size}, recvSeq=${layer.recvSeq - 1})")
+            log("S8: First record bytes[0..${minOf(64, record.size)}]: $preview")
             return record
         } catch (e: Exception) {
             close()
@@ -317,8 +344,193 @@ class MacHevcSession(
         return buf.array()
     }
 
+    fun initStreamingLayer(firstRecord: ByteArray? = null) {
+        val layer = checkNotNull(recordLayer) { "Record layer not established" }
+        val rIn = checkNotNull(rawInput) { "Input stream not established" }
+        val rOut = checkNotNull(rawOutput) { "Output stream not established" }
+
+        val inStream = object : InputStream() {
+            private var currentRecord: ByteArray? = firstRecord
+            private var recordPos = 0
+
+            override fun read(): Int {
+                if (!ensureData()) return -1
+                return currentRecord!![recordPos++].toInt() and 0xff
+            }
+
+            override fun read(b: ByteArray, off: Int, len: Int): Int {
+                if (len == 0) return 0
+                if (!ensureData()) return -1
+                val available = currentRecord!!.size - recordPos
+                val toRead = minOf(len, available)
+                System.arraycopy(currentRecord!!, recordPos, b, off, toRead)
+                recordPos += toRead
+                return toRead
+            }
+
+            private fun ensureData(): Boolean {
+                while (currentRecord == null || recordPos >= currentRecord!!.size) {
+                    val rec = try {
+                        layer.readRecord(rIn)
+                    } catch (e: java.io.EOFException) {
+                        return false
+                    }
+                    currentRecord = rec
+                    recordPos = 0
+                    if (rec.isNotEmpty()) return true
+                }
+                return true
+            }
+        }
+
+        recordIn = DataInputStream(inStream)
+        recordOut = DataOutputStream(layer.createOutputStream(rOut))
+        stage = "S9"
+        log("S9: Reached steady-state (S9) on the framebuffer path with record layer active")
+    }
+
+    fun readNextFramebufferUpdate(): FramebufferUpdateResult {
+        val stream = checkNotNull(recordIn) { "Record stream not initialized" }
+        val msgType = stream.readUnsignedByte()
+        val encodingsSeen = mutableListOf<Int>()
+        var decompressedBytes = 0
+        var zlibRectCount = 0
+        var lastW = width
+        var lastH = height
+
+        when (msgType) {
+            0 -> { // FramebufferUpdate
+                stream.readByte() // pad
+                val numRects = stream.readUnsignedShort()
+                log("S9: FramebufferUpdate numRects=$numRects")
+                for (i in 0 until numRects) {
+                    val rx = stream.readUnsignedShort()
+                    val ry = stream.readUnsignedShort()
+                    val rw = stream.readUnsignedShort()
+                    val rh = stream.readUnsignedShort()
+                    val enc = stream.readInt()
+                    encodingsSeen.add(enc)
+                    log("S9: Rect $i: ${rw}x$rh@$rx,$ry enc=0x${Integer.toHexString(enc)} ($enc)")
+
+                    when (enc) {
+                        6 -> { // ZLIB
+                            val zlibLen = stream.readInt()
+                            val compressed = ByteArray(zlibLen)
+                            stream.readFully(compressed)
+                            val expectedPixels = rw * rh * 4
+                            val decomp = ByteArray(expectedPixels)
+                            zlibInflater.setInput(compressed)
+                            var totalInflated = 0
+                            while (!zlibInflater.needsInput() && totalInflated < decomp.size) {
+                                val count = zlibInflater.inflate(decomp, totalInflated, decomp.size - totalInflated)
+                                if (count <= 0) break
+                                totalInflated += count
+                            }
+                            decompressedBytes += totalInflated
+                            zlibRectCount++
+                            lastW = rw
+                            lastH = rh
+                            log("S9: Decompressed ZLIB rect: $totalInflated / $expectedPixels bytes (w=$rw, h=$rh)")
+                        }
+                        0x451 -> { // AppleDisplayLayout
+                            val payloadLen = stream.readUnsignedShort()
+                            val data = ByteArray(payloadLen)
+                            stream.readFully(data)
+                            log("S9: AppleDisplayLayout (${data.size} bytes), re-arming with 0x09 and 0x03")
+                            recordOut?.write(buildAutoFrameBufferUpdate(width, height))
+                            recordOut?.write(buildFramebufferUpdateRequest(width, height))
+                            recordOut?.flush()
+                        }
+                        0x453 -> { // VendorKeysymEncoding
+                            val data = ByteArray(22)
+                            stream.readFully(data)
+                            log("S9: VendorKeysymEncoding (22 bytes)")
+                        }
+                        0x455 -> { // KeyboardInputSource
+                            val prefixLen = stream.readUnsignedShort()
+                            val data = ByteArray(prefixLen)
+                            stream.readFully(data)
+                            log("S9: KeyboardInputSource ($prefixLen bytes)")
+                        }
+                        0x456 -> { // DeviceInfo
+                            val msgSize = stream.readUnsignedShort()
+                            val data = ByteArray(msgSize)
+                            stream.readFully(data)
+                            log("S9: DeviceInfo ($msgSize bytes)")
+                        }
+                        0x450 -> { // CursorImage
+                            val cacheId = stream.readInt()
+                            val compLen = stream.readInt()
+                            if (compLen > 0) {
+                                val data = ByteArray(compLen)
+                                stream.readFully(data)
+                                log("S9: CursorImage STORE cacheId=0x${Integer.toHexString(cacheId)} len=$compLen")
+                            } else {
+                                log("S9: CursorImage SELECT cacheId=0x${Integer.toHexString(cacheId)}")
+                            }
+                        }
+                        0x3f2 -> { // RFBMediaStreamMessage1
+                            val payloadLen = stream.readUnsignedShort()
+                            val data = ByteArray(payloadLen)
+                            stream.readFully(data)
+                            log("S9: RFBMediaStreamMessage1 ($payloadLen bytes)")
+                        }
+                        0 -> { // Raw
+                            val rawLen = rw * rh * 4
+                            val data = ByteArray(rawLen)
+                            stream.readFully(data)
+                            decompressedBytes += rawLen
+                            lastW = rw
+                            lastH = rh
+                        }
+                        else -> {
+                            log("S9: Unknown or unhandled encoding 0x${Integer.toHexString(enc)}, ignoring per §12")
+                        }
+                    }
+                }
+            }
+            else -> {
+                log("S9: Other RFB message type $msgType, ignoring per §12")
+            }
+        }
+        return FramebufferUpdateResult(msgType, encodingsSeen, decompressedBytes, zlibRectCount, lastW, lastH)
+    }
+
+    fun sendPointer(x: Int, y: Int, buttonMask: Int = 0) {
+        val out = checkNotNull(recordOut) { "Record stream not initialized" }
+        val buf = ByteBuffer.allocate(6).order(ByteOrder.BIG_ENDIAN)
+        buf.put(5.toByte()) // PointerEvent
+        buf.put(buttonMask.toByte())
+        buf.putShort(x.toShort())
+        buf.putShort(y.toShort())
+        out.write(buf.array())
+        out.flush()
+        log("S9: Sent PointerEvent(x=$x, y=$y, mask=$buttonMask)")
+    }
+
+    fun requestUpdate(incremental: Boolean = true) {
+        val out = checkNotNull(recordOut) { "Record stream not initialized" }
+        val fbur = if (incremental) {
+            val buf = ByteBuffer.allocate(10).order(ByteOrder.BIG_ENDIAN)
+            buf.put(3.toByte())
+            buf.put(1.toByte()) // incremental = 1
+            buf.putShort(0); buf.putShort(0)
+            buf.putShort(width.toShort()); buf.putShort(height.toShort())
+            buf.array()
+        } else {
+            buildFramebufferUpdateRequest(width, height)
+        }
+        out.write(fbur)
+        out.flush()
+        log("S9: Requested FramebufferUpdate (incremental=$incremental)")
+    }
+
     override fun close() {
+        zlibInflater.end()
+        runCatching { rawInput?.close() }
+        runCatching { rawOutput?.close() }
         runCatching { socket?.close() }
         socket = null
+        stage = "CLOSED"
     }
 }
