@@ -97,11 +97,6 @@ class MacHevcRecordLayer(
         if (plaintext.size != ciphertext.size) {
             throw MacHevcProtocolException("Decrypted plaintext size ${plaintext.size} != ciphertext size ${ciphertext.size}")
         }
-        val bodyLen = ((plaintext[0].toInt() and 0xff) shl 8) or (plaintext[1].toInt() and 0xff)
-        if (2 + bodyLen + 20 > plaintext.size) {
-            throw MacHevcProtocolException("Invalid body length $bodyLen in record of size ${plaintext.size}")
-        }
-
         val md = MessageDigest.getInstance("SHA-1")
         val seqBytes = ByteArray(4)
         seqBytes[0] = ((recvSeq ushr 24) and 0xff).toByte()
@@ -119,6 +114,11 @@ class MacHevcRecordLayer(
             throw MacHevcIntegrityException("Record integrity verification failed at recvSeq $recvSeq")
         }
         recvSeq++
+
+        val bodyLen = ((plaintext[0].toInt() and 0xff) shl 8) or (plaintext[1].toInt() and 0xff)
+        if (2 + bodyLen + 20 > plaintext.size) {
+            throw MacHevcProtocolException("Invalid body length $bodyLen in record of size ${plaintext.size}")
+        }
 
         val body = ByteArray(bodyLen)
         System.arraycopy(plaintext, 2, body, 0, bodyLen)
