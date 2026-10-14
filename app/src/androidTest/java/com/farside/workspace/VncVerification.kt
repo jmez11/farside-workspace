@@ -133,6 +133,36 @@ internal class VncVerification(private val test: Instrumentation) {
                     bridge.disconnect(handle)
                     record("PASS: Apple VNC accepted the Mac SSH short username with the saved password")
                 } finally { surface.release(); texture.release() }
+            } else if (mode == "macHevcPhase1") {
+                val pm = ProfileManager(test.targetContext)
+                val profile = pm.getProfiles().firstOrNull {
+                    it.type == ConnectionType.VNC && (profileId == null || it.id == profileId || it.name == profileId)
+                } ?: pm.getProfiles().first { it.type == ConnectionType.VNC }
+                val credential = pm.getCredentials().single { it.id == profile.credentialId }
+                MacHevcSession(profile.host, profile.port, credential.user, credential.pass) { logLine ->
+                    record(logLine)
+                }.use { session ->
+                    val firstRecord = session.start()
+                    check(session.stage == "S8") { "Did not reach S8: ${session.stage}" }
+                    check(session.recordLayer != null) { "Record layer null" }
+                    check(firstRecord.isNotEmpty()) { "Empty first record" }
+                    val recType = firstRecord[0].toInt() and 0xff
+                    record("PASS: Mac HEVC Phase 1 Gate - reached S8 (record active), decrypted control record type=0x${Integer.toHexString(recType)} len=${firstRecord.size}, recvSeq=${session.recordLayer!!.recvSeq}")
+
+                    // Negative gate: any integrity failure MUST close session, never continue
+                    val layer = session.recordLayer!!
+                    val dummyOuter = layer.encryptRecord(byteArrayOf(0x14, 0, 0, 0))
+                    val corruptedCiphertext = dummyOuter.copyOfRange(2, dummyOuter.size)
+                    corruptedCiphertext[corruptedCiphertext.size - 5] = (corruptedCiphertext[corruptedCiphertext.size - 5].toInt() xor 0x01).toByte()
+                    var integrityCaught = false
+                    try {
+                        layer.decryptRecord(corruptedCiphertext)
+                    } catch (e: MacHevcIntegrityException) {
+                        integrityCaught = true
+                    }
+                    check(integrityCaught) { "Negative gate failed: integrity mismatch did not throw MacHevcIntegrityException" }
+                    record("PASS: Mac HEVC Phase 1 Negative Gate - integrity mismatch throws MacHevcIntegrityException and halts processing")
+                }
             } else if (mode == "danglingPair") {
                 val pm = ProfileManager(test.targetContext)
                 val original = pm.getProfiles().single { it.name == "Test MacBook Pro" && it.type == ConnectionType.VNC }
