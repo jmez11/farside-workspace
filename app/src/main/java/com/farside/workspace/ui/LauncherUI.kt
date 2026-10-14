@@ -1110,6 +1110,7 @@ fun AddProfileForm(
         redirectStorage = com.farside.workspace.hasStoragePermission(context)
     }
     var redirectClipboard by rememberSaveable { mutableStateOf(initialProfile?.redirectClipboard ?: true) }
+    var reconnectAutomatically by rememberSaveable { mutableStateOf(initialProfile?.reconnectAutomatically ?: false) }
 
     var swapMouseButtons by rememberSaveable { mutableStateOf(initialProfile?.swapMouseButtons ?: false) }
     var autoCopySelection by rememberSaveable { mutableStateOf(initialProfile?.autoCopySelection ?: true) }
@@ -1210,7 +1211,8 @@ fun AddProfileForm(
                         terminalScrollback = initialProfile?.terminalScrollback ?: 2000,
                         terminalFontSize = initialProfile?.terminalFontSize ?: 14,
                         terminalOpacity = initialProfile?.terminalOpacity ?: 1f,
-                        adminMode = adminMode
+                        adminMode = adminMode,
+                        reconnectAutomatically = reconnectAutomatically
                     )
                 )
             }) {
@@ -1560,6 +1562,7 @@ fun AddProfileForm(
                     })
                     SettingsSwitchRow(stringResource(R.string.redirect_clipboard), redirectClipboard, { redirectClipboard = it })
                     SettingsSwitchRow(stringResource(R.string.admin_mode), adminMode, { adminMode = it })
+                    SettingsSwitchRow(stringResource(R.string.reconnect_automatically), reconnectAutomatically, { reconnectAutomatically = it })
                 }
             }
         }

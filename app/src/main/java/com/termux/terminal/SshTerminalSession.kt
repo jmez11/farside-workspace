@@ -24,6 +24,8 @@ class SshTerminalSession(
     var onForwardStatus: ((Map<String, String>) -> Unit)? = null
     /** Invoked on the connection thread after the shell starts; must not block the terminal. */
     var onConnected: (() -> Unit)? = null
+    /** Called on the main thread when a connection attempt fails before the shell starts. */
+    var onConnectionFailed: (() -> Unit)? = null
 
     companion object {
         init {
@@ -42,6 +44,10 @@ class SshTerminalSession(
     @Volatile
     private var isFinished = false
     private val inputQueue = LinkedBlockingQueue<Byte>()
+    private val finishNotified = java.util.concurrent.atomic.AtomicBoolean(false)
+    private fun notifySessionFinished() {
+        if (finishNotified.compareAndSet(false, true)) Handler(Looper.getMainLooper()).post { mClient?.onSessionFinished(this) }
+    }
     private val outputWriter = java.util.concurrent.Executors.newSingleThreadExecutor { task ->
         Thread(task, "ssh-terminal-input").apply { isDaemon = true }
     }
@@ -107,6 +113,7 @@ class SshTerminalSession(
                     onExit = {
                         if (!isFinished) {
                             printToTerminal(context?.getString(R.string.ssh_tunnel_process_exited) ?: "\r\n[Cloudflared tunnel process exited]\r\n")
+                            notifySessionFinished()
                             finishIfRunning()
                         }
                     })
@@ -144,10 +151,9 @@ class SshTerminalSession(
                         mClient.onTextChanged(this)
                     }
                 }
-                mainHandler.post {
-                    mClient.onSessionFinished(this)
-                }
+                notifySessionFinished()
             } catch (e: Exception) {
+                if (sshShell != null && !isFinished) notifySessionFinished()
                 val mainHandler = Handler(Looper.getMainLooper())
                 val reason = context?.let { e.localizedMessage(it) } ?: e.message
                 val errorBytes = (context?.getString(R.string.ssh_terminal_error, reason)
@@ -157,6 +163,7 @@ class SshTerminalSession(
                         mEmulator.append(errorBytes, errorBytes.size)
                         mClient.onTextChanged(this)
                     }
+                    onConnectionFailed?.invoke()
                 }
             } finally {
                 outputWriter.shutdownNow()

@@ -595,4 +595,9 @@
     <string name="vnc_mac_auth_failed">Mac authentication failed. Check the username and password.</string>
     <string name="vnc_sftp_pair">Pair SSH profile for file access</string>
     <string name="vnc_sftp_unpaired">None</string>
+    <string name="reconnect_automatically">Reconnect Automatically</string>
+    <string name="reconnect_auto_hint">Retry after five seconds</string>
+    <string name="reconnect_prompt">Reconnect to %1$s?</string>
+    <string name="reconnecting_in">Reconnecting in %1$d…</string>
+    <string name="reconnect_now">Reconnect now</string>
 </resources>

@@ -171,7 +171,8 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
             redirectStorage = storageAllowed && hasStoragePermission(permissionContext)
         )
     }
-    val rdpBridge: DesktopSessionBridge = remember(session.id) {
+    var reconnectAttempt by remember { mutableIntStateOf(0) }
+    val rdpBridge: DesktopSessionBridge = remember(session.id, reconnectAttempt) {
         (if (isVnc) VncBridge() else FreeRDPBridge()).also { onBridgeCreated?.invoke(it) }
     }
     var rdpInstance by remember { mutableStateOf(0L) }
@@ -185,18 +186,23 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
     var connectionFailed by remember { mutableStateOf(false) }
     var connectFailureReason by remember { mutableStateOf("") }
     var disconnectedReason by remember { mutableStateOf<String?>(null) }
+    var hasConnected by remember(session.id) { mutableStateOf(false) }
+    var autoReconnect by remember(session.id) { mutableStateOf(session.reconnectAutomatically) }
     var tunnelStatus by remember { mutableStateOf("") }
-    val certificates = remember(session.id) {
+    val certificates = remember(session.id, reconnectAttempt) {
         RdpCertificateVerifier(context, session.host, session.port, { certificateRequest = it })
     }
-    val connection: DesktopSessionConnection = remember(session.id) {
+    val connection: DesktopSessionConnection = remember(session.id, reconnectAttempt) {
         val ended: (String, Boolean) -> Unit = { reason, established ->
-            if (established) disconnectedReason = reason else connectFailureReason = reason
+            if (established || hasConnected) { disconnectedReason = reason; connectionFailed = false }
+            else connectFailureReason = reason
         }
         val status: (String) -> Unit = { tunnelStatus = it }
         val connected: (Long) -> Unit = {
             rdpInstance = it
-            connectionFailed = it == 0L
+            if (it != 0L) hasConnected = true
+            else if (hasConnected && disconnectedReason == null) disconnectedReason = connectFailureReason
+            connectionFailed = it == 0L && !hasConnected
             onInstanceCreated(it)
         }
         if (isVnc) VncSessionConnection(context, effectiveSession, rdpBridge as VncBridge, ended, status, connected)
@@ -280,11 +286,17 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
         confirmButton = { TextButton(onClick = { (context as? android.app.Activity)?.finish() }) { Text(stringResource(R.string.close)) } },
     )
     disconnectedReason?.let { reason ->
-        AlertDialog(
-            onDismissRequest = {},
-            title = { Text(stringResource(R.string.disconnected)) },
-            text = { Text(if (reason.isBlank()) stringResource(R.string.session_disconnected, protocolName) else stringResource(R.string.session_disconnected_reason, protocolName, reason)) },
-            confirmButton = { TextButton(onClick = onClose) { Text(stringResource(R.string.ok)) } },
+        ReconnectDialog(
+            profileName = session.name,
+            reason = reason,
+            autoReconnect = autoReconnect,
+            onAutoReconnectChanged = { enabled ->
+                autoReconnect = enabled
+                ProfileManager(context).getProfiles().firstOrNull { it.id == session.id }
+                    ?.let { ProfileManager(context).updateProfile(it.copy(reconnectAutomatically = enabled)) }
+            },
+            onReconnect = { disconnectedReason = null; connectFailureReason = ""; reconnectAttempt++ },
+            onCancel = { disconnectedReason = null; onClose() },
         )
     }
     val focusRequester = remember { FocusRequester() }
@@ -541,7 +553,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                 }
             }
     ) {
-        AndroidView(
+        key(reconnectAttempt) { AndroidView(
             modifier = Modifier.fillMaxSize().graphicsLayer {
                 scaleX = zoom
                 scaleY = zoom
@@ -577,7 +589,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                     }
                 }
             }
-        )
+        ) }
 
         val toolbarMargin = with(density) { 48.dp.toPx() }
         var lastHoverTime by remember { mutableStateOf(0L) }

@@ -148,6 +148,10 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
     var forwardStatuses by remember { mutableStateOf(emptyMap<String, String>()) }
     var showForwards by remember { mutableStateOf(false) }
     var showFiles by remember { mutableStateOf(false) }
+    var sshHasConnected by remember { mutableStateOf(false) }
+    var sshDisconnected by remember { mutableStateOf(false) }
+    var sshReconnectAttempt by remember { mutableIntStateOf(0) }
+    var autoReconnect by remember(session.id) { mutableStateOf(session.reconnectAutomatically) }
     // null = not checked yet (no icon); true = SFTP works; false = enabled but unsupported.
     var sftpSupported by remember { mutableStateOf<Boolean?>(null) }
     var showTerminalSettings by remember { mutableStateOf(false) }
@@ -342,6 +346,7 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                 }
             }
     ) {
+        key(sshReconnectAttempt) {
         AndroidView(
             modifier = Modifier
                 .fillMaxSize()
@@ -373,7 +378,7 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                     }
                     override fun onTitleChanged(changedSession: com.termux.terminal.TerminalSession) {}
                     override fun onSessionFinished(finishedSession: com.termux.terminal.TerminalSession) {
-                        onClose()
+                        if (sshHasConnected) sshDisconnected = true else onClose()
                     }
                     override fun onCopyTextToClipboard(session: com.termux.terminal.TerminalSession, text: String) {
                         copyTextToClipboard(text)
@@ -451,9 +456,14 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
 
                 val sshTerm = com.termux.terminal.SshTerminalSession(session, sessionClient, viewContext)
                 sshTerm.onForwardStatus = { forwardStatuses = it }
-                if (session.enableSftp) sshTerm.onConnected = {
+                sshTerm.onConnectionFailed = { if (sshHasConnected) sshDisconnected = true }
+                sshTerm.onConnected = {
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        sshHasConnected = true
+                        sshDisconnected = false
+                    }
+                    if (session.enableSftp) kotlin.concurrent.thread(name = "sftp-probe", isDaemon = true) {
                     // Minimal background probe over the shared SSH transport; never blocks the terminal.
-                    kotlin.concurrent.thread(name = "sftp-probe", isDaemon = true) {
                         val ok = try {
                             val probe = com.farside.workspace.sftp.SftpSession(viewContext.applicationContext, session)
                             try { probe.connect({}, {}); true } finally { probe.close() }
@@ -469,6 +479,20 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
 
                 terminalView
             }
+        )
+        }
+
+        if (sshDisconnected) ReconnectDialog(
+            profileName = session.name,
+            reason = "",
+            autoReconnect = autoReconnect,
+            onAutoReconnectChanged = { enabled ->
+                autoReconnect = enabled
+                profileManager.getProfiles().firstOrNull { it.id == session.id }
+                    ?.let { profileManager.updateProfile(it.copy(reconnectAutomatically = enabled)) }
+            },
+            onReconnect = { sshDisconnected = false; sshReconnectAttempt++ },
+            onCancel = onClose,
         )
 
         // Floating Movable Disappearing Menu Bar

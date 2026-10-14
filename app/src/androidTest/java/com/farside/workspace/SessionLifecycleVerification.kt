@@ -49,7 +49,8 @@ internal class SessionLifecycleVerification(private val test: Instrumentation) {
         test.uiAutomation.serviceInfo = info
         try {
             when (mode) {
-                "disconnect" -> disconnect(profiles.first { it.type == ConnectionType.RDP })
+                "disconnect" -> disconnect(profiles.firstOrNull { it.type == ConnectionType.RDP && it.name == "LAPTOP-DDJV33M6" }
+                    ?: profiles.first { it.type == ConnectionType.RDP })
                 "placement" -> placement(profiles.first { it.type == ConnectionType.RDP })
                 "launch" -> launchPlacement()
                 "manipulation" -> manipulation()
@@ -161,7 +162,9 @@ internal class SessionLifecycleVerification(private val test: Instrumentation) {
                 }
             }
             val profile = original.copy(id = "verification-disconnect", name = "Disconnect verification",
-                host = "127.0.0.1", port = listener.localPort, useCloudflare = false, redirectMicrophone = false, enableCamera = false)
+                host = "127.0.0.1", port = listener.localPort, useCloudflare = false,
+                proxyType = com.farside.workspace.data.ProxyType.NONE,
+                redirectMicrophone = false, enableCamera = false, reconnectAutomatically = false)
             ProfileManager(context).addProfile(profile)
             val activity = launch(profile.id)
             check(ready.await(10, TimeUnit.SECONDS))
@@ -169,14 +172,19 @@ internal class SessionLifecycleVerification(private val test: Instrumentation) {
             check(find("Disconnected") == null)
             sockets.forEach { it.setSoLinger(true, 0); it.close() } // Real TCP loss; headset networking stays up.
             await("Disconnected")
-            val message = checkNotNull(node { it.text?.toString()?.startsWith("The RDP session has disconnected.") == true }).text.toString()
-            check(message.contains("\n\n") && message.substringAfter("\n\n").isNotBlank()) { "No disconnect reason: $message" }
             captureDialog("rdp-disconnected.png")
             Thread.sleep(500)
-            check(!activity.isFinishing && find("OK") != null) { "Session closed before acknowledgment" }
-            click("OK")
+            check(!activity.isFinishing && find("Reconnect now") != null) { "Reconnect action missing" }
+            check(find("Reconnect Automatically") != null) { "Automatic reconnect switch missing" }
+            check(node { it.text?.toString()?.startsWith("Reconnecting in") == true } == null) { "Countdown shown while disabled" }
+            click("Reconnect now")
+            connected(activity)
+            check(find("Disconnected") == null) { "Reconnect did not dismiss the dialog" }
+            sockets.forEach { it.setSoLinger(true, 0); it.close() }
+            await("Disconnected")
+            click("Cancel")
             repeat(30) { if (!activity.isDestroyed) Thread.sleep(100) }
-            check(activity.isDestroyed) { "OK did not close the session" }
+            check(activity.isDestroyed) { "Cancel did not close the session" }
             fun remoteNotifications(): Int {
                 return android.os.ParcelFileDescriptor.AutoCloseInputStream(test.uiAutomation.executeShellCommand(
                     "logcat -d --pid=${android.os.Process.myPid()} -s FreeRDP-JNI"
@@ -188,7 +196,7 @@ internal class SessionLifecycleVerification(private val test: Instrumentation) {
             close(normal)
             Thread.sleep(700)
             check(remoteNotifications() == before) { "Normal window closure emitted a remote disconnect" }
-            Log.i("LifecycleTest", "PASS: real proxy TCP reset, disconnect reason, OK closes window, normal close has no remote-disconnect notification")
+            Log.i("LifecycleTest", "PASS: real proxy TCP reset, manual reconnect, cancellation, and normal close")
         } finally {
             listener.close()
             sockets.forEach { try { it.close() } catch (_: Exception) {} }

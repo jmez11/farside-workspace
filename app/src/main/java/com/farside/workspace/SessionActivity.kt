@@ -177,7 +177,7 @@ class SessionActivity : ComponentActivity() {
                     } else if (profile.type == ConnectionType.RDP) {
                         SpatialScene {
                         RdpSessionScreen(
-                            session = profile,
+                            session = profile.copy(reconnectAutomatically = profileManager.getProfiles().firstOrNull { it.id == profile.id }?.reconnectAutomatically ?: false),
                             windowInteraction = windowInteraction.value,
                             onInstanceCreated = { rdpInstance = it },
                             onBridgeCreated = { rdpBridge = it; it.displayCapture = displayCapture },
@@ -186,14 +186,14 @@ class SessionActivity : ComponentActivity() {
                         }
                     } else if (profile.type == ConnectionType.VNC) {
                         SpatialScene {
-                            VncSessionScreen(profile, onInstanceCreated = { vncInstance = it },
+                            VncSessionScreen(profile.copy(reconnectAutomatically = profileManager.getProfiles().firstOrNull { it.id == profile.id }?.reconnectAutomatically ?: false), onInstanceCreated = { vncInstance = it },
                                 onBridgeCreated = { vncBridge = it }, onClose = { finish() },
                                 windowInteraction = windowInteraction.value)
                         }
                     } else {
                         SpatialScene {
                         SshSessionScreen(
-                            session = profile,
+                            session = profile.copy(reconnectAutomatically = profileManager.getProfiles().firstOrNull { it.id == profile.id }?.reconnectAutomatically ?: false),
                             windowInteraction = windowInteraction.value,
                             onClose = { finish() }
                         )

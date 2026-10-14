@@ -85,7 +85,8 @@ data class ConnectionProfile(
     val sshForwards: List<SshForward> = emptyList(),
     val terminalScrollback: Int = 2000,
     val terminalFontSize: Int = 14,
-    val terminalOpacity: Float = 1f
+    val terminalOpacity: Float = 1f,
+    val reconnectAutomatically: Boolean = false
 ) {
     fun toJson(): JSONObject {
         val json = JSONObject()
@@ -138,6 +139,7 @@ data class ConnectionProfile(
         json.put("terminalScrollback", terminalScrollback)
         json.put("terminalFontSize", terminalFontSize)
         json.put("terminalOpacity", terminalOpacity)
+        json.put("reconnectAutomatically", reconnectAutomatically)
         json.put("adminMode", adminMode)
         return json
     }
@@ -197,6 +199,7 @@ data class ConnectionProfile(
                 terminalScrollback = json.optInt("terminalScrollback", 2000).coerceIn(100, 50000),
                 terminalFontSize = json.optInt("terminalFontSize", 14).coerceIn(8, 32),
                 terminalOpacity = json.optDouble("terminalOpacity", 1.0).toFloat().let { if (it.isFinite()) it.coerceIn(0.2f, 1f) else 1f },
+                reconnectAutomatically = json.optBoolean("reconnectAutomatically", false),
                 adminMode = json.optBoolean("adminMode", false)
             )
         }
