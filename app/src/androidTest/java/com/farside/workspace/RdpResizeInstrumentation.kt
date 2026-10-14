@@ -40,6 +40,7 @@ class RdpResizeInstrumentation : Instrumentation() {
     private var credentialsOnly = false
     private var credentialDeletionOnly = false
     private var proxiesOnly = false
+    private var rdpHttpLive = false
     private var windowCapacityOnly = false
     private var windowLaunchOnly = false
     private var keyboardFadeOnly = false
@@ -48,6 +49,7 @@ class RdpResizeInstrumentation : Instrumentation() {
     private var sshToolbarOnly = false
     private var sshKeysOnly = false
     private var sshProbe = false
+    private var httpProxyOnly = false
     private var zoomTest = false
     private var clipboardOnly = false
     private var imeOnly = false
@@ -83,6 +85,7 @@ class RdpResizeInstrumentation : Instrumentation() {
         credentialsOnly = arguments?.getString("credentialsOnly") == "true"
         credentialDeletionOnly = arguments?.getString("credentialDeletionOnly") == "true"
         proxiesOnly = arguments?.getString("proxiesOnly") == "true"
+        rdpHttpLive = arguments?.getString("rdpHttpLive") == "true"
         windowCapacityOnly = arguments?.getString("windowCapacityOnly") == "true"
         windowLaunchOnly = arguments?.getString("windowLaunchOnly") == "true"
         keyboardFadeOnly = arguments?.getString("keyboardFadeOnly") == "true"
@@ -91,6 +94,7 @@ class RdpResizeInstrumentation : Instrumentation() {
         sshToolbarOnly = arguments?.getString("sshToolbarOnly") == "true"
         sshKeysOnly = arguments?.getString("sshKeysOnly") == "true"
         sshProbe = arguments?.getString("sshProbe") == "true"
+        httpProxyOnly = arguments?.getString("httpProxyOnly") == "true"
         zoomTest = arguments?.getString("zoomTest") == "true"
         clipboardOnly = arguments?.getString("clipboardOnly") == "true"
         imeOnly = arguments?.getString("imeOnly") == "true"
@@ -203,7 +207,12 @@ class RdpResizeInstrumentation : Instrumentation() {
             }
             if (proxiesOnly) {
                 ProxyVerification(this).run()
-                results.putString("stream", "PASS: four proxy choices, selection/legacy handling and unsupported proxy rejection without direct TCP fallback.\n")
+                results.putString("stream", "PASS: four proxy choices, RDP HTTP CONNECT, and unsupported proxy rejection without direct TCP fallback.\n")
+                finish(0, results)
+                return
+            }
+            if (rdpHttpLive) {
+                results.putString("stream", ProxyVerification(this).runLiveRdp() + "\n")
                 finish(0, results)
                 return
             }
@@ -233,6 +242,31 @@ class RdpResizeInstrumentation : Instrumentation() {
             }
             if (sshProbe) {
                 runSshProbe(results)
+                finish(0, results)
+                return
+            }
+            if (httpProxyOnly) {
+                val profiles = ProfileManager(targetContext).getProfiles()
+                val profile = profiles.single { it.name == "nano via http" }
+                check(profile.proxyType == com.farside.workspace.data.ProxyType.HTTP)
+                val upstream = profiles.single { it.name == "ssh.jameskasyan.com" }
+                val upstreamActivity = startActivitySync(android.content.Intent(targetContext, SessionActivity::class.java)
+                    .putExtra("profileId", upstream.id).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) as SessionActivity
+                try {
+                    var ready = false
+                    for (attempt in 0 until 100) {
+                        ready = runCatching { java.net.Socket("127.0.0.1", profile.proxyPort!!).use { } }.isSuccess
+                        if (ready) break
+                        Thread.sleep(100)
+                    }
+                    check(ready) { "Saved SSH forwarding proxy did not start" }
+                    val lease = com.farside.workspace.ssh.SshConnectionManager.acquire(targetContext, "http-proxy-live-check")
+                    try {
+                        val ssh = lease.connect(profile)
+                        check(ssh.isConnected && ssh.isAuthenticated)
+                        results.putString("stream", "PASS: saved nano via http authenticated over SSHJ HTTP CONNECT.\n")
+                    } finally { lease.close() }
+                } finally { runOnMainSync { upstreamActivity.finish() } }
                 finish(0, results)
                 return
             }

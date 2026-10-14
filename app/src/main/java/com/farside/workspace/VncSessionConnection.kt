@@ -49,7 +49,7 @@ internal class VncSessionConnection(
                 return@execute
             }
             if (instance == 0L) {
-                if (!profile.useCloudflare && profile.proxyType !in listOf(ProxyType.NONE, ProxyType.CLOUDFLARED)) {
+                if (!profile.useCloudflare && profile.proxyType !in listOf(ProxyType.NONE, ProxyType.CLOUDFLARED, ProxyType.HTTP)) {
                     next.release()
                     ended.set(true)
                     main.post { if (!closed.get()) {
@@ -102,11 +102,12 @@ internal class VncSessionConnection(
                     return@execute
                 }
                 var failure: String? = null
-                instance = try { bridge.connect(host, port, credential.pass, next, credential.user, profile.vncAuthMode) }
+                instance = try { bridge.connect(host, port, credential.pass, next, credential.user, profile.vncAuthMode, profile) }
                     catch (error: VncAuthenticationException) { failure = context.getString(R.string.vnc_mac_auth_failed); 0L }
                     catch (error: IllegalArgumentException) {
                         failure = error.localizedMessage(context) ?: context.getString(R.string.invalid_vnc_password); 0L
                     }
+                    catch (error: java.io.IOException) { failure = error.message; 0L }
                     catch (error: Exception) { android.util.Log.w("VncSession", "Connection failed", error); 0L }
                 if (instance == 0L) {
                     ended.set(true)

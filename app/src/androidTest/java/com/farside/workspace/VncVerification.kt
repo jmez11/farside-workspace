@@ -47,7 +47,11 @@ internal class VncVerification(private val test: Instrumentation) {
         val clipboard = test.targetContext.getSystemService(android.content.ClipboardManager::class.java)
         val originalClip = clipboard.primaryClip
         try {
-            if (mode == "macPairSetup") {
+            if (mode == "proxyLive") {
+                proxyLiveMac()
+            } else if (mode == "proxy") {
+                proxyFixture()
+            } else if (mode == "macPairSetup") {
                 val pm = ProfileManager(test.targetContext)
                 val mac = pm.getProfiles().single { it.name == "Test MacBook Pro" && it.type == ConnectionType.VNC }
                 val credential = pm.getCredentials().single { it.name == "James Kasyan Mac" }
@@ -436,6 +440,66 @@ internal class VncVerification(private val test: Instrumentation) {
                 check(bridge.connect("127.0.0.1", server.port, password, surface) == 0L) { "Accepted unauthenticated, ARD or wrong password server" }
             }
             record("PASS: None/ARD-only security and wrong VNC password rejected")
+        } finally { surface.release(); image.release() }
+    }
+    private fun proxyFixture() {
+        val image = android.graphics.SurfaceTexture(0).apply { setDefaultBufferSize(64, 48) }
+        val surface = android.view.Surface(image)
+        try {
+            Fixture(0).use { server -> HttpConnectFixture(server.port).use { proxy ->
+                val firstImage = android.graphics.SurfaceTexture(0).apply { setDefaultBufferSize(64, 48) }
+                val firstSurface = android.view.Surface(firstImage)
+                val pm = ProfileManager(test.targetContext)
+                val credential = SavedCredential("vnc-http-credential", "VNC HTTP verification", "", "testpass")
+                pm.addCredential(credential)
+                val profile = ConnectionProfile("vnc-http-test", "VNC HTTP test", ConnectionType.VNC,
+                    "127.0.0.1", server.port, "", "", proxyType = ProxyType.HTTP,
+                    proxyHost = "127.0.0.1", proxyPort = proxy.port, credentialId = credential.id,
+                    proxyUser = "proxy-fixture", proxyPass = "secret")
+                val bridge = VncBridge()
+                val done = CountDownLatch(1)
+                var instance = -1L
+                var reason = ""
+                val connection = VncSessionConnection(test.targetContext, profile, bridge,
+                    onDisconnected = { message, _ -> reason = message }, onConnected = { instance = it; done.countDown() })
+                try {
+                    connection.attach(firstSurface)
+                    check(done.await(15, TimeUnit.SECONDS)) { "VNC HTTP connection timed out: $reason" }
+                    check(instance != 0L && bridge.getDesktopWidth(instance) == 64)
+                    check(proxy.request?.startsWith("CONNECT 127.0.0.1:${server.port} HTTP/1.1\r\n") == true)
+                    check(proxy.request?.contains("Proxy-Authorization: Basic cHJveHktZml4dHVyZTpzZWNyZXQ=\r\n") == true)
+                    record("PASS: standard VNC authentication and native framebuffer through HTTP CONNECT")
+                } finally { connection.close(); Thread.sleep(200); firstImage.release(); pm.deleteCredential(credential.id) }
+            } }
+            Fixture(0).use { server -> HttpConnectFixture(server.port).use { proxy ->
+                val profile = ConnectionProfile("vnc-http-mac-test", "VNC HTTP Mac test", ConnectionType.VNC,
+                    "127.0.0.1", server.port, "", "", proxyType = ProxyType.HTTP,
+                    proxyHost = "127.0.0.1", proxyPort = proxy.port)
+                check(runCatching { VncBridge().connect(profile.host, profile.port, "testpass", surface,
+                    "fixture", VncAuthMode.MAC_USER, profile) }.exceptionOrNull() is VncAuthenticationException)
+                check(proxy.request?.startsWith("CONNECT 127.0.0.1:${server.port} HTTP/1.1\r\n") == true)
+                record("PASS: Mac VNC preauthentication reached its server through HTTP CONNECT")
+            } }
+        } finally { surface.release(); image.release() }
+    }
+    private fun proxyLiveMac() {
+        val pm = ProfileManager(test.targetContext)
+        val profile = pm.getProfiles().single { it.name == "Test MacBook Pro" && it.type == ConnectionType.VNC }
+        val credential = pm.getCredentials().single { it.id == profile.credentialId }
+        val image = android.graphics.SurfaceTexture(0)
+        val surface = android.view.Surface(image)
+        try {
+            HttpConnectFixture(profile.port, profile.host).use { proxy ->
+                val throughProxy = profile.copy(proxyType = ProxyType.HTTP, proxyHost = "127.0.0.1", proxyPort = proxy.port)
+                val bridge = VncBridge()
+                val instance = bridge.connect(profile.host, profile.port, credential.pass, surface,
+                    credential.user, VncAuthMode.MAC_USER, throughProxy)
+                try {
+                    check(instance != 0L && bridge.getDesktopWidth(instance) > 0 && bridge.getDesktopHeight(instance) > 0)
+                    check(proxy.request?.startsWith("CONNECT ${profile.host}:${profile.port} HTTP/1.1\r\n") == true)
+                    record("PASS: live Mac account VNC authenticated and initialized through HTTP CONNECT; no input sent")
+                } finally { bridge.disconnect(instance) }
+            }
         } finally { surface.release(); image.release() }
     }
     private fun nodes(): List<android.view.accessibility.AccessibilityNodeInfo> {

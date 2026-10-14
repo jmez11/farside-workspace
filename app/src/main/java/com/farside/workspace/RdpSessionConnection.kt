@@ -50,7 +50,7 @@ internal class RdpSessionConnection(
                 return@execute
             }
             if (instance == 0L) {
-                if (!profile.useCloudflare && profile.proxyType !in listOf(ProxyType.NONE, ProxyType.CLOUDFLARED)) {
+                if (!profile.useCloudflare && profile.proxyType !in listOf(ProxyType.NONE, ProxyType.CLOUDFLARED, ProxyType.HTTP)) {
                     next.release()
                     ended.set(true)
                     main.post { if (!closed.get()) {
@@ -86,6 +86,15 @@ internal class RdpSessionConnection(
                     return@execute
                 }
                 if (closed.get() || ended.get()) { next.release(); return@execute }
+                val httpProxy = profile.proxyType == ProxyType.HTTP && tunnel == null
+                if (httpProxy && (profile.proxyHost.isNullOrBlank() || profile.proxyPort !in 1..65535)) {
+                    next.release(); ended.set(true)
+                    main.post { if (!closed.get()) {
+                        onDisconnected(context.getString(R.string.http_proxy_host_port_required), false)
+                        onConnected(0L)
+                    } }
+                    return@execute
+                }
                 val credential = profile.credentialId?.let { id ->
                     com.farside.workspace.data.ProfileManager(context).getCredentials().find { it.id == id }
                 }
@@ -96,7 +105,9 @@ internal class RdpSessionConnection(
                 }
                 bridge.setCameraMaxDimension(profile.cameraResolution.maxDim)
                 instance = bridge.connect(host, port, credential?.user ?: profile.user, credential?.pass ?: profile.pass, profile.remoteApp, profile.adminMode,
-                    profile.enableCamera && hasCameraPermission(context), profile.redirectMicrophone && hasMicrophonePermission(context), profile.redirectStorage && hasStoragePermission(context), next, profile.host.removeSurrounding("[", "]"), certificates)
+                    profile.enableCamera && hasCameraPermission(context), profile.redirectMicrophone && hasMicrophonePermission(context), profile.redirectStorage && hasStoragePermission(context), next, profile.host.removeSurrounding("[", "]"), certificates,
+                    if (httpProxy) profile.proxyHost?.trim() else null, if (httpProxy) profile.proxyPort ?: 0 else 0,
+                    if (httpProxy) profile.proxyUser else null, if (httpProxy) profile.proxyPass else null)
                 val connected = instance
                 this.connected.set(connected != 0L)
                 if (connected == 0L) tunnel?.close()

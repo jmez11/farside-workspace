@@ -109,6 +109,8 @@ class SshConnectionManager private constructor(private val context: Context?, pr
             check(previous.host == profile.host && previous.port == profile.port && previous.user == profile.user &&
                 previous.pass == profile.pass && previous.sshKeyId == profile.sshKeyId && previous.credentialId == profile.credentialId &&
                 previous.proxyType == profile.proxyType && previous.useCloudflare == profile.useCloudflare &&
+                previous.proxyHost == profile.proxyHost && previous.proxyPort == profile.proxyPort &&
+                previous.proxyUser == profile.proxyUser && previous.proxyPass == profile.proxyPass &&
                 previous.cloudflaredParameters == profile.cloudflaredParameters &&
                 (!resolveJumps || previous.jumpHostProfileId == profile.jumpHostProfileId)) { text(R.string.ssh_settings_changed, "Connection settings changed. Close existing sessions and reconnect.") }
             return@synchronized it
@@ -133,6 +135,9 @@ class SshConnectionManager private constructor(private val context: Context?, pr
                 if (via != null && (profile.useCloudflare || profile.proxyType == ProxyType.CLOUDFLARED)) {
                     onStatus(text(R.string.ssh_tunnel_ignored, "[Cloudflare tunnel ignored: this host is reached through a jump host]\r\n"))
                 }
+                if (via != null && profile.proxyType == ProxyType.HTTP) {
+                    throw IllegalArgumentException("HTTP proxy cannot be combined with an SSH jump host")
+                }
                 if (useCloudflared && context != null) {
                     onStatus(text(R.string.ssh_tunnel_starting, "[Starting Cloudflare Access SSH tunnel...]\r\n"))
                     val cfTunnel = CloudflaredTunnel(context)
@@ -156,6 +161,19 @@ class SshConnectionManager private constructor(private val context: Context?, pr
                 val ssh = SSHClient()
                 sshClient = ssh
                 ssh.addHostKeyVerifier(PromiscuousVerifier())
+                ssh.connectTimeout = 10_000
+                if (via == null && profile.proxyType == ProxyType.HTTP && !profile.useCloudflare) {
+                    val proxyHost = profile.proxyHost?.trim()?.takeIf { it.isNotEmpty() }
+                        ?: throw com.farside.workspace.LocalizableException(R.string.http_proxy_host_port_required)
+                    val proxyPort = profile.proxyPort?.takeIf { it in 1..65535 }
+                        ?: throw com.farside.workspace.LocalizableException(R.string.http_proxy_host_port_required)
+                    ssh.socketFactory = HttpConnectSocketFactory(proxyHost, proxyPort, profile.proxyUser, profile.proxyPass)
+                    onStatus("[Connecting through HTTP proxy $proxyHost:$proxyPort...]\r\n")
+                } else if (via == null && profile.proxyType !in listOf(ProxyType.NONE, ProxyType.CLOUDFLARED)) {
+                    throw IllegalArgumentException(text(R.string.proxy_connection_not_supported,
+                        "${profile.proxyType} proxy connections are not supported yet. Select None or Cloudflared.",
+                        context?.getString(profile.proxyType.labelResId) ?: profile.proxyType.name))
+                }
 
                 if (via != null) {
                     try {

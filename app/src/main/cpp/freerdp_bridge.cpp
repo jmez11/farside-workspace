@@ -566,7 +566,11 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
         jboolean enableStorage,
         jobject surface,
         jstring certificateHost,
-        jobject certificateVerifier) {
+        jobject certificateVerifier,
+        jstring proxyHost,
+        jint proxyPort,
+        jstring proxyUser,
+        jstring proxyPassword) {
         
     if (!getenv("HOME")) {
         setenv("HOME", "/data/data/com.farside.workspace/files", 1);
@@ -702,6 +706,20 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
         "/network:auto"
     };
     freerdp_client_settings_parse_command_line(instance->context->settings, 9, (char**)opt_args, FALSE);
+    if (proxyHost && proxyPort > 0 && proxyPort <= 65535) {
+        const char* proxy_host = env->GetStringUTFChars(proxyHost, nullptr);
+        const char* proxy_user = proxyUser ? env->GetStringUTFChars(proxyUser, nullptr) : nullptr;
+        const char* proxy_pass = proxyPassword ? env->GetStringUTFChars(proxyPassword, nullptr) : nullptr;
+        freerdp_settings_set_uint32(instance->context->settings, FreeRDP_ProxyType, PROXY_TYPE_HTTP);
+        freerdp_settings_set_string(instance->context->settings, FreeRDP_ProxyHostname, proxy_host);
+        freerdp_settings_set_uint16(instance->context->settings, FreeRDP_ProxyPort, static_cast<UINT16>(proxyPort));
+        if (proxy_user) freerdp_settings_set_string(instance->context->settings, FreeRDP_ProxyUsername, proxy_user);
+        if (proxy_user) freerdp_settings_set_string(instance->context->settings, FreeRDP_ProxyPassword, proxy_pass ? proxy_pass : "");
+        freerdp_settings_set_uint32(instance->context->settings, FreeRDP_TcpConnectTimeout, 10000);
+        env->ReleaseStringUTFChars(proxyHost, proxy_host);
+        if (proxy_user) env->ReleaseStringUTFChars(proxyUser, proxy_user);
+        if (proxy_pass) env->ReleaseStringUTFChars(proxyPassword, proxy_pass);
+    }
     
     freerdp_settings_set_bool(instance->context->settings, FreeRDP_DeviceRedirection, TRUE);
     freerdp_settings_set_bool(instance->context->settings, FreeRDP_RedirectClipboard, TRUE);

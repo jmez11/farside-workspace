@@ -23,7 +23,8 @@ class FreeRDPBridge : DesktopSessionBridge {
         clipboardListener?.invoke(text)
     }
 
-    external fun connect(hostname: String, port: Int, username: String, password: String, remoteApp: String?, adminMode: Boolean, enableCamera: Boolean, enableMicrophone: Boolean, enableStorage: Boolean, surface: Surface, certificateHost: String, certificateVerifier: RdpCertificateVerifier): Long
+    external fun connect(hostname: String, port: Int, username: String, password: String, remoteApp: String?, adminMode: Boolean, enableCamera: Boolean, enableMicrophone: Boolean, enableStorage: Boolean, surface: Surface, certificateHost: String, certificateVerifier: RdpCertificateVerifier,
+                         proxyHost: String? = null, proxyPort: Int = 0, proxyUser: String? = null, proxyPassword: String? = null): Long
     external override fun sendClipboardText(instance: Long, text: String): Boolean
     external fun isClipboardConnected(instance: Long): Boolean
     external fun certificateMatchesHost(pem: ByteArray, host: String): Boolean

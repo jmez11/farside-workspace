@@ -4,6 +4,9 @@ import android.view.Surface
 import android.os.ParcelFileDescriptor
 import android.util.Log
 import com.farside.workspace.data.VncAuthMode
+import com.farside.workspace.data.ConnectionProfile
+import com.farside.workspace.data.ProxyType
+import com.farside.workspace.ssh.openHttpConnectSocket
 import java.math.BigInteger
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -28,24 +31,38 @@ class VncBridge : DesktopSessionBridge {
     private val heldPrintable = mutableMapOf<Int, Int>()
 
     @Synchronized fun connect(host: String, port: Int, password: String, surface: Surface,
-        username: String = "", authMode: VncAuthMode = VncAuthMode.VNC_PASSWORD): Long {
+        username: String = "", authMode: VncAuthMode = VncAuthMode.VNC_PASSWORD,
+        httpProxy: ConnectionProfile? = null): Long {
         check(active == 0L)
         require(port in 1..65535)
         if (authMode == VncAuthMode.VNC_PASSWORD) {
             if (!(password.isNotEmpty() && password.toByteArray(Charsets.ISO_8859_1).size <= 8 && password.all { it.code in 1..255 }))
                 throw LocalizableException(R.string.vnc_password_latin1)
-            active = nativeConnect(host.removeSurrounding("[", "]"), port, password.toByteArray(Charsets.ISO_8859_1), surface)
+            val fd = if (httpProxy?.proxyType == ProxyType.HTTP) detachSocket(openSocket(host, port, httpProxy)) else -1
+            active = nativeConnect(host.removeSurrounding("[", "]"), port, password.toByteArray(Charsets.ISO_8859_1), surface, fd)
         } else {
             require(username.isNotBlank() && password.isNotEmpty())
-            val fd = authenticateApple(host.removeSurrounding("[", "]"), port, username, password)
+            val fd = authenticateApple(host.removeSurrounding("[", "]"), port, username, password, httpProxy)
             active = nativeConnectAuthenticated(host.removeSurrounding("[", "]"), port, fd, surface)
         }
         return active
     }
-    private fun authenticateApple(host: String, port: Int, username: String, password: String): Int {
-        val socket = Socket()
+    private fun openSocket(host: String, port: Int, httpProxy: ConnectionProfile?): Socket {
+        if (httpProxy?.proxyType != ProxyType.HTTP) return Socket().apply { connect(InetSocketAddress(host, port), 5000) }
+        val proxyHost = httpProxy.proxyHost?.trim()?.takeIf { it.isNotEmpty() }
+            ?: throw LocalizableException(R.string.http_proxy_host_port_required)
+        val proxyPort = httpProxy.proxyPort?.takeIf { it in 1..65535 }
+            ?: throw LocalizableException(R.string.http_proxy_host_port_required)
+        return openHttpConnectSocket(host.removeSurrounding("[", "]"), port, proxyHost, proxyPort,
+            httpProxy.proxyUser, httpProxy.proxyPass)
+    }
+    private fun detachSocket(socket: Socket): Int = socket.use {
+        ParcelFileDescriptor.fromSocket(it).detachFd()
+    }
+    private fun authenticateApple(host: String, port: Int, username: String, password: String,
+                                  httpProxy: ConnectionProfile?): Int {
+        val socket = openSocket(host, port, httpProxy)
         try {
-            socket.connect(InetSocketAddress(host, port), 5000)
             socket.soTimeout = 10000
             val input = java.io.DataInputStream(socket.getInputStream())
             val output = java.io.DataOutputStream(socket.getOutputStream())
@@ -93,10 +110,7 @@ class VncBridge : DesktopSessionBridge {
             output.write(ByteArray(keyLength - publicBytes.size)); output.write(publicBytes); output.flush()
             val result = input.readInt()
             if (result != 0) throw VncAuthenticationException()
-            val descriptor = ParcelFileDescriptor.fromSocket(socket)
-            val fd = descriptor.detachFd()
-            socket.close()
-            return fd
+            return detachSocket(socket)
         } catch (error: Exception) {
             socket.close()
             throw error
@@ -149,7 +163,7 @@ class VncBridge : DesktopSessionBridge {
         val text = bytes.toString(if (utf8) Charsets.UTF_8 else Charsets.ISO_8859_1)
         callbacks.post { clipboardListener?.invoke(text) }
     }
-    private external fun nativeConnect(host: String, port: Int, password: ByteArray, surface: Surface): Long
+    private external fun nativeConnect(host: String, port: Int, password: ByteArray, surface: Surface, fd: Int): Long
     private external fun nativeConnectAuthenticated(host: String, port: Int, fd: Int, surface: Surface): Long
     private external fun nativeDisconnect(instance: Long)
     private external fun nativeSetSurface(instance: Long, surface: Surface?)

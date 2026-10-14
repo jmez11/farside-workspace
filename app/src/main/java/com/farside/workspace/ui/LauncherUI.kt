@@ -1164,6 +1164,11 @@ fun AddProfileForm(
                         }.exceptionOrNull()?.localizedMessage(context)
                         if (cloudflaredError != null) return@TextButton
                     }
+                    if (proxyType == com.farside.workspace.data.ProxyType.HTTP &&
+                        (proxyHost.isBlank() || proxyPort.toIntOrNull() !in 1..65535)) {
+                        showValidationErrors = true
+                        return@TextButton
+                    }
                     
                     onSave(
                         ConnectionProfile(
@@ -1529,9 +1534,19 @@ fun AddProfileForm(
                     Text(stringResource(R.string.allowed_service_token_id_and_service_token_secret_or_header_h_fo), color = Color.Gray, modifier = Modifier.padding(horizontal = 16.dp))
                     cloudflaredError?.let { Text(it, color = Color.Red, modifier = Modifier.padding(16.dp)) }
                 } else if (proxyType == com.farside.workspace.data.ProxyType.SOCKS5 || proxyType == com.farside.workspace.data.ProxyType.HTTP) {
-                    Text(stringResource(R.string.proxy_connections_unavailable, stringResource(proxyType.labelResId)), color = Color.Gray, modifier = Modifier.padding(16.dp))
-                    SettingsTextField(proxyHost, { proxyHost = it }, stringResource(R.string.proxy_hostname_or_ip))
-                    SettingsTextField(proxyPort, { proxyPort = it }, stringResource(R.string.proxy_port))
+                    if (proxyType == com.farside.workspace.data.ProxyType.HTTP) {
+                        Text(stringResource(R.string.http_proxy_connect), color = Color.Gray, modifier = Modifier.padding(16.dp))
+                    } else {
+                        Text(stringResource(R.string.proxy_connections_unavailable, stringResource(proxyType.labelResId)), color = Color.Gray, modifier = Modifier.padding(16.dp))
+                    }
+                    SettingsTextField(proxyHost, { proxyHost = it }, stringResource(R.string.proxy_hostname_or_ip),
+                        isError = showValidationErrors && proxyType == com.farside.workspace.data.ProxyType.HTTP && proxyHost.isBlank())
+                    SettingsTextField(proxyPort, { proxyPort = it }, stringResource(R.string.proxy_port),
+                        isError = showValidationErrors && proxyType == com.farside.workspace.data.ProxyType.HTTP && proxyPort.toIntOrNull() !in 1..65535)
+                    if (showValidationErrors && proxyType == com.farside.workspace.data.ProxyType.HTTP &&
+                        (proxyHost.isBlank() || proxyPort.toIntOrNull() !in 1..65535)) {
+                        Text(stringResource(R.string.http_proxy_host_port_required), color = Color.Red, modifier = Modifier.padding(horizontal = 16.dp))
+                    }
                     SettingsTextField(proxyUser, { proxyUser = it }, stringResource(R.string.proxy_username_optional))
                     SettingsTextField(proxyPass, { proxyPass = it }, stringResource(R.string.proxy_password_optional), visualTransformation = PasswordVisualTransformation())
                     SettingsTextField(proxyExclude, { proxyExclude = it }, stringResource(R.string.exclude_hosts_ips_comma_separated))

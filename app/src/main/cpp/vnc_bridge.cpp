@@ -279,7 +279,7 @@ extern "C" rfbBool farsideZlibHex(rfbClient* c, int rx, int ry, int rw, int rh) 
 }
 
 jlong connectInternal(JNIEnv* env, jobject bridge, jstring host, jint port, jbyteArray password,
-    jobject surface, jint authenticatedFd) {
+    jobject surface, jint preconnectedFd, bool appleAuthenticated) {
     auto s = new Session(); env->GetJavaVM(&s->vm);
     s->bridge = env->NewGlobalRef(bridge);
     auto cls = env->GetObjectClass(bridge);
@@ -289,7 +289,7 @@ jlong connectInternal(JNIEnv* env, jobject bridge, jstring host, jint port, jbyt
     if (password) s->password = bytes(env, password);
     s->window = ANativeWindow_fromSurface(env, surface);
     s->client = rfbGetClient(8, 3, 4);
-    if (!s->client && authenticatedFd >= 0) close(authenticatedFd);
+    if (!s->client && preconnectedFd >= 0) close(preconnectedFd);
     if (s->client) {
         auto c = s->client;
         rfbClientSetClientData(c, nullptr, s);
@@ -310,11 +310,11 @@ jlong connectInternal(JNIEnv* env, jobject bridge, jstring host, jint port, jbyt
         c->GotXCutTextUTF8 = [](rfbClient* cl, const char* text, int len) { cutText(cl, text, len, true); };
         const uint32_t auth[] = {rfbVncAuth}; SetClientAuthSchemes(c, auth, 1);
         // Split connect/init avoids rfbInitClient freeing the client behind our owner on error.
-        const bool connected = authenticatedFd >= 0 ? (c->sock = authenticatedFd, c->authScheme = rfbARD, c->major = 3, c->minor = 8, true)
-            : rfbClientConnect(c);
+        const bool connected = preconnectedFd >= 0 ? (c->sock = preconnectedFd, true) : rfbClientConnect(c);
+        if (connected && appleAuthenticated) { c->authScheme = rfbARD; c->major = 3; c->minor = 8; }
         const bool initialized = connected && rfbClientInitialise(c);
         __android_log_print(ANDROID_LOG_INFO, "VncSession", "connect=%d initialized=%d security=%u size=%dx%d", connected, initialized, c->authScheme, c->width, c->height);
-        if (initialized && c->authScheme == (authenticatedFd >= 0 ? rfbARD : rfbVncAuth)) {
+        if (initialized && c->authScheme == (appleAuthenticated ? rfbARD : rfbVncAuth)) {
             std::fill(s->password.begin(), s->password.end(), '\0'); s->password.clear();
             s->renderer = std::thread(render, s); s->worker = std::thread(work, s);
             return reinterpret_cast<jlong>(s);
@@ -323,12 +323,12 @@ jlong connectInternal(JNIEnv* env, jobject bridge, jstring host, jint port, jbyt
     env->DeleteGlobalRef(s->bridge); delete s; return 0;
 }
 extern "C" JNIEXPORT jlong JNICALL Java_com_farside_workspace_VncBridge_nativeConnect(
-    JNIEnv* env, jobject bridge, jstring host, jint port, jbyteArray password, jobject surface) {
-    return connectInternal(env, bridge, host, port, password, surface, -1);
+    JNIEnv* env, jobject bridge, jstring host, jint port, jbyteArray password, jobject surface, jint fd) {
+    return connectInternal(env, bridge, host, port, password, surface, fd, false);
 }
 extern "C" JNIEXPORT jlong JNICALL Java_com_farside_workspace_VncBridge_nativeConnectAuthenticated(
     JNIEnv* env, jobject bridge, jstring host, jint port, jint fd, jobject surface) {
-    return connectInternal(env, bridge, host, port, nullptr, surface, fd);
+    return connectInternal(env, bridge, host, port, nullptr, surface, fd, true);
 }
 extern "C" JNIEXPORT void JNICALL Java_com_farside_workspace_VncBridge_nativeDisconnect(JNIEnv* env, jobject, jlong id) {
     auto s = reinterpret_cast<Session*>(id); if (!s) return;
