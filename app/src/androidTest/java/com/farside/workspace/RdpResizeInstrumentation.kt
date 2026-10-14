@@ -113,6 +113,11 @@ class RdpResizeInstrumentation : Instrumentation() {
     override fun onStart() {
         val results = Bundle()
         try {
+            if (jumpArgs?.getString("sshPublicOnly") == "true") {
+                results.putString("stream", SshPublicKeyVerification(this).run())
+                finish(0, results)
+                return
+            }
             if (jumpArgs?.getString("rdpDiscoveryOnly") == "true") {
                 results.putString("stream", RdpDiscoveryVerification(this).run())
                 finish(0, results)
