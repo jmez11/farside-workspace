@@ -223,17 +223,12 @@ class MacHevcSession(
             stage = "S8"
             log("S8: Record Layer ACTIVE")
 
-            // 1. Encrypted SetDisplayConfiguration (0x1d)
-            val displayConfig = buildDisplayConfiguration(width, height)
-            layer.writeRecord(output, displayConfig)
-            log("S8: Sent encrypted SetDisplayConfiguration (0x1d, len=${displayConfig.size})")
-
-            // 2. Encrypted SetEncodings (0x02)
-            val encodings = buildSetEncodings(listOf(0x451, 0x453, 0x455, 0x456, 0x450, 6))
+            // 1. Encrypted SetEncodings (0x02)
+            val encodings = buildSetEncodings(listOf(0x451, 0x453, 0x455, 0x456, 0x450, 6, 0))
             layer.writeRecord(output, encodings)
             log("S8: Sent encrypted SetEncodings (0x02, len=${encodings.size})")
 
-            // 3. Encrypted FramebufferUpdateRequest (0x03) + AutoFrameBufferUpdate (0x09)
+            // 2. Encrypted FramebufferUpdateRequest (0x03) + AutoFrameBufferUpdate (0x09)
             val fbur = buildFramebufferUpdateRequest(width, height)
             layer.writeRecord(output, fbur)
             val autoFbur = buildAutoFrameBufferUpdate(width, height)
@@ -275,6 +270,7 @@ class MacHevcSession(
         buf.putShort(0.toShort())   // current_mode_index
         buf.putShort(0.toShort())   // preferred_mode_index
         buf.putInt(0)               // rotations = 0
+        buf.putShort(1.toShort())   // mode_count = 1
 
         // Mode table (1 entry x 28 bytes)
         buf.putInt(w)               // width
