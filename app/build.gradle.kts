@@ -124,4 +124,5 @@ dependencies {
     // SSHJ
     implementation("com.hierynomus:sshj:0.38.0")
     implementation("org.bouncycastle:bcprov-jdk18on:1.75")
+    testImplementation("junit:junit:4.13.2")
 }
