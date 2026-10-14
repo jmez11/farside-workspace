@@ -8,7 +8,7 @@
 
 ## Module Map
 1. **App / UI Layer (`app`)**: Jetpack Compose and Meta VR Layout SDK for Compose Spatial Windows. Manages the connection launcher (main panel) and spawns new Spatial Windows for each session.
-2. **Session Manager**: Coordinates active connections, handles panel lifecycle (spawning/closing windows), and routes input. Responsible for deciding whether to spawn a new FreeRDP instance or mirror an existing session's video decode.
+2. **Session Manager**: Coordinates active connections, handles panel lifecycle (spawning/closing windows), and routes input. Spawns one FreeRDP instance per RDP session.
 3. **RDP Core (`freerdp-jni`)**: JNI bridge to FreeRDP 3.32.1 (`bf217a504e54cc719880c228e82353382cd7d4fa`; submodule tracking branch `3.32.x`). Handles session lifecycle, video stream decoding (MediaCodec AVC/H.264), input event injection, RAIL window mapping, and camera redirection (`rdpecam`). Upstream tag is unmodified; the former pin's local Android CMake fixes are no longer needed by this build.
 4. **SSH / Terminal Core (`ssh-core`)**: SSHJ for secure transport, combined with Termux's GPLv3 terminal-emulator stack for VT100/xterm emulation. Dynamic PTY window resizing via `sshShell.changeWindowDimensions(columns, rows, width, height)`. Floating movable toolbar with 3-second auto-fade, pin toggle, zoom font size adjustment (`8sp..32sp`), reset zoom, and keyboard toggle matching the RDP design. Bottom-attached companion spatial window (`RemoteKeyboardPanel`, 251.2dp tall, minimum 512dp wide) with full `RemoteExtraKeys` modifier latching, VT escape sequences, and shared `RemoteImeEditor` text routing while preserving the main terminal window's geometry (`adjustNothing`). Supports public key authentication using saved SSH keys, password authentication, and interactive terminal login fallback when credentials or keys are not provided.
 5. **Settings & Storage**: Saved credential/profile/proxy passwords and SSH private keys/passphrases use randomized AES-GCM encryption via a non-exportable Android Keystore key (`CredentialManager`); app-private preferences store ciphertext, with plaintext legacy fields migrated in one durable transaction by `ProfileManager`. `SavedSshKey.kt` encrypts both private keys and optional passphrases with Keystore. Key usage requires no biometric prompt. Credentials, SSH keys, and preferences are excluded from cloud backup and device transfer because the key is device-bound. Passwords and keys are decrypted in app memory only when authenticating; hashing cannot replace recoverable credentials. Credential and key editing never preloads saved passwords/passphrases into input fields: blank preserves existing values, new text replaces them. Masked inputs request password keyboard type with autocorrect disabled; password state is not saved in Activity instance state.
@@ -214,9 +214,7 @@
 
 ### Phase 2: Multiple Sessions
 - **Goal**: N concurrent RDP sessions.
-- **Implementation**: Allow user choice when reconnecting to an active host:
-  - *New Independent Session*: Spawns a new FreeRDP instance (requires server CALs or multiple accounts).
-  - *Mirror Session*: Spawns a new Spatial Window observing the same video decode stream from an existing session.
+- **Implementation**: Reconnecting to an active host reuses the existing session window. A genuinely new session spawns a new FreeRDP instance (requires server CALs or multiple accounts).
 - **Acceptance**: Two desktop windows visible simultaneously in passthrough.
 
 ### Phase 3: RemoteApp Support (RAIL)
@@ -240,7 +238,7 @@
 
 ## Open Decisions & Resolutions
 - **App Name**: Resolved as **Farside Workspace**.
-- **Phase 2 (Multiple Sessions)**: Resolved to support **both** true independent sessions and duplicated/mirrored sessions, depending on user choice at launch time.
+- **Phase 2 (Multiple Sessions)**: Resolved to support true independent sessions.
 - **Business Model & SSH Emulator**: App will be **Open-Source (Paid in store)**. Therefore, we will use the **Termux (GPLv3)** stack for terminal emulation, which provides superior emulation and is compatible with an open-source model.
 - **SSH jump hosts**: `jumpHostProfileId` chain resolved by `JumpChains` (max 3 connections, no cycles); `SshConnectionManager` builds hops via `connectVia` with per-hop leases. Harness: `adb shell am instrument -w -r -e jumpMode resolver|live [-e jumpKey <key name> -e jumpHop1 <host> -e jumpHop2 <host> -e jumpDead <host>] com.farside.workspace.test/com.farside.workspace.RdpResizeInstrumentation`; live uses temporary profiles and prints the target's `SSH_CONNECTION`.
 - Launcher connection cards use content-driven height (140dp minimum; 180dp minimum while reordering). Profile names and jump-route labels can wrap so route information remains visible.
