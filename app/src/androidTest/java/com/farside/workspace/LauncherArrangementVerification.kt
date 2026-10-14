@@ -139,6 +139,53 @@ internal class LauncherArrangementVerification(private val test: Instrumentation
             }
             hover("Star Fixture A", "Favorite")
             hover("Use screenshot of Fixture A as card background")
+            if (QuestWindowManager.isAvailable(context)) hover("Window Manager")
+            hover("Files", "SFTP Browser")
+            hover("Settings")
+            hover("Add Connection")
+            click("Add Connection")
+            find("Mac/VNC")
+            find("Click here to Find Local PCs")
+            val addFormImage = Bitmap.createBitmap(activity.window.decorView.width,
+                activity.window.decorView.height, Bitmap.Config.ARGB_8888)
+            val addFormCopied = CountDownLatch(1)
+            var addFormResult = -1
+            test.runOnMainSync { PixelCopy.request(activity.window, addFormImage,
+                { addFormResult = it; addFormCopied.countDown() }, Handler(Looper.getMainLooper())) }
+            check(addFormCopied.await(5, TimeUnit.SECONDS) && addFormResult == PixelCopy.SUCCESS)
+            File(context.cacheDir, "launcher-add-form.png").outputStream().use {
+                addFormImage.compress(Bitmap.CompressFormat.PNG, 100, it)
+            }
+            addFormImage.recycle()
+            fun scrollTo(label: String, direction: Int) {
+                repeat(16) {
+                    if (nodes().any { it.contentDescription?.toString() == label || it.text?.toString() == label }) return
+                    val scroller = nodes().firstOrNull { it.isScrollable }
+                        ?: error("Missing scrollable profile form")
+                    check(scroller.performAction(direction)) { "Could not scroll to $label" }
+                    Thread.sleep(120)
+                }
+                error("Missing $label after scrolling")
+            }
+            fun reconnectChecked(): Boolean {
+                scrollTo("Reconnect Automatically", AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+                return find("Reconnect Automatically").isChecked
+            }
+            fun selectType(label: String) {
+                scrollTo(label, AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
+                click(label)
+            }
+            check(!reconnectChecked())
+            click("Reconnect Automatically")
+            check(reconnectChecked())
+            selectType("SSH")
+            check(reconnectChecked()) { "SSH profile form lost Reconnect Automatically" }
+            selectType("Mac/VNC")
+            check(reconnectChecked()) { "Mac/VNC profile form lost Reconnect Automatically" }
+            click("Reconnect Automatically")
+            check(!reconnectChecked())
+            scrollTo("Close", AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
+            click("Close")
             check(nodes().none { it.contentDescription?.toString() == "Open another Fixture A window here" })
             val actionsImage = Bitmap.createBitmap(activity.window.decorView.width,
                 activity.window.decorView.height, Bitmap.Config.ARGB_8888)
@@ -291,9 +338,20 @@ internal class LauncherArrangementVerification(private val test: Instrumentation
             check(cardBounds("Fixture A").height() == cardBounds("Fixture B").height()) {
                 "Compact cards have different heights"
             }
-            check(bounds("Farside Connections").right <= bounds("Files").left) {
+            check(bounds("Farside Connections").right <= bounds("Add Connection").left) {
                 "Compact launcher title overlaps its actions"
             }
+            if (QuestWindowManager.isAvailable(context)) {
+                check(bounds("Add Connection").right <= bounds("Window Manager").left) {
+                    "Add Connection is not left of Window Manager"
+                }
+                check(bounds("Window Manager").right <= bounds("Files").left) {
+                    "Window Manager button overlaps Files"
+                }
+            } else {
+                check(bounds("Add Connection").right <= bounds("Files").left)
+            }
+            check(nodes().none { it.text?.toString() == "New Connection" })
             val compactImage = Bitmap.createBitmap(activity.window.decorView.width,
                 activity.window.decorView.height, Bitmap.Config.ARGB_8888)
             val compactCopied = CountDownLatch(1)
@@ -305,6 +363,12 @@ internal class LauncherArrangementVerification(private val test: Instrumentation
                 compactImage.compress(Bitmap.CompressFormat.PNG, 100, it)
             }
             compactImage.recycle()
+            click("Add Connection")
+            find("Mac/VNC")
+            click("Close")
+            if (QuestWindowManager.isAvailable(context)) {
+                click("Window Manager")
+            }
             return "click with jitter, star touch without launch, persisted starred-first order, reorder buttons/grid drag, group boundaries, return to normal click and edge scrolling with 46 connections"
         } finally {
             test.runOnMainSync { SessionCardActions.connectedCounts.remove("A") }

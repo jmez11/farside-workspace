@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Computer
@@ -64,6 +65,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.semantics.onClick
 import com.farside.workspace.ConnectionSpatialDrag
+import com.farside.workspace.QuestWindowManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
@@ -100,6 +102,8 @@ fun LauncherScreen(
     var credentialRevision by remember { mutableIntStateOf(0) }
     var reordering by rememberSaveable { mutableStateOf(false) }
     val dragView = LocalView.current
+    val context = LocalContext.current
+    val windowManagerAvailable = remember(context) { QuestWindowManager.isAvailable(context) }
     DisposableEffect(dragView) {
         val detach = ConnectionSpatialDrag.attach(dragView)
         onDispose { detach() }
@@ -134,20 +138,37 @@ fun LauncherScreen(
                 BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
                     val compact = maxWidth < 600.dp
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (!compact) Spacer(Modifier.width(96.dp))
-                    Text(stringResource(R.string.farside_connections), style = MaterialTheme.typography.headlineLarge,
+                    if (!compact) Spacer(Modifier.width(if (windowManagerAvailable) 192.dp else 144.dp))
+                    Text(stringResource(R.string.farside_connections),
+                        style = if (compact) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.headlineLarge,
                         modifier = Modifier.weight(1f), textAlign = TextAlign.Center,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    IconButton(onClick = { filesOpen = true }) {
-                        Icon(androidx.compose.material.icons.Icons.Default.Folder, contentDescription = stringResource(R.string.files), tint = Color.White)
+                    CardActionTooltip(stringResource(R.string.add_connection)) {
+                        IconButton(onClick = { isAdding = true }) {
+                            Icon(Icons.Default.Add, contentDescription = stringResource(R.string.add_connection), tint = Color.White)
+                        }
                     }
-                    IconButton(
-                        onClick = { 
-                            settingsInitialTab = 0
-                            isSettingsOpen = true 
-                        },
-                    ) {
-                        Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.settings), tint = Color.White)
+                    if (windowManagerAvailable) {
+                        CardActionTooltip(stringResource(R.string.window_manager)) {
+                            IconButton(onClick = { QuestWindowManager.toggle(context) }) {
+                                Icon(Icons.Default.Dashboard, contentDescription = stringResource(R.string.window_manager), tint = Color.White)
+                            }
+                        }
+                    }
+                    CardActionTooltip(stringResource(R.string.sftp_browser)) {
+                        IconButton(onClick = { filesOpen = true }) {
+                            Icon(androidx.compose.material.icons.Icons.Default.Folder, contentDescription = stringResource(R.string.files), tint = Color.White)
+                        }
+                    }
+                    CardActionTooltip(stringResource(R.string.settings)) {
+                        IconButton(
+                            onClick = {
+                                settingsInitialTab = 0
+                                isSettingsOpen = true
+                            },
+                        ) {
+                            Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.settings), tint = Color.White)
+                        }
                     }
                     }
                 }
@@ -167,12 +188,6 @@ fun LauncherScreen(
                     onConnect = onConnectProfile, onToggleStar = onToggleStar, onMove = onMoveProfile,
                     onCapture = onCaptureProfile)
 
-                Spacer(modifier = Modifier.height(16.dp))
-                ExtendedFloatingActionButton(
-                    onClick = { isAdding = true },
-                    icon = { Icon(Icons.Default.Add, stringResource(R.string.add)) },
-                    text = { Text(stringResource(R.string.new_connection)) }
-                )
             }
         }
         
@@ -1046,7 +1061,7 @@ fun SettingsSegmentedControl(selectedType: ConnectionType, onTypeSelected: (Conn
         horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally)) {
         ConnectionType.entries.forEach { type ->
             FilterChip(selected = selectedType == type, onClick = { onTypeSelected(type) },
-                label = { Text(stringResource(type.labelResId)) }, colors = FilterChipDefaults.filterChipColors(
+                label = { Text(stringResource(if (type == ConnectionType.VNC) R.string.mac_vnc else type.labelResId)) }, colors = FilterChipDefaults.filterChipColors(
                     selectedContainerColor = Color(0xFF1E88E5), selectedLabelColor = Color.White))
         }
     }
@@ -1419,7 +1434,7 @@ fun AddProfileForm(
                 SettingsHeader(stringResource(R.string.host_server))
                 if (type == ConnectionType.RDP || type == ConnectionType.VNC) {
                     Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(enabled = !isScanning, onClick = {
+                        Button(enabled = !isScanning, onClick = {
                             val scanType = type
                             isScanning = true
                             coroutineScope.launch {
@@ -1433,8 +1448,8 @@ fun AddProfileForm(
                                     android.widget.Toast.makeText(context, error.message ?: context.getString(R.string.discovery_failed), android.widget.Toast.LENGTH_LONG).show()
                                 } finally { isScanning = false }
                             }
-                        }) {
-                            Text(if (isScanning) stringResource(R.string.finding_local_sessions, stringResource(type.labelResId)) else if (type == ConnectionType.VNC) stringResource(R.string.find_screen_sharing) else stringResource(R.string.find_local_pcs), color = Color(0xFF1E88E5))
+                        }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E88E5), contentColor = Color.White)) {
+                            Text(if (isScanning) stringResource(R.string.finding_local_sessions, stringResource(type.labelResId)) else if (type == ConnectionType.VNC) stringResource(R.string.find_screen_sharing) else stringResource(R.string.find_local_pcs))
                         }
                     }
                     if (discoveredHosts.isNotEmpty()) {
@@ -1655,9 +1670,7 @@ fun AddProfileForm(
                             modifier = Modifier.padding(horizontal = 16.dp))
                     }                }
                 
-                if (type == ConnectionType.RDP) {
-                    SettingsHeader(stringResource(R.string.general))
-                } else if (type == ConnectionType.SSH) {
+                if (type == ConnectionType.SSH) {
                     SettingsHeader(stringResource(R.string.files))
                     SettingsSwitchRow(stringResource(R.string.enable_sftp_file_access), enableSftp, { enabled ->
                         if (!enabled) enableSftp = false
@@ -1671,7 +1684,10 @@ fun AddProfileForm(
                     }
 
                 }
-                
+
+                SettingsHeader(stringResource(R.string.general))
+                SettingsSwitchRow(stringResource(R.string.reconnect_automatically), reconnectAutomatically, { reconnectAutomatically = it })
+
                 SettingsHeader(stringResource(R.string.proxy_settings))
                 ProxyTypeSelector(proxyType, { proxyType = it })
                 if (proxyType !in com.farside.workspace.data.ProxyType.choices) {
@@ -1729,7 +1745,6 @@ fun AddProfileForm(
                     })
                     SettingsSwitchRow(stringResource(R.string.redirect_clipboard), redirectClipboard, { redirectClipboard = it })
                     SettingsSwitchRow(stringResource(R.string.admin_mode), adminMode, { adminMode = it })
-                    SettingsSwitchRow(stringResource(R.string.reconnect_automatically), reconnectAutomatically, { reconnectAutomatically = it })
                 }
             }
         }

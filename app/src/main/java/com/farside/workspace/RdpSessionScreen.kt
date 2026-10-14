@@ -27,6 +27,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -105,6 +106,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
     val isVnc = session.type == ConnectionType.VNC
     val protocolName = stringResource(if (isVnc) R.string.protocol_vnc else R.string.protocol_rdp)
     val permissionContext = LocalContext.current
+    val windowManagerAvailable = remember(permissionContext) { QuestWindowManager.isAvailable(permissionContext) }
     var microphoneReady by remember(session.id) {
         mutableStateOf(!session.redirectMicrophone || hasMicrophonePermission(permissionContext))
     }
@@ -677,6 +679,12 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                     IconButton(onClick = { toolbarPinned = !toolbarPinned; revealToolbar() }) {
                         Icon(Icons.Default.PushPin, if (toolbarPinned) stringResource(R.string.unpin_toolbar) else stringResource(R.string.keep_toolbar_visible),
                             tint = if (toolbarPinned) MaterialTheme.colorScheme.primary else Color.White)
+                    }
+                    if (windowManagerAvailable) IconButton(onClick = {
+                        QuestWindowManager.toggle(permissionContext)
+                        revealToolbar()
+                    }) {
+                        Icon(Icons.Default.Dashboard, stringResource(R.string.window_manager), tint = Color.White)
                     }
                     if (!isVnc) IconButton(onClick = { speakerMuted = !speakerMuted; revealToolbar() }) {
                         Icon(if (speakerMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,

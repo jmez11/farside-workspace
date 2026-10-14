@@ -212,6 +212,34 @@ internal class VncVerification(private val test: Instrumentation) {
         var instance = 0L
         var bridge: VncBridge? = null
         try {
+            if (server?.encoding == 16 && QuestWindowManager.isAvailable(test.targetContext)) {
+                val info = test.uiAutomation.serviceInfo
+                info.flags = info.flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+                test.uiAutomation.serviceInfo = info
+                fun toolbarNodes(): List<android.view.accessibility.AccessibilityNodeInfo> {
+                    test.uiAutomation.clearCache()
+                    fun descend(node: android.view.accessibility.AccessibilityNodeInfo): List<android.view.accessibility.AccessibilityNodeInfo> =
+                        listOf(node) + (0 until node.childCount).flatMap { node.getChild(it)?.let(::descend).orEmpty() }
+                    val displays = test.uiAutomation.windowsOnAllDisplays
+                    return (0 until displays.size()).flatMap { i -> displays.valueAt(i).flatMap { window ->
+                        window.root?.takeIf { it.packageName == test.targetContext.packageName }?.let(::descend).orEmpty()
+                    } }
+                }
+                await("VNC toolbar Pin missing") { toolbarNodes().any { it.contentDescription?.toString() == "Keep toolbar visible" } }
+                var pin = toolbarNodes().first { it.contentDescription?.toString() == "Keep toolbar visible" }
+                while (!pin.isClickable) pin = checkNotNull(pin.parent)
+                check(pin.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK))
+                await("VNC toolbar Window Manager missing") {
+                    toolbarNodes().any { it.contentDescription?.toString() == "Window Manager" }
+                }
+                val pinned = toolbarNodes().first { it.contentDescription?.toString() == "Unpin toolbar" }
+                val manager = toolbarNodes().first { it.contentDescription?.toString() == "Window Manager" }
+                val pinBounds = android.graphics.Rect().also(pinned::getBoundsInScreen)
+                val managerBounds = android.graphics.Rect().also(manager::getBoundsInScreen)
+                check(pinBounds.right <= managerBounds.left && pinBounds.centerY() == managerBounds.centerY()) {
+                    "VNC Window Manager button is not next to Pin"
+                }
+            }
             await("VNC did not connect") {
                 server?.failure?.let { throw AssertionError("Fixture handshake failed (${server.stage})", it) }
                 if (server?.disconnected?.count == 0L && activity.vncInstance == 0L) error("Fixture disconnected: ${server.stage}")

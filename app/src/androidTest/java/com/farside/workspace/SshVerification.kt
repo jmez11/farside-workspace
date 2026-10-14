@@ -83,12 +83,24 @@ class SshVerification(private val test: Instrumentation) {
             checkNotNull(find("SSH Term Test")) { "Missing connection name in floating toolbar" }
             checkNotNull(find("127.0.0.1")) { "Missing connection host in floating toolbar" }
             checkNotNull(find("Unpin toolbar")) { "Missing pin button in toolbar" }
+            if (QuestWindowManager.isAvailable(test.targetContext)) {
+                val pin = checkNotNull(find("Unpin toolbar"))
+                val manager = checkNotNull(find("Window Manager")) { "Missing Window Manager toolbar button" }
+                val pinBounds = android.graphics.Rect().also(pin::getBoundsInScreen)
+                val managerBounds = android.graphics.Rect().also(manager::getBoundsInScreen)
+                check(pinBounds.right <= managerBounds.left && pinBounds.centerY() == managerBounds.centerY()) {
+                    "Window Manager button is not next to Pin"
+                }
+            }
             checkNotNull(find("Zoom")) { "Missing zoom button in toolbar" }
             checkNotNull(find("Transparency")) { "Missing transparency button in toolbar" }
             checkNotNull(find("Keyboard")) { "Missing keyboard toggle in toolbar" }
 
             check(find("Menu", retries = 1) == null && find("Terminal settings", retries = 1) == null) { "Menu button still in SSH toolbar" }
-            if (toolbarOnly) return
+            if (toolbarOnly) {
+                if (QuestWindowManager.isAvailable(test.targetContext)) click("Window Manager")
+                return
+            }
 
             // 2. Verify Zoom (Font Size) slider and Reset Zoom button
             Log.i("SshVerification", "Step 2: Testing Zoom")

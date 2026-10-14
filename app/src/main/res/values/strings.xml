@@ -20,6 +20,8 @@
     <string name="app_pin_active">App PIN active</string>
     <string name="app_security">App Security</string>
     <string name="app_settings">App Settings</string>
+    <string name="window_manager">Window Manager</string>
+    <string name="sftp_browser">SFTP Browser</string>
     <string name="auto_copy_selection_to_clipboard">Auto-copy selection to clipboard</string>
     <string name="back">Back</string>
     <string name="begin_openssh_private_key_n">-----BEGIN OPENSSH PRIVATE KEY-----\n...</string>
@@ -83,7 +85,6 @@
     <string name="microphone_redirection_unavailable">Microphone redirection unavailable</string>
     <string name="more_options">More options</string>
     <string name="name">Name</string>
-    <string name="new_connection">New Connection</string>
     <string name="new_folder">New folder</string>
     <string name="login_as">login as: </string>
     <string name="manage_your_passcode_in_quest_settings_security_protected_connec">Manage your passcode in Quest Settings &gt; Security. Protected connections require system authentication.</string>
@@ -506,6 +507,7 @@
     <string name="vnc_discovery_failed">Local VNC discovery could not start (%1$d).</string>
     <string name="unknown_pc">Unknown PC (%1$s)</string>
     <string name="protocol_vnc">VNC</string>
+    <string name="mac_vnc">Mac/VNC</string>
     <string name="protocol_rdp">RDP</string>
     <string name="rdp_clipboard_label">rdp-clipboard</string>
     <string name="ssh_clipboard_label">ssh-clipboard</string>

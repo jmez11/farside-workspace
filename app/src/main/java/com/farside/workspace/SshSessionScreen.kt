@@ -27,6 +27,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -95,6 +96,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 @Composable
 fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, onClose: () -> Unit) {
     val context = LocalContext.current
+    val windowManagerAvailable = remember(context) { QuestWindowManager.isAvailable(context) }
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     var showSoftKeyboard by remember { mutableStateOf(false) }
@@ -537,6 +539,12 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                                 if (toolbarPinned) stringResource(R.string.unpin_toolbar) else stringResource(R.string.keep_toolbar_visible),
                                 tint = if (toolbarPinned) MaterialTheme.colorScheme.primary else Color.White
                             )
+                        }
+                        if (windowManagerAvailable) IconButton(onClick = {
+                            QuestWindowManager.toggle(context)
+                            revealToolbar()
+                        }) {
+                            Icon(Icons.Default.Dashboard, stringResource(R.string.window_manager), tint = Color.White)
                         }
                         IconButton(onClick = {
                             showZoomSlider = !showZoomSlider
