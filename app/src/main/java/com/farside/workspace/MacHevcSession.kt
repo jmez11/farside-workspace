@@ -249,7 +249,7 @@ class MacHevcSession(
             log("S8: Record Layer ACTIVE")
 
             // 1. Encrypted SetEncodings (0x02)
-            val encodings = buildSetEncodings(listOf(0x451, 0x453, 0x455, 0x456, 0x450, 6, 0))
+            val encodings = buildSetEncodings(listOf(0x451, 0x453, 0x455, 0x456, 0x450, 0x3f2, 6, 0))
             layer.writeRecord(output, encodings)
             log("S8: Sent encrypted SetEncodings (0x02, len=${encodings.size})")
 
@@ -523,6 +523,50 @@ class MacHevcSession(
         out.write(fbur)
         out.flush()
         log("S9: Requested FramebufferUpdate (incremental=$incremental)")
+    }
+
+    fun buildMediaStreamOffer(): ByteArray {
+        val audioOffer = ByteArray(32) // audio offer blob
+        val videoOffer = ByteArray(64) // video offer blob
+        val audioKey1 = ByteArray(46)
+        val audioKey2 = ByteArray(46)
+        val videoKey1 = ByteArray(46)
+        val videoKey2 = ByteArray(46)
+        SecureRandom().nextBytes(audioKey1)
+        SecureRandom().nextBytes(audioKey2)
+        SecureRandom().nextBytes(videoKey1)
+        SecureRandom().nextBytes(videoKey2)
+
+        val totalLen = 20 + 16 + 46 * 2 + audioOffer.size + 46 * 2 + videoOffer.size
+        val messageSize = totalLen - 4
+        val buf = ByteBuffer.allocate(totalLen).order(ByteOrder.BIG_ENDIAN)
+        buf.putShort(0x1c.toShort()) // message_type = 0x1c
+        buf.putShort(messageSize.toShort())
+        buf.putShort(1.toShort()) // version = 1
+        buf.order(ByteOrder.LITTLE_ENDIAN)
+        buf.putInt(0x07) // flags (host-endian): 60fps stream 1 & 2 + do-not-send-cursor
+        buf.order(ByteOrder.BIG_ENDIAN)
+        buf.putShort(audioOffer.size.toShort())
+        buf.putShort(videoOffer.size.toShort())
+        buf.putShort(0.toShort()) // video2_offer_len = 0
+        buf.putInt(0) // reserved
+        buf.put(ByteArray(16)) // session / CallID UUID
+        buf.put(audioKey1)
+        buf.put(audioKey2)
+        buf.put(audioOffer)
+        buf.put(videoKey1)
+        buf.put(videoKey2)
+        buf.put(videoOffer)
+        return buf.array()
+    }
+
+    fun sendMediaStreamOffer(): ByteArray {
+        val out = checkNotNull(recordOut) { "Record stream not initialized" }
+        val offer = buildMediaStreamOffer()
+        log("S9: Sending MediaStreamOptions offer (0x1c, ${offer.size} bytes)")
+        out.write(offer)
+        out.flush()
+        return offer
     }
 
     override fun close() {
