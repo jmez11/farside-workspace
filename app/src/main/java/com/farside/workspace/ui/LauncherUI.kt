@@ -46,7 +46,8 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.semantics.onClick
 import com.farside.workspace.ConnectionSpatialDrag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
@@ -172,14 +173,14 @@ fun ProfileCard(profile: ConnectionProfile, onEdit: () -> Unit, onDelete: () -> 
     var menuExpanded by remember { mutableStateOf(false) }
     val view = LocalView.current
     val latestProfile by rememberUpdatedState(profile)
-    val launchModifier = if (!reordering) Modifier.clickable { onConnect() }.pointerInput(profile.id, view) {
-        detectDragGestures(
-            onDragStart = {
-                ConnectionSpatialDrag.start(view, latestProfile)
-            },
-            onDrag = { change, _ -> change.consume() }
-        )
-    } else Modifier
+    val launchModifier = if (!reordering) Modifier
+        .semantics { onClick { onConnect(); true } }
+        .pointerInput(profile.id, view) {
+            detectTapGestures(
+                onTap = { onConnect() },
+                onLongPress = { ConnectionSpatialDrag.start(view, latestProfile) }
+            )
+        } else Modifier
     
     Card(
         modifier = Modifier.padding(8.dp).fillMaxWidth().heightIn(min = if (reordering) 180.dp else 140.dp).then(launchModifier),
