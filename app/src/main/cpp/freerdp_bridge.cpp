@@ -570,7 +570,8 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
         jstring proxyHost,
         jint proxyPort,
         jstring proxyUser,
-        jstring proxyPassword) {
+        jstring proxyPassword,
+        jboolean socksProxy) {
         
     if (!getenv("HOME")) {
         setenv("HOME", "/data/data/com.farside.workspace/files", 1);
@@ -710,7 +711,8 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
         const char* proxy_host = env->GetStringUTFChars(proxyHost, nullptr);
         const char* proxy_user = proxyUser ? env->GetStringUTFChars(proxyUser, nullptr) : nullptr;
         const char* proxy_pass = proxyPassword ? env->GetStringUTFChars(proxyPassword, nullptr) : nullptr;
-        freerdp_settings_set_uint32(instance->context->settings, FreeRDP_ProxyType, PROXY_TYPE_HTTP);
+        freerdp_settings_set_uint32(instance->context->settings, FreeRDP_ProxyType,
+                                    socksProxy ? PROXY_TYPE_SOCKS : PROXY_TYPE_HTTP);
         freerdp_settings_set_string(instance->context->settings, FreeRDP_ProxyHostname, proxy_host);
         freerdp_settings_set_uint16(instance->context->settings, FreeRDP_ProxyPort, static_cast<UINT16>(proxyPort));
         if (proxy_user) freerdp_settings_set_string(instance->context->settings, FreeRDP_ProxyUsername, proxy_user);

@@ -49,7 +49,7 @@ internal class VncSessionConnection(
                 return@execute
             }
             if (instance == 0L) {
-                if (!profile.useCloudflare && profile.proxyType !in listOf(ProxyType.NONE, ProxyType.CLOUDFLARED, ProxyType.HTTP)) {
+                if (!profile.useCloudflare && profile.proxyType !in listOf(ProxyType.NONE, ProxyType.CLOUDFLARED, ProxyType.HTTP, ProxyType.SOCKS5)) {
                     next.release()
                     ended.set(true)
                     main.post { if (!closed.get()) {

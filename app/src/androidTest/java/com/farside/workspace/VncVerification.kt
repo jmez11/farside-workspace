@@ -474,6 +474,30 @@ internal class VncVerification(private val test: Instrumentation) {
         val image = android.graphics.SurfaceTexture(0).apply { setDefaultBufferSize(64, 48) }
         val surface = android.view.Surface(image)
         try {
+            Fixture(0).use { server -> Socks5Fixture(server.port).use { proxy ->
+                val profile = ConnectionProfile("vnc-socks-test", "VNC SOCKS5 test", ConnectionType.VNC,
+                    "127.0.0.1", server.port, "", "", proxyType = ProxyType.SOCKS5,
+                    proxyHost = "127.0.0.1", proxyPort = proxy.port,
+                    proxyUser = "proxy-fixture", proxyPass = "secret")
+                val bridge = VncBridge()
+                val instance = bridge.connect(profile.host, profile.port, "testpass", surface,
+                    httpProxy = profile)
+                try {
+                    check(instance != 0L && bridge.getDesktopWidth(instance) == 64)
+                    check(proxy.authenticated && proxy.destination == "127.0.0.1:${server.port}")
+                    record("PASS: standard VNC framebuffer through authenticated SOCKS5")
+                } finally { bridge.disconnect(instance) }
+            } }
+            Fixture(0).use { server -> Socks5Fixture(server.port).use { proxy ->
+                val profile = ConnectionProfile("vnc-socks-mac-test", "VNC SOCKS5 Mac test", ConnectionType.VNC,
+                    "127.0.0.1", server.port, "", "", proxyType = ProxyType.SOCKS5,
+                    proxyHost = "127.0.0.1", proxyPort = proxy.port,
+                    proxyUser = "proxy-fixture", proxyPass = "secret")
+                check(runCatching { VncBridge().connect(profile.host, profile.port, "testpass", surface,
+                    "fixture", VncAuthMode.MAC_USER, profile) }.exceptionOrNull() is VncAuthenticationException)
+                check(proxy.authenticated && proxy.destination == "127.0.0.1:${server.port}")
+                record("PASS: Mac VNC preauthentication reached server through SOCKS5")
+            } }
             Fixture(0).use { server -> HttpConnectFixture(server.port).use { proxy ->
                 val firstImage = android.graphics.SurfaceTexture(0).apply { setDefaultBufferSize(64, 48) }
                 val firstSurface = android.view.Surface(firstImage)

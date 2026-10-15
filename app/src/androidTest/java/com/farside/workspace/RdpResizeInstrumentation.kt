@@ -41,6 +41,7 @@ class RdpResizeInstrumentation : Instrumentation() {
     private var credentialDeletionOnly = false
     private var proxiesOnly = false
     private var rdpHttpLive = false
+    private var rdpSocksLive = false
     private var windowCapacityOnly = false
     private var windowLaunchOnly = false
     private var sshFeaturesOnly = false
@@ -85,6 +86,7 @@ class RdpResizeInstrumentation : Instrumentation() {
         credentialDeletionOnly = arguments?.getString("credentialDeletionOnly") == "true"
         proxiesOnly = arguments?.getString("proxiesOnly") == "true"
         rdpHttpLive = arguments?.getString("rdpHttpLive") == "true"
+        rdpSocksLive = arguments?.getString("rdpSocksLive") == "true"
         windowCapacityOnly = arguments?.getString("windowCapacityOnly") == "true"
         windowLaunchOnly = arguments?.getString("windowLaunchOnly") == "true"
         sshFeaturesOnly = arguments?.getString("sshFeaturesOnly") == "true"
@@ -204,12 +206,17 @@ class RdpResizeInstrumentation : Instrumentation() {
             }
             if (proxiesOnly) {
                 ProxyVerification(this).run()
-                results.putString("stream", "PASS: four proxy choices, RDP HTTP CONNECT, and unsupported proxy rejection without direct TCP fallback.\n")
+                results.putString("stream", "PASS: four proxy choices, RDP HTTP/SOCKS5, SSH SOCKS5 transport, and unsupported proxy rejection without direct TCP fallback.\n")
                 finish(0, results)
                 return
             }
             if (rdpHttpLive) {
                 results.putString("stream", ProxyVerification(this).runLiveRdp() + "\n")
+                finish(0, results)
+                return
+            }
+            if (rdpSocksLive) {
+                results.putString("stream", ProxyVerification(this).runLiveRdp(socks5 = true) + "\n")
                 finish(0, results)
                 return
             }

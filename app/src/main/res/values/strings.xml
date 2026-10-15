@@ -216,7 +216,9 @@
     <string name="finding_local_sessions">Finding local %1$s sessions...</string>
     <string name="proxy_connections_unavailable">%1$s connections are not available yet.</string>
     <string name="http_proxy_connect">Connect through this HTTP proxy.</string>
+    <string name="socks5_proxy_connect">Connect through this SOCKS5 proxy.</string>
     <string name="http_proxy_host_port_required">Enter an HTTP proxy host and a port from 1 to 65535.</string>
+    <string name="socks5_proxy_host_port_required">Enter a SOCKS5 proxy host and a port from 1 to 65535.</string>
     <string name="edit_named_item">Edit %1$s</string>
     <string name="delete_named_item">Delete %1$s</string>
     <string name="jump_route_preview">%1$s \u2192 via %2$s</string>

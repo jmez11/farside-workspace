@@ -7,6 +7,7 @@ import com.farside.workspace.data.VncAuthMode
 import com.farside.workspace.data.ConnectionProfile
 import com.farside.workspace.data.ProxyType
 import com.farside.workspace.ssh.openHttpConnectSocket
+import com.farside.workspace.ssh.openSocks5Socket
 import java.math.BigInteger
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -38,7 +39,7 @@ class VncBridge : DesktopSessionBridge {
         if (authMode == VncAuthMode.VNC_PASSWORD) {
             if (!(password.isNotEmpty() && password.toByteArray(Charsets.ISO_8859_1).size <= 8 && password.all { it.code in 1..255 }))
                 throw LocalizableException(R.string.vnc_password_latin1)
-            val fd = if (httpProxy?.proxyType == ProxyType.HTTP) detachSocket(openSocket(host, port, httpProxy)) else -1
+            val fd = if (httpProxy?.proxyType in listOf(ProxyType.HTTP, ProxyType.SOCKS5)) detachSocket(openSocket(host, port, httpProxy)) else -1
             active = nativeConnect(host.removeSurrounding("[", "]"), port, password.toByteArray(Charsets.ISO_8859_1), surface, fd)
         } else {
             require(username.isNotBlank() && password.isNotEmpty())
@@ -48,11 +49,14 @@ class VncBridge : DesktopSessionBridge {
         return active
     }
     private fun openSocket(host: String, port: Int, httpProxy: ConnectionProfile?): Socket {
-        if (httpProxy?.proxyType != ProxyType.HTTP) return Socket().apply { connect(InetSocketAddress(host, port), 5000) }
+        if (httpProxy == null || httpProxy.proxyType !in listOf(ProxyType.HTTP, ProxyType.SOCKS5))
+            return Socket().apply { connect(InetSocketAddress(host, port), 5000) }
         val proxyHost = httpProxy.proxyHost?.trim()?.takeIf { it.isNotEmpty() }
-            ?: throw LocalizableException(R.string.http_proxy_host_port_required)
+            ?: throw LocalizableException(if (httpProxy.proxyType == ProxyType.SOCKS5) R.string.socks5_proxy_host_port_required else R.string.http_proxy_host_port_required)
         val proxyPort = httpProxy.proxyPort?.takeIf { it in 1..65535 }
-            ?: throw LocalizableException(R.string.http_proxy_host_port_required)
+            ?: throw LocalizableException(if (httpProxy.proxyType == ProxyType.SOCKS5) R.string.socks5_proxy_host_port_required else R.string.http_proxy_host_port_required)
+        if (httpProxy.proxyType == ProxyType.SOCKS5) return openSocks5Socket(host.removeSurrounding("[", "]"), port,
+            proxyHost, proxyPort, httpProxy.proxyUser, httpProxy.proxyPass)
         return openHttpConnectSocket(host.removeSurrounding("[", "]"), port, proxyHost, proxyPort,
             httpProxy.proxyUser, httpProxy.proxyPass)
     }

@@ -88,6 +88,14 @@ endif()
 string(REPLACE "${quest_proxy_anchor}"
     "if (!is_ipv6_addr(hostname, hostLen) && !winpr_str_is_valid_urlN(hostname, hostLen))"
     quest_proxy_source "${quest_proxy_source}")
+set(quest_socks_anchor "if (!is_ipv6_addr(hostname, hostnlen) || !winpr_str_is_valid_urlN(hostname, hostnlen))")
+string(FIND "${quest_proxy_source}" "${quest_socks_anchor}" quest_socks_anchor_index)
+if(quest_socks_anchor_index EQUAL -1)
+    message(FATAL_ERROR "Upstream SOCKS5 proxy validation changed; recheck CONNECT target validation")
+endif()
+string(REPLACE "${quest_socks_anchor}"
+    "if (!is_ipv6_addr(hostname, hostnlen) && !winpr_str_is_valid_urlN(hostname, hostnlen))"
+    quest_proxy_source "${quest_proxy_source}")
 set(quest_proxy_auth_anchor "crypto_base64_encode_len(creds, size - 1, &b64len)")
 string(FIND "${quest_proxy_source}" "${quest_proxy_auth_anchor}" quest_proxy_auth_index)
 if(quest_proxy_auth_index EQUAL -1)

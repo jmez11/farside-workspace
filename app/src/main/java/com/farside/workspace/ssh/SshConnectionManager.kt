@@ -135,8 +135,8 @@ class SshConnectionManager private constructor(private val context: Context?, pr
                 if (via != null && (profile.useCloudflare || profile.proxyType == ProxyType.CLOUDFLARED)) {
                     onStatus(text(R.string.ssh_tunnel_ignored, "[Cloudflare tunnel ignored: this host is reached through a jump host]\r\n"))
                 }
-                if (via != null && profile.proxyType == ProxyType.HTTP) {
-                    throw IllegalArgumentException("HTTP proxy cannot be combined with an SSH jump host")
+                if (via != null && profile.proxyType in listOf(ProxyType.HTTP, ProxyType.SOCKS5)) {
+                    throw IllegalArgumentException("Connection proxy cannot be combined with an SSH jump host")
                 }
                 if (useCloudflared && context != null) {
                     onStatus(text(R.string.ssh_tunnel_starting, "[Starting Cloudflare Access SSH tunnel...]\r\n"))
@@ -162,13 +162,15 @@ class SshConnectionManager private constructor(private val context: Context?, pr
                 sshClient = ssh
                 ssh.addHostKeyVerifier(PromiscuousVerifier())
                 ssh.connectTimeout = 10_000
-                if (via == null && profile.proxyType == ProxyType.HTTP && !profile.useCloudflare) {
+                if (via == null && profile.proxyType in listOf(ProxyType.HTTP, ProxyType.SOCKS5) && !profile.useCloudflare) {
                     val proxyHost = profile.proxyHost?.trim()?.takeIf { it.isNotEmpty() }
-                        ?: throw com.farside.workspace.LocalizableException(R.string.http_proxy_host_port_required)
+                        ?: throw com.farside.workspace.LocalizableException(if (profile.proxyType == ProxyType.SOCKS5) R.string.socks5_proxy_host_port_required else R.string.http_proxy_host_port_required)
                     val proxyPort = profile.proxyPort?.takeIf { it in 1..65535 }
-                        ?: throw com.farside.workspace.LocalizableException(R.string.http_proxy_host_port_required)
-                    ssh.socketFactory = HttpConnectSocketFactory(proxyHost, proxyPort, profile.proxyUser, profile.proxyPass)
-                    onStatus("[Connecting through HTTP proxy $proxyHost:$proxyPort...]\r\n")
+                        ?: throw com.farside.workspace.LocalizableException(if (profile.proxyType == ProxyType.SOCKS5) R.string.socks5_proxy_host_port_required else R.string.http_proxy_host_port_required)
+                    ssh.socketFactory = if (profile.proxyType == ProxyType.SOCKS5)
+                        Socks5SocketFactory(proxyHost, proxyPort, profile.proxyUser, profile.proxyPass)
+                    else HttpConnectSocketFactory(proxyHost, proxyPort, profile.proxyUser, profile.proxyPass)
+                    onStatus("[Connecting through ${profile.proxyType} proxy $proxyHost:$proxyPort...]\r\n")
                 } else if (via == null && profile.proxyType !in listOf(ProxyType.NONE, ProxyType.CLOUDFLARED)) {
                     throw IllegalArgumentException(text(R.string.proxy_connection_not_supported,
                         "${profile.proxyType} proxy connections are not supported yet. Select None or Cloudflared.",
