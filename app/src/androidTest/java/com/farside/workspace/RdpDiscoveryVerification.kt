@@ -2,9 +2,14 @@ package com.farside.workspace
 
 import android.app.Instrumentation
 import com.farside.workspace.utils.NetworkScanner
+import com.farside.workspace.utils.DiscoveredHost
+import com.farside.workspace.data.ConnectionProfile
+import com.farside.workspace.data.ConnectionType
 import kotlinx.coroutines.runBlocking
 import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
+import java.net.InetSocketAddress
+import java.net.Socket
 
 class RdpDiscoveryVerification(private val instrumentation: Instrumentation) {
     private data class Entry(val name: String, val suffix: Int = 0, val flags: Int = 0x0400)
@@ -45,11 +50,19 @@ class RdpDiscoveryVerification(private val instrumentation: Instrumentation) {
         val error = response.copyOf().also { it[3] = 3 }
         check(NetworkScanner.parseNetBiosName(error) == null)
         val report = StringBuilder("PASS: group-first, computer-first, group-only, server fallback, service filtering, compressed names, truncation, transaction and response errors.\n")
+        check(DiscoveredHost("192.0.2.1", "Unknown PC", hostname = null).savedRdpHost() == "192.0.2.1")
         val hosts = NetworkScanner.scanLocalNetworkForRdp(instrumentation.targetContext)
         hosts.sortedBy { it.ip }.forEach { report.append("Discovered ${it.ip}: ${it.name}\n") }
         val found = hosts.singleOrNull { it.ip == "172.16.0.54" }
         check(found?.name == laptop.name) { "Live laptop discovery: $found" }
-        report.append("PASS: live laptop discovery uses its computer name.\n")
+        check(found.savedRdpHost() == laptop.name)
+        val profile = ConnectionProfile("discovery-fixture", "Discovered laptop", ConnectionType.RDP,
+            found.savedRdpHost(), user = "", pass = "")
+        check(ConnectionProfile.fromJson(profile.toJson()).host == laptop.name)
+        val endpoint = NetworkScanner.resolveRdpHost(instrumentation.targetContext, profile.host)
+        check(endpoint == found.ip) { "Saved hostname resolved to $endpoint, expected ${found.ip}" }
+        Socket().use { it.connect(InetSocketAddress(endpoint, 3389), 1000) }
+        report.append("PASS: saved hostname resolves to the discovered live RDP endpoint and accepts TCP/3389.\n")
         instrumentation.targetContext.cacheDir.resolve("rdp-discovery-results.txt").writeText(report.toString())
         report.toString()
     }

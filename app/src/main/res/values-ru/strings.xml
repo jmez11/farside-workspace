@@ -97,7 +97,6 @@
   <string name="pin_required">Требуется PIN</string>
   <string name="port_forwarding">Перенаправление портов</string>
   <string name="port_rdp_3389_ssh_22_vnc_5900">Порт (RDP 3389 / SSH 22 / VNC 5900)</string>
-  <string name="on_mac_enable_screen_sharing_then_enable_vnc_viewers_with_a_pass">На Mac: включите «Общий экран», затем разрешите программы просмотра VNC с паролем в настройках компьютера.</string>
   <string name="options_for_testing_sign_in_trust_store_prompts_and_permission_r">Параметры для тестирования входа, запросов хранилища доверия и повторных запросов разрешений.</string>
   <string name="proxy_hostname_or_ip">Имя хоста или IP прокси</string>
   <string name="proxy_password_optional">Пароль прокси (необязательно)</string>
@@ -128,7 +127,6 @@
   <string name="save_start_tunnel">Сохранить и запустить туннель</string>
   <string name="save_tunnel">Сохранить туннель</string>
   <string name="saved_credential_deleted">Сохранённые учётные данные были удалены. Выберите другие данные для этого подключения.</string>
-  <string name="screen_sharing">Общий экран</string>
   <string name="secures_credentials_with_require_pin_enabled">Защищает учётные данные при включённом требовании PIN</string>
   <string name="select_none_cloudflared_socks5_or_http_before_saving">Перед сохранением выберите «Нет», Cloudflared, SOCKS5 или HTTP.</string>
   <string name="settings">Настройки</string>
@@ -180,7 +178,6 @@
   <string name="private_key">Закрытый ключ</string>
   <string name="save_ssh_key">Сохранить SSH-ключ</string>
   <string name="unsupported_saved_proxy">Неподдерживаемый сохранённый прокси</string>
-  <string name="find_screen_sharing">Найти общий экран в этой LAN</string>
   <string name="find_local_pcs">Нажмите здесь, чтобы найти локальные ПК</string>
   <string name="select_screen_sharing_server">Выберите сервер общего экрана</string>
   <string name="select_discovered_pc">Выберите найденный ПК</string>
@@ -600,7 +597,6 @@
   <string name="vnc_auth_mode">Аутентификация</string>
   <string name="vnc_auth_password">Пароль VNC</string>
   <string name="vnc_auth_mac_user">Пользователь macOS</string>
-  <string name="vnc_mac_user_hint">На Mac: включите «Общий экран» и разрешите доступ этому пользователю macOS.</string>
   <string name="vnc_mac_credential_required">Выберите сохранённые учётные данные с именем пользователя и паролем macOS.</string>
   <string name="vnc_mac_auth_failed">Не удалось выполнить проверку подлинности Mac. Проверьте имя пользователя и пароль.</string>
   <string name="vnc_sftp_pair">Связать профиль SSH для доступа к файлам</string>

@@ -77,6 +77,7 @@ internal class RdpCameraVerification(private val test: RdpResizeInstrumentation,
             "recording-ui" -> verifyRecordingUi()
             "muted-ui" -> verifyMutedUi()
             "capabilities" -> verifyCapabilities()
+            "host-status" -> verifyHostStatus()
             "live-laptop" -> verifyLiveLaptop()
             "live-nucbox", "live-chart" -> {
                 for (camera in target?.let { listOf(it) } ?: listOf("virtual", "passthrough"))
@@ -280,6 +281,36 @@ internal class RdpCameraVerification(private val test: RdpResizeInstrumentation,
         check(CameraResolution.entries.none { test.targetContext.getString(it.labelResId) == "1080p" })
     }
 
+    private fun verifyHostStatus() {
+        val profile = checkNotNull(ProfileManager(test.targetContext).getProfiles().firstOrNull {
+            it.name.equals(profileName ?: "NUCBOX", ignoreCase = true) && it.type == ConnectionType.RDP
+        }) { "Camera host profile missing" }
+        val activity = test.startActivitySync(Intent(test.targetContext, SessionActivity::class.java)
+            .putExtra("profileId", profile.id).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as SessionActivity
+        val report = StringBuilder("profile=${profile.name} cameraEnabled=${profile.enableCamera} " +
+            "hostReportUnsupported=${RdpHostCapabilities(test.targetContext).cameraUnsupported(profile.host)}\n")
+        try {
+            val deadline = SystemClock.uptimeMillis() + 20000
+            while (activity.rdpInstance == 0L && SystemClock.uptimeMillis() < deadline) Thread.sleep(200)
+            check(activity.rdpInstance != 0L) { "Camera host did not connect" }
+            val start = SystemClock.uptimeMillis()
+            var channelSeen = false
+            repeat(48) {
+                val instance = activity.rdpInstance
+                val channelConnected = activity.rdpBridge?.isCameraChannelConnected(instance) == true
+                channelSeen = channelSeen || channelConnected
+                report.append("t=${SystemClock.uptimeMillis() - start}ms " +
+                    "channelConnected=$channelConnected " +
+                    "recording=${activity.rdpBridge?.isCameraRecording(instance)}\n")
+                Thread.sleep(250)
+            }
+            check(channelSeen) { "NUCBOX did not open an RDPECAM channel" }
+        } finally {
+            test.targetContext.cacheDir.resolve("rdp-camera-host-status.txt").writeText(report.toString())
+            test.runOnMainSync { activity.finish() }
+        }
+    }
+
     private fun verifyLiveLaptop() {
         val profiles = ProfileManager(test.targetContext).getProfiles()
         val laptop = checkNotNull(profiles.firstOrNull { it.host.contains("172.16.0.54") || it.name.contains("LAPTOP", ignoreCase = true) }) {
@@ -296,15 +327,18 @@ internal class RdpCameraVerification(private val test: RdpResizeInstrumentation,
         check(instance != 0L) { "Failed to connect to laptop" }
         try {
             val deadline = SystemClock.uptimeMillis() + 6000
-            var unsupported = false
+            var channelConnected = false
             while (SystemClock.uptimeMillis() < deadline) {
-                if (bridge.isCameraUnsupported(instance)) {
-                    unsupported = true
+                if (bridge.isCameraChannelConnected(instance)) {
+                    channelConnected = true
                     break
                 }
                 Thread.sleep(200)
             }
-            check(unsupported) { "LAPTOP should report camera unsupported after connect" }
+            check(!channelConnected) { "LAPTOP unexpectedly opened an RDPECAM channel" }
+            check(RdpHostCapabilities(test.targetContext).cameraUnsupported(laptop.host)) {
+                "Verified host diagnostic should identify the laptop's camera limitation"
+            }
         } finally {
             bridge.disconnect(instance)
         }
@@ -526,7 +560,7 @@ internal class RdpCameraVerification(private val test: RdpResizeInstrumentation,
                     check(failures == 0) { "Camera color/geometry corrupted in $failures/${frames.size} frames: $output" }
                     if (isolation) check(blackFrames in 6..10) { "Own mute produced $blackFrames blackout frames, expected about eight" }
                 }
-                check(!bridge.isCameraUnsupported(session.rdpInstance))
+                check(bridge.isCameraChannelConnected(session.rdpInstance))
                 val stopDeadline = SystemClock.uptimeMillis() + 10000
                 while (bridge.isCameraRecording(session.rdpInstance) && SystemClock.uptimeMillis() < stopDeadline)
                     Thread.sleep(200)

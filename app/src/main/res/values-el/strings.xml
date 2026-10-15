@@ -97,7 +97,6 @@
   <string name="pin_required">Απαιτείται PIN</string>
   <string name="port_forwarding">Προώθηση θυρών</string>
   <string name="port_rdp_3389_ssh_22_vnc_5900">Θύρα (RDP 3389 / SSH 22 / VNC 5900)</string>
-  <string name="on_mac_enable_screen_sharing_then_enable_vnc_viewers_with_a_pass">Σε Mac: ενεργοποιήστε την Κοινή χρήση οθόνης και, στη συνέχεια, ενεργοποιήστε προγράμματα προβολής VNC με κωδικό πρόσβασης στις Ρυθμίσεις υπολογιστή.</string>
   <string name="options_for_testing_sign_in_trust_store_prompts_and_permission_r">Επιλογές για δοκιμή σύνδεσης, προτροπών αποθήκης αξιοπιστίας και επαναληπτικών αιτημάτων άδειας.</string>
   <string name="proxy_hostname_or_ip">Όνομα κεντρικού υπολογιστή ή IP διαμεσολαβητή</string>
   <string name="proxy_password_optional">Κωδικός πρόσβασης διαμεσολαβητή (προαιρετικός)</string>
@@ -128,7 +127,6 @@
   <string name="save_start_tunnel">Αποθήκευση &amp; έναρξη σήραγγας</string>
   <string name="save_tunnel">Αποθήκευση σήραγγας</string>
   <string name="saved_credential_deleted">Τα αποθηκευμένα διαπιστευτήρια διαγράφηκαν. Επιλέξτε άλλα διαπιστευτήρια για αυτήν τη σύνδεση.</string>
-  <string name="screen_sharing">Κοινή χρήση οθόνης</string>
   <string name="secures_credentials_with_require_pin_enabled">Ασφαλίζει τα διαπιστευτήρια με ενεργοποιημένη την απαίτηση PIN</string>
   <string name="select_none_cloudflared_socks5_or_http_before_saving">Επιλέξτε Καμία, Cloudflared, SOCKS5 ή HTTP πριν από την αποθήκευση.</string>
   <string name="settings">Ρυθμίσεις</string>
@@ -180,7 +178,6 @@
   <string name="private_key">Ιδιωτικό κλειδί</string>
   <string name="save_ssh_key">Αποθήκευση κλειδιού SSH</string>
   <string name="unsupported_saved_proxy">Μη υποστηριζόμενος αποθηκευμένος διαμεσολαβητής</string>
-  <string name="find_screen_sharing">Εύρεση Κοινής χρήσης οθόνης σε αυτό το LAN</string>
   <string name="find_local_pcs">Κάντε κλικ εδώ για Εύρεση τοπικών υπολογιστών</string>
   <string name="select_screen_sharing_server">Επιλογή διακομιστή Κοινής χρήσης οθόνης</string>
   <string name="select_discovered_pc">Επιλογή υπολογιστή που εντοπίστηκε</string>
@@ -600,7 +597,6 @@
   <string name="vnc_auth_mode">Έλεγχος ταυτότητας</string>
   <string name="vnc_auth_password">Κωδικός VNC</string>
   <string name="vnc_auth_mac_user">Χρήστης macOS</string>
-  <string name="vnc_mac_user_hint">Σε Mac: ενεργοποιήστε την Κοινή χρήση οθόνης και επιτρέψτε την πρόσβαση σε αυτόν τον χρήστη macOS.</string>
   <string name="vnc_mac_credential_required">Επιλέξτε αποθηκευμένα διαπιστευτήρια με όνομα χρήστη και κωδικό macOS.</string>
   <string name="vnc_mac_auth_failed">Ο έλεγχος ταυτότητας Mac απέτυχε. Ελέγξτε το όνομα χρήστη και τον κωδικό.</string>
   <string name="vnc_sftp_pair">Σύζευξη προφίλ SSH για πρόσβαση σε αρχεία</string>

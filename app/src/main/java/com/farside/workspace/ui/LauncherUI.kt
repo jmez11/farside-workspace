@@ -7,6 +7,13 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.verticalScroll
@@ -101,6 +108,7 @@ fun LauncherScreen(
     var settingsInitialTab by rememberSaveable { mutableStateOf(0) }
     var credentialRevision by remember { mutableIntStateOf(0) }
     var reordering by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(profiles.size) { if (profiles.size < 2) reordering = false }
     val dragView = LocalView.current
     val context = LocalContext.current
     val windowManagerAvailable = remember(context) { QuestWindowManager.isAvailable(context) }
@@ -144,7 +152,27 @@ fun LauncherScreen(
                         modifier = Modifier.weight(1f), textAlign = TextAlign.Center,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                     CardActionTooltip(stringResource(R.string.add_connection)) {
-                        IconButton(onClick = { isAdding = true }) {
+                        val interaction = remember { MutableInteractionSource() }
+                        val hovered by interaction.collectIsHoveredAsState()
+                        val pulseColor = if (profiles.isEmpty()) {
+                            val pulse = rememberInfiniteTransition(label = "Add connection pulse")
+                            val intensity by pulse.animateFloat(
+                                initialValue = 0f,
+                                targetValue = 1f,
+                                animationSpec = infiniteRepeatable(
+                                    animation = tween(durationMillis = 1800),
+                                    repeatMode = RepeatMode.Reverse
+                                ), label = "Add connection button color"
+                            )
+                            Color.White.copy(alpha = 0.12f * intensity)
+                        } else Color.Transparent
+                        IconButton(
+                            onClick = { isAdding = true },
+                            interactionSource = interaction,
+                            colors = IconButtonDefaults.iconButtonColors(
+                                containerColor = if (hovered) Color.Transparent else pulseColor
+                            )
+                        ) {
                             Icon(Icons.Default.Add, contentDescription = stringResource(R.string.add_connection), tint = Color.White)
                         }
                     }
@@ -155,9 +183,11 @@ fun LauncherScreen(
                             }
                         }
                     }
-                    CardActionTooltip(stringResource(R.string.sftp_browser)) {
-                        IconButton(onClick = { filesOpen = true }) {
-                            Icon(androidx.compose.material.icons.Icons.Default.Folder, contentDescription = stringResource(R.string.files), tint = Color.White)
+                    if (profiles.any { it.type == ConnectionType.SSH && it.enableSftp }) {
+                        CardActionTooltip(stringResource(R.string.sftp_browser)) {
+                            IconButton(onClick = { filesOpen = true }) {
+                                Icon(androidx.compose.material.icons.Icons.Default.Folder, contentDescription = stringResource(R.string.files), tint = Color.White)
+                            }
                         }
                     }
                     CardActionTooltip(stringResource(R.string.settings)) {
@@ -172,18 +202,22 @@ fun LauncherScreen(
                     }
                     }
                 }
-                Spacer(modifier = Modifier.height(24.dp))
-                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Text(if (reordering) stringResource(R.string.reorder_hint)
-                        else stringResource(R.string.open_or_place_hint),
-                        style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                    OutlinedButton(onClick = { reordering = !reordering }, enabled = profiles.size > 1 || reordering) {
-                        Text(if (reordering) stringResource(R.string.done_reordering) else stringResource(R.string.reorder))
+                if (profiles.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Text(if (reordering) stringResource(R.string.reorder_hint)
+                            else stringResource(R.string.open_or_place_hint),
+                            style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                        if (profiles.size > 1) {
+                            OutlinedButton(onClick = { reordering = !reordering }) {
+                                Text(if (reordering) stringResource(R.string.done_reordering) else stringResource(R.string.reorder))
+                            }
+                        }
                     }
+                    Spacer(Modifier.height(8.dp))
                 }
-                Spacer(Modifier.height(8.dp))
-                LauncherConnectionGrid(profiles = profiles, starredIds = starredIds, reordering = reordering,
+                LauncherConnectionGrid(profiles = profiles, starredIds = starredIds, reordering = reordering && profiles.size > 1,
                     modifier = Modifier.weight(1f), onEdit = { editingProfile = it }, onDelete = onDeleteProfile,
                     onConnect = onConnectProfile, onToggleStar = onToggleStar, onMove = onMoveProfile,
                     onCapture = onCaptureProfile)
@@ -1224,7 +1258,7 @@ fun AddProfileForm(
     }
     var savedSshKeyId by rememberSaveable { mutableStateOf(initialProfile?.sshKeyId ?: "") }
     var savedJumpHostId by rememberSaveable { mutableStateOf(initialProfile?.jumpHostProfileId ?: "") }
-    var vncAuthMode by rememberSaveable { mutableStateOf(initialProfile?.vncAuthMode ?: com.farside.workspace.data.VncAuthMode.VNC_PASSWORD) }
+    var vncAuthMode by rememberSaveable { mutableStateOf(initialProfile?.vncAuthMode ?: com.farside.workspace.data.VncAuthMode.MAC_USER) }
     var sftpPairProfileId by rememberSaveable { mutableStateOf(initialProfile?.sftpPairProfileId ?: "") }
     
     var remoteApp by rememberSaveable { mutableStateOf(initialProfile?.remoteApp ?: "") }
@@ -1248,7 +1282,7 @@ fun AddProfileForm(
     // RDP Specific Options
     var soundRedirection by rememberSaveable { mutableStateOf(initialProfile?.soundRedirection ?: com.farside.workspace.data.SoundRedirection.PLAY_ON_DEVICE) }
     var redirectMicrophone by rememberSaveable {
-        mutableStateOf((initialProfile?.redirectMicrophone ?: true) && com.farside.workspace.hasMicrophonePermission(context))
+        mutableStateOf((initialProfile?.redirectMicrophone ?: false) && com.farside.workspace.hasMicrophonePermission(context))
     }
     val microphonePermission = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
@@ -1416,14 +1450,10 @@ fun AddProfileForm(
                 SettingsTextField(name, { name = it }, stringResource(R.string.enter_display_name))
 
                 if (type == ConnectionType.VNC) {
-                    SettingsHeader(stringResource(R.string.screen_sharing))
-                    Text(stringResource(if (vncAuthMode == com.farside.workspace.data.VncAuthMode.MAC_USER)
-                        R.string.vnc_mac_user_hint else R.string.on_mac_enable_screen_sharing_then_enable_vnc_viewers_with_a_pass),
-                        color = Color.LightGray, modifier = Modifier.padding(horizontal = 16.dp), fontSize = 13.sp)
                     SettingsHeader(stringResource(R.string.vnc_auth_mode))
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-                        listOf(com.farside.workspace.data.VncAuthMode.VNC_PASSWORD to R.string.vnc_auth_password,
-                            com.farside.workspace.data.VncAuthMode.MAC_USER to R.string.vnc_auth_mac_user).forEach { (mode, label) ->
+                        listOf(com.farside.workspace.data.VncAuthMode.MAC_USER to R.string.vnc_auth_mac_user,
+                            com.farside.workspace.data.VncAuthMode.VNC_PASSWORD to R.string.vnc_auth_password).forEach { (mode, label) ->
                             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f).clickable { vncAuthMode = mode }) {
                                 RadioButton(selected = vncAuthMode == mode, onClick = { vncAuthMode = mode })
                                 Text(stringResource(label), color = Color.White)
@@ -1434,7 +1464,7 @@ fun AddProfileForm(
                 SettingsHeader(stringResource(R.string.host_server))
                 if (type == ConnectionType.RDP || type == ConnectionType.VNC) {
                     Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Button(enabled = !isScanning, onClick = {
+                        Button(enabled = !isScanning && (type != ConnectionType.VNC || vncAuthMode == com.farside.workspace.data.VncAuthMode.MAC_USER), onClick = {
                             val scanType = type
                             isScanning = true
                             coroutineScope.launch {
@@ -1449,7 +1479,10 @@ fun AddProfileForm(
                                 } finally { isScanning = false }
                             }
                         }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E88E5), contentColor = Color.White)) {
-                            Text(if (isScanning) stringResource(R.string.finding_local_sessions, stringResource(type.labelResId)) else if (type == ConnectionType.VNC) stringResource(R.string.find_screen_sharing) else stringResource(R.string.find_local_pcs))
+                            Text(if (isScanning && type == ConnectionType.VNC) stringResource(R.string.finding_local_macs)
+                                else if (isScanning) stringResource(R.string.finding_local_sessions, stringResource(type.labelResId))
+                                else if (type == ConnectionType.VNC) stringResource(R.string.find_local_macs)
+                                else stringResource(R.string.find_local_pcs))
                         }
                     }
                     if (discoveredHosts.isNotEmpty()) {
@@ -1479,7 +1512,7 @@ fun AddProfileForm(
                                             if (name.isEmpty() || name == "New Profile" || name == host) {
                                                 name = foundHost.name
                                             }
-                                            host = foundHost.ip
+                                            host = if (type == ConnectionType.RDP) foundHost.savedRdpHost() else foundHost.savedVncHost()
                                             port = foundHost.port.toString()
                                             expanded = false
                                         }

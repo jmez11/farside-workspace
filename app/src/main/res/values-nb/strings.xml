@@ -97,7 +97,6 @@
   <string name="pin_required">PIN kreves</string>
   <string name="port_forwarding">Portvideresending</string>
   <string name="port_rdp_3389_ssh_22_vnc_5900">Port (RDP 3389 / SSH 22 / VNC 5900)</string>
-  <string name="on_mac_enable_screen_sharing_then_enable_vnc_viewers_with_a_pass">På Mac: aktiver Skjermdeling, og aktiver deretter VNC-visere med et passord i Datamaskininnstillinger.</string>
   <string name="options_for_testing_sign_in_trust_store_prompts_and_permission_r">Alternativer for testing av pålogging, ledetekster fra klareringslageret og fornyede tillatelsesforespørsler.</string>
   <string name="proxy_hostname_or_ip">Proxyvertsnavn eller IP</string>
   <string name="proxy_password_optional">Proxypassord (valgfritt)</string>
@@ -128,7 +127,6 @@
   <string name="save_start_tunnel">Lagre &amp; start tunnel</string>
   <string name="save_tunnel">Lagre tunnel</string>
   <string name="saved_credential_deleted">Den lagrede påloggingsinformasjonen ble slettet. Velg en annen påloggingsinformasjon for denne tilkoblingen.</string>
-  <string name="screen_sharing">Skjermdeling</string>
   <string name="secures_credentials_with_require_pin_enabled">Sikrer påloggingsinformasjon når Krev PIN er aktivert</string>
   <string name="select_none_cloudflared_socks5_or_http_before_saving">Velg Ingen, Cloudflared, SOCKS5 eller HTTP før du lagrer.</string>
   <string name="settings">Innstillinger</string>
@@ -180,7 +178,6 @@
   <string name="private_key">Privat nøkkel</string>
   <string name="save_ssh_key">Lagre SSH-nøkkel</string>
   <string name="unsupported_saved_proxy">Lagret proxy støttes ikke</string>
-  <string name="find_screen_sharing">Finn skjermdeling på dette LAN-et</string>
   <string name="find_local_pcs">Klikk her for å finne lokale PC-er</string>
   <string name="select_screen_sharing_server">Velg skjermdelingsserver</string>
   <string name="select_discovered_pc">Velg oppdaget PC</string>
@@ -600,7 +597,6 @@
   <string name="vnc_auth_mode">Autentisering</string>
   <string name="vnc_auth_password">VNC-passord</string>
   <string name="vnc_auth_mac_user">macOS-bruker</string>
-  <string name="vnc_mac_user_hint">På Mac: aktiver Skjermdeling og gi denne macOS-brukeren tilgang til den.</string>
   <string name="vnc_mac_credential_required">Velg en lagret legitimasjon med et macOS-brukernavn og passord.</string>
   <string name="vnc_mac_auth_failed">Mac-autentisering mislyktes. Kontroller brukernavnet og passordet.</string>
   <string name="vnc_sftp_pair">Koble SSH-profil for filtilgang</string>

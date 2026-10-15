@@ -373,10 +373,8 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
     LaunchedEffect(rdpInstance) {
         while (rdpInstance != 0L) {
             cameraRecording = rdpBridge.isCameraRecording(rdpInstance)
-            if (cameraRecording) {
+            if (cameraRecording || rdpBridge.isCameraChannelConnected(rdpInstance)) {
                 cameraHostUnsupported = false
-            } else if (rdpBridge.isCameraUnsupported(rdpInstance)) {
-                cameraHostUnsupported = true
             }
             delay(100)
         }

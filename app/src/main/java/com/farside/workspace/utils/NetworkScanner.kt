@@ -13,7 +13,10 @@ import java.net.Socket
 import java.net.DatagramSocket
 import java.net.DatagramPacket
 
-data class DiscoveredHost(val ip: String, val name: String, val port: Int = 3389)
+data class DiscoveredHost(val ip: String, val name: String, val port: Int = 3389, val hostname: String? = null) {
+    fun savedRdpHost(): String = hostname ?: ip
+    fun savedVncHost(): String = name
+}
 
 object NetworkScanner {
     /** Only Screen-Sharing-enabled Macs advertise _rfb._tcp. mDNS is link-local:
@@ -95,10 +98,11 @@ object NetworkScanner {
                             resolvedName = netbios
                         }
                     }
-                    val finalName = if (resolvedName == host || resolvedName.isBlank()) context.getString(com.farside.workspace.R.string.unknown_pc, host) else resolvedName
+                    val hostname = resolvedName.takeUnless { it == host || it.isBlank() }
+                    val finalName = hostname ?: context.getString(com.farside.workspace.R.string.unknown_pc, host)
                     
                     synchronized(activeHosts) {
-                        activeHosts.add(DiscoveredHost(ip = host, name = finalName))
+                        activeHosts.add(DiscoveredHost(ip = host, name = finalName, hostname = hostname))
                     }
                 } catch (e: Exception) {
                     // Timeout or unreachable
@@ -107,6 +111,24 @@ object NetworkScanner {
         }
         jobs.awaitAll()
         activeHosts.toList()
+    }
+
+    /** Android DNS does not resolve Windows NetBIOS names on this Quest. Rediscover them so
+     * a saved computer name still follows a changed DHCP address. */
+    suspend fun resolveRdpHost(context: Context, hostname: String): String {
+        if (runCatching { InetAddress.getByName(hostname) }.isSuccess) return hostname
+        return scanLocalNetworkForRdp(context).firstOrNull {
+            it.hostname.equals(hostname, ignoreCase = true)
+        }?.ip ?: hostname
+    }
+
+    /** Bonjour service names are display names, not DNS hostnames; browse the service again
+     * at connect time to follow its current address. */
+    suspend fun resolveVncHost(context: Context, serviceName: String, port: Int): String {
+        if (runCatching { InetAddress.getByName(serviceName) }.isSuccess) return serviceName
+        return scanLocalNetworkForVnc(context).firstOrNull {
+            it.name == serviceName && it.port == port
+        }?.ip ?: serviceName
     }
 
     private fun getLocalIpAddress(): String {

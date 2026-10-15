@@ -97,7 +97,6 @@
   <string name="pin_required">需要 PIN</string>
   <string name="port_forwarding">端口轉發</string>
   <string name="port_rdp_3389_ssh_22_vnc_5900">端口（RDP 3389 / SSH 22 / VNC 5900）</string>
-  <string name="on_mac_enable_screen_sharing_then_enable_vnc_viewers_with_a_pass">在 Mac 上：啟用螢幕共享，然後在「電腦設定」中允許 VNC 檢視器使用密碼。</string>
   <string name="options_for_testing_sign_in_trust_store_prompts_and_permission_r">用於測試登入、信任存放區提示及權限重新要求的選項。</string>
   <string name="proxy_hostname_or_ip">代理主機名稱或 IP</string>
   <string name="proxy_password_optional">代理密碼（選填）</string>
@@ -128,7 +127,6 @@
   <string name="save_start_tunnel">儲存並啟動隧道</string>
   <string name="save_tunnel">儲存隧道</string>
   <string name="saved_credential_deleted">已儲存的憑證已被刪除。請為此連接選擇另一個憑證。</string>
-  <string name="screen_sharing">屏幕分享</string>
   <string name="secures_credentials_with_require_pin_enabled">使用已啟用的「需要 PIN」保護憑證</string>
   <string name="select_none_cloudflared_socks5_or_http_before_saving">儲存前請選擇「無」、Cloudflared、SOCKS5 或 HTTP。</string>
   <string name="settings">設定</string>
@@ -180,7 +178,6 @@
   <string name="private_key">私人密鑰</string>
   <string name="save_ssh_key">儲存 SSH 密鑰</string>
   <string name="unsupported_saved_proxy">不支援的已儲存代理</string>
-  <string name="find_screen_sharing">在此 LAN 上尋找屏幕分享</string>
   <string name="find_local_pcs">點按此處以尋找本機電腦</string>
   <string name="select_screen_sharing_server">選擇屏幕分享伺服器</string>
   <string name="select_discovered_pc">選擇已探索到的電腦</string>
@@ -600,7 +597,6 @@
   <string name="vnc_auth_mode">驗證</string>
   <string name="vnc_auth_password">VNC 密碼</string>
   <string name="vnc_auth_mac_user">macOS 使用者</string>
-  <string name="vnc_mac_user_hint">在 Mac 上：啟用螢幕共享，並允許此 macOS 使用者存取。</string>
   <string name="vnc_mac_credential_required">選擇包含 macOS 使用者名稱和密碼的已儲存認證。</string>
   <string name="vnc_mac_auth_failed">Mac 驗證失敗。請檢查使用者名稱和密碼。</string>
   <string name="vnc_sftp_pair">配對用於檔案存取的 SSH 設定檔</string>

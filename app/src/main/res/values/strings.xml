@@ -98,7 +98,6 @@
     <string name="pin_required">PIN required</string>
     <string name="port_forwarding">Port forwarding</string>
     <string name="port_rdp_3389_ssh_22_vnc_5900">Port (RDP 3389 / SSH 22 / VNC 5900)</string>
-    <string name="on_mac_enable_screen_sharing_then_enable_vnc_viewers_with_a_pass">On Mac: enable Screen Sharing, then enable VNC viewers with a password in Computer Settings.</string>
     <string name="options_for_testing_sign_in_trust_store_prompts_and_permission_r">Options for testing sign-in, trust store prompts and permission re-requests.</string>
     <string name="proxy_hostname_or_ip">Proxy Hostname or IP</string>
     <string name="proxy_password_optional">Proxy Password (Optional)</string>
@@ -129,7 +128,6 @@
     <string name="save_start_tunnel">Save &amp; start tunnel</string>
     <string name="save_tunnel">Save tunnel</string>
     <string name="saved_credential_deleted">Saved credential was deleted. Choose another credential for this connection.</string>
-    <string name="screen_sharing">Screen Sharing</string>
     <string name="secures_credentials_with_require_pin_enabled">Secures credentials with Require PIN enabled</string>
     <string name="select_none_cloudflared_socks5_or_http_before_saving">Select None, Cloudflared, SOCKS5 or HTTP before saving.</string>
     <string name="settings">Settings</string>
@@ -181,8 +179,9 @@
     <string name="private_key">Private Key</string>
     <string name="save_ssh_key">Save SSH Key</string>
     <string name="unsupported_saved_proxy">Unsupported saved proxy</string>
-    <string name="find_screen_sharing">Find Screen Sharing on this LAN</string>
-    <string name="find_local_pcs">Click here to Find Local PCs</string>
+    <string name="find_local_macs">Click here to find local Macs</string>
+    <string name="finding_local_macs">Finding local Macs...</string>
+    <string name="find_local_pcs">Click here to find local PCs</string>
     <string name="select_screen_sharing_server">Select Screen Sharing server</string>
     <string name="select_discovered_pc">Select Discovered PC</string>
     <string name="vnc_password_credential">VNC Password Credential</string>
@@ -608,7 +607,6 @@
     <string name="vnc_auth_mode">Authentication</string>
     <string name="vnc_auth_password">VNC password</string>
     <string name="vnc_auth_mac_user">macOS user</string>
-    <string name="vnc_mac_user_hint">On Mac: enable Screen Sharing and allow this macOS user to access it.</string>
     <string name="vnc_mac_credential_required">Select a saved credential with a macOS username and password.</string>
     <string name="vnc_mac_auth_failed">Mac authentication failed. Check the username and password.</string>
     <string name="vnc_sftp_pair">Pair SSH profile for file access</string>

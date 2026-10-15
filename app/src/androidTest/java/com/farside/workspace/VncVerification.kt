@@ -165,8 +165,8 @@ internal class VncVerification(private val test: Instrumentation) {
                     val found = runBlocking { NetworkScanner.scanLocalNetworkForVnc(test.targetContext) }
                     val host = found.single { it.ip == profile.host && it.port == profile.port }
                     profile = chooseService(profile.copy(host = "", port = 5900), host.name)
-                    check(profile.host == host.ip && profile.port == host.port)
-                    record("PASS: real Mac ${host.name} selected in actual VNC picker; host/port saved with existing encrypted credential link")
+                    check(profile.host == host.name && profile.port == host.port)
+                    record("PASS: real Mac ${host.name} selected in actual VNC picker; Bonjour name/port saved with existing encrypted credential link")
                 }
                 val loginPassword = if (mode == "macLogin") ProfileManager(test.targetContext).getCredentials()
                     .single { it.id == profile.credentialId }.pass else if (mode == "login") requireNotNull(password) else null
@@ -602,9 +602,12 @@ internal class VncVerification(private val test: Instrumentation) {
                 }
             } }
             Thread.sleep(800)
-            click("Find Screen Sharing on this LAN")
+            click("macOS user")
+            click("Click here to find local Macs")
+            await("Mac scan progress did not say Macs") { nodes().any { it.text?.toString() == "Finding local Macs..." } }
             click("Select Screen Sharing server")
             click(serviceName)
+            click("VNC password")
             click("SAVE")
             val profile = checkNotNull(saved.get())
             check(profile.type == ConnectionType.VNC && profile.credentialId == initial.credentialId)
@@ -633,9 +636,12 @@ internal class VncVerification(private val test: Instrumentation) {
             check(found.any { it.name == serviceName && it.port == server.port && it.ip.isNotBlank() }) { "NSD service did not resolve: $found" }
             val profile = chooseService(ConnectionProfile("vnc-verification-profile", "", ConnectionType.VNC,
                 "", 5900, "", "", credentialId = credentialId), serviceName)
-            check(profile.name == serviceName && profile.port == server.port)
+            check(profile.name == serviceName && profile.host == serviceName && profile.port == server.port)
+            check(ConnectionProfile.fromJson(profile.toJson()).host == serviceName)
+            val endpoint = runBlocking { NetworkScanner.resolveVncHost(test.targetContext, profile.host, profile.port) }
+            check(endpoint == found.single { it.name == serviceName }.ip)
             session(profile, server)
-            record("PASS: real NSD fixture resolved and selected in actual profile picker; Bonjour name/host/port and saved credential produce working VNC session (not a Mac)")
+            record("PASS: real NSD fixture selected in actual profile picker; saved Bonjour name resolves again and produces working VNC session (not a Mac)")
         } finally { nsd.unregisterService(listener); server.close() }
         check(unregistered.await(5, TimeUnit.SECONDS))
         val absent = runBlocking { NetworkScanner.scanLocalNetworkForVnc(test.targetContext) }

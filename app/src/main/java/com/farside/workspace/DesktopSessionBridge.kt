@@ -17,7 +17,7 @@ interface DesktopSessionBridge {
     fun isMicrophoneRecording(instance: Long): Boolean = false
     fun setCameraMuted(instance: Long, muted: Boolean) {}
     fun isCameraRecording(instance: Long): Boolean = false
-    fun isCameraUnsupported(instance: Long): Boolean = false
+    fun isCameraChannelConnected(instance: Long): Boolean = false
 }
 
 internal interface DesktopSessionConnection {

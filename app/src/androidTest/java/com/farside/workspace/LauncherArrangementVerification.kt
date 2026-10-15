@@ -74,7 +74,11 @@ internal class LauncherArrangementVerification(private val test: Instrumentation
         }
         val fixture = ('A'..'F').map { letter -> ConnectionProfile(letter.toString(), "Fixture $letter",
             if (letter == 'F') ConnectionType.SSH else ConnectionType.RDP, "127.0.0.1", 1, "", "") }
-            .map { if (it.id == "A") it.copy(cardBackground = backgroundFile.name) else it }
+            .map { when (it.id) {
+                "A" -> it.copy(cardBackground = backgroundFile.name)
+                "F" -> it.copy(enableSftp = true)
+                else -> it
+            } }
         check(ConnectionProfile.fromJson(fixture[0].copy(cardBackground = "fixture.jpg").toJson()).cardBackground == "fixture.jpg")
         fun ids(profiles: List<ConnectionProfile> = fixture) = LauncherArrangementStore(context, preferenceName).load().arrange(profiles).map { it.id }
         check(ids() == listOf("A", "B", "C", "D", "E", "F"))
@@ -145,7 +149,7 @@ internal class LauncherArrangementVerification(private val test: Instrumentation
             hover("Add Connection")
             click("Add Connection")
             find("Mac/VNC")
-            find("Click here to Find Local PCs")
+            find("Click here to find local PCs")
             val addFormImage = Bitmap.createBitmap(activity.window.decorView.width,
                 activity.window.decorView.height, Bitmap.Config.ARGB_8888)
             val addFormCopied = CountDownLatch(1)
@@ -175,6 +179,8 @@ internal class LauncherArrangementVerification(private val test: Instrumentation
                 scrollTo(label, AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
                 click(label)
             }
+            scrollTo("Redirect Microphone", AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+            check(!find("Redirect Microphone").isChecked) { "New RDP profile should default microphone redirection off" }
             check(!reconnectChecked())
             click("Reconnect Automatically")
             check(reconnectChecked())
@@ -182,6 +188,15 @@ internal class LauncherArrangementVerification(private val test: Instrumentation
             check(reconnectChecked()) { "SSH profile form lost Reconnect Automatically" }
             selectType("Mac/VNC")
             check(reconnectChecked()) { "Mac/VNC profile form lost Reconnect Automatically" }
+            scrollTo("Click here to find local Macs", AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
+            fun macDiscoveryEnabled() = generateSequence(find("Click here to find local Macs")) { it.parent }.all { it.isEnabled }
+            check(macDiscoveryEnabled()) { "Mac discovery should default to macOS user authentication" }
+            check(bounds("macOS user").centerX() < bounds("VNC password").centerX()) { "macOS user should be left of VNC password" }
+            click("VNC password")
+            check(!macDiscoveryEnabled()) { "Mac discovery should disable for VNC password" }
+            click("macOS user")
+            check(macDiscoveryEnabled()) { "Mac discovery should re-enable for macOS user" }
+            scrollTo("Reconnect Automatically", AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
             click("Reconnect Automatically")
             check(!reconnectChecked())
             scrollTo("Close", AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
@@ -369,7 +384,98 @@ internal class LauncherArrangementVerification(private val test: Instrumentation
             if (QuestWindowManager.isAvailable(context)) {
                 click("Window Manager")
             }
-            return "click with jitter, star touch without launch, persisted starred-first order, reorder buttons/grid drag, group boundaries, return to normal click and edge scrolling with 46 connections"
+            test.runOnMainSync {
+                activity.setContent {
+                    MaterialTheme(colorScheme = darkColorScheme()) {
+                        Surface(color = MaterialTheme.colorScheme.background) {
+                            LauncherScreen(profiles = emptyList(), onAddProfile = {}, onDeleteProfile = {},
+                                onConnectProfile = {}, profileManager = ProfileManager(context))
+                        }
+                    }
+                }
+            }
+            find("Add Connection")
+            fun launcherNodes(): List<AccessibilityNodeInfo> {
+                val origin = IntArray(2).also { activity.window.decorView.getLocationOnScreen(it) }
+                val window = Rect(origin[0], origin[1], origin[0] + activity.window.decorView.width,
+                    origin[1] + activity.window.decorView.height)
+                return nodes().filter { node ->
+                    val bounds = Rect().also { node.getBoundsInScreen(it) }
+                    window.contains(bounds.centerX(), bounds.centerY())
+                }
+            }
+            fun hasEmptyStateControls() = launcherNodes().any { it.text?.toString() == "Click to open, or drag into space to place a window." ||
+                it.text?.toString() == "Reorder" || it.contentDescription?.toString() == "Files" }
+            var emptyWaits = 0
+            while (hasEmptyStateControls() && emptyWaits++ < 40) Thread.sleep(50)
+            check(!hasEmptyStateControls()) {
+                "Empty launcher shows connection controls or Files"
+            }
+            val addButton = generateSequence(find("Add Connection")) { it.parent }.first { it.isClickable }
+            val buttonRect = Rect().also { addButton.getBoundsInScreen(it) }
+            val decorOrigin = IntArray(2).also { activity.window.decorView.getLocationOnScreen(it) }
+            buttonRect.offset(-decorOrigin[0], -decorOrigin[1])
+            fun captureEmpty(): Bitmap {
+                val image = Bitmap.createBitmap(activity.window.decorView.width,
+                    activity.window.decorView.height, Bitmap.Config.ARGB_8888)
+                val copied = CountDownLatch(1)
+                var result = -1
+                test.runOnMainSync { PixelCopy.request(activity.window, image,
+                    { result = it; copied.countDown() }, Handler(Looper.getMainLooper())) }
+                check(copied.await(5, TimeUnit.SECONDS) && result == PixelCopy.SUCCESS)
+                return image
+            }
+            Thread.sleep(400)
+            val firstPulse = captureEmpty()
+            Thread.sleep(900)
+            val secondPulse = captureEmpty()
+            var changedPixels = 0
+            for (y in buttonRect.top.coerceAtLeast(0) until buttonRect.bottom.coerceAtMost(firstPulse.height)) {
+                for (x in buttonRect.left.coerceAtLeast(0) until buttonRect.right.coerceAtMost(firstPulse.width)) {
+                    if (firstPulse.getPixel(x, y) != secondPulse.getPixel(x, y)) changedPixels++
+                }
+            }
+            check(changedPixels > 20) { "Add Connection circle color did not pulse in the empty launcher: $changedPixels changed pixels" }
+            File(context.cacheDir, "launcher-empty-pulse.png").outputStream().use {
+                secondPulse.compress(Bitmap.CompressFormat.PNG, 100, it)
+            }
+            firstPulse.recycle()
+            secondPulse.recycle()
+            hover("Add Connection")
+            val firstHover = captureEmpty()
+            Thread.sleep(900)
+            val secondHover = captureEmpty()
+            var changedHoverPixels = 0
+            for (y in buttonRect.top.coerceAtLeast(0) until buttonRect.bottom.coerceAtMost(firstHover.height)) {
+                for (x in buttonRect.left.coerceAtLeast(0) until buttonRect.right.coerceAtMost(firstHover.width)) {
+                    if (firstHover.getPixel(x, y) != secondHover.getPixel(x, y)) changedHoverPixels++
+                }
+            }
+            check(changedHoverPixels < 20) { "Hovered Add Connection button kept pulsing: $changedHoverPixels changed pixels" }
+            File(context.cacheDir, "launcher-empty-hover.png").outputStream().use {
+                secondHover.compress(Bitmap.CompressFormat.PNG, 100, it)
+            }
+            firstHover.recycle()
+            secondHover.recycle()
+            click("Add Connection")
+            find("Mac/VNC")
+            click("Close")
+            test.runOnMainSync {
+                activity.setContent {
+                    MaterialTheme(colorScheme = darkColorScheme()) {
+                        Surface(color = MaterialTheme.colorScheme.background) {
+                            LauncherScreen(profiles = fixture.take(1), onAddProfile = {}, onDeleteProfile = {},
+                                onConnectProfile = {}, profileManager = ProfileManager(context))
+                        }
+                    }
+                }
+            }
+            find("Fixture A")
+            find("Click to open, or drag into space to place a window.")
+            check(launcherNodes().none { it.text?.toString() == "Reorder" || it.contentDescription?.toString() == "Files" }) {
+                "Single non-SFTP connection shows Reorder or Files"
+            }
+            return "launcher arrangement, compact actions, empty color pulse ($changedPixels pixels), and 0/1 connection controls"
         } finally {
             test.runOnMainSync { SessionCardActions.connectedCounts.remove("A") }
             test.runOnMainSync { activity.finish() }

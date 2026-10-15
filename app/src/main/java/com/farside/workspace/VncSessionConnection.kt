@@ -85,6 +85,11 @@ internal class VncSessionConnection(
                     return@execute
                 }
                 if (closed.get() || ended.get()) { next.release(); return@execute }
+                if (tunnel == null && profile.proxyType == ProxyType.NONE) {
+                    host = kotlinx.coroutines.runBlocking {
+                        com.farside.workspace.utils.NetworkScanner.resolveVncHost(context, host, port)
+                    }
+                }
                 val credential = profile.credentialId?.let { id ->
                     com.farside.workspace.data.ProfileManager(context).getCredentials().find { it.id == id }
                 }

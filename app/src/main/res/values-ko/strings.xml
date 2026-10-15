@@ -97,7 +97,6 @@
   <string name="pin_required">PIN 필요</string>
   <string name="port_forwarding">포트 포워딩</string>
   <string name="port_rdp_3389_ssh_22_vnc_5900">포트 (RDP 3389 / SSH 22 / VNC 5900)</string>
-  <string name="on_mac_enable_screen_sharing_then_enable_vnc_viewers_with_a_pass">Mac에서 화면 공유를 활성화한 다음 컴퓨터 설정에서 비밀번호를 사용하는 VNC 뷰어를 허용하세요.</string>
   <string name="options_for_testing_sign_in_trust_store_prompts_and_permission_r">로그인, 신뢰 저장소 프롬프트 및 권한 다시 요청 테스트용 옵션입니다.</string>
   <string name="proxy_hostname_or_ip">프록시 호스트 이름 또는 IP</string>
   <string name="proxy_password_optional">프록시 비밀번호 (선택 사항)</string>
@@ -128,7 +127,6 @@
   <string name="save_start_tunnel">저장 후 터널 시작</string>
   <string name="save_tunnel">터널 저장</string>
   <string name="saved_credential_deleted">저장된 자격 증명이 삭제되었습니다. 이 연결에 사용할 다른 자격 증명을 선택하세요.</string>
-  <string name="screen_sharing">화면 공유</string>
   <string name="secures_credentials_with_require_pin_enabled">PIN 필요를 활성화하여 자격 증명 보호</string>
   <string name="select_none_cloudflared_socks5_or_http_before_saving">저장하기 전에 없음, Cloudflared, SOCKS5 또는 HTTP를 선택하세요.</string>
   <string name="settings">설정</string>
@@ -180,7 +178,6 @@
   <string name="private_key">개인 키</string>
   <string name="save_ssh_key">SSH 키 저장</string>
   <string name="unsupported_saved_proxy">지원되지 않는 저장된 프록시</string>
-  <string name="find_screen_sharing">이 LAN에서 화면 공유 찾기</string>
   <string name="find_local_pcs">여기를 클릭하여 로컬 PC 찾기</string>
   <string name="select_screen_sharing_server">화면 공유 서버 선택</string>
   <string name="select_discovered_pc">검색된 PC 선택</string>
@@ -600,7 +597,6 @@
   <string name="vnc_auth_mode">인증</string>
   <string name="vnc_auth_password">VNC 비밀번호</string>
   <string name="vnc_auth_mac_user">macOS 사용자</string>
-  <string name="vnc_mac_user_hint">Mac에서 화면 공유를 활성화하고 이 macOS 사용자가 접근하도록 허용하세요.</string>
   <string name="vnc_mac_credential_required">macOS 사용자 이름과 비밀번호가 저장된 자격 증명을 선택하세요.</string>
   <string name="vnc_mac_auth_failed">Mac 인증에 실패했습니다. 사용자 이름과 비밀번호를 확인하세요.</string>
   <string name="vnc_sftp_pair">파일 액세스용 SSH 프로필 페어링</string>

@@ -97,7 +97,6 @@
   <string name="pin_required">PIN erforderlich</string>
   <string name="port_forwarding">Portweiterleitung</string>
   <string name="port_rdp_3389_ssh_22_vnc_5900">Port (RDP 3389 / SSH 22 / VNC 5900)</string>
-  <string name="on_mac_enable_screen_sharing_then_enable_vnc_viewers_with_a_pass">Auf dem Mac: Bildschirmfreigabe aktivieren und dann in den Computereinstellungen VNC-Betrachter mit Passwort zulassen.</string>
   <string name="options_for_testing_sign_in_trust_store_prompts_and_permission_r">Optionen zum Testen von Anmeldung, Zertifikatsspeicher-Abfragen und erneuten Berechtigungsanfragen.</string>
   <string name="proxy_hostname_or_ip">Proxy-Hostname oder IP</string>
   <string name="proxy_password_optional">Proxy-Passwort (optional)</string>
@@ -128,7 +127,6 @@
   <string name="save_start_tunnel">Speichern &amp; Tunnel starten</string>
   <string name="save_tunnel">Tunnel speichern</string>
   <string name="saved_credential_deleted">Gespeicherte Anmeldedaten wurden gelöscht. Wähle andere Anmeldedaten für diese Verbindung.</string>
-  <string name="screen_sharing">Bildschirmfreigabe</string>
   <string name="secures_credentials_with_require_pin_enabled">Sichert Anmeldedaten, wenn „PIN erforderlich" aktiviert ist.</string>
   <string name="select_none_cloudflared_socks5_or_http_before_saving">Vor dem Speichern „Keine", „Cloudflared", „SOCKS5" oder „HTTP" wählen.</string>
   <string name="settings">Einstellungen</string>
@@ -180,7 +178,6 @@
   <string name="private_key">Privater Schlüssel</string>
   <string name="save_ssh_key">SSH-Schlüssel speichern</string>
   <string name="unsupported_saved_proxy">Gespeicherter Proxy nicht unterstützt</string>
-  <string name="find_screen_sharing">Bildschirmfreigabe in diesem LAN finden</string>
   <string name="find_local_pcs">Hier klicken, um lokale PCs zu finden</string>
   <string name="select_screen_sharing_server">Bildschirmfreigabe-Server wählen</string>
   <string name="select_discovered_pc">Gefundenen PC wählen</string>
@@ -600,7 +597,6 @@
   <string name="vnc_auth_mode">Authentifizierung</string>
   <string name="vnc_auth_password">VNC-Passwort</string>
   <string name="vnc_auth_mac_user">macOS-Benutzer</string>
-  <string name="vnc_mac_user_hint">Auf dem Mac: Bildschirmfreigabe aktivieren und diesem macOS-Benutzer den Zugriff erlauben.</string>
   <string name="vnc_mac_credential_required">Wähle gespeicherte Anmeldedaten mit macOS-Benutzernamen und -Passwort.</string>
   <string name="vnc_mac_auth_failed">Mac-Authentifizierung fehlgeschlagen. Überprüfe Benutzername und Passwort.</string>
   <string name="vnc_sftp_pair">SSH-Profil für Dateizugriff koppeln</string>

@@ -87,6 +87,11 @@ internal class RdpSessionConnection(
                 }
                 if (closed.get() || ended.get()) { next.release(); return@execute }
                 val connectionProxy = profile.proxyType in listOf(ProxyType.HTTP, ProxyType.SOCKS5) && tunnel == null
+                if (!connectionProxy && tunnel == null) {
+                    host = kotlinx.coroutines.runBlocking {
+                        com.farside.workspace.utils.NetworkScanner.resolveRdpHost(context, host)
+                    }
+                }
                 if (connectionProxy && (profile.proxyHost.isNullOrBlank() || profile.proxyPort !in 1..65535)) {
                     next.release(); ended.set(true)
                     main.post { if (!closed.get()) {

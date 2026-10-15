@@ -97,7 +97,6 @@
   <string name="pin_required">Vyžadován PIN</string>
   <string name="port_forwarding">Přesměrování portů</string>
   <string name="port_rdp_3389_ssh_22_vnc_5900">Port (RDP 3389 / SSH 22 / VNC 5900)</string>
-  <string name="on_mac_enable_screen_sharing_then_enable_vnc_viewers_with_a_pass">Na Macu: povolte Sdílení obrazovky a poté v Nastavení počítače povolte prohlížeče VNC s heslem.</string>
   <string name="options_for_testing_sign_in_trust_store_prompts_and_permission_r">Možnosti pro testování přihlášení, výzev úložiště důvěryhodnosti a opětovných žádostí o oprávnění.</string>
   <string name="proxy_hostname_or_ip">Název hostitele nebo IP proxy</string>
   <string name="proxy_password_optional">Heslo proxy (volitelné)</string>
@@ -128,7 +127,6 @@
   <string name="save_start_tunnel">Uložit a spustit tunel</string>
   <string name="save_tunnel">Uložit tunel</string>
   <string name="saved_credential_deleted">Uložené přihlašovací údaje byly odstraněny. Pro toto připojení vyberte jiné přihlašovací údaje.</string>
-  <string name="screen_sharing">Sdílení obrazovky</string>
   <string name="secures_credentials_with_require_pin_enabled">Zabezpečuje přihlašovací údaje se zapnutým požadavkem na PIN</string>
   <string name="select_none_cloudflared_socks5_or_http_before_saving">Před uložením vyberte Žádné, Cloudflared, SOCKS5 nebo HTTP.</string>
   <string name="settings">Nastavení</string>
@@ -180,7 +178,6 @@
   <string name="private_key">Soukromý klíč</string>
   <string name="save_ssh_key">Uložit klíč SSH</string>
   <string name="unsupported_saved_proxy">Nepodporovaná uložená proxy</string>
-  <string name="find_screen_sharing">Najít Sdílení obrazovky v této síti LAN</string>
   <string name="find_local_pcs">Kliknutím zde najdete místní počítače</string>
   <string name="select_screen_sharing_server">Vybrat server Sdílení obrazovky</string>
   <string name="select_discovered_pc">Vybrat nalezený počítač</string>
@@ -600,7 +597,6 @@
   <string name="vnc_auth_mode">Ověření</string>
   <string name="vnc_auth_password">Heslo VNC</string>
   <string name="vnc_auth_mac_user">Uživatel macOS</string>
-  <string name="vnc_mac_user_hint">Na Macu: povolte Sdílení obrazovky a povolte přístup tomuto uživateli macOS.</string>
   <string name="vnc_mac_credential_required">Vyberte uložené přihlašovací údaje s uživatelským jménem a heslem macOS.</string>
   <string name="vnc_mac_auth_failed">Ověření na Macu se nezdařilo. Zkontrolujte uživatelské jméno a heslo.</string>
   <string name="vnc_sftp_pair">Spárovat profil SSH pro přístup k souborům</string>

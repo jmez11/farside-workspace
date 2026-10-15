@@ -86,7 +86,6 @@ struct RdpContext {
     std::atomic<bool> render_running;
     std::thread render_thread;
     std::atomic<bool> dirty;
-    std::atomic<bool> cameraRequested;
     std::atomic<bool> cameraConnected;
     std::atomic<bool> storageRequested;
     std::atomic<bool> storageConnected;
@@ -95,7 +94,6 @@ struct RdpContext {
     std::mutex clipMutex;
     std::string clientClipText;
     std::atomic<bool> clipConnected;
-    std::chrono::steady_clock::time_point connectTime;
 };
 
 static BOOL display_capture_start(void* owner, ANativeWindow* window) {
@@ -535,7 +533,6 @@ static void destroy_client(freerdp* instance, bool connected) {
     ctx->network_thread.~thread();
     ctx->render_running.~atomic();
     ctx->dirty.~atomic();
-    ctx->cameraRequested.~atomic();
     ctx->cameraConnected.~atomic();
     ctx->storageRequested.~atomic();
     ctx->storageConnected.~atomic();
@@ -647,7 +644,6 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
     ctx->camera.owner = ctx;
     ctx->camera.displayStart = display_capture_start;
     ctx->camera.displayStop = display_capture_stop;
-    new (&ctx->cameraRequested) std::atomic<bool>(enableCamera == JNI_TRUE);
     new (&ctx->cameraConnected) std::atomic<bool>(false);  // destroyed in destroy_client()
     new (&ctx->storageRequested) std::atomic<bool>(enableStorage == JNI_TRUE);
     new (&ctx->storageConnected) std::atomic<bool>(false);  // destroyed in destroy_client()
@@ -656,7 +652,6 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
     new (&ctx->clipMutex) std::mutex();  // destroyed in destroy_client()
     new (&ctx->clientClipText) std::string();  // destroyed in destroy_client()
     new (&ctx->clipConnected) std::atomic<bool>(false);  // destroyed in destroy_client()
-    ctx->connectTime = std::chrono::steady_clock::now();
     
     if (surface) {
         // Display 0 window: ANativeWindow_fromSurface acquires a reference now owned by
@@ -1390,16 +1385,10 @@ Java_com_farside_workspace_QuestCameraPlaneCopy_copyNv12(
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_com_farside_workspace_FreeRDPBridge_isCameraUnsupported(JNIEnv*, jobject, jlong instance) {
+Java_com_farside_workspace_FreeRDPBridge_isCameraChannelConnected(JNIEnv*, jobject, jlong instance) {
     if (!instance) return JNI_FALSE;
     auto* ctx = reinterpret_cast<RdpContext*>(((freerdp*)instance)->context);
-    if (!ctx || !ctx->cameraRequested.load()) return JNI_FALSE;
-    if (ctx->cameraConnected.load()) return JNI_FALSE;
-    auto elapsed = std::chrono::steady_clock::now() - ctx->connectTime;
-    if (elapsed > std::chrono::seconds(4)) {
-        return JNI_TRUE;
-    }
-    return JNI_FALSE;
+    return ctx && ctx->cameraConnected.load() ? JNI_TRUE : JNI_FALSE;
 }
 
 extern "C" JNIEXPORT jboolean JNICALL

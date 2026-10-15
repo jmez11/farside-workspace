@@ -97,7 +97,6 @@
   <string name="pin_required">PIN necesar</string>
   <string name="port_forwarding">Redirecționare porturi</string>
   <string name="port_rdp_3389_ssh_22_vnc_5900">Port (RDP 3389 / SSH 22 / VNC 5900)</string>
-  <string name="on_mac_enable_screen_sharing_then_enable_vnc_viewers_with_a_pass">Pe Mac: activați Partajarea ecranului, apoi activați vizualizatoarele VNC cu o parolă în Configurările computerului.</string>
   <string name="options_for_testing_sign_in_trust_store_prompts_and_permission_r">Opțiuni pentru testarea autentificării, a solicitărilor depozitului de certificate și a re-solicitărilor de permisiuni.</string>
   <string name="proxy_hostname_or_ip">Nume host sau IP proxy</string>
   <string name="proxy_password_optional">Parolă proxy (Opțional)</string>
@@ -128,7 +127,6 @@
   <string name="save_start_tunnel">Salvează &amp; pornește tunelul</string>
   <string name="save_tunnel">Salvează tunelul</string>
   <string name="saved_credential_deleted">Credențialul salvat a fost șters. Alegeți alt credențial pentru această conexiune.</string>
-  <string name="screen_sharing">Partajare ecran</string>
   <string name="secures_credentials_with_require_pin_enabled">Protejează credențialele cu PIN necesar activat</string>
   <string name="select_none_cloudflared_socks5_or_http_before_saving">Selectați Niciunul, Cloudflared, SOCKS5 sau HTTP înainte de salvare.</string>
   <string name="settings">Setări</string>
@@ -180,7 +178,6 @@
   <string name="private_key">Cheie privată</string>
   <string name="save_ssh_key">Salvează cheia SSH</string>
   <string name="unsupported_saved_proxy">Proxy salvat neacceptat</string>
-  <string name="find_screen_sharing">Găsește Partajarea ecranului în această rețea LAN</string>
   <string name="find_local_pcs">Faceți clic aici pentru a găsi PC-uri locale</string>
   <string name="select_screen_sharing_server">Selectați serverul de partajare a ecranului</string>
   <string name="select_discovered_pc">Selectați PC-ul descoperit</string>
@@ -600,7 +597,6 @@
   <string name="vnc_auth_mode">Autentificare</string>
   <string name="vnc_auth_password">Parolă VNC</string>
   <string name="vnc_auth_mac_user">Utilizator macOS</string>
-  <string name="vnc_mac_user_hint">Pe Mac: activați Partajarea ecranului și permiteți accesul acestui utilizator macOS.</string>
   <string name="vnc_mac_credential_required">Selectați o credențială salvată cu un nume de utilizator și o parolă macOS.</string>
   <string name="vnc_mac_auth_failed">Autentificarea Mac a eșuat. Verificați numele de utilizator și parola.</string>
   <string name="vnc_sftp_pair">Asociați profilul SSH pentru acces la fișiere</string>

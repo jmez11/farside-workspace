@@ -97,7 +97,6 @@
   <string name="pin_required">PIN-koodi vaaditaan</string>
   <string name="port_forwarding">Portinohjaus</string>
   <string name="port_rdp_3389_ssh_22_vnc_5900">Portti (RDP 3389 / SSH 22 / VNC 5900)</string>
-  <string name="on_mac_enable_screen_sharing_then_enable_vnc_viewers_with_a_pass">Macissa: ota käyttöön Näytön jakaminen ja salli sitten VNC-katseluohjelmat salasanalla kohdassa Tietokoneen asetukset.</string>
   <string name="options_for_testing_sign_in_trust_store_prompts_and_permission_r">Vaihtoehtoja kirjautumisen, luottamusvaraston kehotteiden ja lupapyyntöjen testaamiseen.</string>
   <string name="proxy_hostname_or_ip">Välityspalvelimen isäntänimi tai IP</string>
   <string name="proxy_password_optional">Välityspalvelimen salasana (valinnainen)</string>
@@ -128,7 +127,6 @@
   <string name="save_start_tunnel">Tallenna &amp; käynnistä tunneli</string>
   <string name="save_tunnel">Tallenna tunneli</string>
   <string name="saved_credential_deleted">Tallennettu tunnistetieto poistettiin. Valitse toinen tunnistetieto tälle yhteydelle.</string>
-  <string name="screen_sharing">Näytön jakaminen</string>
   <string name="secures_credentials_with_require_pin_enabled">Suojaa tunnistetiedot, kun PIN-koodivaatimus on käytössä</string>
   <string name="select_none_cloudflared_socks5_or_http_before_saving">Valitse Ei mitään, Cloudflared, SOCKS5 tai HTTP ennen tallentamista.</string>
   <string name="settings">Asetukset</string>
@@ -180,7 +178,6 @@
   <string name="private_key">Yksityinen avain</string>
   <string name="save_ssh_key">Tallenna SSH-avain</string>
   <string name="unsupported_saved_proxy">Tueton tallennettu välityspalvelin</string>
-  <string name="find_screen_sharing">Etsi näytön jakaminen tästä lähiverkosta</string>
   <string name="find_local_pcs">Napsauta tästä etsiäksesi paikallisia tietokoneita</string>
   <string name="select_screen_sharing_server">Valitse näytön jakamispalvelin</string>
   <string name="select_discovered_pc">Valitse löydetty tietokone</string>
@@ -600,7 +597,6 @@
   <string name="vnc_auth_mode">Todennus</string>
   <string name="vnc_auth_password">VNC-salasana</string>
   <string name="vnc_auth_mac_user">macOS-käyttäjä</string>
-  <string name="vnc_mac_user_hint">Macissa: ota käyttöön Näytön jakaminen ja salli tämän macOS-käyttäjän käyttää sitä.</string>
   <string name="vnc_mac_credential_required">Valitse tallennettu tunnistetieto, jossa on macOS-käyttäjätunnus ja salasana.</string>
   <string name="vnc_mac_auth_failed">Mac-todennus epäonnistui. Tarkista käyttäjätunnus ja salasana.</string>
   <string name="vnc_sftp_pair">Yhdistä SSH-profiili tiedostojen käyttöä varten</string>

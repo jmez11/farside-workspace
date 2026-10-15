@@ -97,7 +97,6 @@
   <string name="pin_required">PIN requerido</string>
   <string name="port_forwarding">Reenvío de puertos</string>
   <string name="port_rdp_3389_ssh_22_vnc_5900">Puerto (RDP 3389 / SSH 22 / VNC 5900)</string>
-  <string name="on_mac_enable_screen_sharing_then_enable_vnc_viewers_with_a_pass">En el Mac: activa Compartir pantalla y luego permite visores VNC con contraseña en los ajustes del ordenador.</string>
   <string name="options_for_testing_sign_in_trust_store_prompts_and_permission_r">Opciones para probar el inicio de sesión, los avisos del almacén de confianza y las solicitudes de permisos.</string>
   <string name="proxy_hostname_or_ip">Nombre de host o IP del proxy</string>
   <string name="proxy_password_optional">Contraseña del proxy (opcional)</string>
@@ -128,7 +127,6 @@
   <string name="save_start_tunnel">Guardar e iniciar túnel</string>
   <string name="save_tunnel">Guardar túnel</string>
   <string name="saved_credential_deleted">La credencial guardada se eliminó. Elija otra credencial para esta conexión.</string>
-  <string name="screen_sharing">Compartir pantalla</string>
   <string name="secures_credentials_with_require_pin_enabled">Protege las credenciales cuando «Requerir PIN» está activado</string>
   <string name="select_none_cloudflared_socks5_or_http_before_saving">Seleccione Ninguno, Cloudflared, SOCKS5 o HTTP antes de guardar.</string>
   <string name="settings">Ajustes</string>
@@ -180,7 +178,6 @@
   <string name="private_key">Clave privada</string>
   <string name="save_ssh_key">Guardar clave SSH</string>
   <string name="unsupported_saved_proxy">Proxy guardado no admitido</string>
-  <string name="find_screen_sharing">Buscar Compartir pantalla en esta LAN</string>
   <string name="find_local_pcs">Toque aquí para buscar PC locales</string>
   <string name="select_screen_sharing_server">Seleccione el servidor de Compartir pantalla</string>
   <string name="select_discovered_pc">Seleccione el PC detectado</string>
@@ -600,7 +597,6 @@
   <string name="vnc_auth_mode">Autenticación</string>
   <string name="vnc_auth_password">Contraseña VNC</string>
   <string name="vnc_auth_mac_user">usuario de macOS</string>
-  <string name="vnc_mac_user_hint">En el Mac: activa Compartir pantalla y permite el acceso a este usuario de macOS.</string>
   <string name="vnc_mac_credential_required">Selecciona una credencial guardada con un nombre de usuario y una contraseña de macOS.</string>
   <string name="vnc_mac_auth_failed">Falló la autenticación del Mac. Comprueba el nombre de usuario y la contraseña.</string>
   <string name="vnc_sftp_pair">Vincular perfil SSH para el acceso a archivos</string>

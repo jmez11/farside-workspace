@@ -34,7 +34,7 @@ class FreeRDPBridge : DesktopSessionBridge {
     external override fun setCameraMuted(instance: Long, muted: Boolean)
     external override fun isCameraRecording(instance: Long): Boolean
     external fun isCameraMuted(instance: Long): Boolean
-    external override fun isCameraUnsupported(instance: Long): Boolean
+    external override fun isCameraChannelConnected(instance: Long): Boolean
     external fun setCameraMaxDimension(maxDim: Int)
     // Debug instrumentation only; release native builds refuse verification patterns.
     external fun setCameraVerificationPattern(enabled: Boolean): Boolean
