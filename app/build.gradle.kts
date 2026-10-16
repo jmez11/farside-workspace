@@ -1,3 +1,6 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -11,9 +14,9 @@ android {
     // CI release signing: reads key.properties from the repo root (gitignored, never committed).
     // Local debug builds are unaffected when the file is absent.
     val keystorePropertiesFile = rootProject.file("key.properties")
-    val keystoreProperties = java.util.Properties()
+    val keystoreProperties = Properties()
     if (keystorePropertiesFile.exists()) {
-        java.io.FileInputStream(keystorePropertiesFile).use { keystoreProperties.load(it) }
+        FileInputStream(keystorePropertiesFile).use { keystoreProperties.load(it) }
     }
     // Tag builds pass -PversionName / -PversionCode; local builds keep the defaults below.
     val ciVersionCode = providers.gradleProperty("versionCode").orNull?.toIntOrNull()
