@@ -179,6 +179,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
     }
     var rdpInstance by remember { mutableStateOf(0L) }
     val context = LocalContext.current
+    val rdpClipboardLabel = stringResource(R.string.rdp_clipboard_label)
     val pairedSshId = remember(session.sftpPairProfileId) {
         if (isVnc) com.farside.workspace.data.ProfileManager(context).getProfiles()
             .firstOrNull { it.id == session.sftpPairProfileId && it.type == ConnectionType.SSH }?.id else null
@@ -245,7 +246,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                     lastReceivedClipText = remoteText
                     android.os.Handler(android.os.Looper.getMainLooper()).post {
                         try {
-                            clipboardManager?.setPrimaryClip(android.content.ClipData.newPlainText(context.getString(R.string.rdp_clipboard_label), remoteText))
+                            clipboardManager?.setPrimaryClip(android.content.ClipData.newPlainText(rdpClipboardLabel, remoteText))
                         } catch (e: Exception) {
                             Log.e("RdpClipboard", "Failed to set primary clip: ${e.message}")
                         }

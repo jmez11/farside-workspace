@@ -1,5 +1,6 @@
 package com.farside.workspace.tunnel
 
+import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -97,6 +98,8 @@ class AdbTunnelService : Service() {
         }
         return START_STICKY
     }
+    // Updates the foreground service's own notification; POST_NOTIFICATIONS is not required for this.
+    @SuppressLint("NotificationPermission")
     private fun update(message: String) {
         mutableStatus.value = message
         getSystemService(NotificationManager::class.java).notify(ID, notification(message))

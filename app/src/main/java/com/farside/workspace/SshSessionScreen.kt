@@ -96,6 +96,8 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 @Composable
 fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, onClose: () -> Unit) {
     val context = LocalContext.current
+    val scrollbackValidationMsg = stringResource(R.string.scrollback_lines_validation)
+    val sshClipboardLabel = stringResource(R.string.ssh_clipboard_label)
     val windowManagerAvailable = remember(context) { QuestWindowManager.isAvailable(context) }
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -189,7 +191,7 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
         }, dismissButton = { TextButton(onClick = { showTerminalSettings = false }) { Text(stringResource(R.string.cancel)) } },
         confirmButton = { TextButton(onClick = {
             val count = scrollbackText.toIntOrNull()
-            if (count == null || count !in 100..50000) scrollbackError = context.getString(R.string.scrollback_lines_validation)
+            if (count == null || count !in 100..50000) scrollbackError = scrollbackValidationMsg
             else {
                 scrollback = count
                 terminalViewRef?.mEmulator?.setScrollbackRows(count)
@@ -369,7 +371,7 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                 val copyTextToClipboard: (String) -> Unit = { text ->
                     try {
                         val clipboard = viewContext.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-                        clipboard?.setPrimaryClip(android.content.ClipData.newPlainText(context.getString(R.string.ssh_clipboard_label), text))
+                        clipboard?.setPrimaryClip(android.content.ClipData.newPlainText(sshClipboardLabel, text))
                     } catch (e: Exception) {
                         Log.e("SshSession", "Error copying text to clipboard: ${e.message}")
                     }

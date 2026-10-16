@@ -30,6 +30,7 @@ fun SystemCredentialDialog(
     onCancel: () -> Unit
 ) {
     val context = LocalContext.current
+    val systemAuthRequiresWindowMsg = stringResource(R.string.system_auth_requires_window)
     val latestUnlocked by rememberUpdatedState(onUnlocked)
     var rememberFor5Min by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
@@ -52,7 +53,7 @@ fun SystemCredentialDialog(
         } },
         confirmButton = { TextButton(enabled = !busy, onClick = {
             val activity = context.activity()
-            if (activity == null) { error = context.getString(R.string.system_auth_requires_window) }
+            if (activity == null) { error = systemAuthRequiresWindowMsg }
             else {
                 busy = true
                 error = null

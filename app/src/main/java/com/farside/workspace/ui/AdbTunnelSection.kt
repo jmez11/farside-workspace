@@ -18,6 +18,8 @@ import kotlinx.coroutines.*
 @Composable
 fun AdbTunnelSection(discovery: (suspend () -> AdbState)? = null) {
     val context = LocalContext.current
+    val portConflictMsg = stringResource(R.string.adb_bridge_port_conflict)
+    val tunnelStartFailedMsg = stringResource(R.string.tunnel_start_failed)
     val store = remember { AdbTunnelSettings(context) }
     var saved by remember { mutableStateOf(store.load()) }
     var state by remember { mutableStateOf(AdbDiscovery.flags(context)) }
@@ -54,7 +56,7 @@ fun AdbTunnelSection(discovery: (suspend () -> AdbState)? = null) {
             Button(enabled = state.port != null && !active, onClick = {
                 try {
                     val config = AdbTunnelConfig(token.ifBlank { store.load()?.token ?: "" }, hostname, port.toIntOrNull() ?: 0).validate()
-                    require(config.port != state.port) { context.getString(R.string.adb_bridge_port_conflict) }
+                    require(config.port != state.port) { portConflictMsg }
                     store.save(config)
                     saved = config
                     preview = config.yaml()
@@ -62,7 +64,7 @@ fun AdbTunnelSection(discovery: (suspend () -> AdbState)? = null) {
                     AdbTunnelService.start(context)
                     active = true
                     error = null
-                } catch (failure: Exception) { error = failure.localizedMessage(context) ?: context.getString(R.string.tunnel_start_failed) }
+                } catch (failure: Exception) { error = failure.localizedMessage(context) ?: tunnelStartFailedMsg }
             }) { Text(stringResource(R.string.save_start_tunnel)) }
             if (active) TextButton(onClick = { AdbTunnelService.stop(context); active = false }) { Text(stringResource(R.string.stop_tunnel)) }
         }

@@ -99,6 +99,32 @@ internal fun SftpFilesEntry(onClose: () -> Unit, profileId: String? = null, allo
 @Composable
 private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?, allowDisabledPairedProfile: Boolean) {
     val context = LocalContext.current
+    // Hoisted for LocalContextGetResourceValueCall: resolve in composable scope, use in callbacks.
+    val doneLabel = stringResource(R.string.done)
+    val cancelledLabel = stringResource(R.string.cancelled)
+    val loadingLabel = stringResource(R.string.loading)
+    val connectingLabel = stringResource(R.string.connecting)
+    val storagePermissionRequiredMsg = stringResource(R.string.storage_permission_required)
+    val savedCredentialRemovedMsg = stringResource(R.string.saved_credential_removed)
+    val cloudflareTunnelExitedMsg = stringResource(R.string.cloudflare_tunnel_exited)
+    val savedToDownloadsMsg = stringResource(R.string.saved_to_downloads)
+    val checkingDownloadsLabel = stringResource(R.string.checking_downloads)
+    val headsetFolderUnreadableMsg = stringResource(R.string.headset_folder_unreadable)
+    val refreshingLabel = stringResource(R.string.refreshing)
+    val newFolderLabel = stringResource(R.string.new_folder)
+    val cannotReadFolderMsg = stringResource(R.string.cannot_read_folder)
+    val renameLabel = stringResource(R.string.rename)
+    val deletingLabel = stringResource(R.string.deleting)
+    val checkingDestinationLabel = stringResource(R.string.checking_destination)
+    val sftpDownloadingFmt = stringResource(R.string.sftp_downloading)
+    val sftpFolderDownloadedFmt = stringResource(R.string.sftp_folder_downloaded)
+    val sftpReplaceDownloadFmt = stringResource(R.string.sftp_replace_download)
+    val sftpConfirmDownloadFmt = stringResource(R.string.sftp_confirm_download)
+    val sftpUploadingFmt = stringResource(R.string.sftp_uploading)
+    val sftpReplaceUploadFmt = stringResource(R.string.sftp_replace_upload)
+    val sftpConfirmUploadFmt = stringResource(R.string.sftp_confirm_upload)
+    val sftpConfirmDeleteFolderFmt = stringResource(R.string.sftp_confirm_delete_folder)
+    val sftpConfirmDeleteFileFmt = stringResource(R.string.sftp_confirm_delete_file)
     val scope = rememberCoroutineScope()
     val fileListState = rememberLazyListState()
     var profiles by remember { mutableStateOf<List<ConnectionProfile>>(emptyList()) }
@@ -143,10 +169,10 @@ private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?, allowDisable
         val op = SftpOperation()
         operation = op; status = label; error = null; progress = null
         scope.launch {
-            try { task(op); op.check(); status = context.getString(R.string.done) }
+            try { task(op); op.check(); status = doneLabel }
             catch (e: Exception) {
                 Log.e("SftpFiles", "Operation failed: ${e.javaClass.simpleName}: ${e.message ?: "(no message)"}", e)
-                error = try { op.check(); sftpError(context, e) } catch (_: java.util.concurrent.CancellationException) { context.getString(R.string.cancelled) }
+                error = try { op.check(); sftpError(context, e) } catch (_: java.util.concurrent.CancellationException) { cancelledLabel }
             }
             finally { operation = null; progress = null }
         }
@@ -160,17 +186,17 @@ private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?, allowDisable
     fun open(folder: String) {
         val hit = listingCache[folder]
         if (operation == null && hit != null) { entries = hit; path = folder; cachedView = true; error = null; status = "" }
-        else work(context.getString(R.string.loading)) { refresh(it, folder) }
+        else work(loadingLabel) { refresh(it, folder) }
     }
     fun connect(id: String) {
-        work(context.getString(R.string.connecting)) { op ->
+        work(connectingLabel) { op ->
             session?.close(); session = null; entries = emptyList(); path = ""; selectedId = id; listingCache.clear(); cachedView = false
             val profile = withContext(Dispatchers.IO) {
-                check(com.farside.workspace.hasStoragePermission(context)) { context.getString(R.string.storage_permission_required) }
+                check(com.farside.workspace.hasStoragePermission(context)) { storagePermissionRequiredMsg }
                 val pm = ProfileManager(context)
                 val p = pm.getProfiles().single { it.id == id && it.type == ConnectionType.SSH &&
                     (it.enableSftp || (allowDisabledPairedProfile && id == profileId)) }
-                check(p.credentialId == null || pm.getCredentials().any { it.id == p.credentialId }) { context.getString(R.string.saved_credential_removed) }
+                check(p.credentialId == null || pm.getCredentials().any { it.id == p.credentialId }) { savedCredentialRemovedMsg }
                 p
             }
             val next = SftpSession(context.applicationContext, profile)
@@ -178,7 +204,7 @@ private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?, allowDisable
             try {
                 path = withContext(Dispatchers.IO) { next.connect(
                     onStatus = { text -> scope.launch { status = text.trim().removeSurrounding("[", "]") } },
-                    onExit = { scope.launch { error = context.getString(R.string.cloudflare_tunnel_exited) } }, operation = op) }
+                    onExit = { scope.launch { error = cloudflareTunnelExitedMsg } }, operation = op) }
                 op.check(); refresh(op)
             } catch (e: Exception) { next.close(); session = null; throw e }
         }
@@ -204,30 +230,30 @@ private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?, allowDisable
         pendingFolderDownload = null
         if (uri != null && entry != null) {
             runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION) }
-            work(context.getString(R.string.sftp_downloading, entry.name)) { op ->
+            work(sftpDownloadingFmt.format(entry.name)) { op ->
                 withContext(Dispatchers.IO) { SftpDownloads(context).downloadFolder(checkNotNull(session), entry, uri, op, report) { text -> scope.launch { if (operation === op) status = text } } }
-                status = context.getString(R.string.sftp_folder_downloaded, entry.name)
+                status = sftpFolderDownloadedFmt.format(entry.name)
             }
         }
     }
-    fun download(entry: SftpEntry, overwrite: Boolean) { work(context.getString(R.string.sftp_downloading, entry.name)) { op ->
+    fun download(entry: SftpEntry, overwrite: Boolean) { work(sftpDownloadingFmt.format(entry.name)) { op ->
         withContext(Dispatchers.IO) { SftpDownloads(context).download(checkNotNull(session), entry, overwrite, op, report) }
-        status = context.getString(R.string.saved_to_downloads)
+        status = savedToDownloadsMsg
     } }
-    fun requestDownload(entry: SftpEntry) { work(context.getString(R.string.checking_downloads)) { _ ->
+    fun requestDownload(entry: SftpEntry) { work(checkingDownloadsLabel) { _ ->
         val exists = withContext(Dispatchers.IO) { SftpDownloads(context).existing(entry.name) != null }
-        if (exists) confirm = context.getString(R.string.sftp_replace_download, entry.name) to { download(entry, true) }
-        else confirm = context.getString(R.string.sftp_confirm_download, entry.name) to { download(entry, false) }
+        if (exists) confirm = sftpReplaceDownloadFmt.format(entry.name) to { download(entry, true) }
+        else confirm = sftpConfirmDownloadFmt.format(entry.name) to { download(entry, false) }
     } }
-    fun upload(file: File, overwrite: Boolean) { work(context.getString(R.string.sftp_uploading, file.name)) { op ->
+    fun upload(file: File, overwrite: Boolean) { work(sftpUploadingFmt.format(file.name)) { op ->
         val target = remoteChild(path, file.name)
         withContext(Dispatchers.IO) { checkNotNull(session).upload(file, target, overwrite, op, report) }
         refresh(op)
     } }
     LaunchedEffect(localFolder) {
         localFolder?.let { folder ->
-            try { localFiles = withContext(Dispatchers.IO) { folder.listFiles()?.filter { it.canRead() && it.canonicalFile.toPath().startsWith(Environment.getExternalStorageDirectory().canonicalFile.toPath()) }?.map { HeadsetFile(it, it.isDirectory) }?.sortedWith(compareByDescending<HeadsetFile> { it.directory }.thenBy { it.file.name.lowercase() }) ?: error(context.getString(R.string.cannot_read_folder)) } }
-            catch (_: Exception) { localFiles = emptyList(); error = context.getString(R.string.headset_folder_unreadable) }
+            try { localFiles = withContext(Dispatchers.IO) { folder.listFiles()?.filter { it.canRead() && it.canonicalFile.toPath().startsWith(Environment.getExternalStorageDirectory().canonicalFile.toPath()) }?.map { HeadsetFile(it, it.isDirectory) }?.sortedWith(compareByDescending<HeadsetFile> { it.directory }.thenBy { it.file.name.lowercase() }) ?: error(cannotReadFolderMsg) } }
+            catch (_: Exception) { localFiles = emptyList(); error = headsetFolderUnreadableMsg }
         }
     }
     val visibleEntries = remember(entries, sortByDate) {
@@ -259,8 +285,8 @@ private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?, allowDisable
                         DropdownMenuItem(text = { Text(stringResource(R.string.sftp_sort_date)) }, onClick = { sortByDate = true; sortMenu = false })
                     }
                 }
-                TextButton(onClick = { work(context.getString(R.string.refreshing)) { refresh(it) } }, enabled = operation == null) { Text(stringResource(R.string.refresh)) }
-                TextButton(onClick = { edit = context.getString(R.string.new_folder) to null; editName = "" }, enabled = operation == null) { Text(context.getString(R.string.new_folder)) }
+                TextButton(onClick = { work(refreshingLabel) { refresh(it) } }, enabled = operation == null) { Text(stringResource(R.string.refresh)) }
+                TextButton(onClick = { edit = newFolderLabel to null; editName = "" }, enabled = operation == null) { Text(newFolderLabel) }
                 TextButton(onClick = { localFolder = Environment.getExternalStorageDirectory() }, enabled = operation == null) { Text(stringResource(R.string.upload)) }
             }
         }
@@ -314,9 +340,9 @@ private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?, allowDisable
                             DropdownMenu(expanded = menu == entry, onDismissRequest = { menu = null }) {
                                 if (entry.directory && entry.link == null && !entry.unavailable) DropdownMenuItem(text = { Text(stringResource(R.string.download_folder)) }, onClick = { menu = null; pendingFolderDownload = entry; folderDestinationPicker.launch(null) })
                                 if (!entry.directory && !entry.unavailable) DropdownMenuItem(text = { Text(stringResource(R.string.download)) }, onClick = { menu = null; requestDownload(entry) })
-                                DropdownMenuItem(text = { Text(context.getString(R.string.rename)) }, onClick = { menu = null; edit = context.getString(R.string.rename) to entry; editName = entry.name })
-                                DropdownMenuItem(text = { Text(stringResource(R.string.delete)) }, onClick = { menu = null; confirm = context.getString(if (entry.directory) R.string.sftp_confirm_delete_folder else R.string.sftp_confirm_delete_file, entry.name) to {
-                                    work(context.getString(R.string.deleting)) { op -> withContext(Dispatchers.IO) { checkNotNull(session).delete(entry, op) }; listingCache.keys.removeAll { it == entry.path || it.startsWith(entry.path.trimEnd('/') + "/") }; refresh(op) }
+                                DropdownMenuItem(text = { Text(renameLabel) }, onClick = { menu = null; edit = renameLabel to entry; editName = entry.name })
+                                DropdownMenuItem(text = { Text(stringResource(R.string.delete)) }, onClick = { menu = null; confirm = (if (entry.directory) sftpConfirmDeleteFolderFmt else sftpConfirmDeleteFileFmt).format(entry.name) to {
+                                    work(deletingLabel) { op -> withContext(Dispatchers.IO) { checkNotNull(session).delete(entry, op) }; listingCache.keys.removeAll { it == entry.path || it.startsWith(entry.path.trimEnd('/') + "/") }; refresh(op) }
                                 } })
                             }
                         }
@@ -346,9 +372,9 @@ private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?, allowDisable
             LazyColumn { items(localFiles, key = { it.file.absolutePath }) { item -> val file = item.file; TextButton(onClick = {
                 if (item.directory) localFolder = file else {
                     localFolder = null
-                    work(context.getString(R.string.checking_destination)) { op ->
+                    work(checkingDestinationLabel) { op ->
                         val exists = withContext(Dispatchers.IO) { checkNotNull(session).exists(remoteChild(path, file.name), op) }
-                        confirm = (if (exists) context.getString(R.string.sftp_replace_upload, file.name) else context.getString(R.string.sftp_confirm_upload, file.name)) to { upload(file, exists) }
+                        confirm = (if (exists) sftpReplaceUploadFmt.format(file.name) else sftpConfirmUploadFmt.format(file.name)) to { upload(file, exists) }
                     }
                 }
             }) { Text(if (item.directory) stringResource(R.string.sftp_folder_name, file.name) else file.name) } } }

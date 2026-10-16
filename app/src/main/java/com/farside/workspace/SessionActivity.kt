@@ -174,7 +174,7 @@ class SessionActivity : ComponentActivity() {
                             message = stringResource(R.string.system_pin_connect_profile, profile.name),
                             onUnlocked = { unlocked = true }, onCancel = { finish() }
                         ) else
-                        com.farside.workspace.ui.CredentialPinDialog(
+                            com.farside.workspace.ui.CredentialPinDialog(
                             title = stringResource(R.string.unlock_connection),
                             message = stringResource(R.string.app_pin_connect_profile, profile.name),
                             onUnlocked = { unlocked = true },

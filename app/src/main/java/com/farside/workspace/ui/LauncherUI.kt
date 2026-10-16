@@ -514,6 +514,18 @@ fun SettingsTextField(
 @Composable
 fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.data.ProfileManager, initialTab: Int = 0) {
     val context = LocalContext.current
+    // Hoisted for LocalContextGetResourceValueCall: resolve in composable scope, use in callbacks.
+    val sshPublicKeyTitleLabel = stringResource(R.string.ssh_public_key_title)
+    val sshPublicKeyCopiedMsg = stringResource(R.string.ssh_public_key_copied)
+    val pinLengthErrorMsg = stringResource(R.string.pin_length_error)
+    val pinMismatchMsg = stringResource(R.string.pin_mismatch)
+    val trustedCertificatesClearedMsg = stringResource(R.string.trusted_certificates_cleared)
+    val permissionsRevokeScheduledMsg = stringResource(R.string.permissions_revoke_scheduled)
+    val permissionsRevokeRequires13Msg = stringResource(R.string.permissions_revoke_requires_android_13)
+    val setAppPinFirstMsg = stringResource(R.string.set_app_pin_first)
+    val sshPublicKeyShowNamedFmt = stringResource(R.string.ssh_public_key_show_named)
+    val editNamedItemFmt = stringResource(R.string.edit_named_item)
+    val deleteNamedItemFmt = stringResource(R.string.delete_named_item)
     var selectedTab by rememberSaveable(initialTab) { mutableStateOf(initialTab) }
     
     var appPinVerifier by remember { mutableStateOf(profileManager.getAppPinVerifier()) }
@@ -604,7 +616,7 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
         if (systemPinEnabled) SystemCredentialDialog(title = stringResource(R.string.remove_pin_requirement), allowRemembered = false,
             onUnlocked = { keyRequirePin = false; keyPinError = null; pendingKeyPinDisable = false },
             onCancel = { pendingKeyPinDisable = false }) else
-        CredentialPinDialog(
+            CredentialPinDialog(
             title = stringResource(R.string.remove_pin_requirement),
             message = stringResource(R.string.enter_the_app_pin_to_remove_pin_requirement),
             onUnlocked = {
@@ -643,8 +655,8 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
             } },
             confirmButton = { TextButton(onClick = {
                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                clipboard.setPrimaryClip(android.content.ClipData.newPlainText(context.getString(R.string.ssh_public_key_title), publicKey.line))
-                android.widget.Toast.makeText(context.applicationContext, context.getString(R.string.ssh_public_key_copied), android.widget.Toast.LENGTH_SHORT).show()
+                clipboard.setPrimaryClip(android.content.ClipData.newPlainText(sshPublicKeyTitleLabel, publicKey.line))
+                android.widget.Toast.makeText(context.applicationContext, sshPublicKeyCopiedMsg, android.widget.Toast.LENGTH_SHORT).show()
             }) { Text(stringResource(R.string.ssh_public_key_copy)) } },
             dismissButton = { TextButton(onClick = { publicKeyShown = null }) { Text(stringResource(R.string.ssh_public_key_close)) } })
     }
@@ -652,7 +664,7 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
         if (systemPinEnabled) SystemCredentialDialog(title = stringResource(R.string.remove_pin_requirement), allowRemembered = false,
             onUnlocked = { requirePin = false; pinError = null; pendingPinDisable = false },
             onCancel = { pendingPinDisable = false }) else
-        CredentialPinDialog(
+            CredentialPinDialog(
             title = stringResource(R.string.remove_pin_requirement),
             message = stringResource(R.string.enter_the_app_pin_to_remove_pin_requirement),
             onUnlocked = {
@@ -772,11 +784,11 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                                 Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                                     TextButton(onClick = {
                                         if (!com.farside.workspace.CredentialPin.valid(appPinNew)) {
-                                            appPinError = context.getString(R.string.pin_length_error)
+                                            appPinError = pinLengthErrorMsg
                                             return@TextButton
                                         }
                                         if (appPinNew != appPinConfirm) {
-                                            appPinError = context.getString(R.string.pin_mismatch)
+                                            appPinError = pinMismatchMsg
                                             return@TextButton
                                         }
                                         val verifier = com.farside.workspace.CredentialPin.create(appPinNew)
@@ -839,7 +851,7 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                                 Button(
                                     onClick = {
                                         com.farside.workspace.RdpCertificateStore(context).clearAll()
-                                        debugStatusMessage = context.getString(R.string.trusted_certificates_cleared)
+                                        debugStatusMessage = trustedCertificatesClearedMsg
                                     },
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
                                 ) {
@@ -856,9 +868,9 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                                         )
                                         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
                                             context.revokeSelfPermissionsOnKill(runtimePerms)
-                                            debugStatusMessage = context.getString(R.string.permissions_revoke_scheduled)
+                                            debugStatusMessage = permissionsRevokeScheduledMsg
                                         } else {
-                                            debugStatusMessage = context.getString(R.string.permissions_revoke_requires_android_13)
+                                            debugStatusMessage = permissionsRevokeRequires13Msg
                                         }
                                     },
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE65100))
@@ -915,7 +927,7 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                                     pendingPinDisable = true
                                 } else if (enabled) {
                                     if (!systemPinEnabled && appPinVerifier == null) {
-                                        pinError = context.getString(R.string.set_app_pin_first)
+                                        pinError = setAppPinFirstMsg
                                     } else {
                                         requirePin = true
                                         pinError = null
@@ -982,19 +994,19 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                                     }
                                     Row {
                                         IconButton(
-                                            modifier = Modifier.semantics { contentDescription = context.getString(R.string.ssh_public_key_show_named, key.name) },
+                                            modifier = Modifier.semantics { contentDescription = sshPublicKeyShowNamedFmt.format(key.name) },
                                             enabled = !savingSshKey,
                                             onClick = { if (key.requirePin) publicKeyPending = key else showPublicKey(key) }
                                         ) { Icon(Icons.Default.VpnKey, contentDescription = null, tint = Color(0xFF1E88E5)) }
                                         TextButton(
-                                            modifier = Modifier.semantics { contentDescription = context.getString(R.string.edit_named_item, key.name) },
+                                            modifier = Modifier.semantics { contentDescription = editNamedItemFmt.format(key.name) },
                                             enabled = !savingSshKey,
                                             onClick = {
                                                 sshKeyAction(key, "edit")
                                             }
                                         ) { Text(stringResource(R.string.edit), color = Color(0xFF1E88E5)) }
                                         TextButton(
-                                            modifier = Modifier.semantics { contentDescription = context.getString(R.string.delete_named_item, key.name) },
+                                            modifier = Modifier.semantics { contentDescription = deleteNamedItemFmt.format(key.name) },
                                             enabled = !savingSshKey,
                                             onClick = {
                                                 sshKeyAction(key, "delete")
@@ -1024,7 +1036,7 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                                     pendingKeyPinDisable = true
                                 } else if (enabled) {
                                     if (!systemPinEnabled && appPinVerifier == null) {
-                                        keyPinError = context.getString(R.string.set_app_pin_first)
+                                        keyPinError = setAppPinFirstMsg
                                     } else {
                                         keyRequirePin = true
                                         keyPinError = null
@@ -1098,13 +1110,15 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
 @Composable
 fun ClearCloudflareLoginsButton(onStatus: (String) -> Unit) {
     val context = LocalContext.current
+    val loginsClearedMsg = stringResource(R.string.cloudflare_logins_cleared)
+    val loginsClearFailedMsg = stringResource(R.string.cloudflare_logins_clear_failed)
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
         Button(
             onClick = {
                 onStatus(runCatching {
                     com.farside.workspace.tunnel.CloudflaredTunnel.clearCachedLogins(context)
-                    context.getString(R.string.cloudflare_logins_cleared)
-                }.getOrElse { it.message ?: context.getString(R.string.cloudflare_logins_clear_failed) })
+                    loginsClearedMsg
+                }.getOrElse { it.message ?: loginsClearFailedMsg })
             },
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
         ) { Text(stringResource(R.string.clear_cloudflare_logins)) }
@@ -1351,6 +1365,12 @@ fun AddProfileForm(
     var isScanning by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
+    // Hoisted for LocalContextGetResourceValueCall: resolve in composable scope, use in callbacks.
+    val discoveryNoServicesMsg = stringResource(R.string.discovery_no_services)
+    val discoveryFailedMsg = stringResource(R.string.discovery_failed)
+    val thisProfileName = stringResource(R.string.this_profile)
+    val jumpRouteSeparator = stringResource(R.string.jump_route_separator)
+    val jumpRoutePreviewFmt = stringResource(R.string.jump_route_preview)
     
     var proxyType by rememberSaveable { mutableStateOf(if (initialProfile?.useCloudflare == true) com.farside.workspace.data.ProxyType.CLOUDFLARED else initialProfile?.proxyType ?: com.farside.workspace.data.ProxyType.NONE) }
     var cloudflaredParameters by remember { mutableStateOf(initialProfile?.cloudflaredParameters ?: "") }
@@ -1552,10 +1572,10 @@ fun AddProfileForm(
                                     val found = if (scanType == ConnectionType.VNC) com.farside.workspace.utils.NetworkScanner.scanLocalNetworkForVnc(context)
                                         else com.farside.workspace.utils.NetworkScanner.scanLocalNetworkForRdp(context)
                                     if (type == scanType) discoveredHosts = found
-                                    if (found.isEmpty()) android.widget.Toast.makeText(context, context.getString(R.string.discovery_no_services), android.widget.Toast.LENGTH_LONG).show()
+                                    if (found.isEmpty()) android.widget.Toast.makeText(context, discoveryNoServicesMsg, android.widget.Toast.LENGTH_LONG).show()
                                 } catch (error: Exception) {
                                     if (error is kotlinx.coroutines.CancellationException) throw error
-                                    android.widget.Toast.makeText(context, error.message ?: context.getString(R.string.discovery_failed), android.widget.Toast.LENGTH_LONG).show()
+                                    android.widget.Toast.makeText(context, error.message ?: discoveryFailedMsg, android.widget.Toast.LENGTH_LONG).show()
                                 } finally { isScanning = false }
                             }
                         }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E88E5), contentColor = Color.White)) {
@@ -1782,7 +1802,7 @@ fun AddProfileForm(
                     }
                     }
                     val previewText = chainPreview?.takeIf { chainProblem == null && it.jumpHosts.isNotEmpty() }?.let {
-                        context.getString(R.string.jump_route_preview, editedProfile.name.ifBlank { context.getString(R.string.this_profile) }, it.jumpHosts.joinToString(context.getString(R.string.jump_route_separator)) { h -> h.name })
+                        jumpRoutePreviewFmt.format(editedProfile.name.ifBlank { thisProfileName }, it.jumpHosts.joinToString(jumpRouteSeparator) { h -> h.name })
                     }
                     if (previewText != null) {
                         Text(previewText, fontSize = 12.sp, color = Color.Gray,
