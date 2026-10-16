@@ -16,3 +16,8 @@ local.properties
 app/build/
 build/
 scratch/
+
+# Release signing (written by the CI release job; never commit the real keystore)
+/key.properties
+/farside-keystore.jks
+app/upload-keystore.jks

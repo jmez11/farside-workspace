@@ -8,6 +8,28 @@ android {
     namespace = "com.farside.workspace"
     compileSdk = 35
 
+    // CI release signing: reads key.properties from the repo root (gitignored, never committed).
+    // Local debug builds are unaffected when the file is absent.
+    val keystorePropertiesFile = rootProject.file("key.properties")
+    val keystoreProperties = java.util.Properties()
+    if (keystorePropertiesFile.exists()) {
+        java.io.FileInputStream(keystorePropertiesFile).use { keystoreProperties.load(it) }
+    }
+    // Tag builds pass -PversionName / -PversionCode; local builds keep the defaults below.
+    val ciVersionCode = providers.gradleProperty("versionCode").orNull?.toIntOrNull()
+    val ciVersionName = providers.gradleProperty("versionName").orNull
+
+    signingConfigs {
+        create("release") {
+            if (keystorePropertiesFile.exists()) {
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+            }
+        }
+    }
+
     configurations.all {
         exclude(group = "com.google.guava", module = "listenablefuture")
     }
@@ -16,8 +38,8 @@ android {
         applicationId = "com.farside.workspace"
         minSdk = 32 // Required for Meta Spatial SDK features (Android 12L)
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = ciVersionCode ?: 1
+        versionName = ciVersionName ?: "1.0"
         testInstrumentationRunner = "com.farside.workspace.RdpResizeInstrumentation"
         ndk {
             abiFilters += "arm64-v8a"
@@ -49,6 +71,16 @@ android {
         jniLibs { useLegacyPackaging = true; keepDebugSymbols += "**/libcloudflared.so" }
         resources.excludes += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
         resources.merges += listOf("META-INF/DEPENDENCIES", "META-INF/LICENSE", "META-INF/NOTICE")
+    }
+
+    buildTypes {
+        getByName("release") {
+            // Signed only when key.properties is present (CI release job); otherwise the
+            // default debug key is used so local release builds don't fail.
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
     }
 }
 

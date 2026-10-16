@@ -1,0 +1,82 @@
+name: Release
+
+# Signed arm64 release APK attached to a GitHub Release.
+# Trigger: push a tag like v1.0.0 (versionName comes from the tag),
+# or run manually from the Actions tab.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-release:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # needed to create the release
+    steps:
+      - name: Checkout with submodules
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          fetch-depth: 0 # versionCode derives from commit count
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Install Android SDK components
+        run: |
+          sdkmanager "platforms;android-35" "ndk;26.1.10909125" "cmake;3.22.1"
+
+      - name: Derive version from tag
+        id: version
+        run: |
+          TAG="${GITHUB_REF_NAME:-manual}"
+          VERSION_NAME="${TAG#v}"
+          VERSION_CODE="$(git rev-list --count HEAD)"
+          echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+          echo "Building $VERSION_NAME ($VERSION_CODE)"
+
+      - name: Configure Android signing
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > app/upload-keystore.jks
+          cat > key.properties << 'EOF'
+          storePassword=${{ secrets.ANDROID_STORE_PASSWORD }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          storeFile=app/upload-keystore.jks
+          EOF
+
+      - name: Build signed release APK
+        run: >
+          ./gradlew assembleRelease --stacktrace
+          "-PversionName=${{ steps.version.outputs.version_name }}"
+          "-PversionCode=${{ steps.version.outputs.version_code }}"
+
+      - name: Clean up keystore
+        if: always()
+        run: rm -f app/upload-keystore.jks key.properties
+
+      - name: Upload release APK artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: farside-release-apk
+          path: app/build/outputs/apk/release/app-release.apk
+          retention-days: 90
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: app/build/outputs/apk/release/app-release.apk
+          generate_release_notes: true
+          # Tags with a hyphen (v1.0.0-rc1, v0.1.0-beta1) become prereleases.
+          prerelease: ${{ contains(github.ref_name, '-') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
