@@ -54,7 +54,6 @@
   <string name="device_audio_redirection">Přesměrování zařízení &amp; zvuku</string>
   <string name="disconnected">Odpojeno</string>
   <string name="discovery_failed">Vyhledávání se nezdařilo</string>
-  <string name="don_t_reprompt_for_5_minutes">Neptat se znovu po dobu 5 minut</string>
   <string name="done">Hotovo</string>
   <string name="download">Stáhnout</string>
   <string name="edit">Upravit</string>
@@ -85,7 +84,6 @@
   <string name="more_options">Další možnosti</string>
   <string name="name">Název</string>
   <string name="new_folder">Nová složka</string>
-  <string name="login_as">přihlásit jako: </string>
   <string name="manage_your_passcode_in_quest_settings_security_protected_connec">Spravujte svůj přístupový kód v Nastavení Questu &gt; Zabezpečení. Chráněná připojení vyžadují ověření systémem.</string>
   <string name="none_connect_directly">Žádné (připojit přímo)</string>
   <string name="none_interactive_key_auth">Žádné (interaktivní / ověření klíčem)</string>
@@ -113,7 +111,6 @@
   <string name="release_to_open_here">Uvolněním otevřete zde</string>
   <string name="remote_key_panel_input">Vstup panelu vzdálených kláves</string>
   <string name="remote_keyboard_input">Vstup vzdálené klávesnice</string>
-  <string name="remoteapp_alias_e_g_cmd">Alias RemoteApp (např. ||cmd)</string>
   <string name="remove_app_pin">Odebrat PIN aplikace</string>
   <string name="remove_pin">Odebrat PIN</string>
   <string name="remove_pin_requirement">Odebrat požadavek na PIN</string>
@@ -128,10 +125,8 @@
   <string name="save_tunnel">Uložit tunel</string>
   <string name="saved_credential_deleted">Uložené přihlašovací údaje byly odstraněny. Pro toto připojení vyberte jiné přihlašovací údaje.</string>
   <string name="secures_credentials_with_require_pin_enabled">Zabezpečuje přihlašovací údaje se zapnutým požadavkem na PIN</string>
-  <string name="select_none_cloudflared_socks5_or_http_before_saving">Před uložením vyberte Žádné, Cloudflared, SOCKS5 nebo HTTP.</string>
   <string name="settings">Nastavení</string>
   <string name="routes_the_connection_through_cloudflare_access_browser_sign_in">Směruje připojení přes Cloudflare Access. Přihlášení v prohlížeči se otevře podle potřeby; tokeny zůstávají v soukromém úložišti aplikace.</string>
-  <string name="select_a_saved_vnc_password_1_to_8_latin_1_characters_and_a_vali">Vyberte uložené heslo VNC (1 až 8 znaků Latin-1) a platný port (1 až 65535).</string>
   <string name="show_cloudflared_parameters">Zobrazit parametry Cloudflared</string>
   <string name="source_port">Zdrojový port</string>
   <string name="ssh_key">Klíč SSH</string>
@@ -140,7 +135,6 @@
   <string name="ssh_keyboard_input">Vstup klávesnice SSH</string>
   <string name="ssh_keys">Klíče SSH</string>
   <string name="stop_tunnel">Zastavit tunel</string>
-  <string name="swap_mouse_buttons">Prohodit tlačítka myši</string>
   <string name="terminal_clipboard">Terminál &amp; schránka</string>
   <string name="terminal_settings">Nastavení terminálu</string>
   <string name="starting_cloudflared">Spouštím Cloudflared…</string>
@@ -166,7 +160,6 @@
   <string name="cancelled">Zrušeno.</string>
   <string name="saved_to_downloads">Uloženo do složky Stažené</string>
   <string name="headset_folder_unreadable">Tuto složku headsetu nelze přečíst.</string>
-  <string name="add">Přidat</string>
   <string name="enter_new_app_pin">Zadejte nový PIN aplikace:</string>
   <string name="set_app_pin_help">Nastavte PIN pro celou aplikaci k zabezpečení přihlašovacích údajů.</string>
   <string name="new_credential">Přidat nové přihlašovací údaje</string>
@@ -191,7 +184,6 @@
   <string name="set_app_pin_first">Nejprve nastavte PIN aplikace v nastavení Tunely a globální.</string>
   <string name="cloudflare_logins_cleared">Uložená přihlášení Cloudflare Access vymazána. Pro nové přihlášení se znovu připojte.</string>
   <string name="cloudflare_logins_clear_failed">Nepodařilo se vymazat přihlášení Cloudflare.</string>
-  <string name="unnamed_connection">Beze jména</string>
   <string name="discovery_no_services">Nebyly nalezeny žádné místní služby. Zadejte hostitele ručně nebo zkontrolujte Sdílení obrazovky a síť LAN.</string>
   <string name="new_pin_hint">Nový PIN (4–12 číslic)</string>
   <string name="pin_length_error">PIN musí mít 4–12 číslic.</string>
@@ -206,7 +198,6 @@
   <string name="move_connection_earlier">Přesunout %1$s dříve</string>
   <string name="move_connection_later">Přesunout %1$s později</string>
   <string name="finding_local_sessions">Hledám místní relace %1$s...</string>
-  <string name="proxy_connections_unavailable">Připojení %1$s zatím nejsou k dispozici.</string>
   <string name="http_proxy_connect">Připojit přes tento HTTP proxy.</string>
   <string name="http_proxy_host_port_required">Zadejte hostitele HTTP proxy a port v rozsahu 1 až 65535.</string>
   <string name="edit_named_item">Upravit %1$s</string>
@@ -297,14 +288,6 @@
   <string name="sftp_folder_name">%1$s/</string>
   <string name="sftp_entry_details">%1$s · %2$s</string>
   <string name="folder">Složka</string>
-  <plurals name="sftp_loading_found">
-    <item quantity="one">Načítání… (nalezena %1$d položka)</item>
-    <item quantity="other">Načítání… (nalezeno %1$d položek)</item>
-  </plurals>
-  <plurals name="sftp_loading_details">
-    <item quantity="one">Načítání… (nalezena %1$d položka, podrobnosti načteny %2$d/%1$d)</item>
-    <item quantity="other">Načítání… (nalezeno %1$d položek, podrobnosti načteny %2$d/%1$d)</item>
-  </plurals>
   <plurals name="sftp_file_bytes">
     <item quantity="one">%1$d bajt</item>
     <item quantity="other">%1$d bajtů</item>
@@ -332,8 +315,6 @@
   <string name="reset_zoom">Obnovit přiblížení</string>
   <string name="keyboard">Klávesnice</string>
   <string name="protocol_connection_failed">Připojení %1$s se nepodařilo navázat.</string>
-  <string name="session_disconnected">Relace %1$s byla odpojena.</string>
-  <string name="session_disconnected_reason">Relace %1$s byla odpojena.\n\n%2$s</string>
   <string name="zoom_percent">%1$d%%</string>
   <string name="scrollback_help">Scrollback ukládá předchozí řádky lokálně. Snížení limitu zahodí starší historii.</string>
   <string name="scrollback_lines_hint">Řádky scrollbacku (100–50 000)</string>

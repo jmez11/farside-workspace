@@ -54,7 +54,6 @@
   <string name="device_audio_redirection">Redirecionamento de dispositivo &amp; áudio</string>
   <string name="disconnected">Desconectado</string>
   <string name="discovery_failed">Falha na descoberta</string>
-  <string name="don_t_reprompt_for_5_minutes">Não perguntar novamente por 5 minutos</string>
   <string name="done">Concluído</string>
   <string name="download">Baixar</string>
   <string name="edit">Editar</string>
@@ -85,7 +84,6 @@
   <string name="more_options">Mais opções</string>
   <string name="name">Nome</string>
   <string name="new_folder">Nova pasta</string>
-  <string name="login_as">login como: </string>
   <string name="manage_your_passcode_in_quest_settings_security_protected_connec">Gerencie seu código em Configurações do Quest &gt; Segurança. Conexões protegidas exigem autenticação do sistema.</string>
   <string name="none_connect_directly">Nenhum (conectar diretamente)</string>
   <string name="none_interactive_key_auth">Nenhum (interativo / autenticação por chave)</string>
@@ -113,7 +111,6 @@
   <string name="release_to_open_here">Solte para abrir aqui</string>
   <string name="remote_key_panel_input">Entrada do painel de teclas remoto</string>
   <string name="remote_keyboard_input">Entrada de teclado remoto</string>
-  <string name="remoteapp_alias_e_g_cmd">Alias do RemoteApp (ex.: ||cmd)</string>
   <string name="remove_app_pin">Remover PIN do app</string>
   <string name="remove_pin">Remover PIN</string>
   <string name="remove_pin_requirement">Remover exigência de PIN</string>
@@ -128,10 +125,8 @@
   <string name="save_tunnel">Salvar túnel</string>
   <string name="saved_credential_deleted">A credencial salva foi excluída. Escolha outra credencial para esta conexão.</string>
   <string name="secures_credentials_with_require_pin_enabled">Protege credenciais com Exigir PIN ativado</string>
-  <string name="select_none_cloudflared_socks5_or_http_before_saving">Selecione Nenhum, Cloudflared, SOCKS5 ou HTTP antes de salvar.</string>
   <string name="settings">Configurações</string>
   <string name="routes_the_connection_through_cloudflare_access_browser_sign_in">Encaminha a conexão pelo Cloudflare Access. O login no navegador abre quando necessário; os tokens ficam no armazenamento privado do app.</string>
-  <string name="select_a_saved_vnc_password_1_to_8_latin_1_characters_and_a_vali">Selecione uma senha VNC salva (1 a 8 caracteres Latin-1) e uma porta válida (1 a 65535).</string>
   <string name="show_cloudflared_parameters">Mostrar parâmetros do Cloudflared</string>
   <string name="source_port">Porta de origem</string>
   <string name="ssh_key">Chave SSH</string>
@@ -140,7 +135,6 @@
   <string name="ssh_keyboard_input">Entrada de teclado SSH</string>
   <string name="ssh_keys">Chaves SSH</string>
   <string name="stop_tunnel">Parar túnel</string>
-  <string name="swap_mouse_buttons">Inverter botões do mouse</string>
   <string name="terminal_clipboard">Terminal &amp; área de transferência</string>
   <string name="terminal_settings">Configurações do terminal</string>
   <string name="starting_cloudflared">Iniciando Cloudflared…</string>
@@ -166,7 +160,6 @@
   <string name="cancelled">Cancelado.</string>
   <string name="saved_to_downloads">Salvo em Downloads</string>
   <string name="headset_folder_unreadable">Não foi possível ler esta pasta do headset.</string>
-  <string name="add">Adicionar</string>
   <string name="enter_new_app_pin">Digite o novo PIN do app:</string>
   <string name="set_app_pin_help">Defina um PIN para todo o app para proteger as credenciais.</string>
   <string name="new_credential">Adicionar nova credencial</string>
@@ -191,7 +184,6 @@
   <string name="set_app_pin_first">Defina um PIN do app primeiro em Túneis &amp; global.</string>
   <string name="cloudflare_logins_cleared">Logins do Cloudflare Access em cache apagados. Reconecte para entrar novamente.</string>
   <string name="cloudflare_logins_clear_failed">Não foi possível limpar os logins do Cloudflare.</string>
-  <string name="unnamed_connection">Sem nome</string>
   <string name="discovery_no_services">Nenhum serviço local encontrado. Digite o host manualmente ou verifique o Compartilhamento de Tela e a LAN.</string>
   <string name="new_pin_hint">Novo PIN (4–12 dígitos)</string>
   <string name="pin_length_error">Use 4–12 dígitos para o PIN.</string>
@@ -206,7 +198,6 @@
   <string name="move_connection_earlier">Mover %1$s para antes</string>
   <string name="move_connection_later">Mover %1$s para depois</string>
   <string name="finding_local_sessions">Localizando sessões %1$s locais...</string>
-  <string name="proxy_connections_unavailable">Conexões %1$s ainda não estão disponíveis.</string>
   <string name="http_proxy_connect">Conectar por meio deste proxy HTTP.</string>
   <string name="http_proxy_host_port_required">Digite um host de proxy HTTP e uma porta de 1 a 65535.</string>
   <string name="edit_named_item">Editar %1$s</string>
@@ -297,14 +288,6 @@
   <string name="sftp_folder_name">%1$s/</string>
   <string name="sftp_entry_details">%1$s · %2$s</string>
   <string name="folder">Pasta</string>
-  <plurals name="sftp_loading_found">
-    <item quantity="one">Carregando… (%1$d item encontrado)</item>
-    <item quantity="other">Carregando… (%1$d itens encontrados)</item>
-  </plurals>
-  <plurals name="sftp_loading_details">
-    <item quantity="one">Carregando… (%1$d item encontrado, detalhes lidos %2$d/%1$d)</item>
-    <item quantity="other">Carregando… (%1$d itens encontrados, detalhes lidos %2$d/%1$d)</item>
-  </plurals>
   <plurals name="sftp_file_bytes">
     <item quantity="one">%1$d byte</item>
     <item quantity="other">%1$d bytes</item>
@@ -332,8 +315,6 @@
   <string name="reset_zoom">Redefinir zoom</string>
   <string name="keyboard">Teclado</string>
   <string name="protocol_connection_failed">Não foi possível estabelecer a conexão %1$s.</string>
-  <string name="session_disconnected">A sessão %1$s foi desconectada.</string>
-  <string name="session_disconnected_reason">A sessão %1$s foi desconectada.\n\n%2$s</string>
   <string name="zoom_percent">%1$d%%</string>
   <string name="scrollback_help">O histórico de rolagem armazena linhas anteriores localmente. Reduzir o limite descarta o histórico mais antigo.</string>
   <string name="scrollback_lines_hint">Linhas de histórico de rolagem (100–50.000)</string>

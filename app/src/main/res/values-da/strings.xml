@@ -54,7 +54,6 @@
   <string name="device_audio_redirection">Enheds- og lydomdirigering</string>
   <string name="disconnected">Afbrudt</string>
   <string name="discovery_failed">Opdagelse mislykkedes</string>
-  <string name="don_t_reprompt_for_5_minutes">Spørg ikke igen i 5 minutter</string>
   <string name="done">Udført</string>
   <string name="download">Download</string>
   <string name="edit">Rediger</string>
@@ -85,7 +84,6 @@
   <string name="more_options">Flere indstillinger</string>
   <string name="name">Navn</string>
   <string name="new_folder">Ny mappe</string>
-  <string name="login_as">log ind som: </string>
   <string name="manage_your_passcode_in_quest_settings_security_protected_connec">Administrér din adgangskode i Quest Settings &gt; Sikkerhed. Beskyttede forbindelser kræver systemgodkendelse.</string>
   <string name="none_connect_directly">Ingen (forbind direkte)</string>
   <string name="none_interactive_key_auth">Ingen (interaktiv / nøglegodkendelse)</string>
@@ -113,7 +111,6 @@
   <string name="release_to_open_here">Slip for at åbne her</string>
   <string name="remote_key_panel_input">Input i fjerntastaturpanelet</string>
   <string name="remote_keyboard_input">Input fra fjerntastatur</string>
-  <string name="remoteapp_alias_e_g_cmd">RemoteApp-alias (f.eks. ||cmd)</string>
   <string name="remove_app_pin">Fjern app-PIN</string>
   <string name="remove_pin">Fjern PIN</string>
   <string name="remove_pin_requirement">Fjern PIN-kravet</string>
@@ -128,10 +125,8 @@
   <string name="save_tunnel">Gem tunnel</string>
   <string name="saved_credential_deleted">Den gemte loginoplysning blev slettet. Vælg en anden loginoplysning til denne forbindelse.</string>
   <string name="secures_credentials_with_require_pin_enabled">Sikrer loginoplysninger, når Kræv PIN er aktiveret</string>
-  <string name="select_none_cloudflared_socks5_or_http_before_saving">Vælg Ingen, Cloudflared, SOCKS5 eller HTTP, før du gemmer.</string>
   <string name="settings">Indstillinger</string>
   <string name="routes_the_connection_through_cloudflare_access_browser_sign_in">Dirigerer forbindelsen via Cloudflare Access. Browserlogin åbnes ved behov; token bliver i appens private lager.</string>
-  <string name="select_a_saved_vnc_password_1_to_8_latin_1_characters_and_a_vali">Vælg en gemt VNC-adgangskode (1 til 8 Latin-1-tegn) og en gyldig port (1 til 65535).</string>
   <string name="show_cloudflared_parameters">Vis Cloudflared-parametre</string>
   <string name="source_port">Kildeport</string>
   <string name="ssh_key">SSH-nøgle</string>
@@ -140,7 +135,6 @@
   <string name="ssh_keyboard_input">Tastaturinput til SSH</string>
   <string name="ssh_keys">SSH-nøgler</string>
   <string name="stop_tunnel">Stop tunnel</string>
-  <string name="swap_mouse_buttons">Byt museknapper</string>
   <string name="terminal_clipboard">Terminal &amp; udklipsholder</string>
   <string name="terminal_settings">Terminalindstillinger</string>
   <string name="starting_cloudflared">Starter Cloudflared…</string>
@@ -166,7 +160,6 @@
   <string name="cancelled">Annulleret.</string>
   <string name="saved_to_downloads">Gemt i Downloads</string>
   <string name="headset_folder_unreadable">Denne headsetmappe kan ikke læses.</string>
-  <string name="add">Tilføj</string>
   <string name="enter_new_app_pin">Indtast ny app-PIN:</string>
   <string name="set_app_pin_help">Indstil en app-dækkende PIN for at sikre loginoplysninger.</string>
   <string name="new_credential">Tilføj ny loginoplysning</string>
@@ -191,7 +184,6 @@
   <string name="set_app_pin_first">Indstil først en app-PIN i indstillingerne for Tunneler &amp; globalt.</string>
   <string name="cloudflare_logins_cleared">Cachelagrede Cloudflare Access-logins er ryddet. Opret forbindelse igen for at logge ind igen.</string>
   <string name="cloudflare_logins_clear_failed">Kunne ikke rydde Cloudflare Access-logins.</string>
-  <string name="unnamed_connection">Unavngivet</string>
   <string name="discovery_no_services">Ingen lokale tjenester fundet. Indtast værten manuelt, eller tjek skærmdeling og LAN.</string>
   <string name="new_pin_hint">Ny PIN (4–12 cifre)</string>
   <string name="pin_length_error">Brug 4–12 cifre til PIN.</string>
@@ -206,7 +198,6 @@
   <string name="move_connection_earlier">Flyt %1$s tidligere</string>
   <string name="move_connection_later">Flyt %1$s senere</string>
   <string name="finding_local_sessions">Finder lokale %1$s-sessioner…</string>
-  <string name="proxy_connections_unavailable">%1$s-forbindelser er ikke tilgængelige endnu.</string>
   <string name="http_proxy_connect">Opret forbindelse via denne HTTP-proxy.</string>
   <string name="http_proxy_host_port_required">Indtast en HTTP-proxyvært og en port mellem 1 og 65535.</string>
   <string name="edit_named_item">Rediger %1$s</string>
@@ -297,14 +288,6 @@
   <string name="sftp_folder_name">%1$s/</string>
   <string name="sftp_entry_details">%1$s · %2$s</string>
   <string name="folder">Mappe</string>
-  <plurals name="sftp_loading_found">
-    <item quantity="one">Indlæser… (Fandt %1$d element)</item>
-    <item quantity="other">Indlæser… (Fandt %1$d elementer)</item>
-  </plurals>
-  <plurals name="sftp_loading_details">
-    <item quantity="one">Indlæser… (Fandt %1$d element, læste detaljer %2$d/%1$d)</item>
-    <item quantity="other">Indlæser… (Fandt %1$d elementer, læste detaljer %2$d/%1$d)</item>
-  </plurals>
   <plurals name="sftp_file_bytes">
     <item quantity="one">%1$d byte</item>
     <item quantity="other">%1$d byte</item>
@@ -332,8 +315,6 @@
   <string name="reset_zoom">Nulstil zoom</string>
   <string name="keyboard">Tastatur</string>
   <string name="protocol_connection_failed">%1$s-forbindelsen kunne ikke oprettes.</string>
-  <string name="session_disconnected">%1$s-sessionen er blevet afbrudt.</string>
-  <string name="session_disconnected_reason">%1$s-sessionen er blevet afbrudt.\n\n%2$s</string>
   <string name="zoom_percent">%1$d%%</string>
   <string name="scrollback_help">Scrollback gemmer tidligere linjer lokalt. Hvis du sænker grænsen, kasseres ældre historik.</string>
   <string name="scrollback_lines_hint">Scrollback-linjer (100–50.000)</string>

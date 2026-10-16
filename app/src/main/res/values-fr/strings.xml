@@ -54,7 +54,6 @@
   <string name="device_audio_redirection">Redirection des appareils et de l\'audio</string>
   <string name="disconnected">Déconnecté</string>
   <string name="discovery_failed">Échec de la découverte</string>
-  <string name="don_t_reprompt_for_5_minutes">Ne plus redemander pendant 5 minutes</string>
   <string name="done">Terminé</string>
   <string name="download">Télécharger</string>
   <string name="edit">Modifier</string>
@@ -85,7 +84,6 @@
   <string name="more_options">Plus d\'options</string>
   <string name="name">Nom</string>
   <string name="new_folder">Nouveau dossier</string>
-  <string name="login_as">Connexion en tant que : </string>
   <string name="manage_your_passcode_in_quest_settings_security_protected_connec">Gérez votre code dans Paramètres Quest &gt; Sécurité. Les connexions protégées nécessitent une authentification système.</string>
   <string name="none_connect_directly">Aucun (connexion directe)</string>
   <string name="none_interactive_key_auth">Aucun (authentification interactive / par clé)</string>
@@ -113,7 +111,6 @@
   <string name="release_to_open_here">Relâchez pour ouvrir ici</string>
   <string name="remote_key_panel_input">Saisie du panneau de touches distant</string>
   <string name="remote_keyboard_input">Saisie du clavier distant</string>
-  <string name="remoteapp_alias_e_g_cmd">Alias RemoteApp (p. ex. ||cmd)</string>
   <string name="remove_app_pin">Supprimer le PIN d\'application</string>
   <string name="remove_pin">Supprimer le PIN</string>
   <string name="remove_pin_requirement">Supprimer l\'exigence de PIN</string>
@@ -128,10 +125,8 @@
   <string name="save_tunnel">Enregistrer le tunnel</string>
   <string name="saved_credential_deleted">L\'identifiant enregistré a été supprimé. Choisissez un autre identifiant pour cette connexion.</string>
   <string name="secures_credentials_with_require_pin_enabled">Protège les identifiants avec « Exiger le PIN » activé</string>
-  <string name="select_none_cloudflared_socks5_or_http_before_saving">Sélectionnez Aucun, Cloudflared, SOCKS5 ou HTTP avant d\'enregistrer.</string>
   <string name="settings">Paramètres</string>
   <string name="routes_the_connection_through_cloudflare_access_browser_sign_in">Achemine la connexion via Cloudflare Access. La connexion au navigateur s\'ouvre si nécessaire ; les jetons restent dans le stockage privé de l\'application.</string>
-  <string name="select_a_saved_vnc_password_1_to_8_latin_1_characters_and_a_vali">Sélectionnez un mot de passe VNC enregistré (1 à 8 caractères Latin-1) et un port valide (1 à 65535).</string>
   <string name="show_cloudflared_parameters">Afficher les paramètres Cloudflared</string>
   <string name="source_port">Port source</string>
   <string name="ssh_key">Clé SSH</string>
@@ -140,7 +135,6 @@
   <string name="ssh_keyboard_input">Saisie du clavier SSH</string>
   <string name="ssh_keys">Clés SSH</string>
   <string name="stop_tunnel">Arrêter le tunnel</string>
-  <string name="swap_mouse_buttons">Inverser les boutons de la souris</string>
   <string name="terminal_clipboard">Terminal et presse-papiers</string>
   <string name="terminal_settings">Paramètres du terminal</string>
   <string name="starting_cloudflared">Démarrage de Cloudflared…</string>
@@ -166,7 +160,6 @@
   <string name="cancelled">Annulé.</string>
   <string name="saved_to_downloads">Enregistré dans Téléchargements</string>
   <string name="headset_folder_unreadable">Ce dossier du casque est illisible.</string>
-  <string name="add">Ajouter</string>
   <string name="enter_new_app_pin">Saisissez le nouveau PIN d\'application :</string>
   <string name="set_app_pin_help">Définissez un PIN global à l\'application pour protéger les identifiants.</string>
   <string name="new_credential">Ajouter un identifiant</string>
@@ -191,7 +184,6 @@
   <string name="set_app_pin_first">Définissez d\'abord un PIN d\'application dans les paramètres Tunnels et global.</string>
   <string name="cloudflare_logins_cleared">Connexions Cloudflare Access en cache effacées. Reconnectez-vous pour vous connecter à nouveau.</string>
   <string name="cloudflare_logins_clear_failed">Impossible d\'effacer les connexions Cloudflare.</string>
-  <string name="unnamed_connection">Sans nom</string>
   <string name="discovery_no_services">Aucun service local trouvé. Saisissez l\'hôte manuellement ou vérifiez le partage d\'écran et le réseau local.</string>
   <string name="new_pin_hint">Nouveau PIN (4 à 12 chiffres)</string>
   <string name="pin_length_error">Utilisez 4 à 12 chiffres pour le PIN.</string>
@@ -206,7 +198,6 @@
   <string name="move_connection_earlier">Déplacer %1$s plus tôt</string>
   <string name="move_connection_later">Déplacer %1$s plus tard</string>
   <string name="finding_local_sessions">Recherche de sessions %1$s locales…</string>
-  <string name="proxy_connections_unavailable">Les connexions %1$s ne sont pas encore disponibles.</string>
   <string name="http_proxy_connect">Se connecter via ce proxy HTTP.</string>
   <string name="http_proxy_host_port_required">Saisissez un hôte proxy HTTP et un port compris entre 1 et 65535.</string>
   <string name="edit_named_item">Modifier %1$s</string>
@@ -297,14 +288,6 @@
   <string name="sftp_folder_name">%1$s/</string>
   <string name="sftp_entry_details">%1$s · %2$s</string>
   <string name="folder">Dossier</string>
-  <plurals name="sftp_loading_found">
-    <item quantity="one">Chargement… (%1$d élément trouvé)</item>
-    <item quantity="other">Chargement… (%1$d éléments trouvés)</item>
-  </plurals>
-  <plurals name="sftp_loading_details">
-    <item quantity="one">Chargement… (%1$d élément trouvé, détails lus %2$d/%1$d)</item>
-    <item quantity="other">Chargement… (%1$d éléments trouvés, détails lus %2$d/%1$d)</item>
-  </plurals>
   <plurals name="sftp_file_bytes">
     <item quantity="one">%1$d octet</item>
     <item quantity="other">%1$d octets</item>
@@ -332,8 +315,6 @@
   <string name="reset_zoom">Réinitialiser le zoom</string>
   <string name="keyboard">Clavier</string>
   <string name="protocol_connection_failed">La connexion %1$s n\'a pas pu être établie.</string>
-  <string name="session_disconnected">La session %1$s s\'est déconnectée.</string>
-  <string name="session_disconnected_reason">La session %1$s s\'est déconnectée.\n\n%2$s</string>
   <string name="zoom_percent">%1$d%%</string>
   <string name="scrollback_help">Le défilement conserve les lignes précédentes localement. Réduire la limite supprime l\'historique le plus ancien.</string>
   <string name="scrollback_lines_hint">Lignes de défilement (100–50 000)</string>

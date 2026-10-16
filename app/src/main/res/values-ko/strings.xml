@@ -54,7 +54,6 @@
   <string name="device_audio_redirection">장치 및 오디오 리디렉션</string>
   <string name="disconnected">연결 끊김</string>
   <string name="discovery_failed">검색 실패</string>
-  <string name="don_t_reprompt_for_5_minutes">5분 동안 다시 묻지 않기</string>
   <string name="done">완료</string>
   <string name="download">다운로드</string>
   <string name="edit">편집</string>
@@ -85,7 +84,6 @@
   <string name="more_options">추가 옵션</string>
   <string name="name">이름</string>
   <string name="new_folder">새 폴더</string>
-  <string name="login_as">로그인: </string>
   <string name="manage_your_passcode_in_quest_settings_security_protected_connec">Quest 설정 &gt; 보안에서 패스코드를 관리하세요. 보호된 연결에는 시스템 인증이 필요합니다.</string>
   <string name="none_connect_directly">없음 (직접 연결)</string>
   <string name="none_interactive_key_auth">없음 (대화형 / 키 인증)</string>
@@ -113,7 +111,6 @@
   <string name="release_to_open_here">여기에 놓으면 열립니다</string>
   <string name="remote_key_panel_input">원격 키 패널 입력</string>
   <string name="remote_keyboard_input">원격 키보드 입력</string>
-  <string name="remoteapp_alias_e_g_cmd">RemoteApp 별칭 (예: ||cmd)</string>
   <string name="remove_app_pin">앱 PIN 제거</string>
   <string name="remove_pin">PIN 제거</string>
   <string name="remove_pin_requirement">PIN 요구 사항 제거</string>
@@ -128,10 +125,8 @@
   <string name="save_tunnel">터널 저장</string>
   <string name="saved_credential_deleted">저장된 자격 증명이 삭제되었습니다. 이 연결에 사용할 다른 자격 증명을 선택하세요.</string>
   <string name="secures_credentials_with_require_pin_enabled">PIN 필요를 활성화하여 자격 증명 보호</string>
-  <string name="select_none_cloudflared_socks5_or_http_before_saving">저장하기 전에 없음, Cloudflared, SOCKS5 또는 HTTP를 선택하세요.</string>
   <string name="settings">설정</string>
   <string name="routes_the_connection_through_cloudflare_access_browser_sign_in">Cloudflare Access를 통해 연결을 라우팅합니다. 필요 시 브라우저 로그인이 열리며, 토큰은 앱의 비공개 저장소에 보관됩니다.</string>
-  <string name="select_a_saved_vnc_password_1_to_8_latin_1_characters_and_a_vali">저장된 VNC 비밀번호(1~8자의 Latin-1 문자)와 유효한 포트(1~65535)를 선택하세요.</string>
   <string name="show_cloudflared_parameters">Cloudflared 매개변수 표시</string>
   <string name="source_port">원본 포트</string>
   <string name="ssh_key">SSH 키</string>
@@ -140,7 +135,6 @@
   <string name="ssh_keyboard_input">SSH 키보드 입력</string>
   <string name="ssh_keys">SSH 키</string>
   <string name="stop_tunnel">터널 중지</string>
-  <string name="swap_mouse_buttons">마우스 버튼 바꾸기</string>
   <string name="terminal_clipboard">터미널 및 클립보드</string>
   <string name="terminal_settings">터미널 설정</string>
   <string name="starting_cloudflared">Cloudflared 시작 중…</string>
@@ -166,7 +160,6 @@
   <string name="cancelled">취소됨.</string>
   <string name="saved_to_downloads">Downloads에 저장됨</string>
   <string name="headset_folder_unreadable">이 헤드셋 폴더를 읽을 수 없습니다.</string>
-  <string name="add">추가</string>
   <string name="enter_new_app_pin">새 앱 PIN 입력:</string>
   <string name="set_app_pin_help">자격 증명을 보호하기 위해 앱 전체 PIN을 설정하세요.</string>
   <string name="new_credential">새 자격 증명 추가</string>
@@ -191,7 +184,6 @@
   <string name="set_app_pin_first">먼저 터널 및 전역 설정에서 앱 PIN을 설정하세요.</string>
   <string name="cloudflare_logins_cleared">캐시된 Cloudflare Access 로그인이 지워졌습니다. 다시 연결하여 로그인하세요.</string>
   <string name="cloudflare_logins_clear_failed">Cloudflare 로그인을 지울 수 없습니다.</string>
-  <string name="unnamed_connection">이름 없음</string>
   <string name="discovery_no_services">로컬 서비스를 찾을 수 없습니다. 호스트를 수동으로 입력하거나 화면 공유 및 LAN을 확인하세요.</string>
   <string name="new_pin_hint">새 PIN (4~12자리 숫자)</string>
   <string name="pin_length_error">PIN은 4~12자리 숫자로 입력하세요.</string>
@@ -206,7 +198,6 @@
   <string name="move_connection_earlier">%1$s 앞으로 이동</string>
   <string name="move_connection_later">%1$s 뒤로 이동</string>
   <string name="finding_local_sessions">로컬 %1$s 세션 검색 중...</string>
-  <string name="proxy_connections_unavailable">%1$s 연결을 아직 사용할 수 없습니다.</string>
   <string name="http_proxy_connect">이 HTTP 프록시를 통해 연결합니다.</string>
   <string name="http_proxy_host_port_required">HTTP 프록시 호스트와 1~65535 사이의 포트를 입력하세요.</string>
   <string name="edit_named_item">%1$s 편집</string>
@@ -297,14 +288,6 @@
   <string name="sftp_folder_name">%1$s/</string>
   <string name="sftp_entry_details">%1$s · %2$s</string>
   <string name="folder">폴더</string>
-  <plurals name="sftp_loading_found">
-    <item quantity="one">로드 중… (%1$d개 항목 찾음)</item>
-    <item quantity="other">로드 중… (%1$d개 항목 찾음)</item>
-  </plurals>
-  <plurals name="sftp_loading_details">
-    <item quantity="one">로드 중… (%1$d개 항목 찾음, 세부 정보 %2$d/%1$d 읽음)</item>
-    <item quantity="other">로드 중… (%1$d개 항목 찾음, 세부 정보 %2$d/%1$d 읽음)</item>
-  </plurals>
   <plurals name="sftp_file_bytes">
     <item quantity="one">%1$d 바이트</item>
     <item quantity="other">%1$d 바이트</item>
@@ -332,8 +315,6 @@
   <string name="reset_zoom">확대/축소 초기화</string>
   <string name="keyboard">키보드</string>
   <string name="protocol_connection_failed">%1$s 연결을 설정할 수 없습니다.</string>
-  <string name="session_disconnected">%1$s 세션의 연결이 끊어졌습니다.</string>
-  <string name="session_disconnected_reason">%1$s 세션의 연결이 끊어졌습니다.\n\n%2$s</string>
   <string name="zoom_percent">%1$d%%</string>
   <string name="scrollback_help">스크롤백은 이전 줄을 로컬에 저장합니다. 제한을 낮추면 이전 기록이 삭제됩니다.</string>
   <string name="scrollback_lines_hint">스크롤백 줄 수 (100–50,000)</string>
