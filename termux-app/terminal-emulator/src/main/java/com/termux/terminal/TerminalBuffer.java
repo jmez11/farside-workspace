@@ -267,7 +267,7 @@ public final class TerminalBuffer {
      */
     public void resize(int newColumns, int newRows, int newTotalRows, int[] cursor, long currentStyle, boolean altScreen) {
         // newRows > mTotalRows should not normally happen since mTotalRows is TRANSCRIPT_ROWS (10000):
-        if (newColumns == mColumns && newRows <= mTotalRows && newTotalRows == mTotalRows) {
+        if (newColumns == mColumns && newRows <= mTotalRows && newTotalRows <= mTotalRows) {
             // Fast resize where just the rows changed.
             int shiftDownOfTopRow = mScreenRows - newRows;
             if (shiftDownOfTopRow > 0 && shiftDownOfTopRow < mScreenRows) {
