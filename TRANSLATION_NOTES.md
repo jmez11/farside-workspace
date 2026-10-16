@@ -477,3 +477,13 @@ Preserve positional placeholders, XML/Android escaping, brand names, protocol id
 - `protocol_rdp`: RDP device/clipboard sharing with a remote PC; RemoteApp is a published Windows application.
 - `rdp_clipboard_label`: RDP device/clipboard sharing with a remote PC; RemoteApp is a published Windows application. Android/remote copy-paste or headset Downloads/storage-access terminology.
 - `ssh_clipboard_label`: SSH terminal/SFTP file-transfer terminology; jump hosts are intermediate SSH machines. Android/remote copy-paste or headset Downloads/storage-access terminology.
+
+## 2026-10-15 top-up (11 strings)
+- `capture_connection`: %1$s is the connected session's name; keep the positional placeholder exactly once, in a grammatically natural position.
+- `card_capture_failed`: Screenshot capture of the connected session window failed.
+- `favorite` / `unfavorite`: Toggle action pair (add to / remove from favorites) on connection cards.
+- `mac_vnc`: Brand/protocol token; never translated.
+- `sftp_browser`: SFTP file browser panel title; SFTP untranslated.
+- `socks5_proxy_connect` / `socks5_proxy_host_port_required`: Mirror the existing `http_proxy_connect` / `http_proxy_host_port_required` strings; SOCKS5 untranslated.
+- `window_manager`: Horizon OS window manager shortcut.
+- `find_local_macs` / `finding_local_macs`: "Macs" = Apple Mac computers on the LAN (Bonjour discovery context); brand token "Mac"/"Macs" kept untranslated (CJK locales use "Mac" — those languages don't mark plurals; flagged UNCERTAIN there). Ellipsis follows the existing per-locale convention ("…" vs "...") mirroring `finding_local_sessions`.

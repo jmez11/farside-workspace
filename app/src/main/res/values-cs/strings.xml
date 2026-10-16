@@ -606,4 +606,17 @@
   <string name="reconnect_prompt">Znovu se připojit k %1$s?</string>
   <string name="reconnecting_in">Opětovné připojení za %1$d…</string>
   <string name="reconnect_now">Připojit znovu</string>
+  <string name="capture_connection">Použít snímek obrazovky %1$s jako pozadí karty</string>
+  <string name="card_capture_failed">Nepodařilo se zachytit připojené okno.</string>
+  <!-- UNCERTAIN: "idiomatic Czech UI term for the favorite toggle is uncertain" -->
+  <string name="favorite">Přidat do oblíbených</string>
+  <string name="mac_vnc">Mac/VNC</string>
+  <string name="sftp_browser">Prohlížeč SFTP</string>
+  <string name="socks5_proxy_connect">Připojit přes tento SOCKS5 proxy.</string>
+  <string name="socks5_proxy_host_port_required">Zadejte hostitele SOCKS5 proxy a port v rozsahu 1 až 65535.</string>
+  <!-- UNCERTAIN: "idiomatic Czech UI term for the unfavorite toggle is uncertain" -->
+  <string name="unfavorite">Odebrat z oblíbených</string>
+  <string name="window_manager">Správce oken</string>
+  <string name="find_local_macs">Kliknutím zde najdete místní Macs</string>
+  <string name="finding_local_macs">Hledám místní Macs...</string>
 </resources>

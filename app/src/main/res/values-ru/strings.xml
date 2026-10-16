@@ -606,4 +606,17 @@
   <string name="reconnect_prompt">Переподключиться к %1$s?</string>
   <string name="reconnecting_in">Переподключение через %1$d…</string>
   <string name="reconnect_now">Переподключиться сейчас</string>
+  <string name="capture_connection">Использовать снимок экрана %1$s как фон карточки</string>
+  <string name="card_capture_failed">Не удалось сделать снимок подключённого окна.</string>
+  <string name="favorite">В избранное</string>
+  <string name="mac_vnc">Mac/VNC</string>
+  <string name="sftp_browser">SFTP-браузер</string>
+  <string name="socks5_proxy_connect">Подключиться через этот SOCKS5-прокси.</string>
+  <string name="socks5_proxy_host_port_required">Введите хост SOCKS5-прокси и порт от 1 до 65535.</string>
+  <string name="unfavorite">Убрать из избранного</string>
+  <string name="window_manager">Диспетчер окон</string>
+  <!-- UNCERTAIN: "kept 'Macs' untranslated per brand-token rule; natural Russian would use 'компьютеров Mac'" -->
+  <string name="find_local_macs">Нажмите здесь, чтобы найти локальные Macs</string>
+  <!-- UNCERTAIN: "kept 'Macs' untranslated per brand-token rule; natural Russian would use 'компьютеров Mac'" -->
+  <string name="finding_local_macs">Поиск локальных Macs...</string>
 </resources>

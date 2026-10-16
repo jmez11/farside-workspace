@@ -606,4 +606,15 @@
   <string name="reconnect_prompt">Återansluta till %1$s?</string>
   <string name="reconnecting_in">Återansluter om %1$d…</string>
   <string name="reconnect_now">Återanslut nu</string>
+  <string name="capture_connection">Använd skärmbild av %1$s som kortbakgrund</string>
+  <string name="card_capture_failed">Kunde inte ta en skärmbild av det anslutna fönstret.</string>
+  <string name="favorite">Lägg till i favoriter</string>
+  <string name="mac_vnc">Mac/VNC</string>
+  <string name="sftp_browser">SFTP-webbläsare</string>
+  <string name="socks5_proxy_connect">Anslut via denna SOCKS5-proxy.</string>
+  <string name="socks5_proxy_host_port_required">Ange en SOCKS5-proxyvärd och en port mellan 1 och 65535.</string>
+  <string name="unfavorite">Ta bort från favoriter</string>
+  <string name="window_manager">Fönsterhanterare</string>
+  <string name="find_local_macs">Klicka här för att hitta lokala Macs</string>
+  <string name="finding_local_macs">Hittar lokala Macs…</string>
 </resources>

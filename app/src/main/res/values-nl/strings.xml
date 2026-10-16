@@ -606,4 +606,15 @@
   <string name="reconnect_prompt">Opnieuw verbinden met %1$s?</string>
   <string name="reconnecting_in">Opnieuw verbinden over %1$d…</string>
   <string name="reconnect_now">Nu opnieuw verbinden</string>
+  <string name="capture_connection">Schermafbeelding van %1$s als kaartachtergrond gebruiken</string>
+  <string name="card_capture_failed">Kan geen schermafbeelding van het verbonden venster maken.</string>
+  <string name="favorite">Toevoegen aan favorieten</string>
+  <string name="mac_vnc">Mac/VNC</string>
+  <string name="sftp_browser">SFTP-browser</string>
+  <string name="socks5_proxy_connect">Verbinden via deze SOCKS5-proxy.</string>
+  <string name="socks5_proxy_host_port_required">Voer een SOCKS5-proxyhost en een poort van 1 tot 65535 in.</string>
+  <string name="unfavorite">Verwijderen uit favorieten</string>
+  <string name="window_manager">Vensterbeheer</string>
+  <string name="find_local_macs">Klik hier om lokale Macs te zoeken</string>
+  <string name="finding_local_macs">Lokale Macs zoeken...</string>
 </resources>

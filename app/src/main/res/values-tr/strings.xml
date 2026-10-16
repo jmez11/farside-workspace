@@ -606,4 +606,16 @@
   <string name="reconnect_prompt">%1$s öğesine yeniden bağlanılsın mı?</string>
   <string name="reconnecting_in">%1$d içinde yeniden bağlanılıyor…</string>
   <string name="reconnect_now">Şimdi yeniden bağlan</string>
+  <string name="capture_connection">%1$s ekran görüntüsünü kart arka planı olarak kullan</string>
+  <string name="card_capture_failed">Bağlı pencerenin ekran görüntüsü alınamadı.</string>
+  <string name="favorite">Favorilere ekle</string>
+  <string name="mac_vnc">Mac/VNC</string>
+  <string name="sftp_browser">SFTP tarayıcısı</string>
+  <string name="socks5_proxy_connect">Bu SOCKS5 proxy üzerinden bağlan.</string>
+  <string name="socks5_proxy_host_port_required">Bir SOCKS5 proxy ana bilgisayarı ve 1 ile 65535 arasında bir bağlantı noktası girin.</string>
+  <string name="unfavorite">Favorilerden çıkar</string>
+  <string name="window_manager">Pencere yöneticisi</string>
+  <!-- UNCERTAIN: "kept 'Macs' untranslated; dropped the accusative suffix Turkish grammar would want" -->
+  <string name="find_local_macs">Yerel Macs Bulmak için buraya tıklayın</string>
+  <string name="finding_local_macs">Yerel Macs aranıyor…</string>
 </resources>
