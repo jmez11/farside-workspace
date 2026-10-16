@@ -2,9 +2,6 @@
 	path = app/src/main/cpp/freerdp
 	url = https://github.com/FreeRDP/FreeRDP.git
 	branch = 3.32.x
-[submodule "termux-app"]
-	path = termux-app
-	url = https://github.com/termux/termux-app.git
 [submodule "app/src/main/cpp/libvncserver"]
 	path = app/src/main/cpp/libvncserver
 	url = https://github.com/LibVNC/libvncserver.git

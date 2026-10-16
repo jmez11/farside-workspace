@@ -16,8 +16,8 @@ run them locally before tagging.
 
 `.github/workflows/release.yml` triggers on tags like `v1.0.0`:
 
-- Checks out with `submodules: recursive` (FreeRDP 3.32.x, LibVNC, termux-app
-  modules are all required to compile).
+- Checks out with `submodules: recursive` (FreeRDP 3.32.x and LibVNC must check
+  out and compile; the Termux terminal modules are vendored in `termux-app/`).
 - Installs the pinned NDK (`26.1.10909125`) and CMake (`3.22.1`) via sdkmanager.
 - Derives `versionName` from the tag (`v1.0.0` → `1.0.0`) and `versionCode`
   from the commit count — monotonic, no manual bumping.
