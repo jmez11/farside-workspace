@@ -83,7 +83,6 @@
   <string name="microphone_redirection_unavailable">Redirecionamento de microfone indisponível</string>
   <string name="more_options">Mais opções</string>
   <string name="name">Nome</string>
-  <string name="new_connection">Nova conexão</string>
   <string name="new_folder">Nova pasta</string>
   <string name="login_as">login como: </string>
   <string name="manage_your_passcode_in_quest_settings_security_protected_connec">Gerencie seu código em Configurações do Quest &gt; Segurança. Conexões protegidas exigem autenticação do sistema.</string>

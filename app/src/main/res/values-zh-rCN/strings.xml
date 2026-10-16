@@ -83,7 +83,6 @@
   <string name="microphone_redirection_unavailable">麦克风重定向不可用</string>
   <string name="more_options">更多选项</string>
   <string name="name">名称</string>
-  <string name="new_connection">新建连接</string>
   <string name="new_folder">新建文件夹</string>
   <string name="login_as">登录身份： </string>
   <string name="manage_your_passcode_in_quest_settings_security_protected_connec">请在 Quest Settings &gt; 安全 中管理您的密码。受保护的连接需要系统身份验证。</string>

@@ -83,7 +83,6 @@
   <string name="microphone_redirection_unavailable">Mikrofon yönlendirme kullanılamıyor</string>
   <string name="more_options">Diğer seçenekler</string>
   <string name="name">Ad</string>
-  <string name="new_connection">Yeni Bağlantı</string>
   <string name="new_folder">Yeni klasör</string>
   <string name="login_as">olarak giriş yap: </string>
   <string name="manage_your_passcode_in_quest_settings_security_protected_connec">Parolanızı Quest Settings &gt; Güvenlik bölümünde yönetin. Korunan bağlantılar sistem kimlik doğrulaması gerektirir.</string>

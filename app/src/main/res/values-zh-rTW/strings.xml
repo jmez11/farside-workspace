@@ -83,7 +83,6 @@
   <string name="microphone_redirection_unavailable">無法使用麥克風重新導向</string>
   <string name="more_options">更多選項</string>
   <string name="name">名稱</string>
-  <string name="new_connection">新增連線</string>
   <string name="new_folder">新增資料夾</string>
   <string name="login_as">登入身分: </string>
   <string name="manage_your_passcode_in_quest_settings_security_protected_connec">請在 Quest 設定 &gt; 安全性中管理您的密碼。受保護的連線需要系統驗證。</string>

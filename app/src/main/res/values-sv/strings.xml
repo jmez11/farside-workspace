@@ -83,7 +83,6 @@
   <string name="microphone_redirection_unavailable">Mikrofonombdirigering är inte tillgänglig</string>
   <string name="more_options">Fler alternativ</string>
   <string name="name">Namn</string>
-  <string name="new_connection">Ny anslutning</string>
   <string name="new_folder">Ny mapp</string>
   <string name="login_as">logga in som: </string>
   <string name="manage_your_passcode_in_quest_settings_security_protected_connec">Hantera din lösenkod i Quest Settings &gt; Säkerhet. Skyddade anslutningar kräver systemautentisering.</string>
