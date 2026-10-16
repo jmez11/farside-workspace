@@ -77,10 +77,13 @@ android {
     }
 
     lint {
-        // The Compose FrequentlyChangingValue detector crashes lint outright
-        // (IncompatibleClassChangeError from a Kotlin analysis API mismatch — a lint
-        // tool bug, not a code issue). Disabling it is lint's own suggested workaround.
-        disable += "FrequentlyChangingValue"
+        // Two Compose lint detectors crash lint outright (IncompatibleClassChangeError
+        // from a Kotlin analysis API mismatch: AGP 8.7.2's lint predates the Compose
+        // 1.9 checks Meta's SDK pulls in). Verified against the 1.9.0 lint.jar that
+        // these are the only two detectors using the broken helper, so the
+        // whack-a-mole ends here. Disabling is lint's own suggested workaround.
+        // Proper fix later: bump AGP 8.7.2 -> 8.11.1 (already staged in libs.versions.toml).
+        disable += listOf("FrequentlyChangingValue", "RememberInComposition")
     }
 
     buildTypes {
