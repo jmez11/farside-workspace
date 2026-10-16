@@ -207,6 +207,9 @@
   <string name="jump_route_separator">" \u2192 "</string>
   <plurals name="saved_port_forward_count">
     <item quantity="one">Przekierowanie portów · zapisano: %1$d</item>
+    <!-- DRAFT: few/many need native-speaker review -->
+    <item quantity="few">Przekierowanie portów · zapisano: %1$d</item>
+    <item quantity="many">Przekierowanie portów · zapisano: %1$d</item>
     <item quantity="other">Przekierowanie portów · zapisano: %1$d</item>
   </plurals>
   <string name="enable_wireless_debugging_help">Włącz debugowanie bezprzewodowe na goglach, aby skonfigurować tunel.</string>
@@ -226,6 +229,9 @@
   <string name="unlock">Odblokuj</string>
   <plurals name="pin_remember_minutes">
     <item quantity="one">Nie pytaj ponownie przez %1$d minutę</item>
+    <!-- DRAFT: few/many need native-speaker review -->
+    <item quantity="few">Nie pytaj ponownie przez %1$d minuty</item>
+    <item quantity="many">Nie pytaj ponownie przez %1$d minut</item>
     <item quantity="other">Nie pytaj ponownie przez %1$d minut</item>
   </plurals>
   <string name="connection_via">przez %1$s</string>
@@ -290,6 +296,9 @@
   <string name="folder">Folder</string>
   <plurals name="sftp_file_bytes">
     <item quantity="one">%1$d bajt</item>
+    <!-- DRAFT: few/many need native-speaker review -->
+    <item quantity="few">%1$d bajty</item>
+    <item quantity="many">%1$d bajtów</item>
     <item quantity="other">%1$d bajtów</item>
   </plurals>
   <string name="sftp_auth_failed">Uwierzytelnienie nie powiodło się. Sprawdź zapisane poświadczenie lub klucz SSH.</string>
@@ -394,6 +403,9 @@
   <string name="incorrect_pin">Nieprawidłowy PIN.</string>
   <plurals name="pin_retry_seconds">
     <item quantity="one">Za dużo prób. Spróbuj ponownie za %1$d sekundę.</item>
+    <!-- DRAFT: few/many need native-speaker review -->
+    <item quantity="few">Za dużo prób. Spróbuj ponownie za %1$d sekundy.</item>
+    <item quantity="many">Za dużo prób. Spróbuj ponownie za %1$d sekund.</item>
     <item quantity="other">Za dużo prób. Spróbuj ponownie za %1$d sekund.</item>
   </plurals>
   <string name="headset_passcode_required">Ustaw kod gogli w Ustawienia Quest &gt; Bezpieczeństwo, zanim odblokujesz to połączenie.</string>
@@ -513,6 +525,9 @@
   <string name="jump_host_wrong_type">Host pośredniczący %1$s nie jest profilem SSH.</string>
   <plurals name="jump_chain_too_long">
     <item quantity="one">Łańcuch hostów pośredniczących jest dłuższy niż %1$d przeskoków (%2$s).</item>
+    <!-- DRAFT: few/many need native-speaker review; note: "one" form also looks wrong (should be "przeskok") -->
+    <item quantity="few">Łańcuch hostów pośredniczących jest dłuższy niż %1$d przeskoki (%2$s).</item>
+    <item quantity="many">Łańcuch hostów pośredniczących jest dłuższy niż %1$d przeskoków (%2$s).</item>
     <item quantity="other">Łańcuch hostów pośredniczących jest dłuższy niż %1$d przeskoków (%2$s).</item>
   </plurals>
   <string name="forward_kind_local">Lokalny</string>

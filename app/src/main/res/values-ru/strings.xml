@@ -207,6 +207,9 @@
   <string name="jump_route_separator">" \u2192 "</string>
   <plurals name="saved_port_forward_count">
     <item quantity="one">Перенаправление портов · %1$d сохранено</item>
+    <!-- DRAFT: few/many need native-speaker review -->
+    <item quantity="few">Перенаправление портов · %1$d сохранено</item>
+    <item quantity="many">Перенаправление портов · %1$d сохранено</item>
     <item quantity="other">Перенаправление портов · %1$d сохранено</item>
   </plurals>
   <string name="enable_wireless_debugging_help">Включите беспроводную отладку на гарнитуре, чтобы настроить туннель.</string>
@@ -226,6 +229,9 @@
   <string name="unlock">Разблокировать</string>
   <plurals name="pin_remember_minutes">
     <item quantity="one">Не спрашивать %1$d минуту</item>
+    <!-- DRAFT: few/many need native-speaker review -->
+    <item quantity="few">Не спрашивать %1$d минуты</item>
+    <item quantity="many">Не спрашивать %1$d минут</item>
     <item quantity="other">Не спрашивать %1$d минут</item>
   </plurals>
   <string name="connection_via">через %1$s</string>
@@ -290,6 +296,9 @@
   <string name="folder">Папка</string>
   <plurals name="sftp_file_bytes">
     <item quantity="one">%1$d байт</item>
+    <!-- DRAFT: few/many need native-speaker review -->
+    <item quantity="few">%1$d байта</item>
+    <item quantity="many">%1$d байтов</item>
     <item quantity="other">%1$d байтов</item>
   </plurals>
   <string name="sftp_auth_failed">Аутентификация не удалась. Проверьте сохранённые учётные данные или SSH-ключ.</string>
@@ -394,6 +403,9 @@
   <string name="incorrect_pin">Неверный PIN.</string>
   <plurals name="pin_retry_seconds">
     <item quantity="one">Слишком много попыток. Попробуйте через %1$d секунду.</item>
+    <!-- DRAFT: few/many need native-speaker review -->
+    <item quantity="few">Слишком много попыток. Попробуйте через %1$d секунды.</item>
+    <item quantity="many">Слишком много попыток. Попробуйте через %1$d секунд.</item>
     <item quantity="other">Слишком много попыток. Попробуйте через %1$d секунд.</item>
   </plurals>
   <string name="headset_passcode_required">Установите код гарнитуры в настройках Quest &gt; Безопасность перед разблокировкой этого подключения.</string>
@@ -513,6 +525,9 @@
   <string name="jump_host_wrong_type">Промежуточный хост %1$s не является SSH-профилем.</string>
   <plurals name="jump_chain_too_long">
     <item quantity="one">Цепочка длиннее %1$d хопа (%2$s).</item>
+    <!-- DRAFT: few/many need native-speaker review -->
+    <item quantity="few">Цепочка длиннее %1$d хопа (%2$s).</item>
+    <item quantity="many">Цепочка длиннее %1$d хопов (%2$s).</item>
     <item quantity="other">Цепочка длиннее %1$d хопов (%2$s).</item>
   </plurals>
   <string name="forward_kind_local">Локальное</string>

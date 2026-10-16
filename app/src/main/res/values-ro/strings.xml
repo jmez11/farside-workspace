@@ -207,6 +207,8 @@
   <string name="jump_route_separator">" \u2192 "</string>
   <plurals name="saved_port_forward_count">
     <item quantity="one">Redirecționare porturi · %1$d salvată</item>
+    <!-- DRAFT: few needs native-speaker review -->
+    <item quantity="few">Redirecționare porturi · %1$d salvate</item>
     <item quantity="other">Redirecționare porturi · %1$d salvate</item>
   </plurals>
   <string name="enable_wireless_debugging_help">Activați depanarea wireless pe cască pentru a configura tunelul.</string>
@@ -226,6 +228,8 @@
   <string name="unlock">Deblochează</string>
   <plurals name="pin_remember_minutes">
     <item quantity="one">Nu mai cere timp de %1$d minut</item>
+    <!-- DRAFT: few needs native-speaker review -->
+    <item quantity="few">Nu mai cere timp de %1$d minute</item>
     <item quantity="other">Nu mai cere timp de %1$d minute</item>
   </plurals>
   <string name="connection_via">prin %1$s</string>
@@ -290,6 +294,8 @@
   <string name="folder">Folder</string>
   <plurals name="sftp_file_bytes">
     <item quantity="one">%1$d octet</item>
+    <!-- DRAFT: few needs native-speaker review -->
+    <item quantity="few">%1$d octeți</item>
     <item quantity="other">%1$d octeți</item>
   </plurals>
   <string name="sftp_auth_failed">Autentificarea a eșuat. Verificați credențialul salvat sau cheia SSH.</string>
@@ -394,6 +400,8 @@
   <string name="incorrect_pin">PIN incorect.</string>
   <plurals name="pin_retry_seconds">
     <item quantity="one">Prea multe încercări. Încercați din nou peste %1$d secundă.</item>
+    <!-- DRAFT: few needs native-speaker review -->
+    <item quantity="few">Prea multe încercări. Încercați din nou peste %1$d secunde.</item>
     <item quantity="other">Prea multe încercări. Încercați din nou peste %1$d secunde.</item>
   </plurals>
   <string name="headset_passcode_required">Setați un cod de acces al căștii în Setări Quest &gt; Securitate înainte de a debloca această conexiune.</string>
@@ -513,6 +521,8 @@
   <string name="jump_host_wrong_type">Hostul intermediar %1$s nu este un profil SSH.</string>
   <plurals name="jump_chain_too_long">
     <item quantity="one">Lanțul de hosturi intermediare este mai lung de %1$d hop (%2$s).</item>
+    <!-- DRAFT: few needs native-speaker review -->
+    <item quantity="few">Lanțul de hosturi intermediare este mai lung de %1$d hopuri (%2$s).</item>
     <item quantity="other">Lanțul de hosturi intermediare este mai lung de %1$d hopuri (%2$s).</item>
   </plurals>
   <string name="forward_kind_local">Local</string>

@@ -207,6 +207,9 @@
   <string name="jump_route_separator">" \u2192 "</string>
   <plurals name="saved_port_forward_count">
     <item quantity="one">Přesměrování portů · uloženo: %1$d</item>
+    <!-- DRAFT: few/many need native-speaker review -->
+    <item quantity="few">Přesměrování portů · uloženy: %1$d</item>
+    <item quantity="many">Přesměrování portů · uloženo: %1$d</item>
     <item quantity="other">Přesměrování portů · uloženo: %1$d</item>
   </plurals>
   <string name="enable_wireless_debugging_help">Povolte bezdrátové ladění na headsetu pro nastavení tunelu.</string>
@@ -226,6 +229,9 @@
   <string name="unlock">Odemknout</string>
   <plurals name="pin_remember_minutes">
     <item quantity="one">Neptat se znovu %1$d minutu</item>
+    <!-- DRAFT: few/many need native-speaker review -->
+    <item quantity="few">Neptat se znovu po dobu %1$d minuty</item>
+    <item quantity="many">Neptat se znovu po dobu %1$d minut</item>
     <item quantity="other">Neptat se znovu po dobu %1$d minut</item>
   </plurals>
   <string name="connection_via">přes %1$s</string>
@@ -290,6 +296,9 @@
   <string name="folder">Složka</string>
   <plurals name="sftp_file_bytes">
     <item quantity="one">%1$d bajt</item>
+    <!-- DRAFT: few/many need native-speaker review -->
+    <item quantity="few">%1$d bajty</item>
+    <item quantity="many">%1$d bajtu</item>
     <item quantity="other">%1$d bajtů</item>
   </plurals>
   <string name="sftp_auth_failed">Ověření se nezdařilo. Zkontrolujte uložené přihlašovací údaje nebo klíč SSH.</string>
@@ -394,6 +403,9 @@
   <string name="incorrect_pin">Nesprávný PIN.</string>
   <plurals name="pin_retry_seconds">
     <item quantity="one">Příliš mnoho pokusů. Zkuste to znovu za %1$d sekundu.</item>
+    <!-- DRAFT: few/many need native-speaker review -->
+    <item quantity="few">Příliš mnoho pokusů. Zkuste to znovu za %1$d sekundy.</item>
+    <item quantity="many">Příliš mnoho pokusů. Zkuste to znovu za %1$d sekundy.</item>
     <item quantity="other">Příliš mnoho pokusů. Zkuste to znovu za %1$d sekund.</item>
   </plurals>
   <string name="headset_passcode_required">Před odemčením tohoto připojení nastavte přístupový kód headsetu v Nastavení Quest &gt; Zabezpečení.</string>
@@ -513,6 +525,9 @@
   <string name="jump_host_wrong_type">Skokový hostitel %1$s není profil SSH.</string>
   <plurals name="jump_chain_too_long">
     <item quantity="one">Řetězec skoků je delší než %1$d skok (%2$s).</item>
+    <!-- DRAFT: few/many need native-speaker review -->
+    <item quantity="few">Řetězec skoků je delší než %1$d skoky (%2$s).</item>
+    <item quantity="many">Řetězec skoků je delší než %1$d skoku (%2$s).</item>
     <item quantity="other">Řetězec skoků je delší než %1$d skoků (%2$s).</item>
   </plurals>
   <string name="forward_kind_local">Místní</string>
