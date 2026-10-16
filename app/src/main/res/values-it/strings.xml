@@ -14,6 +14,7 @@
   <string name="about_open_source_licenses">Informazioni e licenze open source</string>
   <string name="account_display_name">Nome visualizzato dell\'account</string>
   <string name="add_connection">Aggiungi connessione</string>
+  <string name="edit_connection">Modifica connessione</string>
   <string name="add_tunnel">Aggiungi tunnel</string>
   <string name="admin_mode">Modalità amministratore</string>
   <string name="allow_connections_from_other_hosts">Consenti connessioni da altri host</string>
@@ -597,6 +598,17 @@
   <string name="vnc_auth_password">Password VNC</string>
   <string name="vnc_auth_mac_user">utente macOS</string>
   <string name="vnc_mac_credential_required">Seleziona una credenziale salvata con nome utente e password di macOS.</string>
+  <string name="profile_host_required">Inserisci un nome host o un indirizzo IP.</string>
+  <string name="profile_name_required">Inserisci un nome visualizzato.</string>
+  <string name="profile_port_invalid">Inserisci una porta compresa tra 1 e 65535.</string>
+  <string name="profile_rdp_credential_required">Seleziona una credenziale salvata con un nome utente.</string>
+  <string name="profile_credential_username_missing">La credenziale selezionata non ha un nome utente.</string>
+  <string name="profile_mac_credential_required">Seleziona una credenziale salvata per l\'utente macOS.</string>
+  <string name="profile_mac_username_missing">La credenziale selezionata non ha un nome utente macOS.</string>
+  <string name="profile_mac_password_required">Una connessione utente macOS richiede una password nella credenziale selezionata.</string>
+  <string name="profile_selected_credential_no_password">La credenziale selezionata non ha una password.</string>
+  <string name="profile_proxy_type_invalid">Seleziona un tipo di proxy supportato.</string>
+  <string name="profile_proxy_host_required">Inserisci un nome host o un IP del proxy.</string>
   <string name="vnc_mac_auth_failed">Autenticazione Mac non riuscita. Controlla nome utente e password.</string>
   <string name="vnc_sftp_pair">Abbina un profilo SSH per l\'accesso ai file</string>
   <string name="vnc_sftp_unpaired">Nessuno</string>

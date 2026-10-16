@@ -14,6 +14,7 @@
   <string name="about_open_source_licenses">정보 및 오픈소스 라이선스</string>
   <string name="account_display_name">계정 표시 이름</string>
   <string name="add_connection">연결 추가</string>
+  <string name="edit_connection">연결 편집</string>
   <string name="add_tunnel">터널 추가</string>
   <string name="admin_mode">관리자 모드</string>
   <string name="allow_connections_from_other_hosts">다른 호스트에서의 연결 허용</string>
@@ -597,6 +598,17 @@
   <string name="vnc_auth_password">VNC 비밀번호</string>
   <string name="vnc_auth_mac_user">macOS 사용자</string>
   <string name="vnc_mac_credential_required">macOS 사용자 이름과 비밀번호가 저장된 자격 증명을 선택하세요.</string>
+  <string name="profile_host_required">호스트 이름 또는 IP 주소를 입력하세요.</string>
+  <string name="profile_name_required">표시 이름을 입력하세요.</string>
+  <string name="profile_port_invalid">1~65535 사이의 포트를 입력하세요.</string>
+  <string name="profile_rdp_credential_required">사용자 이름이 저장된 자격 증명을 선택하세요.</string>
+  <string name="profile_credential_username_missing">선택한 자격 증명에 사용자 이름이 없습니다.</string>
+  <string name="profile_mac_credential_required">macOS 사용자용으로 저장된 자격 증명을 선택하세요.</string>
+  <string name="profile_mac_username_missing">선택한 자격 증명에 macOS 사용자 이름이 없습니다.</string>
+  <string name="profile_mac_password_required">macOS 사용자 연결에는 선택한 자격 증명에 비밀번호가 필요합니다.</string>
+  <string name="profile_selected_credential_no_password">선택한 자격 증명에 비밀번호가 없습니다.</string>
+  <string name="profile_proxy_type_invalid">지원되는 프록시 유형을 선택하세요.</string>
+  <string name="profile_proxy_host_required">프록시 호스트 이름 또는 IP 주소를 입력하세요.</string>
   <string name="vnc_mac_auth_failed">Mac 인증에 실패했습니다. 사용자 이름과 비밀번호를 확인하세요.</string>
   <string name="vnc_sftp_pair">파일 액세스용 SSH 프로필 페어링</string>
   <string name="vnc_sftp_unpaired">없음</string>

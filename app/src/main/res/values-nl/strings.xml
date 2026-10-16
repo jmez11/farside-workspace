@@ -14,6 +14,7 @@
   <string name="about_open_source_licenses">Info &amp; opensourcelicenties</string>
   <string name="account_display_name">Weergavenaam account</string>
   <string name="add_connection">Verbinding toevoegen</string>
+  <string name="edit_connection">Verbinding bewerken</string>
   <string name="add_tunnel">Tunnel toevoegen</string>
   <string name="admin_mode">Beheerdersmodus</string>
   <string name="allow_connections_from_other_hosts">Verbindingen van andere hosts toestaan</string>
@@ -597,6 +598,17 @@
   <string name="vnc_auth_password">VNC-wachtwoord</string>
   <string name="vnc_auth_mac_user">macOS-gebruiker</string>
   <string name="vnc_mac_credential_required">Selecteer een opgeslagen inloggegeven met een macOS-gebruikersnaam en -wachtwoord.</string>
+  <string name="profile_host_required">Voer een hostnaam of IP-adres in.</string>
+  <string name="profile_name_required">Voer een weergavenaam in.</string>
+  <string name="profile_port_invalid">Voer een poort van 1 tot 65535 in.</string>
+  <string name="profile_rdp_credential_required">Selecteer een opgeslagen inloggegeven met een gebruikersnaam.</string>
+  <string name="profile_credential_username_missing">Het geselecteerde inloggegeven heeft geen gebruikersnaam.</string>
+  <string name="profile_mac_credential_required">Selecteer een opgeslagen inloggegeven voor de macOS-gebruiker.</string>
+  <string name="profile_mac_username_missing">Het geselecteerde inloggegeven heeft geen macOS-gebruikersnaam.</string>
+  <string name="profile_mac_password_required">Voor een macOS-gebruikersverbinding is een wachtwoord vereist in het geselecteerde inloggegeven.</string>
+  <string name="profile_selected_credential_no_password">Het geselecteerde inloggegeven heeft geen wachtwoord.</string>
+  <string name="profile_proxy_type_invalid">Selecteer een ondersteund proxytype.</string>
+  <string name="profile_proxy_host_required">Voer een proxyhostnaam of IP-adres in.</string>
   <string name="vnc_mac_auth_failed">Mac-verificatie mislukt. Controleer de gebruikersnaam en het wachtwoord.</string>
   <string name="vnc_sftp_pair">SSH-profiel koppelen voor bestandstoegang</string>
   <string name="vnc_sftp_unpaired">Geen</string>

@@ -14,6 +14,7 @@
   <string name="about_open_source_licenses">Informacje &amp; licencje open source</string>
   <string name="account_display_name">Nazwa wyświetlana konta</string>
   <string name="add_connection">Dodaj połączenie</string>
+  <string name="edit_connection">Edytuj połączenie</string>
   <string name="add_tunnel">Dodaj tunel</string>
   <string name="admin_mode">Tryb administratora</string>
   <string name="allow_connections_from_other_hosts">Zezwalaj na połączenia z innych hostów</string>
@@ -597,6 +598,17 @@
   <string name="vnc_auth_password">Hasło VNC</string>
   <string name="vnc_auth_mac_user">użytkownik macOS</string>
   <string name="vnc_mac_credential_required">Wybierz zapisane poświadczenia z nazwą użytkownika i hasłem macOS.</string>
+  <string name="profile_host_required">Wprowadź nazwę hosta lub adres IP.</string>
+  <string name="profile_name_required">Wprowadź nazwę wyświetlaną.</string>
+  <string name="profile_port_invalid">Wprowadź port z zakresu od 1 do 65535.</string>
+  <string name="profile_rdp_credential_required">Wybierz zapisane poświadczenia z nazwą użytkownika.</string>
+  <string name="profile_credential_username_missing">Wybrane poświadczenia nie mają nazwy użytkownika.</string>
+  <string name="profile_mac_credential_required">Wybierz zapisane poświadczenia dla użytkownika macOS.</string>
+  <string name="profile_mac_username_missing">Wybrane poświadczenia nie mają nazwy użytkownika macOS.</string>
+  <string name="profile_mac_password_required">Połączenie użytkownika macOS wymaga hasła w wybranych poświadczeniach.</string>
+  <string name="profile_selected_credential_no_password">Wybrane poświadczenia nie mają hasła.</string>
+  <string name="profile_proxy_type_invalid">Wybierz obsługiwany typ serwera proxy.</string>
+  <string name="profile_proxy_host_required">Wprowadź nazwę hosta lub adres IP serwera proxy.</string>
   <string name="vnc_mac_auth_failed">Uwierzytelnianie Mac nie powiodło się. Sprawdź nazwę użytkownika i hasło.</string>
   <string name="vnc_sftp_pair">Sparuj profil SSH, aby uzyskać dostęp do plików</string>
   <string name="vnc_sftp_unpaired">Brak</string>

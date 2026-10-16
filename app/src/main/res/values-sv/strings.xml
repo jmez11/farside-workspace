@@ -14,6 +14,7 @@
   <string name="about_open_source_licenses">Om &amp; licenser för öppen källkod</string>
   <string name="account_display_name">Visningsnamn för konto</string>
   <string name="add_connection">Lägg till anslutning</string>
+  <string name="edit_connection">Redigera anslutning</string>
   <string name="add_tunnel">Lägg till tunnel</string>
   <string name="admin_mode">Adminläge</string>
   <string name="allow_connections_from_other_hosts">Tillåt anslutningar från andra värdar</string>
@@ -597,6 +598,17 @@
   <string name="vnc_auth_password">VNC-lösenord</string>
   <string name="vnc_auth_mac_user">macOS-användare</string>
   <string name="vnc_mac_credential_required">Välj en sparad inloggningsuppgift med ett macOS-användarnamn och lösenord.</string>
+  <string name="profile_host_required">Ange ett värdnamn eller en IP-adress.</string>
+  <string name="profile_name_required">Ange ett visningsnamn.</string>
+  <string name="profile_port_invalid">Ange en port mellan 1 och 65535.</string>
+  <string name="profile_rdp_credential_required">Välj en sparad inloggningsuppgift med ett användarnamn.</string>
+  <string name="profile_credential_username_missing">Den valda inloggningsuppgiften har inget användarnamn.</string>
+  <string name="profile_mac_credential_required">Välj en sparad inloggningsuppgift för macOS-användaren.</string>
+  <string name="profile_mac_username_missing">Den valda inloggningsuppgiften har inget macOS-användarnamn.</string>
+  <string name="profile_mac_password_required">En macOS-användaranslutning kräver ett lösenord i den valda inloggningsuppgiften.</string>
+  <string name="profile_selected_credential_no_password">Den valda inloggningsuppgiften har inget lösenord.</string>
+  <string name="profile_proxy_type_invalid">Välj en proxytyp som stöds.</string>
+  <string name="profile_proxy_host_required">Ange ett proxyvärdnamn eller en IP-adress.</string>
   <string name="vnc_mac_auth_failed">Mac-autentiseringen misslyckades. Kontrollera användarnamnet och lösenordet.</string>
   <string name="vnc_sftp_pair">Para SSH-profil för filåtkomst</string>
   <string name="vnc_sftp_unpaired">Ingen</string>

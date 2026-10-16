@@ -14,6 +14,7 @@
   <string name="about_open_source_licenses">Acerca de &amp; Licenças de Código Aberto</string>
   <string name="account_display_name">Nome de apresentação da conta</string>
   <string name="add_connection">Adicionar ligação</string>
+  <string name="edit_connection">Editar ligação</string>
   <string name="add_tunnel">Adicionar túnel</string>
   <string name="admin_mode">Modo de administrador</string>
   <string name="allow_connections_from_other_hosts">Permitir ligações de outros hosts</string>
@@ -597,6 +598,17 @@
   <string name="vnc_auth_password">Palavra-passe VNC</string>
   <string name="vnc_auth_mac_user">utilizador do macOS</string>
   <string name="vnc_mac_credential_required">Selecione uma credencial guardada com nome de utilizador e palavra-passe do macOS.</string>
+  <string name="profile_host_required">Introduza um nome de host ou endereço IP.</string>
+  <string name="profile_name_required">Introduza um nome de apresentação.</string>
+  <string name="profile_port_invalid">Introduza uma porta de 1 a 65535.</string>
+  <string name="profile_rdp_credential_required">Selecione uma credencial guardada com um nome de utilizador.</string>
+  <string name="profile_credential_username_missing">A credencial selecionada não tem nome de utilizador.</string>
+  <string name="profile_mac_credential_required">Selecione uma credencial guardada para o utilizador do macOS.</string>
+  <string name="profile_mac_username_missing">A credencial selecionada não tem nome de utilizador do macOS.</string>
+  <string name="profile_mac_password_required">Uma ligação de utilizador do macOS requer uma palavra-passe na credencial selecionada.</string>
+  <string name="profile_selected_credential_no_password">A credencial selecionada não tem palavra-passe.</string>
+  <string name="profile_proxy_type_invalid">Selecione um tipo de proxy suportado.</string>
+  <string name="profile_proxy_host_required">Introduza um nome de host ou endereço IP do proxy.</string>
   <string name="vnc_mac_auth_failed">Falha na autenticação do Mac. Verifique o nome de utilizador e a palavra-passe.</string>
   <string name="vnc_sftp_pair">Emparelhar perfil SSH para acesso a ficheiros</string>
   <string name="vnc_sftp_unpaired">Nenhum</string>

@@ -14,6 +14,7 @@
   <string name="about_open_source_licenses">Om og lisenser for åpen kildekode</string>
   <string name="account_display_name">Kontovisningsnavn</string>
   <string name="add_connection">Legg til tilkobling</string>
+  <string name="edit_connection">Rediger tilkobling</string>
   <string name="add_tunnel">Legg til tunnel</string>
   <string name="admin_mode">Administratormodus</string>
   <string name="allow_connections_from_other_hosts">Tillat tilkoblinger fra andre verter</string>
@@ -597,6 +598,17 @@
   <string name="vnc_auth_password">VNC-passord</string>
   <string name="vnc_auth_mac_user">macOS-bruker</string>
   <string name="vnc_mac_credential_required">Velg en lagret legitimasjon med et macOS-brukernavn og passord.</string>
+  <string name="profile_host_required">Skriv inn et vertsnavn eller en IP-adresse.</string>
+  <string name="profile_name_required">Skriv inn et visningsnavn.</string>
+  <string name="profile_port_invalid">Skriv inn en port mellom 1 og 65535.</string>
+  <string name="profile_rdp_credential_required">Velg en lagret legitimasjon med et brukernavn.</string>
+  <string name="profile_credential_username_missing">Den valgte legitimasjonen har ikke noe brukernavn.</string>
+  <string name="profile_mac_credential_required">Velg en lagret legitimasjon for macOS-brukeren.</string>
+  <string name="profile_mac_username_missing">Den valgte legitimasjonen har ikke noe macOS-brukernavn.</string>
+  <string name="profile_mac_password_required">En macOS-brukertilkobling krever et passord i den valgte legitimasjonen.</string>
+  <string name="profile_selected_credential_no_password">Den valgte legitimasjonen har ikke noe passord.</string>
+  <string name="profile_proxy_type_invalid">Velg en støttet proxytype.</string>
+  <string name="profile_proxy_host_required">Skriv inn et proxyvertsnavn eller en IP-adresse.</string>
   <string name="vnc_mac_auth_failed">Mac-autentisering mislyktes. Kontroller brukernavnet og passordet.</string>
   <string name="vnc_sftp_pair">Koble SSH-profil for filtilgang</string>
   <string name="vnc_sftp_unpaired">Ingen</string>

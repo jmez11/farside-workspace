@@ -14,6 +14,7 @@
   <string name="about_open_source_licenses">Om og open source-licenser</string>
   <string name="account_display_name">Kontovisningsnavn</string>
   <string name="add_connection">Tilføj forbindelse</string>
+  <string name="edit_connection">Rediger forbindelse</string>
   <string name="add_tunnel">Tilføj tunnel</string>
   <string name="admin_mode">Administratortilstand</string>
   <string name="allow_connections_from_other_hosts">Tillad forbindelser fra andre værter</string>
@@ -597,6 +598,17 @@
   <string name="vnc_auth_password">VNC-adgangskode</string>
   <string name="vnc_auth_mac_user">macOS-bruger</string>
   <string name="vnc_mac_credential_required">Vælg en gemt legitimationsoplysning med et macOS-brugernavn og en adgangskode.</string>
+  <string name="profile_host_required">Indtast et værtsnavn eller en IP-adresse.</string>
+  <string name="profile_name_required">Indtast et visningsnavn.</string>
+  <string name="profile_port_invalid">Indtast en port mellem 1 og 65535.</string>
+  <string name="profile_rdp_credential_required">Vælg en gemt legitimationsoplysning med et brugernavn.</string>
+  <string name="profile_credential_username_missing">Den valgte legitimationsoplysning har intet brugernavn.</string>
+  <string name="profile_mac_credential_required">Vælg en gemt legitimationsoplysning til macOS-brugeren.</string>
+  <string name="profile_mac_username_missing">Den valgte legitimationsoplysning har intet macOS-brugernavn.</string>
+  <string name="profile_mac_password_required">En macOS-brugerforbindelse kræver en adgangskode i den valgte legitimationsoplysning.</string>
+  <string name="profile_selected_credential_no_password">Den valgte legitimationsoplysning har ingen adgangskode.</string>
+  <string name="profile_proxy_type_invalid">Vælg en understøttet proxytype.</string>
+  <string name="profile_proxy_host_required">Indtast et proxyværtsnavn eller en IP-adresse.</string>
   <string name="vnc_mac_auth_failed">Mac-godkendelse mislykkedes. Kontrollér brugernavnet og adgangskoden.</string>
   <string name="vnc_sftp_pair">Par SSH-profil til filadgang</string>
   <string name="vnc_sftp_unpaired">Ingen</string>

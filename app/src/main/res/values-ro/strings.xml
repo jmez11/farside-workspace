@@ -14,6 +14,7 @@
   <string name="about_open_source_licenses">Despre &amp; licențe open source</string>
   <string name="account_display_name">Nume afișat al contului</string>
   <string name="add_connection">Adaugă conexiune</string>
+  <string name="edit_connection">Editează conexiunea</string>
   <string name="add_tunnel">Adaugă tunel</string>
   <string name="admin_mode">Mod admin</string>
   <string name="allow_connections_from_other_hosts">Permite conexiuni de la alte hosturi</string>
@@ -597,6 +598,17 @@
   <string name="vnc_auth_password">Parolă VNC</string>
   <string name="vnc_auth_mac_user">Utilizator macOS</string>
   <string name="vnc_mac_credential_required">Selectați o credențială salvată cu un nume de utilizator și o parolă macOS.</string>
+  <string name="profile_host_required">Introduceți un nume de host sau o adresă IP.</string>
+  <string name="profile_name_required">Introduceți un nume afișat.</string>
+  <string name="profile_port_invalid">Introduceți un port între 1 și 65535.</string>
+  <string name="profile_rdp_credential_required">Selectați o credențială salvată cu un nume de utilizator.</string>
+  <string name="profile_credential_username_missing">Credențiala selectată nu are nume de utilizator.</string>
+  <string name="profile_mac_credential_required">Selectați o credențială salvată pentru utilizatorul macOS.</string>
+  <string name="profile_mac_username_missing">Credențiala selectată nu are nume de utilizator macOS.</string>
+  <string name="profile_mac_password_required">O conexiune de utilizator macOS necesită o parolă în credențiala selectată.</string>
+  <string name="profile_selected_credential_no_password">Credențiala selectată nu are parolă.</string>
+  <string name="profile_proxy_type_invalid">Selectați un tip de proxy acceptat.</string>
+  <string name="profile_proxy_host_required">Introduceți un nume de host sau o adresă IP proxy.</string>
   <string name="vnc_mac_auth_failed">Autentificarea Mac a eșuat. Verificați numele de utilizator și parola.</string>
   <string name="vnc_sftp_pair">Asociați profilul SSH pentru acces la fișiere</string>
   <string name="vnc_sftp_unpaired">Niciunul</string>

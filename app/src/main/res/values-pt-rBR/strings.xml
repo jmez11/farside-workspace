@@ -14,6 +14,7 @@
   <string name="about_open_source_licenses">Sobre &amp; licenças de código aberto</string>
   <string name="account_display_name">Nome de exibição da conta</string>
   <string name="add_connection">Adicionar conexão</string>
+  <string name="edit_connection">Editar conexão</string>
   <string name="add_tunnel">Adicionar túnel</string>
   <string name="admin_mode">Modo administrador</string>
   <string name="allow_connections_from_other_hosts">Permitir conexões de outros hosts</string>
@@ -597,6 +598,17 @@
   <string name="vnc_auth_password">Senha VNC</string>
   <string name="vnc_auth_mac_user">usuário do macOS</string>
   <string name="vnc_mac_credential_required">Selecione uma credencial salva com nome de usuário e senha do macOS.</string>
+  <string name="profile_host_required">Digite um nome de host ou endereço IP.</string>
+  <string name="profile_name_required">Digite um nome de exibição.</string>
+  <string name="profile_port_invalid">Digite uma porta de 1 a 65535.</string>
+  <string name="profile_rdp_credential_required">Selecione uma credencial salva com um nome de usuário.</string>
+  <string name="profile_credential_username_missing">A credencial selecionada não tem nome de usuário.</string>
+  <string name="profile_mac_credential_required">Selecione uma credencial salva para o usuário do macOS.</string>
+  <string name="profile_mac_username_missing">A credencial selecionada não tem nome de usuário do macOS.</string>
+  <string name="profile_mac_password_required">Uma conexão de usuário do macOS requer uma senha na credencial selecionada.</string>
+  <string name="profile_selected_credential_no_password">A credencial selecionada não tem senha.</string>
+  <string name="profile_proxy_type_invalid">Selecione um tipo de proxy compatível.</string>
+  <string name="profile_proxy_host_required">Digite um nome de host ou IP do proxy.</string>
   <string name="vnc_mac_auth_failed">Falha na autenticação do Mac. Verifique o nome de usuário e a senha.</string>
   <string name="vnc_sftp_pair">Emparelhar perfil SSH para acesso a arquivos</string>
   <string name="vnc_sftp_unpaired">Nenhum</string>

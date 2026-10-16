@@ -14,6 +14,7 @@
   <string name="about_open_source_licenses">Tietoja &amp; avoimen lähdekoodin lisenssit</string>
   <string name="account_display_name">Tilin näyttönimi</string>
   <string name="add_connection">Lisää yhteys</string>
+  <string name="edit_connection">Muokkaa yhteyttä</string>
   <string name="add_tunnel">Lisää tunneli</string>
   <string name="admin_mode">Järjestelmänvalvojan tila</string>
   <string name="allow_connections_from_other_hosts">Salli yhteydet muista isäntäkoneista</string>
@@ -597,6 +598,17 @@
   <string name="vnc_auth_password">VNC-salasana</string>
   <string name="vnc_auth_mac_user">macOS-käyttäjä</string>
   <string name="vnc_mac_credential_required">Valitse tallennettu tunnistetieto, jossa on macOS-käyttäjätunnus ja salasana.</string>
+  <string name="profile_host_required">Anna isäntänimi tai IP-osoite.</string>
+  <string name="profile_name_required">Anna näyttönimi.</string>
+  <string name="profile_port_invalid">Anna portti väliltä 1–65535.</string>
+  <string name="profile_rdp_credential_required">Valitse tallennettu tunnistetieto, jossa on käyttäjätunnus.</string>
+  <string name="profile_credential_username_missing">Valitussa tunnistetiedossa ei ole käyttäjätunnusta.</string>
+  <string name="profile_mac_credential_required">Valitse tallennettu tunnistetieto macOS-käyttäjälle.</string>
+  <string name="profile_mac_username_missing">Valitussa tunnistetiedossa ei ole macOS-käyttäjätunnusta.</string>
+  <string name="profile_mac_password_required">macOS-käyttäjän yhteys edellyttää salasanaa valitussa tunnistetiedossa.</string>
+  <string name="profile_selected_credential_no_password">Valitussa tunnistetiedossa ei ole salasanaa.</string>
+  <string name="profile_proxy_type_invalid">Valitse tuettu välityspalvelintyyppi.</string>
+  <string name="profile_proxy_host_required">Anna välityspalvelimen isäntänimi tai IP-osoite.</string>
   <string name="vnc_mac_auth_failed">Mac-todennus epäonnistui. Tarkista käyttäjätunnus ja salasana.</string>
   <string name="vnc_sftp_pair">Yhdistä SSH-profiili tiedostojen käyttöä varten</string>
   <string name="vnc_sftp_unpaired">Ei mitään</string>

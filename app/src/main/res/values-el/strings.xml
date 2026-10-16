@@ -14,6 +14,7 @@
   <string name="about_open_source_licenses">Σχετικά &amp; Άδειες ανοιχτού κώδικα</string>
   <string name="account_display_name">Εμφανιζόμενο όνομα λογαριασμού</string>
   <string name="add_connection">Προσθήκη σύνδεσης</string>
+  <string name="edit_connection">Επεξεργασία σύνδεσης</string>
   <string name="add_tunnel">Προσθήκη σήραγγας</string>
   <string name="admin_mode">Λειτουργία διαχειριστή</string>
   <string name="allow_connections_from_other_hosts">Να επιτρέπονται συνδέσεις από άλλους κεντρικούς υπολογιστές</string>
@@ -597,6 +598,17 @@
   <string name="vnc_auth_password">Κωδικός VNC</string>
   <string name="vnc_auth_mac_user">Χρήστης macOS</string>
   <string name="vnc_mac_credential_required">Επιλέξτε αποθηκευμένα διαπιστευτήρια με όνομα χρήστη και κωδικό macOS.</string>
+  <string name="profile_host_required">Εισαγάγετε ένα όνομα κεντρικού υπολογιστή ή μια διεύθυνση IP.</string>
+  <string name="profile_name_required">Εισαγάγετε ένα εμφανιζόμενο όνομα.</string>
+  <string name="profile_port_invalid">Εισαγάγετε μια θύρα από 1 έως 65535.</string>
+  <string name="profile_rdp_credential_required">Επιλέξτε αποθηκευμένα διαπιστευτήρια με όνομα χρήστη.</string>
+  <string name="profile_credential_username_missing">Τα επιλεγμένα διαπιστευτήρια δεν έχουν όνομα χρήστη.</string>
+  <string name="profile_mac_credential_required">Επιλέξτε αποθηκευμένα διαπιστευτήρια για τον χρήστη macOS.</string>
+  <string name="profile_mac_username_missing">Τα επιλεγμένα διαπιστευτήρια δεν έχουν όνομα χρήστη macOS.</string>
+  <string name="profile_mac_password_required">Μια σύνδεση χρήστη macOS απαιτεί κωδικό στα επιλεγμένα διαπιστευτήρια.</string>
+  <string name="profile_selected_credential_no_password">Τα επιλεγμένα διαπιστευτήρια δεν έχουν κωδικό.</string>
+  <string name="profile_proxy_type_invalid">Επιλέξτε έναν υποστηριζόμενο τύπο διαμεσολαβητή.</string>
+  <string name="profile_proxy_host_required">Εισαγάγετε ένα όνομα κεντρικού υπολογιστή ή μια διεύθυνση IP διαμεσολαβητή.</string>
   <string name="vnc_mac_auth_failed">Ο έλεγχος ταυτότητας Mac απέτυχε. Ελέγξτε το όνομα χρήστη και τον κωδικό.</string>
   <string name="vnc_sftp_pair">Σύζευξη προφίλ SSH για πρόσβαση σε αρχεία</string>
   <string name="vnc_sftp_unpaired">Κανένα</string>

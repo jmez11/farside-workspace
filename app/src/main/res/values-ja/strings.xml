@@ -14,6 +14,7 @@
   <string name="about_open_source_licenses">アプリについて &amp; オープンソースライセンス</string>
   <string name="account_display_name">アカウント表示名</string>
   <string name="add_connection">接続を追加</string>
+  <string name="edit_connection">接続を編集</string>
   <string name="add_tunnel">トンネルを追加</string>
   <string name="admin_mode">管理者モード</string>
   <string name="allow_connections_from_other_hosts">他のホストからの接続を許可</string>
@@ -597,6 +598,17 @@
   <string name="vnc_auth_password">VNCパスワード</string>
   <string name="vnc_auth_mac_user">macOSユーザ</string>
   <string name="vnc_mac_credential_required">macOSのユーザー名とパスワードが保存された認証情報を選択してください。</string>
+  <string name="profile_host_required">ホスト名またはIPアドレスを入力してください。</string>
+  <string name="profile_name_required">表示名を入力してください。</string>
+  <string name="profile_port_invalid">1〜65535のポートを入力してください。</string>
+  <string name="profile_rdp_credential_required">ユーザー名が保存された認証情報を選択してください。</string>
+  <string name="profile_credential_username_missing">選択した認証情報にユーザー名がありません。</string>
+  <string name="profile_mac_credential_required">macOSユーザー用の保存された認証情報を選択してください。</string>
+  <string name="profile_mac_username_missing">選択した認証情報にmacOSユーザー名がありません。</string>
+  <string name="profile_mac_password_required">macOSユーザー接続には、選択した認証情報にパスワードが必要です。</string>
+  <string name="profile_selected_credential_no_password">選択した認証情報にパスワードがありません。</string>
+  <string name="profile_proxy_type_invalid">サポートされているプロキシの種類を選択してください。</string>
+  <string name="profile_proxy_host_required">プロキシホスト名またはIPアドレスを入力してください。</string>
   <string name="vnc_mac_auth_failed">Macの認証に失敗しました。ユーザー名とパスワードを確認してください。</string>
   <string name="vnc_sftp_pair">ファイルアクセス用にSSHプロファイルをペアリング</string>
   <string name="vnc_sftp_unpaired">なし</string>

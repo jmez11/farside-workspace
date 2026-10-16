@@ -14,6 +14,7 @@
   <string name="about_open_source_licenses">Über &amp; Open-Source-Lizenzen</string>
   <string name="account_display_name">Anzeigename des Kontos</string>
   <string name="add_connection">Verbindung hinzufügen</string>
+  <string name="edit_connection">Verbindung bearbeiten</string>
   <string name="add_tunnel">Tunnel hinzufügen</string>
   <string name="admin_mode">Adminmodus</string>
   <string name="allow_connections_from_other_hosts">Verbindungen von anderen Hosts zulassen</string>
@@ -597,6 +598,17 @@
   <string name="vnc_auth_password">VNC-Passwort</string>
   <string name="vnc_auth_mac_user">macOS-Benutzer</string>
   <string name="vnc_mac_credential_required">Wähle gespeicherte Anmeldedaten mit macOS-Benutzernamen und -Passwort.</string>
+  <string name="profile_host_required">Geben Sie einen Hostnamen oder eine IP-Adresse ein.</string>
+  <string name="profile_name_required">Geben Sie einen Anzeigenamen ein.</string>
+  <string name="profile_port_invalid">Geben Sie einen Port von 1 bis 65535 ein.</string>
+  <string name="profile_rdp_credential_required">Wähle gespeicherte Anmeldedaten mit einem Benutzernamen.</string>
+  <string name="profile_credential_username_missing">Die ausgewählten Anmeldedaten haben keinen Benutzernamen.</string>
+  <string name="profile_mac_credential_required">Wähle gespeicherte Anmeldedaten für den macOS-Benutzer.</string>
+  <string name="profile_mac_username_missing">Die ausgewählten Anmeldedaten haben keinen macOS-Benutzernamen.</string>
+  <string name="profile_mac_password_required">Eine macOS-Benutzerverbindung erfordert ein Passwort in den ausgewählten Anmeldedaten.</string>
+  <string name="profile_selected_credential_no_password">Die ausgewählten Anmeldedaten haben kein Passwort.</string>
+  <string name="profile_proxy_type_invalid">Wähle einen unterstützten Proxy-Typ.</string>
+  <string name="profile_proxy_host_required">Geben Sie einen Proxy-Hostnamen oder eine IP-Adresse ein.</string>
   <string name="vnc_mac_auth_failed">Mac-Authentifizierung fehlgeschlagen. Überprüfe Benutzername und Passwort.</string>
   <string name="vnc_sftp_pair">SSH-Profil für Dateizugriff koppeln</string>
   <string name="vnc_sftp_unpaired">Keine</string>

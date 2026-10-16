@@ -14,6 +14,7 @@
   <string name="about_open_source_licenses">O aplikaci &amp; licence open source</string>
   <string name="account_display_name">Zobrazovaný název účtu</string>
   <string name="add_connection">Přidat připojení</string>
+  <string name="edit_connection">Upravit připojení</string>
   <string name="add_tunnel">Přidat tunel</string>
   <string name="admin_mode">Režim správce</string>
   <string name="allow_connections_from_other_hosts">Povolit připojení z jiných hostitelů</string>
@@ -597,6 +598,17 @@
   <string name="vnc_auth_password">Heslo VNC</string>
   <string name="vnc_auth_mac_user">Uživatel macOS</string>
   <string name="vnc_mac_credential_required">Vyberte uložené přihlašovací údaje s uživatelským jménem a heslem macOS.</string>
+  <string name="profile_host_required">Zadejte název hostitele nebo IP adresu.</string>
+  <string name="profile_name_required">Zadejte zobrazovaný název.</string>
+  <string name="profile_port_invalid">Zadejte port v rozsahu 1 až 65535.</string>
+  <string name="profile_rdp_credential_required">Vyberte uložené přihlašovací údaje s uživatelským jménem.</string>
+  <string name="profile_credential_username_missing">Vybrané přihlašovací údaje nemají uživatelské jméno.</string>
+  <string name="profile_mac_credential_required">Vyberte uložené přihlašovací údaje pro uživatele macOS.</string>
+  <string name="profile_mac_username_missing">Vybrané přihlašovací údaje nemají uživatelské jméno macOS.</string>
+  <string name="profile_mac_password_required">Připojení uživatele macOS vyžaduje heslo ve vybraných přihlašovacích údajích.</string>
+  <string name="profile_selected_credential_no_password">Vybrané přihlašovací údaje nemají heslo.</string>
+  <string name="profile_proxy_type_invalid">Vyberte podporovaný typ proxy.</string>
+  <string name="profile_proxy_host_required">Zadejte název hostitele nebo IP proxy.</string>
   <string name="vnc_mac_auth_failed">Ověření na Macu se nezdařilo. Zkontrolujte uživatelské jméno a heslo.</string>
   <string name="vnc_sftp_pair">Spárovat profil SSH pro přístup k souborům</string>
   <string name="vnc_sftp_unpaired">Žádný</string>

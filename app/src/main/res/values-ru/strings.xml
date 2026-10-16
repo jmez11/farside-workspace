@@ -14,6 +14,7 @@
   <string name="about_open_source_licenses">О приложении и лицензии с открытым кодом</string>
   <string name="account_display_name">Отображаемое имя учётной записи</string>
   <string name="add_connection">Добавить подключение</string>
+  <string name="edit_connection">Изменить подключение</string>
   <string name="add_tunnel">Добавить туннель</string>
   <string name="admin_mode">Режим администратора</string>
   <string name="allow_connections_from_other_hosts">Разрешить подключения с других хостов</string>
@@ -597,6 +598,17 @@
   <string name="vnc_auth_password">Пароль VNC</string>
   <string name="vnc_auth_mac_user">Пользователь macOS</string>
   <string name="vnc_mac_credential_required">Выберите сохранённые учётные данные с именем пользователя и паролем macOS.</string>
+  <string name="profile_host_required">Введите имя хоста или IP-адрес.</string>
+  <string name="profile_name_required">Введите отображаемое имя.</string>
+  <string name="profile_port_invalid">Введите порт от 1 до 65535.</string>
+  <string name="profile_rdp_credential_required">Выберите сохранённые учётные данные с именем пользователя.</string>
+  <string name="profile_credential_username_missing">В выбранных учётных данных нет имени пользователя.</string>
+  <string name="profile_mac_credential_required">Выберите сохранённые учётные данные для пользователя macOS.</string>
+  <string name="profile_mac_username_missing">В выбранных учётных данных нет имени пользователя macOS.</string>
+  <string name="profile_mac_password_required">Для подключения пользователя macOS требуется пароль в выбранных учётных данных.</string>
+  <string name="profile_selected_credential_no_password">В выбранных учётных данных нет пароля.</string>
+  <string name="profile_proxy_type_invalid">Выберите поддерживаемый тип прокси.</string>
+  <string name="profile_proxy_host_required">Введите имя хоста или IP-адрес прокси.</string>
   <string name="vnc_mac_auth_failed">Не удалось выполнить проверку подлинности Mac. Проверьте имя пользователя и пароль.</string>
   <string name="vnc_sftp_pair">Связать профиль SSH для доступа к файлам</string>
   <string name="vnc_sftp_unpaired">Нет</string>

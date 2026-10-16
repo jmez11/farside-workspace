@@ -14,6 +14,7 @@
   <string name="about_open_source_licenses">關於及開放源碼授權</string>
   <string name="account_display_name">帳戶顯示名稱</string>
   <string name="add_connection">新增連接</string>
+  <string name="edit_connection">編輯連接</string>
   <string name="add_tunnel">新增隧道</string>
   <string name="admin_mode">管理員模式</string>
   <string name="allow_connections_from_other_hosts">允許來自其他主機的連接</string>
@@ -597,6 +598,17 @@
   <string name="vnc_auth_password">VNC 密碼</string>
   <string name="vnc_auth_mac_user">macOS 使用者</string>
   <string name="vnc_mac_credential_required">選擇包含 macOS 使用者名稱和密碼的已儲存認證。</string>
+  <string name="profile_host_required">輸入主機名稱或 IP 位址。</string>
+  <string name="profile_name_required">輸入顯示名稱。</string>
+  <string name="profile_port_invalid">輸入 1 到 65535 之間的連接埠。</string>
+  <string name="profile_rdp_credential_required">選擇包含使用者名稱的已儲存認證。</string>
+  <string name="profile_credential_username_missing">所選認證沒有使用者名稱。</string>
+  <string name="profile_mac_credential_required">選擇適用於 macOS 使用者的已儲存認證。</string>
+  <string name="profile_mac_username_missing">所選認證沒有 macOS 使用者名稱。</string>
+  <string name="profile_mac_password_required">macOS 使用者連接需要在所選認證中設定密碼。</string>
+  <string name="profile_selected_credential_no_password">所選認證沒有密碼。</string>
+  <string name="profile_proxy_type_invalid">選擇支援的代理類型。</string>
+  <string name="profile_proxy_host_required">輸入代理主機名稱或 IP 位址。</string>
   <string name="vnc_mac_auth_failed">Mac 驗證失敗。請檢查使用者名稱和密碼。</string>
   <string name="vnc_sftp_pair">配對用於檔案存取的 SSH 設定檔</string>
   <string name="vnc_sftp_unpaired">無</string>

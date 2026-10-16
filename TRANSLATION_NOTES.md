@@ -487,3 +487,10 @@ Preserve positional placeholders, XML/Android escaping, brand names, protocol id
 - `socks5_proxy_connect` / `socks5_proxy_host_port_required`: Mirror the existing `http_proxy_connect` / `http_proxy_host_port_required` strings; SOCKS5 untranslated.
 - `window_manager`: Horizon OS window manager shortcut.
 - `find_local_macs` / `finding_local_macs`: "Macs" = Apple Mac computers on the LAN (Bonjour discovery context); brand token "Mac"/"Macs" kept untranslated (CJK locales use "Mac" — those languages don't mark plurals; flagged UNCERTAIN there). Ellipsis follows the existing per-locale convention ("…" vs "...") mirroring `finding_local_sessions`.
+
+## 2026-10-15 top-up (12 strings)
+- `edit_connection`: Mirrors `add_connection`.
+- `profile_host_required` / `profile_name_required` / `profile_port_invalid`: Connection-editor validation messages, shown when saving a profile with a missing/invalid field. Port phrasing mirrors `socks5_proxy_host_port_required`.
+- `profile_rdp_credential_required` / `profile_credential_username_missing` / `profile_selected_credential_no_password`: "credential" = the app's saved login credential; phrasing mirrors `vnc_mac_credential_required` per locale.
+- `profile_mac_credential_required` / `profile_mac_username_missing` / `profile_mac_password_required`: "macOS user" = the macOS account used for VNC/Screen Sharing auth; "macOS"/"Mac" kept untranslated.
+- `profile_proxy_type_invalid` / `profile_proxy_host_required`: Proxy types are None/Cloudflared/SOCKS5/HTTP (see `select_none_cloudflared_socks5_or_http`); `profile_proxy_host_required` mirrors each locale's `proxy_hostname_or_ip` phrasing.
