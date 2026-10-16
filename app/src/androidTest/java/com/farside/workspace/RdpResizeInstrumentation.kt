@@ -118,6 +118,16 @@ class RdpResizeInstrumentation : Instrumentation() {
                 finish(0, results)
                 return
             }
+            jumpArgs?.getString("rdpName")?.let { name ->
+                results.putString("stream", RdpDiscoveryVerification(this).diagnoseName(name))
+                finish(0, results)
+                return
+            }
+            jumpArgs?.getString("rdpSavedProfile")?.let { name ->
+                results.putString("stream", RdpDiscoveryVerification(this).verifySavedSession(name))
+                finish(0, results)
+                return
+            }
             if (jumpArgs?.getString("rdpDiscoveryOnly") == "true") {
                 results.putString("stream", RdpDiscoveryVerification(this).run())
                 finish(0, results)

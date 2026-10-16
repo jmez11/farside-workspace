@@ -2,6 +2,7 @@
 package com.farside.workspace.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.layout.*
@@ -16,6 +17,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.error
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -59,6 +61,7 @@ import android.hardware.camera2.CameraManager
 import android.hardware.camera2.CameraCharacteristics
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import com.farside.workspace.R
@@ -81,6 +84,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.farside.workspace.data.ConnectionProfile
+import com.farside.workspace.data.SavedCredential
 import androidx.compose.material.icons.filled.DesktopMac
 import com.farside.workspace.data.ConnectionType
 import kotlinx.coroutines.launch
@@ -377,7 +381,7 @@ private fun CardActionTooltip(label: String, content: @Composable () -> Unit) {
     Box(Modifier.pointerInput(Unit) {
         awaitPointerEventScope {
             while (true) when (awaitPointerEvent().type) {
-                PointerEventType.Enter -> hovering = true
+                PointerEventType.Enter, PointerEventType.Move -> hovering = true
                 PointerEventType.Exit -> hovering = false
                 PointerEventType.Press -> visible = false
                 else -> Unit
@@ -392,9 +396,53 @@ private fun CardActionTooltip(label: String, content: @Composable () -> Unit) {
                     .coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0)),
                 (anchorBounds.bottom + gap).coerceAtMost((windowSize.height - popupContentSize.height).coerceAtLeast(0)))
         } }, properties = PopupProperties(focusable = false), onDismissRequest = { visible = false }) {
-            Surface(shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.inverseSurface,
+            Surface(modifier = Modifier.widthIn(max = 320.dp), shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.inverseSurface,
                 shadowElevation = 6.dp) {
                 Text(label, color = MaterialTheme.colorScheme.inverseOnSurface,
+                    style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(8.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun FormValidationField(message: String?, content: @Composable (Modifier) -> Unit) {
+    if (message == null) {
+        content(Modifier)
+        return
+    }
+    var hovering by remember { mutableStateOf(false) }
+    var visible by remember { mutableStateOf(false) }
+    val gap = with(androidx.compose.ui.platform.LocalDensity.current) { 6.dp.roundToPx() }
+    LaunchedEffect(hovering, message) {
+        visible = false
+        if (hovering) {
+            delay(450)
+            visible = true
+        }
+    }
+    val hoverModifier = Modifier.pointerInput(message) {
+        awaitPointerEventScope {
+            while (true) when (awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial).type) {
+                PointerEventType.Enter, PointerEventType.Move -> hovering = true
+                PointerEventType.Exit -> hovering = false
+                PointerEventType.Press -> visible = false
+                else -> Unit
+            }
+        }
+    }
+    Box(hoverModifier.semantics { error(message) }) {
+        content(Modifier)
+        if (visible) Popup(popupPositionProvider = remember(gap) { object : PopupPositionProvider {
+            override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize,
+                layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset = IntOffset(
+                (anchorBounds.left + (anchorBounds.width - popupContentSize.width) / 2)
+                    .coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0)),
+                (anchorBounds.bottom + gap).coerceAtMost((windowSize.height - popupContentSize.height).coerceAtLeast(0)))
+        } }, properties = PopupProperties(focusable = false), onDismissRequest = { visible = false }) {
+            Surface(modifier = Modifier.widthIn(max = 320.dp), shape = RoundedCornerShape(6.dp),
+                color = MaterialTheme.colorScheme.inverseSurface, shadowElevation = 6.dp) {
+                Text(message, color = MaterialTheme.colorScheme.inverseOnSurface,
                     style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(8.dp))
             }
         }
@@ -423,24 +471,29 @@ fun SettingsTextField(
     visualTransformation: androidx.compose.ui.text.input.VisualTransformation = androidx.compose.ui.text.input.VisualTransformation.None,
     keyboardOptions: androidx.compose.foundation.text.KeyboardOptions = androidx.compose.foundation.text.KeyboardOptions.Default,
     isError: Boolean = false,
+    errorMessage: String? = null,
     accessibleLabel: String? = null,
     singleLine: Boolean = true,
     minLines: Int = 1,
     maxLines: Int = if (singleLine) 1 else Int.MAX_VALUE,
     modifier: Modifier = Modifier
 ) {
+    val invalid = isError || errorMessage != null
+    FormValidationField(errorMessage) { hoverModifier ->
     TextField(
         value = value,
         onValueChange = onValueChange,
         placeholder = { Text(placeholder, color = Color.Gray) },
         label = if (accessibleLabel != null) { { Text(accessibleLabel, color = Color.Gray) } } else null,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).then(modifier)
+        modifier = hoverModifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).then(modifier)
+            .then(if (invalid) Modifier.border(2.dp, Color.Red, RoundedCornerShape(4.dp)) else Modifier)
             .semantics { if (accessibleLabel != null) contentDescription = accessibleLabel },
         colors = TextFieldDefaults.colors(
             focusedContainerColor = Color(0xFF1C1C1E),
             unfocusedContainerColor = Color(0xFF1C1C1E),
             focusedIndicatorColor = Color(0xFF1E88E5),
             unfocusedIndicatorColor = Color.DarkGray,
+            errorIndicatorColor = Color.Red,
             focusedTextColor = Color.White,
             unfocusedTextColor = Color.White
         ),
@@ -453,8 +506,9 @@ fun SettingsTextField(
         singleLine = singleLine,
         minLines = minLines,
         maxLines = maxLines,
-        isError = isError
+        isError = invalid
     )
+    }
 }
 
 @Composable
@@ -1145,9 +1199,10 @@ fun CameraResolutionSelector(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProxyTypeSelector(selectedType: com.farside.workspace.data.ProxyType, onTypeSelected: (com.farside.workspace.data.ProxyType) -> Unit) {
+fun ProxyTypeSelector(selectedType: com.farside.workspace.data.ProxyType, errorMessage: String? = null,
+                      onTypeSelected: (com.farside.workspace.data.ProxyType) -> Unit) {
     var expanded by rememberSaveable { mutableStateOf(false) }
-    
+    FormValidationField(errorMessage) { hoverModifier ->
     ExposedDropdownMenuBox(
         expanded = expanded,
         onExpandedChange = { expanded = !expanded },
@@ -1163,10 +1218,13 @@ fun ProxyTypeSelector(selectedType: com.farside.workspace.data.ProxyType, onType
                 unfocusedContainerColor = Color(0xFF1C1C1E),
                 focusedIndicatorColor = Color(0xFF1E88E5),
                 unfocusedIndicatorColor = Color.DarkGray,
+                errorIndicatorColor = Color.Red,
                 focusedTextColor = Color.White,
                 unfocusedTextColor = Color.White
             ),
-            modifier = Modifier.menuAnchor().fillMaxWidth()
+            modifier = hoverModifier.menuAnchor().fillMaxWidth()
+                .then(if (errorMessage != null) Modifier.border(2.dp, Color.Red, RoundedCornerShape(4.dp)) else Modifier),
+            isError = errorMessage != null
         )
         ExposedDropdownMenu(
             expanded = expanded,
@@ -1182,6 +1240,7 @@ fun ProxyTypeSelector(selectedType: com.farside.workspace.data.ProxyType, onType
                 )
             }
         }
+    }
     }
 }
 
@@ -1232,6 +1291,31 @@ fun ResolutionDropdown(selectedRes: String, onResSelected: (String) -> Unit) {
     }
 }
 
+internal fun profileCredentialErrorRes(type: ConnectionType, vncMode: com.farside.workspace.data.VncAuthMode,
+                                       credential: SavedCredential?, legacyUser: String): Int? = when (type) {
+    ConnectionType.SSH -> null
+    ConnectionType.RDP -> when {
+        credential?.user?.isNotBlank() == true -> null
+        credential != null -> R.string.profile_credential_username_missing
+        legacyUser.isNotBlank() -> null
+        else -> R.string.profile_rdp_credential_required
+    }
+    ConnectionType.VNC -> when (vncMode) {
+        com.farside.workspace.data.VncAuthMode.MAC_USER -> when {
+            credential == null -> R.string.profile_mac_credential_required
+            credential.user.isBlank() -> R.string.profile_mac_username_missing
+            credential.pass.isEmpty() -> R.string.profile_mac_password_required
+            else -> null
+        }
+        com.farside.workspace.data.VncAuthMode.VNC_PASSWORD -> when {
+            credential == null -> R.string.choose_vnc_password_credential
+            credential.pass.isEmpty() -> R.string.profile_selected_credential_no_password
+            credential.pass.length > 8 || credential.pass.any { it.code !in 1..255 } -> R.string.vnc_password_latin1
+            else -> null
+        }
+    }
+}
+
 @androidx.compose.material3.ExperimentalMaterial3Api
 @Composable
 fun AddProfileForm(
@@ -1246,7 +1330,7 @@ fun AddProfileForm(
     var name by rememberSaveable { mutableStateOf(initialProfile?.name ?: "") }
     var type by rememberSaveable { mutableStateOf(initialProfile?.type ?: ConnectionType.RDP) }
     var host by rememberSaveable { mutableStateOf(initialProfile?.host ?: "") }
-    var port by rememberSaveable { mutableStateOf(initialProfile?.port?.toString() ?: "") }
+    var port by rememberSaveable { mutableStateOf(initialProfile?.port?.toString() ?: "3389") }
     var user by rememberSaveable { mutableStateOf(initialProfile?.user ?: "") }
     var pass by remember { mutableStateOf(initialProfile?.pass ?: "") }
     val creds = remember(profileManager, credentialRevision) { profileManager.getCredentials() }
@@ -1271,7 +1355,8 @@ fun AddProfileForm(
     var proxyType by rememberSaveable { mutableStateOf(if (initialProfile?.useCloudflare == true) com.farside.workspace.data.ProxyType.CLOUDFLARED else initialProfile?.proxyType ?: com.farside.workspace.data.ProxyType.NONE) }
     var cloudflaredParameters by remember { mutableStateOf(initialProfile?.cloudflaredParameters ?: "") }
     var showCloudflaredParameters by remember { mutableStateOf(false) }
-    var cloudflaredError by remember { mutableStateOf<String?>(null) }
+    var cloudflaredHostError by remember { mutableStateOf<String?>(null) }
+    var cloudflaredParametersError by remember { mutableStateOf<String?>(null) }
     var proxyHost by rememberSaveable { mutableStateOf(initialProfile?.proxyHost ?: "") }
     var proxyPort by rememberSaveable { mutableStateOf(initialProfile?.proxyPort?.toString() ?: "") }
     var proxyUser by rememberSaveable { mutableStateOf(initialProfile?.proxyUser ?: "") }
@@ -1322,6 +1407,9 @@ fun AddProfileForm(
     var adminMode by rememberSaveable { mutableStateOf(initialProfile?.adminMode ?: false) }
 
     var showValidationErrors by rememberSaveable { mutableStateOf(false) }
+    val selectedCredential = creds.find { it.id == savedCredId }
+    val credentialErrorRes = profileCredentialErrorRes(type, vncAuthMode, selectedCredential, user)
+    val credentialErrorMessage = if (showValidationErrors) credentialErrorRes?.let { stringResource(it) } else null
 
     Column(
         modifier = Modifier
@@ -1339,42 +1427,33 @@ fun AddProfileForm(
             IconButton(onClick = onCancel) {
                 Icon(Icons.Default.Close, contentDescription = stringResource(R.string.close), tint = Color(0xFF1E88E5))
             }
-            Text(stringResource(R.string.add_connection), color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(stringResource(if (initialProfile == null) R.string.add_connection else R.string.edit_connection),
+                color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             TextButton(onClick = {
+                    showValidationErrors = true
                     if (proxyType !in com.farside.workspace.data.ProxyType.choices) {
-                        showValidationErrors = true
                         return@TextButton
                     }
                     val creds = profileManager.getCredentials()
                     val selectedCred = creds.find { it.id == savedCredId }
-                    val credSelected = when (type) {
-                        ConnectionType.SSH -> true
-                        ConnectionType.VNC -> selectedCred != null && selectedCred.pass.isNotEmpty() &&
-                            (if (vncAuthMode == com.farside.workspace.data.VncAuthMode.MAC_USER) selectedCred.user.isNotBlank()
-                            else selectedCred.pass.length <= 8 && selectedCred.pass.all { it.code in 1..255 })
-                        ConnectionType.RDP -> if (selectedCred != null) selectedCred.user.isNotBlank() else user.isNotBlank()
-                    }
-                    if (host.isBlank() || !credSelected || port.toIntOrNull() !in 1..65535) {
-                        showValidationErrors = true
+                    if (name.isBlank() || host.isBlank() || profileCredentialErrorRes(type, vncAuthMode, selectedCred, user) != null ||
+                        port.toIntOrNull() !in 1..65535 ||
+                        (proxyType in listOf(com.farside.workspace.data.ProxyType.HTTP, com.farside.workspace.data.ProxyType.SOCKS5) &&
+                            (proxyHost.isBlank() || proxyPort.toIntOrNull() !in 1..65535))) {
                         return@TextButton
                     }
                     if (proxyType == com.farside.workspace.data.ProxyType.CLOUDFLARED) {
-                        cloudflaredError = runCatching {
-                            com.farside.workspace.tunnel.CloudflaredOptions.hostname(host)
-                            com.farside.workspace.tunnel.CloudflaredOptions.parse(cloudflaredParameters)
-                        }.exceptionOrNull()?.localizedMessage(context)
-                        if (cloudflaredError != null) return@TextButton
-                    }
-                    if (proxyType in listOf(com.farside.workspace.data.ProxyType.HTTP, com.farside.workspace.data.ProxyType.SOCKS5) &&
-                        (proxyHost.isBlank() || proxyPort.toIntOrNull() !in 1..65535)) {
-                        showValidationErrors = true
-                        return@TextButton
+                        cloudflaredHostError = runCatching { com.farside.workspace.tunnel.CloudflaredOptions.hostname(host) }
+                            .exceptionOrNull()?.localizedMessage(context)
+                        cloudflaredParametersError = runCatching { com.farside.workspace.tunnel.CloudflaredOptions.parse(cloudflaredParameters) }
+                            .exceptionOrNull()?.localizedMessage(context)
+                        if (cloudflaredHostError != null || cloudflaredParametersError != null) return@TextButton
                     }
                     
                     onSave(
                         ConnectionProfile(
                             id = initialProfile?.id ?: UUID.randomUUID().toString(),
-                        name = name.takeIf { it.isNotBlank() } ?: context.getString(R.string.unnamed_connection),
+                        name = name,
                         type = type,
                         host = host,
                         port = port.toIntOrNull() ?: when (type) { ConnectionType.RDP -> 3389; ConnectionType.SSH -> 22; ConnectionType.VNC -> 5900 },
@@ -1447,7 +1526,8 @@ fun AddProfileForm(
                 }
 
                 SettingsHeader(stringResource(R.string.connection_name))
-                SettingsTextField(name, { name = it }, stringResource(R.string.enter_display_name))
+                SettingsTextField(name, { name = it }, stringResource(R.string.enter_display_name),
+                    errorMessage = if (showValidationErrors && name.isBlank()) stringResource(R.string.profile_name_required) else null)
 
                 if (type == ConnectionType.VNC) {
                     SettingsHeader(stringResource(R.string.vnc_auth_mode))
@@ -1463,7 +1543,7 @@ fun AddProfileForm(
                 }
                 SettingsHeader(stringResource(R.string.host_server))
                 if (type == ConnectionType.RDP || type == ConnectionType.VNC) {
-                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).zIndex(1f), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Button(enabled = !isScanning && (type != ConnectionType.VNC || vncAuthMode == com.farside.workspace.data.VncAuthMode.MAC_USER), onClick = {
                             val scanType = type
                             isScanning = true
@@ -1490,7 +1570,7 @@ fun AddProfileForm(
                         ExposedDropdownMenuBox(
                             expanded = expanded,
                             onExpandedChange = { expanded = !expanded },
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).zIndex(1f)
                         ) {
                             TextField(
                                 value = if (type == ConnectionType.VNC) stringResource(R.string.select_screen_sharing_server) else stringResource(R.string.select_discovered_pc),
@@ -1522,17 +1602,21 @@ fun AddProfileForm(
                         }
                     }
                 }
-                SettingsTextField(host, { host = it }, stringResource(R.string.hostname_or_ip_address), isError = showValidationErrors && host.isBlank())
+                SettingsTextField(host, { host = it; cloudflaredHostError = null }, stringResource(R.string.hostname_or_ip_address),
+                    errorMessage = if (showValidationErrors && host.isBlank()) stringResource(R.string.profile_host_required)
+                        else if (proxyType == com.farside.workspace.data.ProxyType.CLOUDFLARED) cloudflaredHostError else null)
                 SettingsTextField(
                     value = port, 
                     onValueChange = { port = it }, 
                     placeholder = stringResource(R.string.port_rdp_3389_ssh_22_vnc_5900),
-                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+                    errorMessage = if (showValidationErrors && port.toIntOrNull() !in 1..65535) stringResource(R.string.profile_port_invalid) else null
                 )
 
                 SettingsHeader(when (type) { ConnectionType.SSH -> stringResource(R.string.user_account_optional_for_ssh); ConnectionType.VNC -> stringResource(if (vncAuthMode == com.farside.workspace.data.VncAuthMode.MAC_USER) R.string.vnc_auth_mac_user else R.string.vnc_password_credential); else -> stringResource(R.string.user_account) })
                 var expandedCreds by rememberSaveable { mutableStateOf(false) }
                 
+                FormValidationField(credentialErrorMessage) { hoverModifier ->
                 ExposedDropdownMenuBox(
                     expanded = expandedCreds,
                     onExpandedChange = { expandedCreds = !expandedCreds },
@@ -1546,10 +1630,12 @@ fun AddProfileForm(
                         colors = ExposedDropdownMenuDefaults.textFieldColors(
                             focusedContainerColor = Color(0xFF1C1C1E), unfocusedContainerColor = Color(0xFF1C1C1E),
                             focusedIndicatorColor = Color(0xFF1E88E5), unfocusedIndicatorColor = Color.DarkGray,
+                            errorIndicatorColor = Color.Red,
                             focusedTextColor = Color.White, unfocusedTextColor = Color.White
                         ),
-                        modifier = Modifier.menuAnchor().fillMaxWidth(),
-                        isError = showValidationErrors && type != ConnectionType.SSH && savedCredId.isBlank()
+                        modifier = hoverModifier.menuAnchor().fillMaxWidth()
+                            .then(if (credentialErrorMessage != null) Modifier.border(2.dp, Color.Red, RoundedCornerShape(4.dp)) else Modifier),
+                        isError = credentialErrorMessage != null
                     )
                     ExposedDropdownMenu(expanded = expandedCreds, onDismissRequest = { expandedCreds = false }) {
                         if (type == ConnectionType.SSH) {
@@ -1583,11 +1669,6 @@ fun AddProfileForm(
                         )
                     }
                 }
-
-                if (type == ConnectionType.VNC && showValidationErrors) {
-                    Text(stringResource(if (vncAuthMode == com.farside.workspace.data.VncAuthMode.MAC_USER)
-                        R.string.vnc_mac_credential_required else R.string.select_a_saved_vnc_password_1_to_8_latin_1_characters_and_a_vali),
-                        color = Color.Red, modifier = Modifier.padding(16.dp))
                 }
                 if (type == ConnectionType.VNC) {
                     val sshProfiles = savedProfiles.filter { it.type == ConnectionType.SSH && it.enableSftp }
@@ -1663,7 +1744,9 @@ fun AddProfileForm(
                     val jumpCandidates = remember(allProfiles, initialProfile?.id) {
                         com.farside.workspace.ssh.JumpChains.candidates(editedProfile.copy(jumpHostProfileId = null), allProfiles)
                     }
+                    val (chainPreview, chainProblem) = com.farside.workspace.ssh.JumpChains.preview(context, editedProfile, allProfiles)
                     var expandedJump by rememberSaveable { mutableStateOf(false) }
+                    FormValidationField(chainProblem) { hoverModifier ->
                     ExposedDropdownMenuBox(
                         expanded = expandedJump,
                         onExpandedChange = { expandedJump = !expandedJump },
@@ -1677,9 +1760,12 @@ fun AddProfileForm(
                             colors = ExposedDropdownMenuDefaults.textFieldColors(
                                 focusedContainerColor = Color(0xFF1C1C1E), unfocusedContainerColor = Color(0xFF1C1C1E),
                                 focusedIndicatorColor = Color(0xFF1E88E5), unfocusedIndicatorColor = Color.DarkGray,
+                                errorIndicatorColor = Color.Red,
                                 focusedTextColor = Color.White, unfocusedTextColor = Color.White
                             ),
-                            modifier = Modifier.menuAnchor().fillMaxWidth()
+                            modifier = hoverModifier.menuAnchor().fillMaxWidth()
+                                .then(if (chainProblem != null) Modifier.border(2.dp, Color.Red, RoundedCornerShape(4.dp)) else Modifier),
+                            isError = chainProblem != null
                         )
                         ExposedDropdownMenu(expanded = expandedJump, onDismissRequest = { expandedJump = false }) {
                             DropdownMenuItem(
@@ -1694,12 +1780,12 @@ fun AddProfileForm(
                             }
                         }
                     }
-                    val (chainPreview, chainProblem) = com.farside.workspace.ssh.JumpChains.preview(context, editedProfile, allProfiles)
-                    val previewText = chainProblem ?: chainPreview?.takeIf { it.jumpHosts.isNotEmpty() }?.let {
+                    }
+                    val previewText = chainPreview?.takeIf { chainProblem == null && it.jumpHosts.isNotEmpty() }?.let {
                         context.getString(R.string.jump_route_preview, editedProfile.name.ifBlank { context.getString(R.string.this_profile) }, it.jumpHosts.joinToString(context.getString(R.string.jump_route_separator)) { h -> h.name })
                     }
                     if (previewText != null) {
-                        Text(previewText, fontSize = 12.sp, color = if (chainProblem != null) Color.Red else Color.Gray,
+                        Text(previewText, fontSize = 12.sp, color = Color.Gray,
                             modifier = Modifier.padding(horizontal = 16.dp))
                     }                }
                 
@@ -1722,30 +1808,28 @@ fun AddProfileForm(
                 SettingsSwitchRow(stringResource(R.string.reconnect_automatically), reconnectAutomatically, { reconnectAutomatically = it })
 
                 SettingsHeader(stringResource(R.string.proxy_settings))
-                ProxyTypeSelector(proxyType, { proxyType = it })
-                if (proxyType !in com.farside.workspace.data.ProxyType.choices) {
-                    Text(stringResource(R.string.select_none_cloudflared_socks5_or_http_before_saving), color = Color.Red, modifier = Modifier.padding(16.dp))
+                ProxyTypeSelector(proxyType,
+                    errorMessage = if (showValidationErrors && proxyType !in com.farside.workspace.data.ProxyType.choices)
+                        stringResource(R.string.profile_proxy_type_invalid) else null) {
+                    proxyType = it
+                    cloudflaredHostError = null
+                    cloudflaredParametersError = null
                 }
                 if (proxyType == com.farside.workspace.data.ProxyType.CLOUDFLARED) {
                     Text(stringResource(R.string.routes_the_connection_through_cloudflare_access_browser_sign_in), color = Color.Gray, modifier = Modifier.padding(16.dp))
-                    SettingsTextField(cloudflaredParameters, { cloudflaredParameters = it; cloudflaredError = null }, stringResource(R.string.extra_parameters_optional),
+                    SettingsTextField(cloudflaredParameters, { cloudflaredParameters = it; cloudflaredParametersError = null }, stringResource(R.string.extra_parameters_optional),
                         visualTransformation = if (showCloudflaredParameters) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
-                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(autoCorrect = false, keyboardType = androidx.compose.ui.text.input.KeyboardType.Password))
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(autoCorrect = false, keyboardType = androidx.compose.ui.text.input.KeyboardType.Password),
+                        errorMessage = cloudflaredParametersError)
                     SettingsSwitchRow(stringResource(R.string.show_cloudflared_parameters), showCloudflaredParameters, { showCloudflaredParameters = it })
                     Text(stringResource(R.string.allowed_service_token_id_and_service_token_secret_or_header_h_fo), color = Color.Gray, modifier = Modifier.padding(horizontal = 16.dp))
-                    cloudflaredError?.let { Text(it, color = Color.Red, modifier = Modifier.padding(16.dp)) }
                 } else if (proxyType == com.farside.workspace.data.ProxyType.SOCKS5 || proxyType == com.farside.workspace.data.ProxyType.HTTP) {
                     Text(stringResource(if (proxyType == com.farside.workspace.data.ProxyType.SOCKS5) R.string.socks5_proxy_connect else R.string.http_proxy_connect),
                         color = Color.Gray, modifier = Modifier.padding(16.dp))
                     SettingsTextField(proxyHost, { proxyHost = it }, stringResource(R.string.proxy_hostname_or_ip),
-                        isError = showValidationErrors && proxyHost.isBlank())
+                        errorMessage = if (showValidationErrors && proxyHost.isBlank()) stringResource(R.string.profile_proxy_host_required) else null)
                     SettingsTextField(proxyPort, { proxyPort = it }, stringResource(R.string.proxy_port),
-                        isError = showValidationErrors && proxyPort.toIntOrNull() !in 1..65535)
-                    if (showValidationErrors &&
-                        (proxyHost.isBlank() || proxyPort.toIntOrNull() !in 1..65535)) {
-                        Text(stringResource(if (proxyType == com.farside.workspace.data.ProxyType.SOCKS5) R.string.socks5_proxy_host_port_required else R.string.http_proxy_host_port_required),
-                            color = Color.Red, modifier = Modifier.padding(horizontal = 16.dp))
-                    }
+                        errorMessage = if (showValidationErrors && proxyPort.toIntOrNull() !in 1..65535) stringResource(R.string.profile_port_invalid) else null)
                     SettingsTextField(proxyUser, { proxyUser = it }, stringResource(R.string.proxy_username_optional))
                     SettingsTextField(proxyPass, { proxyPass = it }, stringResource(R.string.proxy_password_optional), visualTransformation = PasswordVisualTransformation())
                     SettingsTextField(proxyExclude, { proxyExclude = it }, stringResource(R.string.exclude_hosts_ips_comma_separated))

@@ -25,7 +25,10 @@ import com.farside.workspace.data.ConnectionProfile
 import com.farside.workspace.data.ConnectionType
 import com.farside.workspace.data.LauncherArrangementStore
 import com.farside.workspace.data.ProfileManager
+import com.farside.workspace.data.SavedCredential
+import com.farside.workspace.data.VncAuthMode
 import com.farside.workspace.ui.LauncherScreen
+import com.farside.workspace.ui.profileCredentialErrorRes
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -62,6 +65,16 @@ internal class LauncherArrangementVerification(private val test: Instrumentation
     private fun bounds(label: String): Rect = Rect().also { find(label).getBoundsInScreen(it); check(!it.isEmpty) }
 
     fun run(): String {
+        val emptyPassword = SavedCredential(name = "Validation fixture", user = "macuser", pass = "")
+        val missingUser = emptyPassword.copy(user = "", pass = "secret")
+        val invalidVnc = emptyPassword.copy(pass = "ninechars")
+        check(profileCredentialErrorRes(ConnectionType.VNC, VncAuthMode.MAC_USER, emptyPassword, "") == R.string.profile_mac_password_required)
+        check(profileCredentialErrorRes(ConnectionType.VNC, VncAuthMode.MAC_USER, missingUser, "") == R.string.profile_mac_username_missing)
+        check(profileCredentialErrorRes(ConnectionType.VNC, VncAuthMode.VNC_PASSWORD, emptyPassword, "") == R.string.profile_selected_credential_no_password)
+        check(profileCredentialErrorRes(ConnectionType.VNC, VncAuthMode.VNC_PASSWORD, invalidVnc, "") == R.string.vnc_password_latin1)
+        check(profileCredentialErrorRes(ConnectionType.VNC, VncAuthMode.VNC_PASSWORD, emptyPassword.copy(pass = "\u0100"), "") == R.string.vnc_password_latin1)
+        check(profileCredentialErrorRes(ConnectionType.VNC, VncAuthMode.VNC_PASSWORD, emptyPassword.copy(pass = "valid"), "") == null)
+        check(profileCredentialErrorRes(ConnectionType.RDP, VncAuthMode.MAC_USER, missingUser, "") == R.string.profile_credential_username_missing)
         val prefs = context.getSharedPreferences(preferenceName, Context.MODE_PRIVATE)
         check(prefs.edit().clear().commit())
         val store = LauncherArrangementStore(context, preferenceName)
@@ -136,6 +149,7 @@ internal class LauncherArrangementVerification(private val test: Instrumentation
                     }
                     lastHover?.let { send(MotionEvent.ACTION_HOVER_EXIT, it) }
                     send(MotionEvent.ACTION_HOVER_ENTER, target)
+                    send(MotionEvent.ACTION_HOVER_MOVE, target)
                 }
                 lastHover = target
                 Thread.sleep(650)
@@ -150,6 +164,39 @@ internal class LauncherArrangementVerification(private val test: Instrumentation
             click("Add Connection")
             find("Mac/VNC")
             find("Click here to find local PCs")
+            check(nodes().any { it.text?.toString() == "3389" && it.isEditable }) {
+                "New RDP form did not populate port 3389"
+            }
+            val discoveryBeforeValidation = bounds("Click here to find local PCs")
+            click("SAVE")
+            check(nodes().any { it.error?.toString() == "Enter a display name." })
+            check(nodes().any { it.error?.toString() == "Enter a hostname or IP address." })
+            check(nodes().none { it.error?.toString() == "Enter a port from 1 to 65535." }) {
+                "Default RDP port should remain valid after Save"
+            }
+            check(nodes().any { it.error?.toString() == "Select a saved credential with a username." })
+            check(bounds("Click here to find local PCs") == discoveryBeforeValidation) { "Validation shifted the form" }
+            check(nodes().none { it.text?.toString() == "Enter a hostname or IP address." }) {
+                "Validation text should not shift the form"
+            }
+            fun touchControl(label: String) {
+                val button = bounds(label)
+                val downTime = SystemClock.uptimeMillis()
+                for (action in listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP)) {
+                    test.runOnMainSync {
+                        val decor = activity.window.decorView
+                        val origin = IntArray(2).also { decor.getLocationOnScreen(it) }
+                        val event = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), action,
+                            button.exactCenterX() - origin[0], button.exactCenterY() - origin[1], 0)
+                        try { decor.dispatchTouchEvent(event) } finally { event.recycle() }
+                    }
+                }
+            }
+            touchControl("Click here to find local PCs")
+            check((0 until 20).any {
+                Thread.sleep(100)
+                nodes().any { node -> node.text?.toString()?.startsWith("Finding local RDP sessions") == true }
+            }) { "RDP discovery did not start after invalid Save" }
             val addFormImage = Bitmap.createBitmap(activity.window.decorView.width,
                 activity.window.decorView.height, Bitmap.Config.ARGB_8888)
             val addFormCopied = CountDownLatch(1)
@@ -161,6 +208,28 @@ internal class LauncherArrangementVerification(private val test: Instrumentation
                 addFormImage.compress(Bitmap.CompressFormat.PNG, 100, it)
             }
             addFormImage.recycle()
+            check((0 until 300).any {
+                Thread.sleep(100)
+                nodes().any { node -> node.text?.toString() == "Select Discovered PC" }
+            }) { "RDP discovery returned no selectable result" }
+            touchControl("Select Discovered PC")
+            val discoveredName = (0 until 20).asSequence().mapNotNull {
+                Thread.sleep(100)
+                nodes().firstOrNull { node -> node.text?.toString()?.startsWith("LAPTOP-") == true }?.text?.toString()
+            }.firstOrNull() ?: error("RDP discovery dropdown did not open after invalid Save")
+            val itemBounds = bounds(discoveredName)
+            val itemDownTime = SystemClock.uptimeMillis()
+            for (action in listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP)) {
+                val event = MotionEvent.obtain(itemDownTime, SystemClock.uptimeMillis(), action,
+                    itemBounds.exactCenterX(), itemBounds.exactCenterY(), 0)
+                    .apply { source = android.view.InputDevice.SOURCE_TOUCHSCREEN }
+                try { test.uiAutomation.injectInputEvent(event, true) } finally { event.recycle() }
+            }
+            check((0 until 20).any {
+                Thread.sleep(100)
+                nodes().any { node -> node.text?.toString() == discoveredName && node.isEditable }
+            }) { "RDP discovery selection did not fill display name; visible=" +
+                nodes().mapNotNull { it.text?.toString()?.let { value -> "$value(editable=${it.isEditable})" } }.distinct().take(25) }
             fun scrollTo(label: String, direction: Int) {
                 repeat(16) {
                     if (nodes().any { it.contentDescription?.toString() == label || it.text?.toString() == label }) return
@@ -187,6 +256,19 @@ internal class LauncherArrangementVerification(private val test: Instrumentation
             selectType("SSH")
             check(reconnectChecked()) { "SSH profile form lost Reconnect Automatically" }
             selectType("Mac/VNC")
+            check((0 until 100).any {
+                Thread.sleep(100)
+                nodes().any { node -> node.text?.toString() == "Click here to find local Macs" }
+            }) { "Mac discovery did not become available after RDP scan" }
+            touchControl("Click here to find local Macs")
+            check((0 until 20).any {
+                Thread.sleep(100)
+                nodes().any { node -> node.text?.toString() == "Finding local Macs..." }
+            }) { "Mac discovery did not start after invalid Save" }
+            check((0 until 100).any {
+                Thread.sleep(100)
+                nodes().any { node -> node.text?.toString() == "Click here to find local Macs" }
+            }) { "Mac discovery did not finish" }
             check(reconnectChecked()) { "Mac/VNC profile form lost Reconnect Automatically" }
             scrollTo("Click here to find local Macs", AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
             fun macDiscoveryEnabled() = generateSequence(find("Click here to find local Macs")) { it.parent }.all { it.isEnabled }
@@ -202,6 +284,11 @@ internal class LauncherArrangementVerification(private val test: Instrumentation
             scrollTo("Close", AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
             click("Close")
             check(nodes().none { it.contentDescription?.toString() == "Open another Fixture A window here" })
+            click("More options")
+            click("Edit")
+            find("Edit Connection")
+            check(nodes().none { it.text?.toString() == "Add Connection" })
+            click("Close")
             val actionsImage = Bitmap.createBitmap(activity.window.decorView.width,
                 activity.window.decorView.height, Bitmap.Config.ARGB_8888)
             val actionsCopied = CountDownLatch(1)
@@ -475,6 +562,9 @@ internal class LauncherArrangementVerification(private val test: Instrumentation
             check(launcherNodes().none { it.text?.toString() == "Reorder" || it.contentDescription?.toString() == "Files" }) {
                 "Single non-SFTP connection shows Reorder or Files"
             }
+            click("Add Connection")
+            click("SAVE")
+            hover("Hostname or IP address", "Enter a hostname or IP address.")
             return "launcher arrangement, compact actions, empty color pulse ($changedPixels pixels), and 0/1 connection controls"
         } finally {
             test.runOnMainSync { SessionCardActions.connectedCounts.remove("A") }

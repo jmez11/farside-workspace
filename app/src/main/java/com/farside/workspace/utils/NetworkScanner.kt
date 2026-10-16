@@ -12,6 +12,9 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.DatagramSocket
 import java.net.DatagramPacket
+import java.net.NetworkInterface
+import java.io.ByteArrayOutputStream
+import java.io.DataOutputStream
 
 data class DiscoveredHost(val ip: String, val name: String, val port: Int = 3389, val hostname: String? = null) {
     fun savedRdpHost(): String = hostname ?: ip
@@ -113,13 +116,136 @@ object NetworkScanner {
         activeHosts.toList()
     }
 
-    /** Android DNS does not resolve Windows NetBIOS names on this Quest. Rediscover them so
-     * a saved computer name still follows a changed DHCP address. */
-    suspend fun resolveRdpHost(context: Context, hostname: String): String {
+    /** Resolve only the saved name. A failed DNS lookup must not scan the LAN on connect. */
+    suspend fun resolveRdpHost(hostname: String): String {
         if (runCatching { InetAddress.getByName(hostname) }.isSuccess) return hostname
-        return scanLocalNetworkForRdp(context).firstOrNull {
-            it.hostname.equals(hostname, ignoreCase = true)
-        }?.ip ?: hostname
+        return resolveNetBiosName(hostname) ?: hostname
+    }
+
+    /** A NetBIOS name query asks for one computer's current address using UDP/137 broadcast. */
+    internal suspend fun resolveNetBiosName(hostname: String): String? = withContext(Dispatchers.IO) {
+        if (hostname.length !in 1..15 || !hostname.all { it.code in 0x21..0x7e && it != '.' }) {
+            return@withContext null
+        }
+        val broadcasts = linkedSetOf<InetAddress>()
+        val interfaces = runCatching { NetworkInterface.getNetworkInterfaces() }.getOrNull()
+            ?: return@withContext null
+        while (interfaces.hasMoreElements()) {
+            val network = interfaces.nextElement()
+            runCatching {
+                if (network.isUp && !network.isLoopback) {
+                    network.interfaceAddresses.mapNotNullTo(broadcasts) { it.broadcast }
+                }
+            }
+        }
+        for (broadcast in broadcasts) {
+            try {
+                DatagramSocket().use { socket ->
+                    socket.broadcast = true
+                    socket.soTimeout = 750
+                    val transactionId = kotlin.random.Random.nextInt(0x10000)
+                    val query = netBiosNameQuery(hostname, transactionId)
+                    socket.send(DatagramPacket(query, query.size, broadcast, 137))
+                    val deadline = android.os.SystemClock.elapsedRealtime() + 750
+                    while (android.os.SystemClock.elapsedRealtime() < deadline) {
+                        val response = ByteArray(512)
+                        val packet = DatagramPacket(response, response.size)
+                        socket.soTimeout = (deadline - android.os.SystemClock.elapsedRealtime()).coerceAtLeast(1).toInt()
+                        socket.receive(packet)
+                        parseNetBiosNameQueryResponse(response, packet.length, hostname, transactionId)?.let {
+                            // Multi-homed PCs can advertise an unreachable adapter first. The
+                            // responding socket address is the interface that answered this LAN query.
+                            return@withContext packet.address.hostAddress
+                        }
+                    }
+                }
+            } catch (_: java.net.SocketTimeoutException) {
+                // No host with this name answered on this link.
+            } catch (_: Exception) {
+                // A blocked or unavailable interface must not prevent other links from resolving.
+            }
+        }
+        null
+    }
+
+    internal fun netBiosNameQuery(hostname: String, transactionId: Int): ByteArray {
+        val name = hostname.uppercase(java.util.Locale.ROOT).padEnd(15, ' ')
+        val buffer = ByteArrayOutputStream(50)
+        DataOutputStream(buffer).use { out ->
+            out.writeShort(transactionId)
+            out.writeShort(0x0110) // Recursion desired; broadcast query.
+            out.writeShort(1)
+            out.writeShort(0)
+            out.writeShort(0)
+            out.writeShort(0)
+            out.writeByte(32)
+            (name + '\u0000').forEach { char ->
+                val value = char.code
+                out.writeByte('A'.code + (value ushr 4))
+                out.writeByte('A'.code + (value and 15))
+            }
+            out.writeByte(0)
+            out.writeShort(0x20) // NB name record.
+            out.writeShort(1)
+        }
+        return buffer.toByteArray()
+    }
+
+    internal fun parseNetBiosNameQueryResponse(
+        response: ByteArray, length: Int, hostname: String, transactionId: Int
+    ): String? {
+        if (length !in 12..response.size) return null
+        fun byte(offset: Int): Int = response[offset].toInt() and 0xff
+        fun word(offset: Int): Int = (byte(offset) shl 8) or byte(offset + 1)
+        if (word(0) != transactionId || word(2) and 0xf80f != 0x8000) return null
+        val expectedName = netBiosNameQuery(hostname, transactionId).copyOfRange(13, 45)
+        fun readName(start: Int): Int? {
+            var offset = start
+            var end = -1
+            var firstLabel: ByteArray? = null
+            val visited = mutableSetOf<Int>()
+            while (offset < length && visited.add(offset)) {
+                val size = byte(offset++)
+                if (size == 0) return if (firstLabel?.contentEquals(expectedName) == true) {
+                    if (end >= 0) end else offset
+                } else null
+                if (size and 0xc0 == 0xc0) {
+                    if (offset >= length) return null
+                    if (end < 0) end = offset + 1
+                    offset = ((size and 0x3f) shl 8) or byte(offset)
+                    continue
+                }
+                if (size > 63 || offset + size > length) return null
+                if (firstLabel == null) firstLabel = response.copyOfRange(offset, offset + size)
+                offset += size
+            }
+            return null
+        }
+        var offset = 12
+        repeat(word(4)) {
+            offset = readName(offset) ?: return null
+            if (offset + 4 > length) return null
+            offset += 4
+        }
+        repeat(word(6)) {
+            offset = readName(offset) ?: return null
+            if (offset + 10 > length) return null
+            val type = word(offset)
+            val recordClass = word(offset + 2)
+            val dataLength = word(offset + 8)
+            offset += 10
+            if (offset + dataLength > length) return null
+            if (type == 0x20 && recordClass == 1 && dataLength >= 6) {
+                var addressOffset = offset
+                while (addressOffset + 6 <= offset + dataLength) {
+                    val address = response.copyOfRange(addressOffset + 2, addressOffset + 6)
+                    if (address.any { it.toInt() != 0 }) return InetAddress.getByAddress(address).hostAddress
+                    addressOffset += 6
+                }
+            }
+            offset += dataLength
+        }
+        return null
     }
 
     /** Bonjour service names are display names, not DNS hostnames; browse the service again
