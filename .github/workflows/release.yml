@@ -21,6 +21,11 @@ jobs:
           submodules: recursive
           fetch-depth: 0 # versionCode derives from commit count
 
+      - name: Apply Termux TerminalSession patch
+        # SshTerminalSession subclasses TerminalSession, which is final upstream.
+        # Same procedure as ARCHITECTURE.md documents for fresh local checkouts.
+        run: git -C termux-app apply ../tools/termux-terminal-session.patch
+
       - name: Set up JDK 17
         uses: actions/setup-java@v5
         with:
