@@ -3,6 +3,7 @@ package com.farside.workspace.ssh
 import com.farside.workspace.data.ConnectionProfile
 import com.farside.workspace.data.ConnectionType
 import android.content.Context
+import androidx.annotation.AnyRes
 import androidx.annotation.StringRes
 import com.farside.workspace.LocalizableError
 import com.farside.workspace.R
@@ -12,7 +13,7 @@ class JumpChainException : Exception, LocalizableError {
     override val resId: Int
     override val formatArgs: Array<out Any>
     override val quantity: Int?
-    constructor(@StringRes resId: Int, vararg args: Any, quantity: Int? = null) : super() {
+    constructor(@AnyRes resId: Int, vararg args: Any, quantity: Int? = null) : super() {
         this.resId = resId; formatArgs = args; this.quantity = quantity
     }
 }

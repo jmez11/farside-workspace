@@ -1,11 +1,11 @@
 package com.farside.workspace
 
 import android.content.Context
-import androidx.annotation.StringRes
+import androidx.annotation.AnyRes
 
 /** Resource-bearing validation error; never retains a UI context. */
 interface LocalizableError {
-    @get:StringRes val resId: Int
+    @get:AnyRes val resId: Int
     val formatArgs: Array<out Any>
     val quantity: Int? get() = null
 }
@@ -18,7 +18,7 @@ fun LocalizableError.resolve(context: Context): String {
 }
 
 open class LocalizableException(
-    @StringRes override val resId: Int,
+    @AnyRes override val resId: Int,
     override val formatArgs: Array<out Any> = emptyArray(),
 ) : IllegalArgumentException(), LocalizableError
 
