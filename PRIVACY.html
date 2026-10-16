@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy | Farside Workspace</title>
+</head>
+<body>
+<h1>Privacy Policy | Farside Workspace</h1>
+
+<p><strong>Farside Workspace</strong> (by OceanSideVR) is built with privacy in mind.</p>
+
+<h2>Data Collection &amp; Analytics</h2>
+<ul>
+<li><strong>No Personal Data Collected</strong>: Farside Workspace does not collect, store, transmit, or share any personal information.</li>
+<li><strong>No Analytics / Telemetry</strong>: The app does not include third-party tracking SDKs, advertising libraries, or telemetry/crash-reporting services.</li>
+</ul>
+
+<h2>Network Connections</h2>
+<ul>
+<li><strong>Your servers only</strong>: RDP and SSH sessions connect solely to hosts you configure. The bundled cloudflared binary is used only for tunnels you set up yourself. The app makes no connections to OceanSideVR or any third party.</li>
+<li><strong>Encrypted transport</strong>: SSH sessions are end-to-end encrypted; RDP sessions use the server's negotiated encryption.</li>
+<li><strong>Stored credentials</strong>: Saved login credentials are encrypted on-device with AES-256-GCM using the Android Keystore. SSH host keys are stored locally. Nothing leaves your headset except to the servers you connect to.</li>
+</ul>
+
+<h2>Camera &amp; Screen Capture</h2>
+<ul>
+<li><strong>Headset Display capture is opt-in per session</strong>: sharing your headset view with a remote session requires your explicit consent through Android's MediaProjection prompt each time. Captured frames go to your remote session only.</li>
+</ul>
+
+<h2>System Logs</h2>
+<ul>
+<li>Hostnames or addresses you connect to may appear in Android system logs (<code>logcat</code>) and process memory. Be mindful of this if exporting system-wide debug logs.</li>
+</ul>
+
+<h2>Platform</h2>
+<ul>
+<li>Farside Workspace runs on Meta Horizon OS and requests no Meta platform features. Data handled by the Horizon OS platform itself is governed by Meta's privacy policy.</li>
+</ul>
+
+<h2>Contact</h2>
+<p>If you have any questions or feedback regarding this policy, please file an issue on the Farside GitHub repository.</p>
+</body>
+</html>
