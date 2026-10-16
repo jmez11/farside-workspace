@@ -76,6 +76,13 @@ android {
         resources.merges += listOf("META-INF/DEPENDENCIES", "META-INF/LICENSE", "META-INF/NOTICE")
     }
 
+    lint {
+        // The Compose FrequentlyChangingValue detector crashes lint outright
+        // (IncompatibleClassChangeError from a Kotlin analysis API mismatch — a lint
+        // tool bug, not a code issue). Disabling it is lint's own suggested workaround.
+        disable += "FrequentlyChangingValue"
+    }
+
     buildTypes {
         getByName("release") {
             // Signed only when key.properties is present (CI release job); otherwise the
