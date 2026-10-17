@@ -27,3 +27,6 @@ app/upload-keystore.jks
 
 .codex-remote-attachments/
 .kotlin/
+
+# Personal editor settings (never commit)
+.vscode/
