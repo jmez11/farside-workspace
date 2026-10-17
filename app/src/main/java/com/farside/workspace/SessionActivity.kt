@@ -159,7 +159,10 @@ class SessionActivity : ComponentActivity() {
             com.farside.workspace.ssh.JumpChains.resolveChain(profile, com.farside.workspace.data.ProfileManager(this).getProfiles()).describe(this)
         }.getOrDefault(profile.name)
         setTitle(headerTitle)
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            setTaskDescription(android.app.ActivityManager.TaskDescription.Builder().setLabel(headerTitle).build())
+        } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+            @Suppress("DEPRECATION")
             setTaskDescription(android.app.ActivityManager.TaskDescription(headerTitle))
         }
 

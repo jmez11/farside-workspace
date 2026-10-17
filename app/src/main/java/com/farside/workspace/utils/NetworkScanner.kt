@@ -274,8 +274,9 @@ object NetworkScanner {
                 val addresses = networkInterface.inetAddresses
                 while (addresses.hasMoreElements()) {
                     val address = addresses.nextElement()
-                    if (!address.isLoopbackAddress && address.hostAddress.indexOf(':') < 0) {
-                        return address.hostAddress
+                    val hostAddress = address.hostAddress
+                    if (!address.isLoopbackAddress && hostAddress != null && hostAddress.indexOf(':') < 0) {
+                        return hostAddress
                     }
                 }
             }

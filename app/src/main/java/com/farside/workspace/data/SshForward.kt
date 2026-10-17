@@ -6,8 +6,8 @@ import androidx.annotation.StringRes
 import com.farside.workspace.LocalizableException
 import com.farside.workspace.R
 
-enum class ForwardKind(@StringRes val labelResId: Int) { LOCAL(R.string.forward_kind_local), REMOTE(R.string.forward_kind_remote), DYNAMIC(R.string.forward_kind_dynamic) }
-enum class ForwardFamily(@StringRes val labelResId: Int) { AUTO(R.string.forward_family_auto), IPV4(R.string.forward_family_ipv4), IPV6(R.string.forward_family_ipv6) }
+enum class ForwardKind(@get:StringRes val labelResId: Int) { LOCAL(R.string.forward_kind_local), REMOTE(R.string.forward_kind_remote), DYNAMIC(R.string.forward_kind_dynamic) }
+enum class ForwardFamily(@get:StringRes val labelResId: Int) { AUTO(R.string.forward_family_auto), IPV4(R.string.forward_family_ipv4), IPV6(R.string.forward_family_ipv6) }
 
 data class SshForward(
     val id: String = UUID.randomUUID().toString(),
@@ -30,7 +30,7 @@ data class SshForward(
         ForwardKind.REMOTE -> R.string.forward_route_remote
     }
     val routeFormatArgs: Array<out Any> get() = if (kind == ForwardKind.DYNAMIC) arrayOf(sourcePort)
-        else arrayOf(sourcePort, destinationHost, destinationPort)
+        else arrayOf<Any>(sourcePort, destinationHost, destinationPort)
     fun validate() {
         if (sourcePort !in 1..65535) throw LocalizableException(R.string.forward_source_port_invalid)
         if (kind != ForwardKind.DYNAMIC) {

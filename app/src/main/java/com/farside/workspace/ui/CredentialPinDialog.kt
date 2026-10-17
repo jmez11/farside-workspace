@@ -53,7 +53,7 @@ fun CredentialPinDialog(
             Text(message)
             OutlinedTextField(pin, { pin = it; error = null }, label = { Text(stringResource(R.string.pin)) },
                 singleLine = true, enabled = !busy, visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, autoCorrect = false),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, autoCorrectEnabled = false),
                 isError = error != null)
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Row(

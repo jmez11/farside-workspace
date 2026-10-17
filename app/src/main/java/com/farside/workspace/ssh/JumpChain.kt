@@ -19,7 +19,7 @@ class JumpChainException : Exception, LocalizableError {
 }
 
 /** [hops] are in connect order and end with the target profile itself. [warning] is set for a dangling jump reference. */
-data class JumpChain(val hops: List<ConnectionProfile>, @StringRes val warning: Int? = null) {
+data class JumpChain(val hops: List<ConnectionProfile>, @get:StringRes val warning: Int? = null) {
     val jumpHosts: List<ConnectionProfile> get() = hops.dropLast(1)
     /** "bastion → db-01", or just the name for a direct profile. */
     fun describe(context: Context): String = hops.joinToString(context.getString(R.string.jump_route_separator)) { it.name }

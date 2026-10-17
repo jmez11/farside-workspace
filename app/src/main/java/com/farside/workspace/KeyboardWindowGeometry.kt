@@ -30,13 +30,15 @@ internal class KeyboardWindowGeometry(context: Context) {
                             val next = mutableMapOf<String, Snapshot>()
                             fun collect(windows: List<*>) {
                                 for (info in windows.filterNotNull()) {
-                                    val token = info.javaClass.getMethod("getVolumetricWindowToken").invoke(info)
-                                    val size = info.javaClass.getMethod("getWindowSize2d").invoke(info)
+                                    val token = info.javaClass.getMethod("getVolumetricWindowToken").invoke(info) ?: continue
+                                    val size = info.javaClass.getMethod("getWindowSize2d").invoke(info) ?: continue
+                                    val pose = info.javaClass.getMethod("getPose").invoke(info)?.toString() ?: ""
+                                    val bounds = info.javaClass.getMethod("getBounds").invoke(info)?.toString() ?: ""
                                     id(token)?.let { next[it] = Snapshot((size.javaClass.getMethod("getWidth").invoke(size) as Number).toInt(),
                                         (size.javaClass.getMethod("getHeight").invoke(size) as Number).toInt(),
-                                        info.javaClass.getMethod("getPose").invoke(info).toString(),
-                                        info.javaClass.getMethod("getBounds").invoke(info).toString()) }
-                                    collect(info.javaClass.getMethod("getChildren").invoke(info) as List<*>)
+                                        pose,
+                                        bounds) }
+                                    collect((info.javaClass.getMethod("getChildren").invoke(info) as? List<*>) ?: emptyList<Any?>())
                                 }
                             }
                             collect(args!![0] as List<*>)

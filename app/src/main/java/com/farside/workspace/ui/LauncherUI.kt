@@ -1848,7 +1848,7 @@ fun AddProfileForm(
                     Text(stringResource(R.string.routes_the_connection_through_cloudflare_access_browser_sign_in), color = Color.Gray, modifier = Modifier.padding(16.dp))
                     SettingsTextField(cloudflaredParameters, { cloudflaredParameters = it; cloudflaredParametersError = null }, stringResource(R.string.extra_parameters_optional),
                         visualTransformation = if (showCloudflaredParameters) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
-                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(autoCorrect = false, keyboardType = androidx.compose.ui.text.input.KeyboardType.Password),
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(autoCorrectEnabled = false, keyboardType = androidx.compose.ui.text.input.KeyboardType.Password),
                         errorMessage = cloudflaredParametersError)
                     SettingsSwitchRow(stringResource(R.string.show_cloudflared_parameters), showCloudflaredParameters, { showCloudflaredParameters = it })
                     Text(stringResource(R.string.allowed_service_token_id_and_service_token_secret_or_header_h_fo), color = Color.Gray, modifier = Modifier.padding(horizontal = 16.dp))

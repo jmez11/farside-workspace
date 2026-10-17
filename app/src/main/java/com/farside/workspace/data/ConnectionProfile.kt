@@ -4,7 +4,7 @@ import org.json.JSONObject
 import androidx.annotation.StringRes
 import com.farside.workspace.R
 
-enum class ConnectionType(@StringRes val labelResId: Int) {
+enum class ConnectionType(@get:StringRes val labelResId: Int) {
     RDP(R.string.protocol_rdp), SSH(R.string.protocol_ssh), VNC(R.string.protocol_vnc)
 }
 
@@ -32,7 +32,7 @@ enum class SoundRedirection {
 
 enum class VncAuthMode { VNC_PASSWORD, MAC_USER }
 
-enum class CameraResolution(@StringRes val labelResId: Int, val maxDim: Int) {
+enum class CameraResolution(@get:StringRes val labelResId: Int, val maxDim: Int) {
     SD(R.string.camera_resolution_sd, 480),
     HD_720(R.string.camera_resolution_720, 720),
     NATIVE_MAX(R.string.camera_resolution_native, -1)

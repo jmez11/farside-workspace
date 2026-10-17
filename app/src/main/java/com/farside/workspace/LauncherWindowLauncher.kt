@@ -28,9 +28,9 @@ internal object LauncherWindowLauncher {
                 val token = Class.forName("$namespace.app.ActivityExt")
                     .getMethod("getVolumetricWindowToken", Activity::class.java).invoke(null, session) ?: continue
                 val info = managerClass.getMethod("getWindowInfo", tokenClass).invoke(manager, token) ?: continue
-                val pose = info.javaClass.getMethod("getPose").invoke(info)
-                val orientation = pose.javaClass.getMethod("getOrientation").invoke(pose)
-                val position = pose.javaClass.getMethod("getPosition").invoke(pose)
+                val pose = info.javaClass.getMethod("getPose").invoke(info) ?: continue
+                val orientation = pose.javaClass.getMethod("getOrientation").invoke(pose) ?: continue
+                val position = pose.javaClass.getMethod("getPosition").invoke(pose) ?: continue
                 fun component(value: Any, name: String) = (value.javaClass.getMethod(name).invoke(value) as Number).toFloat()
                 val target = inFront(floatArrayOf(component(position, "getX"), component(position, "getY"), component(position, "getZ"),
                     component(orientation, "getX"), component(orientation, "getY"), component(orientation, "getZ"), component(orientation, "getW")))

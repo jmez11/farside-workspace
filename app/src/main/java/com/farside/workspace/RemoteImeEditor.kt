@@ -174,10 +174,10 @@ internal fun RemoteImeEditor(label: String, activation: Long, showInitially: Boo
     val interceptor = remember {
         PlatformTextInputInterceptor { request, handler ->
             handler.startInputMethod(object : PlatformTextInputMethodRequest {
-                override fun createInputConnection(outAttrs: EditorInfo): InputConnection {
+                override fun createInputConnection(outAttributes: EditorInfo): InputConnection {
                     // Horizon's cached range can clamp to insertion after the sentinel reset.
                     // Preserve the requested replacement operation through Compose's wrapper.
-                    val target = request.createInputConnection(outAttrs)
+                    val target = request.createInputConnection(outAttributes)
                     val replacement = { explicitReplacement = true }
                     return if (android.os.Build.VERSION.SDK_INT >= 34) RemoteImeInputConnectionApi34(target, replacement)
                     else RemoteImeInputConnection(target, replacement)
@@ -202,7 +202,7 @@ internal fun RemoteImeEditor(label: String, activation: Long, showInitially: Boo
             explicitReplacement = false
             // Keep composing ranges for incremental updates, without delaying their remote input.
             text = if ('\n' !in next.text && next.composition != null) next else TextFieldValue(" ", selection = TextRange(1))
-        }, keyboardOptions = KeyboardOptions(imeAction = ImeAction.None, autoCorrect = false),
+        }, keyboardOptions = KeyboardOptions(imeAction = ImeAction.None, autoCorrectEnabled = false),
             modifier = Modifier.size(1.dp).alpha(0f).focusRequester(focus)
                 .onPreviewKeyEvent { event ->
                     if (event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_ENTER) {

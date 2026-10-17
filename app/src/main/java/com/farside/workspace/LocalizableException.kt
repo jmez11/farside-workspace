@@ -18,7 +18,7 @@ fun LocalizableError.resolve(context: Context): String {
 }
 
 open class LocalizableException(
-    @AnyRes override val resId: Int,
+    @get:AnyRes override val resId: Int,
     override val formatArgs: Array<out Any> = emptyArray(),
 ) : IllegalArgumentException(), LocalizableError
 

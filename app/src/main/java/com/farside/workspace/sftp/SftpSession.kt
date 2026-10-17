@@ -80,13 +80,13 @@ internal class SftpSession(private val context: Context, val profile: Connection
     private val depth = ThreadLocal.withInitial { 0 }
     private fun <T> usingTransport(block: () -> T): T {
         synchronized(lifetime) {
-            check(!closing || depth.get() > 0) { "Files panel closed" }
+            check(!closing || (depth.get() ?: 0) > 0) { "Files panel closed" }
             active++
-            depth.set(depth.get() + 1)
+            depth.set((depth.get() ?: 0) + 1)
         }
         try { return block() }
         finally {
-            val release = synchronized(lifetime) { depth.set(depth.get() - 1); active--; closing && active == 0 }
+            val release = synchronized(lifetime) { depth.set((depth.get() ?: 1) - 1); active--; closing && active == 0 }
             if (release) lease.close()
         }
     }
