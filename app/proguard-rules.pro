@@ -36,6 +36,10 @@
 -keep class net.schmizz.sshj.** { *; }
 -dontwarn net.schmizz.**
 
+# --- EdDSA (net.i2p): references JDK-internal sun.security.x509.X509Key, which
+# --- does not exist on Android. The code path is never hit at runtime; suppress.
+-dontwarn sun.security.x509.**
+
 # --- Termux terminal emulator/view: custom views and JNI-adjacent code.
 -keep class com.termux.** { *; }
 
