@@ -69,14 +69,14 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "ndk;26.1.10909125" "cmake;3.22.1"
 
       - name: Build debug APK
-        id: apk
+        id: apk-debug
         if: inputs.build_type == 'debug'
         run: |
           ./gradlew assembleDebug --stacktrace
           echo "apk=app/build/outputs/apk/debug/app-debug.apk" >> "$GITHUB_OUTPUT"
 
       - name: Download latest release APK
-        id: apk
+        id: apk-release
         if: inputs.build_type == 'release'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -187,7 +187,7 @@ jobs:
             exit 1
           fi
           adb -s 127.0.0.1:5555 wait-for-device
-          adb -s 127.0.0.1:5555 push "${{ steps.apk.outputs.apk }}" /data/local/tmp/farside-update.apk
+          adb -s 127.0.0.1:5555 push "${{ steps.apk-debug.outputs.apk || steps.apk-release.outputs.apk }}" /data/local/tmp/farside-update.apk
           # Detached reinstall: the shell is parented to adbd (uid 2000), so it
           # survives `pm install -r` killing Farside, finishes the install,
           # cleans up, and restarts AdbTunnelService so the tunnel reconnects
@@ -234,7 +234,7 @@ jobs:
           # confirm the installed versionCode matches the APK we just pushed.
           AAPT="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name aapt -type f 2>/dev/null | head -1)"
           if [ -n "$AAPT" ]; then
-            WANT_VERCODE="$("$AAPT" dump badging "${{ steps.apk.outputs.apk }}" | sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p")"
+            WANT_VERCODE="$("$AAPT" dump badging "${{ steps.apk-debug.outputs.apk || steps.apk-release.outputs.apk }}" | sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p")"
             GOT_VERCODE="$(adb -s 127.0.0.1:5555 shell dumpsys package com.farside.workspace | sed -n 's/.*versionCode=\([0-9]*\).*/\1/p' | head -1 | tr -d '\r')"
             echo "apk versionCode=$WANT_VERCODE installed versionCode=$GOT_VERCODE"
             if [ -n "$WANT_VERCODE" ] && [ "$WANT_VERCODE" != "$GOT_VERCODE" ]; then
