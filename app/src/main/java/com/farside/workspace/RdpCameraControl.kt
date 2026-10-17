@@ -35,6 +35,7 @@ internal fun RdpCameraControl(
     hostUnsupported: Boolean,
     onToggleMute: () -> Unit,
     onInteraction: () -> Unit,
+    iconSize: androidx.compose.ui.unit.Dp = 24.dp,
 ) {
     var showUnsupportedDialog by remember { mutableStateOf(false) }
     val description = when {
@@ -46,8 +47,8 @@ internal fun RdpCameraControl(
     IconButton(onClick = {
         onInteraction()
         if (hostUnsupported) showUnsupportedDialog = true else onToggleMute()
-    }) {
-        Box(Modifier.size(24.dp)) {
+    }, modifier = Modifier.size(iconSize + 12.dp)) {
+        Box(Modifier.size(iconSize)) {
             Icon(
                 if (muted && !hostUnsupported) Icons.Default.VideocamOff else Icons.Default.Videocam,
                 contentDescription = description,

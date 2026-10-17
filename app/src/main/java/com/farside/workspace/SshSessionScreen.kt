@@ -522,93 +522,112 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                             revealToolbar()
                         }
                     },
-                shape = RoundedCornerShape(24.dp),
+                shape = RoundedCornerShape(18.dp),
                 color = Color.Black.copy(alpha = 0.7f)
             ) {
+                val iconSize = 18.dp
+                val buttonSize = 36.dp
                 Column(
-                    modifier = Modifier.padding(8.dp),
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
                     horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
                 ) {
                     Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                        Column(Modifier.widthIn(max = 240.dp).padding(horizontal = 12.dp)) {
-                            Text(session.name, color = Color.White, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                            Text(session.host, color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.labelSmall,
-                                maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                        }
-                        IconButton(onClick = { toolbarPinned = !toolbarPinned; revealToolbar() }) {
+                        Text(session.name, color = Color.White, style = MaterialTheme.typography.bodyMedium, maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            modifier = Modifier.widthIn(max = 160.dp).padding(horizontal = 6.dp))
+                        IconButton(onClick = { toolbarPinned = !toolbarPinned; revealToolbar() }, modifier = Modifier.size(buttonSize)) {
                             Icon(
                                 Icons.Default.PushPin,
                                 if (toolbarPinned) stringResource(R.string.unpin_toolbar) else stringResource(R.string.keep_toolbar_visible),
+                                modifier = Modifier.size(iconSize),
                                 tint = if (toolbarPinned) MaterialTheme.colorScheme.primary else Color.White
                             )
                         }
                         if (windowManagerAvailable) IconButton(onClick = {
                             QuestWindowManager.toggle(context)
                             revealToolbar()
-                        }) {
-                            Icon(Icons.Default.Dashboard, stringResource(R.string.window_manager), tint = Color.White)
+                        }, modifier = Modifier.size(buttonSize)) {
+                            Icon(Icons.Default.Dashboard, stringResource(R.string.window_manager), modifier = Modifier.size(iconSize), tint = Color.White)
                         }
                         IconButton(onClick = {
                             showZoomSlider = !showZoomSlider
                             if (showZoomSlider) showTransparencySlider = false
                             revealToolbar()
-                        }) {
-                            Icon(Icons.Default.Search, stringResource(R.string.zoom), tint = Color.White)
-                        }
-                        if (fontSize != defaultFontSize) {
-                            IconButton(onClick = {
-                                fontSize = defaultFontSize
-                                terminalViewRef?.setTextSize(defaultFontSize)
-                                revealToolbar()
-                            }) {
-                                Icon(Icons.Default.FullscreenExit, stringResource(R.string.reset_zoom), tint = Color.White)
-                            }
+                        }, modifier = Modifier.size(buttonSize)) {
+                            Icon(Icons.Default.Search, stringResource(R.string.zoom), modifier = Modifier.size(iconSize), tint = if (showZoomSlider) MaterialTheme.colorScheme.primary else Color.White)
                         }
                         IconButton(onClick = {
                             showTransparencySlider = !showTransparencySlider
                             if (showTransparencySlider) showZoomSlider = false
                             revealToolbar()
-                        }) {
+                        }, modifier = Modifier.size(buttonSize)) {
                             Icon(
                                 Icons.Default.Opacity,
                                 stringResource(R.string.transparency),
-                                tint = if (terminalAlpha < 1.0f) MaterialTheme.colorScheme.primary else Color.White
+                                modifier = Modifier.size(iconSize),
+                                tint = if (showTransparencySlider) MaterialTheme.colorScheme.primary else if (terminalAlpha < 1.0f) MaterialTheme.colorScheme.primary else Color.White
                             )
                         }
                         sftpSupported?.let { works ->
-                            SftpFilesControl(unsupported = !works, onOpen = { showFiles = true }, onInteraction = { revealToolbar() })
+                            SftpFilesControl(unsupported = !works, onOpen = { showFiles = true }, onInteraction = { revealToolbar() }, iconSize = iconSize)
                         }
-                        IconButton(onClick = { showForwards = true; revealToolbar() }) {
-                            Icon(Icons.Default.SwapHoriz, stringResource(R.string.port_forwarding), tint = Color.White)
+                        IconButton(onClick = { showForwards = true; revealToolbar() }, modifier = Modifier.size(buttonSize)) {
+                            Icon(Icons.Default.SwapHoriz, stringResource(R.string.port_forwarding), modifier = Modifier.size(iconSize), tint = Color.White)
                         }
                         IconButton(onClick = {
                             revealToolbar()
                             showSoftKeyboard = !showSoftKeyboard
                             if (!showSoftKeyboard) { keyboardController?.hide() }
-                        }) {
-                            Icon(Icons.Default.Keyboard, stringResource(R.string.keyboard), tint = if (showSoftKeyboard) MaterialTheme.colorScheme.primary else Color.White)
+                        }, modifier = Modifier.size(buttonSize)) {
+                            Icon(Icons.Default.Keyboard, stringResource(R.string.keyboard), modifier = Modifier.size(iconSize), tint = if (showSoftKeyboard) MaterialTheme.colorScheme.primary else Color.White)
                         }
                     }
 
                     if (showZoomSlider) {
-                        Text(stringResource(R.string.terminal_font_size, fontSize), color = Color.White, modifier = Modifier.padding(bottom = 4.dp))
-                        Slider(
-                            value = fontSize.toFloat(),
-                            onValueChange = { newSize ->
-                                val rounded = newSize.roundToInt()
-                                if (rounded != fontSize) {
-                                    fontSize = rounded
-                                    terminalViewRef?.setTextSize(rounded)
-                                }
-                                revealToolbar()
-                            },
-                            valueRange = 8f..32f,
-                            modifier = Modifier.width(150.dp)
-                        )
+                        Row(
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                            modifier = Modifier.padding(top = 4.dp, start = 4.dp, end = 4.dp)
+                        ) {
+                            IconButton(
+                                onClick = {
+                                    fontSize = defaultFontSize
+                                    terminalViewRef?.setTextSize(defaultFontSize)
+                                    revealToolbar()
+                                },
+                                enabled = fontSize != defaultFontSize,
+                                modifier = Modifier.size(buttonSize)
+                            ) {
+                                Icon(
+                                    Icons.Default.FullscreenExit,
+                                    stringResource(R.string.reset_zoom),
+                                    modifier = Modifier.size(iconSize),
+                                    tint = if (fontSize != defaultFontSize) Color.White else Color.Gray
+                                )
+                            }
+                            Slider(
+                                value = fontSize.toFloat(),
+                                onValueChange = { newSize ->
+                                    val rounded = newSize.roundToInt()
+                                    if (rounded != fontSize) {
+                                        fontSize = rounded
+                                        terminalViewRef?.setTextSize(rounded)
+                                    }
+                                    revealToolbar()
+                                },
+                                valueRange = 8f..32f,
+                                modifier = Modifier.width(224.dp).padding(horizontal = 4.dp)
+                            )
+                            Text(
+                                stringResource(R.string.terminal_font_size, fontSize),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White,
+                                modifier = Modifier.padding(start = 2.dp)
+                            )
+                        }
                     }
 
                     if (showTransparencySlider) {
-                        Text(stringResource(R.string.terminal_opacity_percent, (terminalAlpha * 100).roundToInt()), color = Color.White, modifier = Modifier.padding(bottom = 4.dp))
+                        Text(stringResource(R.string.terminal_opacity_percent, (terminalAlpha * 100).roundToInt()), style = MaterialTheme.typography.bodySmall, color = Color.White, modifier = Modifier.padding(bottom = 3.dp))
                         Slider(
                             value = terminalAlpha,
                             onValueChange = { newAlpha ->
@@ -616,7 +635,7 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                                 revealToolbar()
                             },
                             valueRange = 0.2f..1.0f,
-                            modifier = Modifier.width(150.dp)
+                            modifier = Modifier.width(112.dp)
                         )
                     }
                 }

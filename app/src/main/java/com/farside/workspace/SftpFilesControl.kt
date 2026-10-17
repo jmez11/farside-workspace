@@ -28,13 +28,14 @@ import androidx.compose.ui.unit.dp
 
 /** SSH toolbar Files control: opens the file browser, or shows a circle-backslash when SFTP is unsupported. */
 @Composable
-internal fun SftpFilesControl(unsupported: Boolean, onOpen: () -> Unit, onInteraction: () -> Unit) {
+internal fun SftpFilesControl(unsupported: Boolean, onOpen: () -> Unit, onInteraction: () -> Unit,
+                              iconSize: androidx.compose.ui.unit.Dp = 24.dp) {
     var showUnsupportedDialog by remember { mutableStateOf(false) }
     IconButton(onClick = {
         onInteraction()
         if (unsupported) showUnsupportedDialog = true else onOpen()
-    }) {
-        Box(Modifier.size(24.dp)) {
+    }, modifier = Modifier.size(iconSize + 12.dp)) {
+        Box(Modifier.size(iconSize)) {
             Icon(
                 Icons.Default.Folder,
                 contentDescription = if (unsupported) stringResource(R.string.sftp_files_unsupported) else stringResource(R.string.browse_files),

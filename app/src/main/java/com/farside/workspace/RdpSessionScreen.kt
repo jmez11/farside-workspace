@@ -665,32 +665,33 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                         revealToolbar()
                     }
                 },
-            shape = RoundedCornerShape(24.dp),
+            shape = RoundedCornerShape(18.dp),
             color = Color.Black.copy(alpha = 0.7f)
         ) {
-            Column(modifier = Modifier.padding(8.dp), horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+            val iconSize = 18.dp
+            val buttonSize = 36.dp
+            Column(modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp), horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
                 Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                    Column(Modifier.widthIn(max = 240.dp).padding(horizontal = 12.dp)) {
-                        Text(session.name, color = Color.White, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                        Text(session.host, color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.labelSmall,
-                            maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                    }
-                    IconButton(onClick = { toolbarPinned = !toolbarPinned; revealToolbar() }) {
+                    Text(session.name, color = Color.White, style = MaterialTheme.typography.bodyMedium, maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.widthIn(max = 160.dp).padding(horizontal = 6.dp))
+                    IconButton(onClick = { toolbarPinned = !toolbarPinned; revealToolbar() }, modifier = Modifier.size(buttonSize)) {
                         Icon(Icons.Default.PushPin, if (toolbarPinned) stringResource(R.string.unpin_toolbar) else stringResource(R.string.keep_toolbar_visible),
+                            modifier = Modifier.size(iconSize),
                             tint = if (toolbarPinned) MaterialTheme.colorScheme.primary else Color.White)
                     }
                     if (windowManagerAvailable) IconButton(onClick = {
                         QuestWindowManager.toggle(permissionContext)
                         revealToolbar()
-                    }) {
-                        Icon(Icons.Default.Dashboard, stringResource(R.string.window_manager), tint = Color.White)
+                    }, modifier = Modifier.size(buttonSize)) {
+                        Icon(Icons.Default.Dashboard, stringResource(R.string.window_manager), modifier = Modifier.size(iconSize), tint = Color.White)
                     }
-                    if (!isVnc) IconButton(onClick = { speakerMuted = !speakerMuted; revealToolbar() }) {
+                    if (!isVnc) IconButton(onClick = { speakerMuted = !speakerMuted; revealToolbar() }, modifier = Modifier.size(buttonSize)) {
                         Icon(if (speakerMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
-                            if (speakerMuted) stringResource(R.string.unmute_speakers) else stringResource(R.string.mute_speakers), tint = Color.White)
+                            if (speakerMuted) stringResource(R.string.unmute_speakers) else stringResource(R.string.mute_speakers), modifier = Modifier.size(iconSize), tint = Color.White)
                     }
                     if (pairedSshId != null) SftpFilesControl(unsupported = false,
-                        onOpen = { showVncFiles = true }, onInteraction = revealToolbar)
+                        onOpen = { showVncFiles = true }, onInteraction = revealToolbar, iconSize = iconSize)
                     if (effectiveSession.redirectMicrophone) {
                         RdpMicrophoneControl(
                             muted = micMuted,
@@ -698,6 +699,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                             hostUnsupported = micHostUnsupported,
                             onToggleMute = { micMuted = !micMuted },
                             onInteraction = revealToolbar,
+                            iconSize = iconSize,
                         )
                     }
                     if (effectiveSession.enableCamera) {
@@ -707,29 +709,47 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                             hostUnsupported = cameraHostUnsupported,
                             onToggleMute = { cameraMuted = !cameraMuted },
                             onInteraction = revealToolbar,
+                            iconSize = iconSize,
                         )
                     }
-                    IconButton(onClick = { showZoomSlider = !showZoomSlider }) {
-                        Icon(Icons.Default.Search, stringResource(R.string.zoom), tint = Color.White)
+                    IconButton(onClick = { showZoomSlider = !showZoomSlider }, modifier = Modifier.size(buttonSize)) {
+                        Icon(Icons.Default.Search, stringResource(R.string.zoom), modifier = Modifier.size(iconSize), tint = if (showZoomSlider) MaterialTheme.colorScheme.primary else Color.White)
                     }
-                    if (zoom > 1.0f) {
-                        IconButton(onClick = { zoom = 1f; panX = 0f; panY = 0f }) {
-                            Icon(Icons.Default.FullscreenExit, stringResource(R.string.reset_zoom), tint = androidx.compose.ui.graphics.Color.White)
-                        }
-                    }
-                    IconButton(onClick = { revealToolbar(); showSoftKeyboard = !showSoftKeyboard; if (!showSoftKeyboard) { keyboardController?.hide() } }) {
-                        Icon(Icons.Default.Keyboard, stringResource(R.string.keyboard), tint = Color.White)
+                    IconButton(onClick = { revealToolbar(); showSoftKeyboard = !showSoftKeyboard; if (!showSoftKeyboard) { keyboardController?.hide() } }, modifier = Modifier.size(buttonSize)) {
+                        Icon(Icons.Default.Keyboard, stringResource(R.string.keyboard), modifier = Modifier.size(iconSize), tint = Color.White)
                     }
                 }
                 
                 if (showZoomSlider) {
-                    Text(stringResource(R.string.zoom_percent, (zoom * 100).toInt()), color = androidx.compose.ui.graphics.Color.White, modifier = Modifier.padding(bottom = 4.dp))
-                    Slider(
-                        value = zoom,
-                        onValueChange = { zoom = it },
-                        valueRange = 1f..3f,
-                        modifier = Modifier.width(150.dp)
-                    )
+                    Row(
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                        modifier = Modifier.padding(top = 4.dp, start = 4.dp, end = 4.dp)
+                    ) {
+                        IconButton(
+                            onClick = { zoom = 1f; panX = 0f; panY = 0f },
+                            enabled = zoom > 1.0f,
+                            modifier = Modifier.size(buttonSize)
+                        ) {
+                            Icon(
+                                Icons.Default.FullscreenExit,
+                                stringResource(R.string.reset_zoom),
+                                modifier = Modifier.size(iconSize),
+                                tint = if (zoom > 1.0f) Color.White else Color.Gray
+                            )
+                        }
+                        Slider(
+                            value = zoom,
+                            onValueChange = { zoom = it },
+                            valueRange = 1f..3f,
+                            modifier = Modifier.width(224.dp).padding(horizontal = 4.dp)
+                        )
+                        Text(
+                            stringResource(R.string.zoom_percent, (zoom * 100).toInt()),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White,
+                            modifier = Modifier.padding(start = 2.dp)
+                        )
+                    }
                 }
             }
         }
