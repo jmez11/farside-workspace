@@ -1,6 +1,6 @@
 name: Deploy to Quest
 
-# Pushes a fresh build to the Quest 3 through the Farside-hosted Cloudflare
+# Pushes an existing build to the Quest 3 through the Farside-hosted Cloudflare
 # tunnel and reinstalls it WITHOUT killing the tunnel: the APK is pushed to
 # /data/local/tmp first, then a detached adbd-shell script runs `pm install -r`
 # (which kills Farside to replace the APK) and immediately restarts
@@ -10,10 +10,12 @@ name: Deploy to Quest
 # adbd's cgroup — not inside Farside's app process — so the nohup'd script
 # survives the package replacement that kills the app.
 #
-# Two modes (chosen at dispatch):
-#   debug   — builds the current master debug APK on the runner and pushes it.
+# Two modes (chosen at dispatch); both take an already-built APK, nothing is
+# compiled here:
+#   debug   — downloads the `farside-debug-apk` artifact from the latest
+#             successful CI run on master.
 #   release — downloads `app-release.apk` from the newest GitHub Release
-#             (including prereleases, e.g. v0.1.0-rc1) and pushes that.
+#             (including prereleases, e.g. v0.1.0-rc1).
 #
 # Farside must be running on the headset with its tunnel started — reaching
 # the headset this way IS the test. Manual trigger only.
@@ -41,46 +43,39 @@ on:
 
 permissions:
   contents: read
+  actions: read # needed to list runs and download the CI artifact
 
 jobs:
   deploy:
     runs-on: ubuntu-24.04
     steps:
-      - name: Checkout with submodules
-        if: inputs.build_type == 'debug'
-        uses: actions/checkout@v5
-        with:
-          submodules: recursive
-
-      - name: Set up JDK 17
-        if: inputs.build_type == 'debug'
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Set up Gradle
-        if: inputs.build_type == 'debug'
-        uses: gradle/actions/setup-gradle@v6
-
-      - name: Install Android SDK components
-        if: inputs.build_type == 'debug'
-        run: |
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "ndk;26.1.10909125" "cmake;3.22.1"
-
-      - name: Build debug APK
+      - name: Download latest debug APK artifact
         id: apk-debug
         if: inputs.build_type == 'debug'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ./gradlew assembleDebug --stacktrace
-          echo "apk=app/build/outputs/apk/debug/app-debug.apk" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          # Latest successful CI run on master. If you just pushed and CI is
+          # still running, this is the previous green build — the log below
+          # says exactly which commit the APK came from.
+          RUN_JSON="$(gh run list --repo "${{ github.repository }}" --workflow CI --branch master --status success --limit 1 --json databaseId,headSha,displayTitle --jq '.[0]')"
+          RUN_ID="$(echo "$RUN_JSON" | jq -r '.databaseId')"
+          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+            echo "No successful CI run found on master." >&2
+            exit 1
+          fi
+          echo "using CI run $RUN_ID: $(echo "$RUN_JSON" | jq -r '.displayTitle') ($(echo "$RUN_JSON" | jq -r '.headSha' | cut -c1-7))"
+          mkdir -p /tmp/farside-deploy
+          gh run download "$RUN_ID" --repo "${{ github.repository }}" --name farside-debug-apk --dir /tmp/farside-deploy
+          echo "apk=/tmp/farside-deploy/app-debug.apk" >> "$GITHUB_OUTPUT"
 
       - name: Download latest release APK
         id: apk-release
         if: inputs.build_type == 'release'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # NOTE: --repo is required because this path does no checkout, so gh
+        # NOTE: --repo is required because this job does no checkout, so gh
         # cannot infer the repository from a git remote. `release list` is
         # newest-first and includes prereleases.
         run: |
@@ -95,14 +90,7 @@ jobs:
           gh release download "$TAG" --repo "${{ github.repository }}" --pattern 'app-release.apk' --dir /tmp/farside-deploy
           echo "apk=/tmp/farside-deploy/app-release.apk" >> "$GITHUB_OUTPUT"
 
-      - name: Install build-tools for the APK version check
-        # The release path does no SDK setup, but the verify step uses aapt to
-        # compare the pushed APK's versionCode against the installed one.
-        if: inputs.build_type == 'release'
-        run: |
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "build-tools;35.0.0" > /dev/null
-
-      - name: Install cloudflared and adb
+      - name: Install cloudflared, adb and build-tools
         run: |
           # NOTE: cloudflared is pinned to 2026.5.1, NOT latest. Versions
           # >=2026.6.0 have a regression (cloudflare/cloudflared#1674) where
@@ -112,6 +100,8 @@ jobs:
           curl -sSfL -o /tmp/cloudflared.deb https://github.com/cloudflare/cloudflared/releases/download/2026.5.1/cloudflared-linux-amd64.deb
           sudo dpkg -i /tmp/cloudflared.deb
           sudo apt-get update -qq && sudo apt-get install -y -qq adb
+          # build-tools only, for the aapt versionCode check in the verify step.
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "build-tools;35.0.0" > /dev/null
 
       - name: Install the paired adb key (if configured)
         env:
