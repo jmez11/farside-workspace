@@ -136,6 +136,7 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
             ctrlLatched = false
             altLatched = false
             shiftLatched = false
+            focusRequester.requestFocus()
         }
     }
 
@@ -146,6 +147,11 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
     var showTransparencySlider by remember { mutableStateOf(false) }
 
     var terminalViewRef by remember { mutableStateOf<com.termux.view.TerminalView?>(null) }
+    LaunchedEffect(terminalViewRef) {
+        if (terminalViewRef != null && !showSoftKeyboard) {
+            focusRequester.requestFocus()
+        }
+    }
     var sshSessionRef by remember { mutableStateOf<com.termux.terminal.SshTerminalSession?>(null) }
     val profileManager = remember { ProfileManager(context) }
     var forwards by remember { mutableStateOf(session.sshForwards) }
@@ -336,6 +342,25 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black.copy(alpha = terminalAlpha))
+            .focusRequester(focusRequester)
+            .focusable()
+            .onKeyEvent { event ->
+                // Horizon's control-bar Back is local navigation; let Activity route it to launcher.
+                if (event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_BACK) {
+                    false
+                } else {
+                    val tv = terminalViewRef
+                    if (tv != null) {
+                        when (event.type) {
+                            KeyEventType.KeyDown -> tv.onKeyDown(event.nativeKeyEvent.keyCode, event.nativeKeyEvent)
+                            KeyEventType.KeyUp -> tv.onKeyUp(event.nativeKeyEvent.keyCode, event.nativeKeyEvent)
+                            else -> false
+                        }
+                    } else {
+                        false
+                    }
+                }
+            }
             .pointerInput(Unit) {
                 awaitPointerEventScope {
                     while (true) {
@@ -345,6 +370,8 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                             if (showSoftKeyboard) {
                                 desktopKeyboardActivation = SystemClock.uptimeMillis()
                                 keyboardInteraction = desktopKeyboardActivation
+                            } else {
+                                focusRequester.requestFocus()
                             }
                         }
                     }

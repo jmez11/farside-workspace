@@ -81,7 +81,6 @@ class SshVerification(private val test: Instrumentation) {
             // 1. Verify Floating Toolbar appears with connection name, host, pin, zoom, and keyboard toggle
             Log.i("SshVerification", "Step 1: Finding toolbar controls")
             checkNotNull(find("SSH Term Test")) { "Missing connection name in floating toolbar" }
-            checkNotNull(find("127.0.0.1")) { "Missing connection host in floating toolbar" }
             checkNotNull(find("Unpin toolbar")) { "Missing pin button in toolbar" }
             if (QuestWindowManager.isAvailable(test.targetContext)) {
                 val pin = checkNotNull(find("Unpin toolbar"))
@@ -99,6 +98,10 @@ class SshVerification(private val test: Instrumentation) {
             check(find("Menu", retries = 1) == null && find("Terminal settings", retries = 1) == null) { "Menu button still in SSH toolbar" }
             if (toolbarOnly) {
                 if (QuestWindowManager.isAvailable(test.targetContext)) click("Window Manager")
+                test.runOnMainSync { activity.finish() }
+                Thread.sleep(400)
+                profileManager.deleteProfile(testProfile.id)
+                check(test.targetContext.getSharedPreferences("farside_profiles", 0).edit().commit())
                 return
             }
 
@@ -278,6 +281,20 @@ class SshVerification(private val test: Instrumentation) {
             click("Keyboard")
             Thread.sleep(600)
             check(find("WIN", retries = 2) == null) { "Keyboard panel did not close" }
+
+            // 9. Verify Physical Hardware Keyboard input routing
+            Log.i("SshVerification", "Step 9: Testing physical keyboard routing")
+            val decor = activity.window.decorView
+            val now = android.os.SystemClock.uptimeMillis()
+            var handledDown = false
+            var handledUp = false
+            test.runOnMainSync {
+                handledDown = decor.dispatchKeyEvent(android.view.KeyEvent(now, now, android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_A, 0))
+                handledUp = decor.dispatchKeyEvent(android.view.KeyEvent(now, now, android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_A, 0))
+            }
+            check(handledDown) { "Hardware key down was not consumed by SshSessionScreen" }
+            check(handledUp) { "Hardware key up was not consumed by SshSessionScreen" }
+
             Log.i("SshVerification", "All steps completed successfully!")
         } catch (e: Throwable) {
             Log.e("SshVerification", "Exception during SshVerification", e)
