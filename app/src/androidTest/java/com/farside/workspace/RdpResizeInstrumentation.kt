@@ -11,6 +11,9 @@ import com.farside.workspace.data.ConnectionType
 import com.farside.workspace.data.ProfileManager
 import java.io.File
 
+internal val Instrumentation.arguments: Bundle?
+    get() = (this as? RdpResizeInstrumentation)?.jumpArgs
+
 /** On-device regression check: saved RDP profile, actual task resizes, full-frame captures. */
 class RdpResizeInstrumentation : Instrumentation() {
     private var sftpMode: String? = null
@@ -54,7 +57,7 @@ class RdpResizeInstrumentation : Instrumentation() {
     private var clipboardOnly = false
     private var imeOnly = false
     private var sshImeOnly = false
-    private var jumpArgs: Bundle? = null
+    internal var jumpArgs: Bundle? = null
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(arguments)
         sftpMode = arguments?.getString("sftpMode")

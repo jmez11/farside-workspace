@@ -192,6 +192,29 @@ internal class LauncherArrangementVerification(private val test: Instrumentation
                     }
                 }
             }
+            touchControl("Enter display name")
+            Thread.sleep(150)
+            for (keyCode in listOf(android.view.KeyEvent.KEYCODE_T, android.view.KeyEvent.KEYCODE_E,
+                android.view.KeyEvent.KEYCODE_S, android.view.KeyEvent.KEYCODE_T)) {
+                test.sendKeyDownUpSync(keyCode)
+                Thread.sleep(60)
+            }
+            check(nodes().any { it.text?.toString() == "test" && it.isEditable && it.isFocused }) {
+                "Invalid display name field lost focus or failed multi-character entry; editable=" +
+                    nodes().filter { it.isEditable }.map { "${it.text}(focused=${it.isFocused})" }
+            }
+            check(nodes().none { it.error?.toString() == "Enter a display name." }) {
+                "Display name error should clear after typing"
+            }
+            repeat(4) {
+                test.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_DEL)
+                Thread.sleep(60)
+            }
+            test.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_SPACE)
+            Thread.sleep(100)
+            check(nodes().any { it.error?.toString() == "Enter a display name." }) {
+                "Blank/whitespace display name should re-show validation error while keeping focus"
+            }
             touchControl("Click here to find local PCs")
             check((0 until 20).any {
                 Thread.sleep(100)
@@ -227,9 +250,9 @@ internal class LauncherArrangementVerification(private val test: Instrumentation
             }
             check((0 until 20).any {
                 Thread.sleep(100)
-                nodes().any { node -> node.text?.toString() == discoveredName && node.isEditable }
-            }) { "RDP discovery selection did not fill display name; visible=" +
-                nodes().mapNotNull { it.text?.toString()?.let { value -> "$value(editable=${it.isEditable})" } }.distinct().take(25) }
+                nodes().count { node -> node.text?.toString() == discoveredName && node.isEditable } >= 2
+            }) { "RDP discovery selection did not fill both display name and host; visible=" +
+                nodes().mapNotNull { it.text?.toString()?.let { value -> "$value(editable=${it.isEditable})" } } }
             fun scrollTo(label: String, direction: Int) {
                 repeat(16) {
                     if (nodes().any { it.contentDescription?.toString() == label || it.text?.toString() == label }) return

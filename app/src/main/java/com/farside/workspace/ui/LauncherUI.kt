@@ -406,9 +406,11 @@ private fun CardActionTooltip(label: String, content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun FormValidationField(message: String?, content: @Composable (Modifier) -> Unit) {
-    if (message == null) {
-        content(Modifier)
+private fun FormValidationField(message: String?, content: @Composable () -> Unit) {
+    var active by remember { mutableStateOf(false) }
+    if (message != null) active = true
+    if (!active) {
+        content()
         return
     }
     var hovering by remember { mutableStateOf(false) }
@@ -416,7 +418,7 @@ private fun FormValidationField(message: String?, content: @Composable (Modifier
     val gap = with(androidx.compose.ui.platform.LocalDensity.current) { 6.dp.roundToPx() }
     LaunchedEffect(hovering, message) {
         visible = false
-        if (hovering) {
+        if (hovering && message != null) {
             delay(450)
             visible = true
         }
@@ -431,9 +433,9 @@ private fun FormValidationField(message: String?, content: @Composable (Modifier
             }
         }
     }
-    Box(hoverModifier.semantics { error(message) }) {
-        content(Modifier)
-        if (visible) Popup(popupPositionProvider = remember(gap) { object : PopupPositionProvider {
+    Box(hoverModifier.semantics { if (message != null) error(message) }) {
+        content()
+        if (visible && message != null) Popup(popupPositionProvider = remember(gap) { object : PopupPositionProvider {
             override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize,
                 layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset = IntOffset(
                 (anchorBounds.left + (anchorBounds.width - popupContentSize.width) / 2)
@@ -479,13 +481,13 @@ fun SettingsTextField(
     modifier: Modifier = Modifier
 ) {
     val invalid = isError || errorMessage != null
-    FormValidationField(errorMessage) { hoverModifier ->
+    FormValidationField(errorMessage) {
     TextField(
         value = value,
         onValueChange = onValueChange,
         placeholder = { Text(placeholder, color = Color.Gray) },
         label = if (accessibleLabel != null) { { Text(accessibleLabel, color = Color.Gray) } } else null,
-        modifier = hoverModifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).then(modifier)
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).then(modifier)
             .then(if (invalid) Modifier.border(2.dp, Color.Red, RoundedCornerShape(4.dp)) else Modifier)
             .semantics { if (accessibleLabel != null) contentDescription = accessibleLabel },
         colors = TextFieldDefaults.colors(
@@ -1216,7 +1218,7 @@ fun CameraResolutionSelector(
 fun ProxyTypeSelector(selectedType: com.farside.workspace.data.ProxyType, errorMessage: String? = null,
                       onTypeSelected: (com.farside.workspace.data.ProxyType) -> Unit) {
     var expanded by rememberSaveable { mutableStateOf(false) }
-    FormValidationField(errorMessage) { hoverModifier ->
+    FormValidationField(errorMessage) {
     ExposedDropdownMenuBox(
         expanded = expanded,
         onExpandedChange = { expanded = !expanded },
@@ -1236,7 +1238,7 @@ fun ProxyTypeSelector(selectedType: com.farside.workspace.data.ProxyType, errorM
                 focusedTextColor = Color.White,
                 unfocusedTextColor = Color.White
             ),
-            modifier = hoverModifier.menuAnchor().fillMaxWidth()
+            modifier = Modifier.menuAnchor().fillMaxWidth()
                 .then(if (errorMessage != null) Modifier.border(2.dp, Color.Red, RoundedCornerShape(4.dp)) else Modifier),
             isError = errorMessage != null
         )
@@ -1342,6 +1344,7 @@ fun AddProfileForm(
     credentialRevision: Int = 0
 ) {
     var name by rememberSaveable { mutableStateOf(initialProfile?.name ?: "") }
+    var nameAutoFilled by rememberSaveable { mutableStateOf(false) }
     var type by rememberSaveable { mutableStateOf(initialProfile?.type ?: ConnectionType.RDP) }
     var host by rememberSaveable { mutableStateOf(initialProfile?.host ?: "") }
     var port by rememberSaveable { mutableStateOf(initialProfile?.port?.toString() ?: "3389") }
@@ -1365,6 +1368,7 @@ fun AddProfileForm(
     var isScanning by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     // Hoisted for LocalContextGetResourceValueCall: resolve in composable scope, use in callbacks.
     val discoveryNoServicesMsg = stringResource(R.string.discovery_no_services)
     val discoveryFailedMsg = stringResource(R.string.discovery_failed)
@@ -1546,7 +1550,7 @@ fun AddProfileForm(
                 }
 
                 SettingsHeader(stringResource(R.string.connection_name))
-                SettingsTextField(name, { name = it }, stringResource(R.string.enter_display_name),
+                SettingsTextField(name, { name = it; nameAutoFilled = false }, stringResource(R.string.enter_display_name),
                     errorMessage = if (showValidationErrors && name.isBlank()) stringResource(R.string.profile_name_required) else null)
 
                 if (type == ConnectionType.VNC) {
@@ -1565,6 +1569,7 @@ fun AddProfileForm(
                 if (type == ConnectionType.RDP || type == ConnectionType.VNC) {
                     Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).zIndex(1f), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Button(enabled = !isScanning && (type != ConnectionType.VNC || vncAuthMode == com.farside.workspace.data.VncAuthMode.MAC_USER), onClick = {
+                            focusManager.clearFocus()
                             val scanType = type
                             isScanning = true
                             coroutineScope.launch {
@@ -1589,7 +1594,7 @@ fun AddProfileForm(
                         var expanded by rememberSaveable { mutableStateOf(false) }
                         ExposedDropdownMenuBox(
                             expanded = expanded,
-                            onExpandedChange = { expanded = !expanded },
+                            onExpandedChange = { focusManager.clearFocus(); expanded = !expanded },
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).zIndex(1f)
                         ) {
                             TextField(
@@ -1609,10 +1614,14 @@ fun AddProfileForm(
                                     DropdownMenuItem(
                                         text = { Text(foundHost.name) },
                                         onClick = {
-                                            if (name.isEmpty() || name == "New Profile" || name == host) {
+                                            focusManager.clearFocus()
+                                            if (name.isBlank() || name == "New Profile" || name == host || nameAutoFilled ||
+                                                discoveredHosts.any { it.name == name || it.savedRdpHost() == name || it.savedVncHost() == name || it.ip == name }) {
                                                 name = foundHost.name
+                                                nameAutoFilled = true
                                             }
                                             host = if (type == ConnectionType.RDP) foundHost.savedRdpHost() else foundHost.savedVncHost()
+                                            cloudflaredHostError = null
                                             port = foundHost.port.toString()
                                             expanded = false
                                         }
@@ -1636,7 +1645,7 @@ fun AddProfileForm(
                 SettingsHeader(when (type) { ConnectionType.SSH -> stringResource(R.string.user_account_optional_for_ssh); ConnectionType.VNC -> stringResource(if (vncAuthMode == com.farside.workspace.data.VncAuthMode.MAC_USER) R.string.vnc_auth_mac_user else R.string.vnc_password_credential); else -> stringResource(R.string.user_account) })
                 var expandedCreds by rememberSaveable { mutableStateOf(false) }
                 
-                FormValidationField(credentialErrorMessage) { hoverModifier ->
+                FormValidationField(credentialErrorMessage) {
                 ExposedDropdownMenuBox(
                     expanded = expandedCreds,
                     onExpandedChange = { expandedCreds = !expandedCreds },
@@ -1653,7 +1662,7 @@ fun AddProfileForm(
                             errorIndicatorColor = Color.Red,
                             focusedTextColor = Color.White, unfocusedTextColor = Color.White
                         ),
-                        modifier = hoverModifier.menuAnchor().fillMaxWidth()
+                        modifier = Modifier.menuAnchor().fillMaxWidth()
                             .then(if (credentialErrorMessage != null) Modifier.border(2.dp, Color.Red, RoundedCornerShape(4.dp)) else Modifier),
                         isError = credentialErrorMessage != null
                     )
@@ -1766,7 +1775,7 @@ fun AddProfileForm(
                     }
                     val (chainPreview, chainProblem) = com.farside.workspace.ssh.JumpChains.preview(context, editedProfile, allProfiles)
                     var expandedJump by rememberSaveable { mutableStateOf(false) }
-                    FormValidationField(chainProblem) { hoverModifier ->
+                    FormValidationField(chainProblem) {
                     ExposedDropdownMenuBox(
                         expanded = expandedJump,
                         onExpandedChange = { expandedJump = !expandedJump },
@@ -1783,7 +1792,7 @@ fun AddProfileForm(
                                 errorIndicatorColor = Color.Red,
                                 focusedTextColor = Color.White, unfocusedTextColor = Color.White
                             ),
-                            modifier = hoverModifier.menuAnchor().fillMaxWidth()
+                            modifier = Modifier.menuAnchor().fillMaxWidth()
                                 .then(if (chainProblem != null) Modifier.border(2.dp, Color.Red, RoundedCornerShape(4.dp)) else Modifier),
                             isError = chainProblem != null
                         )

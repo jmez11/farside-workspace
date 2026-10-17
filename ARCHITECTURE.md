@@ -17,7 +17,8 @@
 ## Connection profile editor
 - New Add Connection forms select RDP and initialize the editable port to 3389; switching to SSH or Mac/VNC applies their respective port defaults. Editing a profile retains its saved port.
 - The profile form title uses Add Connection for a new profile and Edit Connection when an existing profile is supplied.
-- Invalid field tooltips listen for hover on the validation wrapper around the input, so the host field receives pointer hover even when its inner text control handles events.
+- Invalid field tooltips listen for hover on the validation wrapper around the input, so the host field receives pointer hover even when its inner text control handles events. Once a field's validation wrapper activates (`message != null`), `FormValidationField` keeps the wrapper `Box` mounted when the error clears during editing so the inner `TextField` stays in the same composition slot and retains focus and the active IME session.
+- Starting network discovery, opening the discovered-host picker, or choosing a discovered RDP/VNC host clears focus from any active text field first, and selecting a discovered host populates the Connection Name whenever it is blank/whitespace, `"New Profile"`, matches the previous host, or was previously auto-filled from discovery.
 
 ## English UI resources
 - `app/src/main/res/values/strings.xml` is the English catalog. Compose uses `stringResource`/`pluralStringResource`; callbacks and notifications use context resource lookups. Positional placeholders retain existing English formatting; no locale resources exist.
