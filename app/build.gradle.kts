@@ -83,6 +83,15 @@ android {
             if (keystorePropertiesFile.exists()) {
                 signingConfig = signingConfigs.getByName("release")
             }
+            // Shrink unused code: strips unreachable library classes (e.g. Bouncy
+            // Castle's EST module, flagged by store scanners for a trust-all
+            // TrustManager nothing calls). First R8 run: on-device smoke test
+            // (SSH/RDP/SFTP) required before shipping a minified build.
+            isMinifyEnabled = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 }
