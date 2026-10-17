@@ -1,25 +1,39 @@
 name: Deploy to Quest
 
-# Pushes a fresh debug APK to the Quest 3 through the Farside-hosted
-# Cloudflare tunnel and reinstalls it WITHOUT killing the tunnel:
-# the APK is pushed to /data/local/tmp first, then a detached adbd-shell
-# script runs `pm install -r` (which kills Farside to replace the APK) and
-# immediately restarts AdbTunnelService so the tunnel reconnects by itself.
+# Pushes a fresh build to the Quest 3 through the Farside-hosted Cloudflare
+# tunnel and reinstalls it WITHOUT killing the tunnel: the APK is pushed to
+# /data/local/tmp first, then a detached adbd-shell script runs `pm install -r`
+# (which kills Farside to replace the APK) and immediately restarts
+# AdbTunnelService so the tunnel reconnects by itself.
 #
 # This works because `adb shell` runs as Android's shell user (uid 2000) in
 # adbd's cgroup — not inside Farside's app process — so the nohup'd script
 # survives the package replacement that kills the app.
 #
+# Two modes (chosen at dispatch):
+#   debug   — builds the current master debug APK on the runner and pushes it.
+#   release — downloads `app-release.apk` from the newest GitHub Release
+#             (including prereleases, e.g. v0.1.0-rc1) and pushes that.
+#
 # Farside must be running on the headset with its tunnel started — reaching
 # the headset this way IS the test. Manual trigger only.
 #
 # NOTE: `pm install -r` requires the same signing cert every time. A debug
-# APK will NOT install over a differently-signed (release) build — uninstall
-# Farside from the headset once first in that case.
+# APK will NOT install over a differently-signed (release) build, and a
+# release APK will NOT install over a debug build — uninstall Farside from
+# the headset once first when switching between the two.
 
 on:
   workflow_dispatch:
     inputs:
+      build_type:
+        description: 'Which build to push to the Quest'
+        required: true
+        default: 'debug'
+        type: choice
+        options:
+          - debug
+          - release
       hostname:
         description: 'Tunnel hostname publishing the Quest adbd (defaults to the ADB_TUNNEL_HOSTNAME secret)'
         required: false
@@ -33,25 +47,60 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout with submodules
+        if: inputs.build_type == 'debug'
         uses: actions/checkout@v5
         with:
           submodules: recursive
 
       - name: Set up JDK 17
+        if: inputs.build_type == 'debug'
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
       - name: Set up Gradle
+        if: inputs.build_type == 'debug'
         uses: gradle/actions/setup-gradle@v6
 
       - name: Install Android SDK components
+        if: inputs.build_type == 'debug'
         run: |
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "ndk;26.1.10909125" "cmake;3.22.1"
 
       - name: Build debug APK
-        run: ./gradlew assembleDebug --stacktrace
+        id: apk
+        if: inputs.build_type == 'debug'
+        run: |
+          ./gradlew assembleDebug --stacktrace
+          echo "apk=app/build/outputs/apk/debug/app-debug.apk" >> "$GITHUB_OUTPUT"
+
+      - name: Download latest release APK
+        id: apk
+        if: inputs.build_type == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # NOTE: --repo is required because this path does no checkout, so gh
+        # cannot infer the repository from a git remote. `release list` is
+        # newest-first and includes prereleases.
+        run: |
+          set -euo pipefail
+          TAG="$(gh release list --repo "${{ github.repository }}" --limit 1 --json tagName --jq '.[0].tagName')"
+          if [ -z "$TAG" ] || [ "$TAG" = "null" ]; then
+            echo "No releases found on ${{ github.repository }}." >&2
+            exit 1
+          fi
+          echo "latest release: $TAG"
+          mkdir -p /tmp/farside-deploy
+          gh release download "$TAG" --repo "${{ github.repository }}" --pattern 'app-release.apk' --dir /tmp/farside-deploy
+          echo "apk=/tmp/farside-deploy/app-release.apk" >> "$GITHUB_OUTPUT"
+
+      - name: Install build-tools for the APK version check
+        # The release path does no SDK setup, but the verify step uses aapt to
+        # compare the pushed APK's versionCode against the installed one.
+        if: inputs.build_type == 'release'
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "build-tools;35.0.0" > /dev/null
 
       - name: Install cloudflared and adb
         run: |
@@ -138,8 +187,7 @@ jobs:
             exit 1
           fi
           adb -s 127.0.0.1:5555 wait-for-device
-          APK=app/build/outputs/apk/debug/app-debug.apk
-          adb -s 127.0.0.1:5555 push "$APK" /data/local/tmp/farside-update.apk
+          adb -s 127.0.0.1:5555 push "${{ steps.apk.outputs.apk }}" /data/local/tmp/farside-update.apk
           # Detached reinstall: the shell is parented to adbd (uid 2000), so it
           # survives `pm install -r` killing Farside, finishes the install,
           # cleans up, and restarts AdbTunnelService so the tunnel reconnects
@@ -186,7 +234,7 @@ jobs:
           # confirm the installed versionCode matches the APK we just pushed.
           AAPT="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name aapt -type f 2>/dev/null | head -1)"
           if [ -n "$AAPT" ]; then
-            WANT_VERCODE="$("$AAPT" dump badging app/build/outputs/apk/debug/app-debug.apk | sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p")"
+            WANT_VERCODE="$("$AAPT" dump badging "${{ steps.apk.outputs.apk }}" | sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p")"
             GOT_VERCODE="$(adb -s 127.0.0.1:5555 shell dumpsys package com.farside.workspace | sed -n 's/.*versionCode=\([0-9]*\).*/\1/p' | head -1 | tr -d '\r')"
             echo "apk versionCode=$WANT_VERCODE installed versionCode=$GOT_VERCODE"
             if [ -n "$WANT_VERCODE" ] && [ "$WANT_VERCODE" != "$GOT_VERCODE" ]; then
