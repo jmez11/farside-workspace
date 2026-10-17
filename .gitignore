@@ -21,3 +21,6 @@ scratch/
 /key.properties
 /farside-keystore.jks
 app/upload-keystore.jks
+
+# Local setup values (see docs/local-setup.template.md; never commit real values)
+/local/
