@@ -24,3 +24,6 @@ app/upload-keystore.jks
 
 # Local setup values (see docs/local-setup.template.md; never commit real values)
 /local/
+
+.codex-remote-attachments/
+.kotlin/
