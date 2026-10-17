@@ -162,7 +162,10 @@ class AdbTunnelVerification(private val instrumentation: Instrumentation) {
         val tokenFile = File(context.cacheDir, "adb-tunnel-test-token")
         val token = if (tokenFile.exists()) tokenFile.readText().trim() else checkNotNull(AdbTunnelSettings(context).load()).token
         tokenFile.delete()
-        val config = AdbTunnelConfig(token, "quest-adb.jameskasyan.com", 5555).validate()
+        val tunnelHostname = checkNotNull(instrumentation.arguments?.getString("adbTunnelHostname")) {
+            "Missing instrumentation arg: pass -e adbTunnelHostname <host>"
+        }
+        val config = AdbTunnelConfig(token, tunnelHostname, 5555).validate()
         AdbTunnelSettings(context).save(config)
         val activity = instrumentation.startActivitySync(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         val reportFile = File(context.cacheDir, "adb-tunnel-live.txt")

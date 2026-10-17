@@ -27,6 +27,10 @@ import kotlinx.coroutines.runBlocking
 internal class VncVerification(private val test: Instrumentation) {
     private val results = File(test.targetContext.cacheDir, "vnc-results.txt")
     private fun record(text: String) { results.appendText("$text\n") }
+    // macOS short username for the Mac VNC/SSH tests: setup-specific, never hardcoded.
+    private fun macSshUser(): String = checkNotNull(test.arguments?.getString("macSshUser")) {
+        "Missing instrumentation arg: pass -e macSshUser <macOS short username>"
+    }
     private fun main(block: () -> Unit) = test.runOnMainSync(block)
     private fun await(reason: String, check: () -> Boolean) {
         val end = SystemClock.uptimeMillis() + 15000
@@ -55,7 +59,7 @@ internal class VncVerification(private val test: Instrumentation) {
                 val pm = ProfileManager(test.targetContext)
                 val mac = pm.getProfiles().single { it.name == "Test MacBook Pro" && it.type == ConnectionType.VNC }
                 val credential = pm.getCredentials().single { it.name == "James Kasyan Mac" }
-                pm.updateCredential(credential.copy(user = "jameskasyan"))
+                pm.updateCredential(credential.copy(user = macSshUser()))
                 val ssh = pm.getProfiles().firstOrNull { it.name == "Test MacBook Pro SSH" && it.type == ConnectionType.SSH }
                     ?: ConnectionProfile(java.util.UUID.randomUUID().toString(), "Test MacBook Pro SSH", ConnectionType.SSH,
                         mac.host, 22, "", "", credentialId = credential.id, enableSftp = false)
@@ -67,7 +71,7 @@ internal class VncVerification(private val test: Instrumentation) {
                     val vnc = profiles.single { it.id == mac.id }
                     val paired = profiles.single { it.id == ssh.id }
                     vnc.sftpPairProfileId == paired.id && vnc.vncAuthMode == VncAuthMode.MAC_USER &&
-                        paired.user == "jameskasyan" && paired.pass.isNotEmpty() && !paired.enableSftp
+                        paired.user == macSshUser() && paired.pass.isNotEmpty() && !paired.enableSftp
                 })
                 record("PASS: saved credential now uses SSH short name; Mac VNC and SSH profiles share it, with explicit Files pairing")
             } else if (mode == "macSetup") {
@@ -124,7 +128,7 @@ internal class VncVerification(private val test: Instrumentation) {
                 val bridge = VncBridge()
                 try {
                     val handle = bridge.connect(profile.host, profile.port, credential.pass, surface,
-                        "jameskasyan", VncAuthMode.MAC_USER)
+                        macSshUser(), VncAuthMode.MAC_USER)
                     check(handle != 0L) { "Mac rejected short account name" }
                     bridge.disconnect(handle)
                     record("PASS: Apple VNC accepted the Mac SSH short username with the saved password")

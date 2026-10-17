@@ -88,7 +88,10 @@ class SftpVerification(private val test: Instrumentation) {
             val pm = ProfileManager(context)
             val mac = pm.getProfiles().single { it.name == "Test MacBook Pro" && it.type == ConnectionType.VNC }
             val credential = pm.getCredentials().single { it.name == "James Kasyan Mac" }
-            val shortCredential = credential.copy(id = UUID.randomUUID().toString(), user = "jameskasyan")
+            val macUser = checkNotNull(test.arguments?.getString("macSshUser")) {
+                "Missing instrumentation arg: pass -e macSshUser <macOS short username>"
+            }
+            val shortCredential = credential.copy(id = UUID.randomUUID().toString(), user = macUser)
             val ssh = ConnectionProfile(UUID.randomUUID().toString(), "Mac SFTP validation", ConnectionType.SSH,
                 mac.host, 22, "", "", credentialId = shortCredential.id, enableSftp = false)
             val source = File(context.cacheDir, "mac-sftp-${UUID.randomUUID()}.txt")

@@ -140,8 +140,16 @@ class RdpResizeInstrumentation : Instrumentation() {
             }
             jumpArgs?.getString("jumpMode")?.let { mode ->
                 val a = jumpArgs!!
-                results.putString("stream", JumpHostVerification(this).run(mode, a.getString("jumpKey"),
-                    a.getString("jumpHop1") ?: "nanokvm-ssh.jameskasyan.com", a.getString("jumpHop2") ?: "192.168.1.250", a.getString("jumpDead") ?: "192.168.1.253"))
+                // Hop hosts are setup-specific: no defaults in code. Resolver mode uses
+                // synthetic profiles and ignores them.
+                val hop1 = a.getString("jumpHop1") ?: ""
+                val hop2 = a.getString("jumpHop2") ?: ""
+                val hopDead = a.getString("jumpDead") ?: ""
+                if ((mode == "live" || mode == "seed") && (hop1.isBlank() || hop2.isBlank() || hopDead.isBlank())) {
+                    results.putString("stream", "FAIL: live/seed needs -e jumpHop1 <bastion> -e jumpHop2 <target> -e jumpDead <dead-host>")
+                } else {
+                    results.putString("stream", JumpHostVerification(this).run(mode, a.getString("jumpKey"), hop1, hop2, hopDead))
+                }
                 finish(0, results)
                 return
             }
@@ -263,7 +271,10 @@ class RdpResizeInstrumentation : Instrumentation() {
                 val profiles = ProfileManager(targetContext).getProfiles()
                 val profile = profiles.single { it.name == "nano via http" }
                 check(profile.proxyType == com.farside.workspace.data.ProxyType.HTTP)
-                val upstream = profiles.single { it.name == "ssh.jameskasyan.com" }
+                val upstreamName = checkNotNull(jumpArgs?.getString("proxyUpstreamProfile")) {
+                    "Missing instrumentation arg: pass -e proxyUpstreamProfile <saved SSH profile name>"
+                }
+                val upstream = profiles.single { it.name == upstreamName }
                 val upstreamActivity = startActivitySync(android.content.Intent(targetContext, SessionActivity::class.java)
                     .putExtra("profileId", upstream.id).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) as SessionActivity
                 try {
@@ -647,7 +658,8 @@ class RdpResizeInstrumentation : Instrumentation() {
 
     private fun runSshProbe(results: Bundle) {
         val pm = ProfileManager(targetContext)
-        val profile = pm.getProfiles().find { it.host.contains("jeremy-ssh") }
+        val probeHost = jumpArgs?.getString("sshProbeHost")
+        val profile = probeHost?.let { frag -> pm.getProfiles().find { it.host.contains(frag) } }
             ?: pm.getProfiles().firstOrNull { it.type == ConnectionType.SSH }
         val sshKey = pm.getSshKeys().find { it.id == profile?.sshKeyId }
             ?: pm.getSshKeys().firstOrNull()
@@ -659,7 +671,9 @@ class RdpResizeInstrumentation : Instrumentation() {
         val tunnel = com.farside.workspace.tunnel.CloudflaredTunnel(targetContext)
         try {
             val port = tunnel.start(
-                hostInput = profile?.host ?: "jeremy-ssh.jameskasyan.com",
+                hostInput = profile?.host ?: checkNotNull(probeHost) {
+                    "Missing instrumentation arg: pass -e sshProbeHost <host> (or save a matching SSH profile)"
+                },
                 parameters = profile?.cloudflaredParameters ?: "",
                 onStatus = { report.append("Tunnel status: $it\n") },
                 onExit = {},
@@ -680,10 +694,9 @@ class RdpResizeInstrumentation : Instrumentation() {
             val keyAlgos = runCatching { ssh.transport.config.keyAlgorithms.map { it.name } }.getOrNull()
             report.append("Client key algorithms: $keyAlgos\n")
 
-            val testUsers = listOfNotNull(
-                profile?.user?.takeIf { it.isNotBlank() },
-                "jmez", "jmez11", "jeremy", "james", "jkasyan", "jameskasyan", "admin", "ubuntu", "debian", "root"
-            ).distinct()
+            val extraUsers = jumpArgs?.getString("sshProbeUsers")?.split(",")?.map { it.trim() }
+                ?.filter { it.isNotEmpty() } ?: listOf("admin", "ubuntu", "debian", "root")
+            val testUsers = (listOfNotNull(profile?.user?.takeIf { it.isNotBlank() }) + extraUsers).distinct()
 
             var sshAuthenticated = false
             for (u in testUsers) {
