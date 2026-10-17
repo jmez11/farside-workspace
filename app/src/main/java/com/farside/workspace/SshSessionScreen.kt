@@ -637,16 +637,26 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                     }
 
                     if (showTransparencySlider) {
-                        Text(stringResource(R.string.terminal_opacity_percent, (terminalAlpha * 100).roundToInt()), style = MaterialTheme.typography.bodySmall, color = Color.White, modifier = Modifier.padding(bottom = 3.dp))
-                        Slider(
-                            value = terminalAlpha,
-                            onValueChange = { newAlpha ->
-                                terminalAlpha = newAlpha.coerceIn(0.2f, 1.0f)
-                                revealToolbar()
-                            },
-                            valueRange = 0.2f..1.0f,
-                            modifier = Modifier.width(112.dp)
-                        )
+                        Row(
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                            modifier = Modifier.padding(top = 4.dp, start = 4.dp, end = 4.dp)
+                        ) {
+                            Slider(
+                                value = terminalAlpha,
+                                onValueChange = { newAlpha ->
+                                    terminalAlpha = newAlpha.coerceIn(0.2f, 1.0f)
+                                    revealToolbar()
+                                },
+                                valueRange = 0.2f..1.0f,
+                                modifier = Modifier.width(224.dp).padding(horizontal = 4.dp)
+                            )
+                            Text(
+                                stringResource(R.string.terminal_opacity_percent, (terminalAlpha * 100).roundToInt()),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White,
+                                modifier = Modifier.padding(start = 2.dp)
+                            )
+                        }
                     }
                 }
             }

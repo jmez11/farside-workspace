@@ -90,6 +90,11 @@ internal class SftpSession(private val context: Context, val profile: Connection
             if (release) lease.close()
         }
     }
+    val isConnected: Boolean
+        get() = synchronized(lifetime) {
+            !closing && !lease.closed.get() && ::ssh.isInitialized && ssh.isConnected && ssh.isAuthenticated
+        }
+
     fun connect(onStatus: (String) -> Unit, onExit: () -> Unit, operation: SftpOperation = SftpOperation()): String {
         ssh = lease.connect(profile, onStatus = onStatus, onExit = onExit)
         return channel(operation) { it.canonicalize(".") }

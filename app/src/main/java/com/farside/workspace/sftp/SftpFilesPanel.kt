@@ -228,6 +228,15 @@ private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?, allowDisable
             try { task(op); op.check(); status = doneLabel }
             catch (e: Exception) {
                 Log.e("SftpFiles", "Operation failed: ${e.javaClass.simpleName}: ${e.message ?: "(no message)"}", e)
+                val isConnError = e is net.schmizz.sshj.transport.TransportException ||
+                    e is net.schmizz.sshj.connection.ConnectionException ||
+                    e is SftpUnavailable ||
+                    (e is IllegalStateException && e.message == "Connection lost") ||
+                    (session?.isConnected == false)
+                if (isConnError) {
+                    session?.close()
+                    session = null
+                }
                 error = try { op.check(); sftpError(context, e) } catch (_: java.util.concurrent.CancellationException) { cancelledLabel }
             }
             finally { operation = null; progress = null }
@@ -260,7 +269,7 @@ private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?, allowDisable
             try {
                 path = withContext(Dispatchers.IO) { next.connect(
                     onStatus = { text -> scope.launch { status = text.trim().removeSurrounding("[", "]") } },
-                    onExit = { scope.launch { error = cloudflareTunnelExitedMsg } }, operation = op) }
+                    onExit = { scope.launch { session?.close(); session = null; error = cloudflareTunnelExitedMsg } }, operation = op) }
                 op.check(); refresh(op)
             } catch (e: Exception) { next.close(); session = null; throw e }
         }
@@ -377,7 +386,10 @@ private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?, allowDisable
         }
         error?.let { message -> Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF292A2E))) { Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(message, Modifier.weight(1f), color = MaterialTheme.colorScheme.error)
-            selectedId?.let { id -> TextButton(onClick = { connect(id) }, enabled = operation == null) { Text(stringResource(R.string.reconnect), color = Color(0xFFF1F0F4)) } }
+            val isDisconnected = session == null || session?.isConnected == false
+            if (isDisconnected) {
+                selectedId?.let { id -> TextButton(onClick = { connect(id) }, enabled = operation == null) { Text(stringResource(R.string.reconnect), color = Color(0xFFF1F0F4)) } }
+            }
         } } }
         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
         LazyColumn(Modifier.weight(1f), state = fileListState, verticalArrangement = Arrangement.spacedBy(6.dp)) {
