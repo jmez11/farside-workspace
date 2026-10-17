@@ -40,7 +40,7 @@ android {
     defaultConfig {
         applicationId = "com.farside.workspace"
         minSdk = 32 // Required for Meta Spatial SDK features (Android 12L)
-        targetSdk = 35
+        targetSdk = 34 // Horizon OS is API 34; targeting higher only triggers a dashboard warning
         versionCode = ciVersionCode ?: 1
         versionName = ciVersionName ?: "1.0"
         testInstrumentationRunner = "com.farside.workspace.RdpResizeInstrumentation"
