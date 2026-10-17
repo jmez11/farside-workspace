@@ -28,6 +28,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -40,6 +43,55 @@ import java.text.DateFormat
 import java.util.Date
 
 private data class HeadsetFile(val file: File, val directory: Boolean)
+
+@Composable
+private fun TruncatedPathText(
+    path: String,
+    cachedText: String?,
+    modifier: Modifier = Modifier,
+    style: TextStyle = MaterialTheme.typography.bodyMedium,
+    color: Color = Color(0xFFF1F0F4)
+) {
+    BoxWithConstraints(modifier = modifier) {
+        val density = LocalDensity.current
+        val textMeasurer = rememberTextMeasurer()
+        val maxWidthPx = with(density) { maxWidth.toPx() }
+
+        val displayText = remember(path, cachedText, maxWidthPx, style) {
+            if (path.isEmpty() || maxWidthPx <= 0) return@remember ""
+            if (cachedText != null) {
+                val cachedWidth = textMeasurer.measure(cachedText, style = style, maxLines = 1).size.width
+                if (cachedWidth <= maxWidthPx) return@remember cachedText
+            }
+            val pathWidth = textMeasurer.measure(path, style = style, maxLines = 1).size.width
+            if (pathWidth <= maxWidthPx) return@remember path
+
+            var low = 1
+            var high = path.length
+            var best = "..."
+            while (low <= high) {
+                val mid = (low + high) / 2
+                val candidate = "..." + path.takeLast(mid)
+                val width = textMeasurer.measure(candidate, style = style, maxLines = 1).size.width
+                if (width <= maxWidthPx) {
+                    best = candidate
+                    low = mid + 1
+                } else {
+                    high = mid - 1
+                }
+            }
+            best
+        }
+
+        Text(
+            text = displayText,
+            style = style,
+            color = color,
+            maxLines = 1,
+            softWrap = false
+        )
+    }
+}
 
 @Composable
 private fun SftpListScrollbar(state: LazyListState, modifier: Modifier = Modifier) {
@@ -84,13 +136,17 @@ internal fun SftpFilesEntry(onClose: () -> Unit, profileId: String? = null, allo
         security = withContext(Dispatchers.IO) { ProfileManager(context).let { it.usesSystemPin() to it.getAppPinVerifier() } }
     }
     BackHandler { onClose() }
-    Surface(Modifier.fillMaxSize(), color = Color(0xFF202124)) {
-        val auth = security
-        when {
-            auth == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-            !unlocked && auth.first -> SystemCredentialDialog(title = stringResource(R.string.unlock_files), message = stringResource(R.string.confirm_headset_files), onUnlocked = { unlocked = true }, onCancel = onClose)
-            !unlocked && auth.second != null -> CredentialPinDialog(title = stringResource(R.string.unlock_files), verifier = auth.second, onUnlocked = { unlocked = true }, onCancel = onClose)
-            else -> SftpFilesPanel(onClose, profileId, allowDisabledPairedProfile)
+    MaterialTheme(colorScheme = darkColorScheme()) {
+        CompositionLocalProvider(LocalContentColor provides Color(0xFFF1F0F4)) {
+            Surface(Modifier.fillMaxSize(), color = Color(0xFF202124), contentColor = Color(0xFFF1F0F4)) {
+                val auth = security
+                when {
+                    auth == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Color(0xFFF1F0F4)) }
+                    !unlocked && auth.first -> SystemCredentialDialog(title = stringResource(R.string.unlock_files), message = stringResource(R.string.confirm_headset_files), onUnlocked = { unlocked = true }, onCancel = onClose)
+                    !unlocked && auth.second != null -> CredentialPinDialog(title = stringResource(R.string.unlock_files), verifier = auth.second, onUnlocked = { unlocked = true }, onCancel = onClose)
+                    else -> SftpFilesPanel(onClose, profileId, allowDisabledPairedProfile)
+                }
+            }
         }
     }
 }
@@ -260,62 +316,87 @@ private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?, allowDisable
         if (sortByDate) entries.sortedWith(compareByDescending<SftpEntry> { it.directory }.thenByDescending { it.modified }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name })
         else entries.sortedWith(compareByDescending<SftpEntry> { it.directory }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name })
     }
+    val connectionName = session?.profile?.name ?: profiles.find { it.id == selectedId }?.name
+    val titleText = connectionName.orEmpty()
+
     Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = ::back) { Icon(Icons.Default.ArrowBack, stringResource(R.string.back_in_files)) }
-            Text(stringResource(R.string.files_title), style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
-            IconButton(onClick = onClose) { Icon(Icons.Default.Close, stringResource(R.string.close_files)) }
-        }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = ::root, enabled = operation == null) { Text(stringResource(R.string.ssh_files_root)) }
-            Text(session?.profile?.name.orEmpty(), Modifier.weight(1f), maxLines = 1,
-                overflow = TextOverflow.Ellipsis)
-        }
-        if (session != null) {
-            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Box {
-                    TextButton(onClick = { sortMenu = true }, enabled = operation == null) {
-                        Icon(Icons.Default.Sort, null)
-                        Spacer(Modifier.width(6.dp))
-                        Text(stringResource(if (sortByDate) R.string.sftp_sort_date else R.string.sftp_sort_name))
-                    }
-                    DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
-                        DropdownMenuItem(text = { Text(stringResource(R.string.sftp_sort_name)) }, onClick = { sortByDate = false; sortMenu = false })
-                        DropdownMenuItem(text = { Text(stringResource(R.string.sftp_sort_date)) }, onClick = { sortByDate = true; sortMenu = false })
-                    }
-                }
-                TextButton(onClick = { work(refreshingLabel) { refresh(it) } }, enabled = operation == null) { Text(stringResource(R.string.refresh)) }
-                TextButton(onClick = { edit = newFolderLabel to null; editName = "" }, enabled = operation == null) { Text(newFolderLabel) }
-                TextButton(onClick = { localFolder = Environment.getExternalStorageDirectory() }, enabled = operation == null) { Text(stringResource(R.string.upload)) }
+            Text(titleText, style = MaterialTheme.typography.headlineMedium, color = Color(0xFFF1F0F4), modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            IconButton(onClick = onClose, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.Default.Close, stringResource(R.string.close_files), modifier = Modifier.size(22.dp), tint = Color(0xFFF1F0F4))
             }
         }
-        if (path.isNotEmpty()) Text(if (cachedView && operation == null) stringResource(R.string.sftp_cached_path, path) else path,
-            style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (session != null) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                TruncatedPathText(
+                    path = path,
+                    cachedText = if (cachedView && operation == null) stringResource(R.string.sftp_cached_path, path) else null,
+                    modifier = Modifier.weight(1f).padding(end = 8.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color(0xFFF1F0F4)
+                )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    IconButton(onClick = ::back, enabled = operation == null, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Default.ArrowBack, stringResource(R.string.back_in_files), modifier = Modifier.size(20.dp), tint = if (operation == null) Color(0xFFF1F0F4) else Color(0xFF757575))
+                    }
+                    IconButton(onClick = ::root, enabled = operation == null, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Default.Home, stringResource(R.string.key_home), modifier = Modifier.size(20.dp), tint = if (operation == null) Color(0xFFF1F0F4) else Color(0xFF757575))
+                    }
+                    IconButton(onClick = { work(refreshingLabel) { refresh(it) } }, enabled = operation == null, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Default.Refresh, stringResource(R.string.refresh), modifier = Modifier.size(20.dp), tint = if (operation == null) Color(0xFFF1F0F4) else Color(0xFF757575))
+                    }
+                    IconButton(onClick = { edit = newFolderLabel to null; editName = "" }, enabled = operation == null, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Default.CreateNewFolder, newFolderLabel, modifier = Modifier.size(20.dp), tint = if (operation == null) Color(0xFFF1F0F4) else Color(0xFF757575))
+                    }
+                    IconButton(onClick = { localFolder = Environment.getExternalStorageDirectory() }, enabled = operation == null, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Default.Upload, stringResource(R.string.upload), modifier = Modifier.size(20.dp), tint = if (operation == null) Color(0xFFF1F0F4) else Color(0xFF757575))
+                    }
+                    Box {
+                        IconButton(onClick = { sortMenu = true }, enabled = operation == null, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Default.Sort, stringResource(if (sortByDate) R.string.sftp_sort_date else R.string.sftp_sort_name), modifier = Modifier.size(20.dp), tint = if (operation == null) Color(0xFFF1F0F4) else Color(0xFF757575))
+                        }
+                        DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
+                            DropdownMenuItem(text = { Text(stringResource(R.string.sftp_sort_name), color = Color(0xFFF1F0F4)) }, onClick = { sortByDate = false; sortMenu = false })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.sftp_sort_date), color = Color(0xFFF1F0F4)) }, onClick = { sortByDate = true; sortMenu = false })
+                        }
+                    }
+                }
+            }
+        }
         if (operation != null) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(status, Modifier.weight(1f)); TextButton(onClick = { operation?.cancel(); if (path.isEmpty()) session?.close() }) { Text(stringResource(R.string.cancel)) }
+                Text(status, Modifier.weight(1f), color = Color(0xFFF1F0F4))
+                TextButton(onClick = { operation?.cancel(); if (path.isEmpty()) session?.close() }) { Text(stringResource(R.string.cancel), color = Color(0xFFB9B7C0)) }
             }
             val p = progress
             if (p != null && p.second > 0) {
                 LinearProgressIndicator(progress = (p.first.toFloat() / p.second).coerceIn(0f, 1f), modifier = Modifier.fillMaxWidth())
                 Text(if (p.second < 1024L * 1024L) stringResource(R.string.sftp_transfer_bytes, p.first, p.second)
-                    else stringResource(R.string.sftp_transfer_megabytes, p.first / 1024 / 1024, p.second / 1024 / 1024))
+                    else stringResource(R.string.sftp_transfer_megabytes, p.first / 1024 / 1024, p.second / 1024 / 1024), color = Color(0xFFB9B7C0))
             } else LinearProgressIndicator(Modifier.fillMaxWidth())
         }
-        error?.let { message -> Card { Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        error?.let { message -> Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF292A2E))) { Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(message, Modifier.weight(1f), color = MaterialTheme.colorScheme.error)
-            selectedId?.let { id -> TextButton(onClick = { connect(id) }, enabled = operation == null) { Text(stringResource(R.string.reconnect)) } }
+            selectedId?.let { id -> TextButton(onClick = { connect(id) }, enabled = operation == null) { Text(stringResource(R.string.reconnect), color = Color(0xFFF1F0F4)) } }
         } } }
         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
         LazyColumn(Modifier.weight(1f), state = fileListState, verticalArrangement = Arrangement.spacedBy(6.dp)) {
             if (selectedId == null) {
-                if (profiles.isEmpty()) item { Text(stringResource(R.string.enable_sftp_help)) }
-                items(profiles, key = { it.id }) { profile -> Card(Modifier.fillMaxWidth().clickable(enabled = operation == null) { connect(profile.id) }) {
-                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.Folder, null); Spacer(Modifier.width(12.dp)); Text(profile.name) }
+                if (profiles.isEmpty()) item { Text(stringResource(R.string.enable_sftp_help), color = Color(0xFFB9B7C0)) }
+                items(profiles, key = { it.id }) { profile -> Card(
+                    Modifier.fillMaxWidth().clickable(enabled = operation == null) { connect(profile.id) },
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF292A2E)),
+                    border = BorderStroke(1.dp, Color(0xFF393A3F))
+                ) {
+                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Folder, null, tint = Color(0xFFE4E1EA))
+                        Spacer(Modifier.width(12.dp))
+                        Text(profile.name, color = Color(0xFFF1F0F4), style = MaterialTheme.typography.titleMedium)
+                    }
                 } }
             } else {
-                if (entries.isEmpty() && operation == null && error == null) item { Text(stringResource(R.string.empty_folder)) }
+                if (entries.isEmpty() && operation == null && error == null) item { Text(stringResource(R.string.empty_folder), color = Color(0xFFB9B7C0)) }
                 items(visibleEntries, key = { it.path }) { entry -> Card(
                     Modifier.fillMaxWidth().alpha(if (entry.unavailable) 0.45f else 1f),
                     shape = RoundedCornerShape(14.dp),
@@ -336,12 +417,12 @@ private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?, allowDisable
                             Text(if (entry.unavailable) stringResource(R.string.file_unavailable) else
                                 stringResource(R.string.sftp_entry_details, if (entry.directory) stringResource(R.string.folder) else pluralStringResource(R.plurals.sftp_file_bytes, entry.size.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), entry.size), DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(entry.modified))), color = Color(0xFFB9B7C0), style = MaterialTheme.typography.bodySmall)
                         }
-                        Box { IconButton(onClick = { menu = entry }, enabled = operation == null) { Icon(Icons.Default.MoreVert, stringResource(R.string.sftp_entry_actions, entry.name)) }
+                        Box { IconButton(onClick = { menu = entry }, enabled = operation == null, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.MoreVert, stringResource(R.string.sftp_entry_actions, entry.name), modifier = Modifier.size(20.dp), tint = Color(0xFFE4E1EA)) }
                             DropdownMenu(expanded = menu == entry, onDismissRequest = { menu = null }) {
-                                if (entry.directory && entry.link == null && !entry.unavailable) DropdownMenuItem(text = { Text(stringResource(R.string.download_folder)) }, onClick = { menu = null; pendingFolderDownload = entry; folderDestinationPicker.launch(null) })
-                                if (!entry.directory && !entry.unavailable) DropdownMenuItem(text = { Text(stringResource(R.string.download)) }, onClick = { menu = null; requestDownload(entry) })
-                                DropdownMenuItem(text = { Text(renameLabel) }, onClick = { menu = null; edit = renameLabel to entry; editName = entry.name })
-                                DropdownMenuItem(text = { Text(stringResource(R.string.delete)) }, onClick = { menu = null; confirm = (if (entry.directory) sftpConfirmDeleteFolderFmt else sftpConfirmDeleteFileFmt).format(entry.name) to {
+                                if (entry.directory && entry.link == null && !entry.unavailable) DropdownMenuItem(text = { Text(stringResource(R.string.download_folder), color = Color(0xFFF1F0F4)) }, onClick = { menu = null; pendingFolderDownload = entry; folderDestinationPicker.launch(null) })
+                                if (!entry.directory && !entry.unavailable) DropdownMenuItem(text = { Text(stringResource(R.string.download), color = Color(0xFFF1F0F4)) }, onClick = { menu = null; requestDownload(entry) })
+                                DropdownMenuItem(text = { Text(renameLabel, color = Color(0xFFF1F0F4)) }, onClick = { menu = null; edit = renameLabel to entry; editName = entry.name })
+                                DropdownMenuItem(text = { Text(stringResource(R.string.delete), color = Color(0xFFF1F0F4)) }, onClick = { menu = null; confirm = (if (entry.directory) sftpConfirmDeleteFolderFmt else sftpConfirmDeleteFileFmt).format(entry.name) to {
                                     work(deletingLabel) { op -> withContext(Dispatchers.IO) { checkNotNull(session).delete(entry, op) }; listingCache.keys.removeAll { it == entry.path || it.startsWith(entry.path.trimEnd('/') + "/") }; refresh(op) }
                                 } })
                             }
@@ -353,31 +434,57 @@ private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?, allowDisable
         if (selectedId != null) SftpListScrollbar(fileListState, Modifier.fillMaxHeight())
         }
     }
-    edit?.let { action -> AlertDialog(onDismissRequest = { edit = null }, title = { Text(action.first) }, text = {
-        OutlinedTextField(editName, { editName = it }, label = { Text(stringResource(R.string.name)) }, singleLine = true)
-    }, confirmButton = { TextButton(onClick = {
-        val name = editName; edit = null
-        work(action.first) { op ->
-            val target = remoteChild(path, name)
-            withContext(Dispatchers.IO) { val current = checkNotNull(session); if (action.second == null) current.mkdir(target, op) else current.rename(action.second!!.path, target, op) }; action.second?.let { old -> listingCache.keys.removeAll { it == old.path || it.startsWith(old.path.trimEnd('/') + "/") } }
-            refresh(op)
-        }
-    }) { Text(stringResource(R.string.save)) } }, dismissButton = { TextButton(onClick = { edit = null }) { Text(stringResource(R.string.cancel)) } }) }
-    confirm?.let { choice -> AlertDialog(onDismissRequest = { confirm = null }, title = { Text(stringResource(R.string.confirm_file_operation)) }, text = { Text(choice.first) },
-        confirmButton = { TextButton(onClick = { confirm = null; choice.second() }) { Text(stringResource(R.string.continue_action)) } }, dismissButton = { TextButton(onClick = { confirm = null }) { Text(stringResource(R.string.cancel)) } }) }
-    localFolder?.let { folder -> AlertDialog(onDismissRequest = { localFolder = null }, title = { Text(stringResource(R.string.upload_from_headset)) }, text = {
-        Column(Modifier.heightIn(max = 420.dp)) {
-            Text(folder.absolutePath)
-            if (folder != Environment.getExternalStorageDirectory()) TextButton(onClick = { localFolder = folder.parentFile }) { Text(stringResource(R.string.up)) }
-            LazyColumn { items(localFiles, key = { it.file.absolutePath }) { item -> val file = item.file; TextButton(onClick = {
-                if (item.directory) localFolder = file else {
-                    localFolder = null
-                    work(checkingDestinationLabel) { op ->
-                        val exists = withContext(Dispatchers.IO) { checkNotNull(session).exists(remoteChild(path, file.name), op) }
-                        confirm = (if (exists) sftpReplaceUploadFmt.format(file.name) else sftpConfirmUploadFmt.format(file.name)) to { upload(file, exists) }
+    edit?.let { action -> AlertDialog(onDismissRequest = { edit = null },
+        title = { Text(action.first, color = Color(0xFFF1F0F4)) },
+        text = {
+            OutlinedTextField(
+                value = editName,
+                onValueChange = { editName = it },
+                label = { Text(stringResource(R.string.name)) },
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = Color(0xFFF1F0F4),
+                    unfocusedTextColor = Color(0xFFF1F0F4),
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = Color(0xFF606166),
+                    focusedLabelColor = MaterialTheme.colorScheme.primary,
+                    unfocusedLabelColor = Color(0xFFB9B7C0)
+                )
+            )
+        },
+        confirmButton = { TextButton(onClick = {
+            val name = editName; edit = null
+            work(action.first) { op ->
+                val target = remoteChild(path, name)
+                withContext(Dispatchers.IO) { val current = checkNotNull(session); if (action.second == null) current.mkdir(target, op) else current.rename(action.second!!.path, target, op) }; action.second?.let { old -> listingCache.keys.removeAll { it == old.path || it.startsWith(old.path.trimEnd('/') + "/") } }
+                refresh(op)
+            }
+        }) { Text(stringResource(R.string.save), color = Color(0xFFF1F0F4)) } },
+        dismissButton = { TextButton(onClick = { edit = null }) { Text(stringResource(R.string.cancel), color = Color(0xFFB9B7C0)) } }
+    ) }
+    confirm?.let { choice -> AlertDialog(onDismissRequest = { confirm = null },
+        title = { Text(stringResource(R.string.confirm_file_operation), color = Color(0xFFF1F0F4)) },
+        text = { Text(choice.first, color = Color(0xFFF1F0F4)) },
+        confirmButton = { TextButton(onClick = { confirm = null; choice.second() }) { Text(stringResource(R.string.continue_action), color = Color(0xFFF1F0F4)) } },
+        dismissButton = { TextButton(onClick = { confirm = null }) { Text(stringResource(R.string.cancel), color = Color(0xFFB9B7C0)) } }
+    ) }
+    localFolder?.let { folder -> AlertDialog(onDismissRequest = { localFolder = null },
+        title = { Text(stringResource(R.string.upload_from_headset), color = Color(0xFFF1F0F4)) },
+        text = {
+            Column(Modifier.heightIn(max = 420.dp)) {
+                Text(folder.absolutePath, color = Color(0xFFB9B7C0))
+                if (folder != Environment.getExternalStorageDirectory()) TextButton(onClick = { localFolder = folder.parentFile }) { Text(stringResource(R.string.up), color = Color(0xFFF1F0F4)) }
+                LazyColumn { items(localFiles, key = { it.file.absolutePath }) { item -> val file = item.file; TextButton(onClick = {
+                    if (item.directory) localFolder = file else {
+                        localFolder = null
+                        work(checkingDestinationLabel) { op ->
+                            val exists = withContext(Dispatchers.IO) { checkNotNull(session).exists(remoteChild(path, file.name), op) }
+                            confirm = (if (exists) sftpReplaceUploadFmt.format(file.name) else sftpConfirmUploadFmt.format(file.name)) to { upload(file, exists) }
+                        }
                     }
-                }
-            }) { Text(if (item.directory) stringResource(R.string.sftp_folder_name, file.name) else file.name) } } }
-        }
-    }, confirmButton = { TextButton(onClick = { localFolder = null }) { Text(stringResource(R.string.cancel)) } }) }
+                }) { Text(if (item.directory) stringResource(R.string.sftp_folder_name, file.name) else file.name, color = Color(0xFFF1F0F4)) } } }
+            }
+        },
+        confirmButton = { TextButton(onClick = { localFolder = null }) { Text(stringResource(R.string.cancel), color = Color(0xFFB9B7C0)) } }
+    ) }
 }

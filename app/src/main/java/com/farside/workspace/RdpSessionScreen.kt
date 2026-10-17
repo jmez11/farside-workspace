@@ -386,10 +386,14 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
     var toolbarActivity by remember { mutableStateOf(0L) }
     var toolbarBounds by remember { mutableStateOf(Rect.Zero) }
     val remotePointer = remember { intArrayOf(0, 0) }
-    DisposableEffect(rdpInstance) {
+    DisposableEffect(rdpInstance, showVncFiles) {
         val activity = context as? SessionActivity
-        activity?.remoteScroll = { flags ->
-            if (rdpInstance != 0L) rdpBridge.sendMouseEvent(rdpInstance, remotePointer[0], remotePointer[1], flags)
+        if (showVncFiles) {
+            activity?.remoteScroll = null
+        } else {
+            activity?.remoteScroll = { flags ->
+                if (rdpInstance != 0L) rdpBridge.sendMouseEvent(rdpInstance, remotePointer[0], remotePointer[1], flags)
+            }
         }
         onDispose { activity?.remoteScroll = null }
     }

@@ -482,7 +482,9 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                     }
                 }
                 terminalView.attachSession(sshTerm)
-                (context as? SessionActivity)?.sshHistoryScroll = { terminalView.scrollHistory(it) }
+                if (!showFiles && !showForwards && !showTerminalSettings) {
+                    (context as? SessionActivity)?.sshHistoryScroll = { terminalView.scrollHistory(it) }
+                }
 
                 terminalViewRef = terminalView
                 (context as? SessionActivity)?.sshCaptureView = terminalView
@@ -569,7 +571,15 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                             )
                         }
                         sftpSupported?.let { works ->
-                            SftpFilesControl(unsupported = !works, onOpen = { showFiles = true }, onInteraction = { revealToolbar() }, iconSize = iconSize)
+                            SftpFilesControl(
+                                unsupported = !works,
+                                onOpen = {
+                                    terminalViewRef?.stopTextSelectionMode()
+                                    showFiles = true
+                                },
+                                onInteraction = { revealToolbar() },
+                                iconSize = iconSize
+                            )
                         }
                         IconButton(onClick = { showForwards = true; revealToolbar() }, modifier = Modifier.size(buttonSize)) {
                             Icon(Icons.Default.SwapHoriz, stringResource(R.string.port_forwarding), modifier = Modifier.size(iconSize), tint = Color.White)
@@ -637,6 +647,25 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
                             valueRange = 0.2f..1.0f,
                             modifier = Modifier.width(112.dp)
                         )
+                    }
+                }
+            }
+        }
+
+        val hasModalOverlay = showFiles || showForwards || showTerminalSettings
+        DisposableEffect(hasModalOverlay, terminalViewRef) {
+            val activity = context as? SessionActivity
+            if (hasModalOverlay) {
+                activity?.sshHistoryScroll = null
+            } else {
+                terminalViewRef?.let { tv ->
+                    activity?.sshHistoryScroll = { tv.scrollHistory(it) }
+                }
+            }
+            onDispose {
+                if (hasModalOverlay) {
+                    terminalViewRef?.let { tv ->
+                        activity?.sshHistoryScroll = { tv.scrollHistory(it) }
                     }
                 }
             }

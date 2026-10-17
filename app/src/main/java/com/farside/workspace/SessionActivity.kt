@@ -32,11 +32,19 @@ class SessionActivity : ComponentActivity() {
     internal var keyboardEditorActions: ImeEditorActions? = null
     internal var keyboardPanelEditorActions: ImeEditorActions? = null
     internal var remoteScroll: ((Int) -> Unit)? = null
+        set(value) {
+            field = value
+            if (value == null) controllerScroll.stop()
+        }
     internal var setZoom: ((Float) -> Unit)? = null
     internal var setPan: ((Float, Float) -> Unit)? = null
     internal var onTouchDebug: ((android.view.MotionEvent, Float, Float, Float) -> Unit)? = null
     private val controllerScroll = RdpControllerScroll { remoteScroll?.invoke(it) }
     internal var sshHistoryScroll: ((Int) -> Unit)? = null
+        set(value) {
+            field = value
+            if (value == null) sshControllerScroll.stop()
+        }
     private val sshControllerScroll = SshControllerScroll { sshHistoryScroll?.invoke(it) }
     private var nextSshInputLog = 0L
 
