@@ -1,0 +1,203 @@
+name: Deploy to Quest
+
+# Pushes a fresh debug APK to the Quest 3 through the Farside-hosted
+# Cloudflare tunnel and reinstalls it WITHOUT killing the tunnel:
+# the APK is pushed to /data/local/tmp first, then a detached adbd-shell
+# script runs `pm install -r` (which kills Farside to replace the APK) and
+# immediately restarts AdbTunnelService so the tunnel reconnects by itself.
+#
+# This works because `adb shell` runs as Android's shell user (uid 2000) in
+# adbd's cgroup — not inside Farside's app process — so the nohup'd script
+# survives the package replacement that kills the app.
+#
+# Farside must be running on the headset with its tunnel started — reaching
+# the headset this way IS the test. Manual trigger only.
+#
+# NOTE: `pm install -r` requires the same signing cert every time. A debug
+# APK will NOT install over a differently-signed (release) build — uninstall
+# Farside from the headset once first in that case.
+
+on:
+  workflow_dispatch:
+    inputs:
+      hostname:
+        description: 'Tunnel hostname publishing the Quest adbd (defaults to the ADB_TUNNEL_HOSTNAME secret)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout with submodules
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Install Android SDK components
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "ndk;26.1.10909125" "cmake;3.22.1"
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Install cloudflared and adb
+        run: |
+          # NOTE: cloudflared is pinned to 2026.5.1, NOT latest. Versions
+          # >=2026.6.0 have a regression (cloudflare/cloudflared#1674) where
+          # `access tcp` ignores service-token credentials (flags, env vars
+          # and header injection) and falls back to interactive browser auth,
+          # so the tunnel never proxies on a headless runner.
+          curl -sSfL -o /tmp/cloudflared.deb https://github.com/cloudflare/cloudflared/releases/download/2026.5.1/cloudflared-linux-amd64.deb
+          sudo dpkg -i /tmp/cloudflared.deb
+          sudo apt-get update -qq && sudo apt-get install -y -qq adb
+
+      - name: Install the paired adb key (if configured)
+        env:
+          ADB_KEY: ${{ secrets.ADB_KEY }}
+          ADB_KEY_PUB: ${{ secrets.ADB_KEY_PUB }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ADB_KEY:-}" ] || [ -z "${ADB_KEY_PUB:-}" ]; then
+            echo "ADB_KEY/ADB_KEY_PUB not set; continuing with an ephemeral key (the Quest will not trust it)."
+            exit 0
+          fi
+          mkdir -p ~/.android
+          printf '%s' "$ADB_KEY" | base64 -d > ~/.android/adbkey
+          printf '%s' "$ADB_KEY_PUB" | base64 -d > ~/.android/adbkey.pub
+          chmod 600 ~/.android/adbkey ~/.android/adbkey.pub
+          adb kill-server 2>/dev/null || true
+          echo "paired adb key installed"
+
+      - name: Open the tunnel
+        # NOTE: the secrets keep the CF_ACCESS_CLIENT_ID / CF_ACCESS_CLIENT_SECRET
+        # names, but cloudflared's `access` commands read TUNNEL_SERVICE_TOKEN_ID /
+        # TUNNEL_SERVICE_TOKEN_SECRET, so they are remapped here.
+        env:
+          TUNNEL_SERVICE_TOKEN_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          TUNNEL_SERVICE_TOKEN_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          HOST="${{ inputs.hostname }}"
+          if [ -z "$HOST" ]; then HOST="${{ secrets.ADB_TUNNEL_HOSTNAME }}"; fi
+          if [ -z "$HOST" ]; then
+            echo "Set the hostname input or the ADB_TUNNEL_HOSTNAME secret." >&2
+            exit 1
+          fi
+          # Fail fast: without a service token cloudflared falls back to an
+          # interactive browser login and the tunnel silently never proxies.
+          if [ -z "${TUNNEL_SERVICE_TOKEN_ID:-}" ] || [ -z "${TUNNEL_SERVICE_TOKEN_SECRET:-}" ]; then
+            echo "CF_ACCESS_CLIENT_ID / CF_ACCESS_CLIENT_SECRET secrets are empty or not set." >&2
+            exit 1
+          fi
+          cloudflared access tcp --hostname "$HOST" --url 127.0.0.1:5555 > /tmp/cloudflared.log 2>&1 &
+          echo $! > /tmp/cloudflared.pid
+          sleep 5
+          if ! kill -0 "$(cat /tmp/cloudflared.pid)" 2>/dev/null; then
+            echo "cloudflared died on startup. Log:" >&2
+            cat /tmp/cloudflared.log >&2 || true
+            exit 1
+          fi
+          echo "cloudflared is running. Startup log:"
+          cat /tmp/cloudflared.log
+
+      - name: Push APK and trigger detached reinstall
+        run: |
+          set -euo pipefail
+          # NOTE: `adb connect` exits 0 even when it fails, so poll
+          # `adb devices` for a real 'device' state instead of trusting
+          # the exit code.
+          connected=0
+          for i in $(seq 1 24); do
+            adb connect 127.0.0.1:5555 >/dev/null 2>&1 || true
+            if adb devices | grep -Eq "127\.0\.0\.1:5555[[:space:]]+device$"; then
+              connected=1
+              echo "connected on attempt $i"
+              break
+            fi
+            echo "attempt $i: $(adb devices | grep '127.0.0.1:5555' | tr '\n' ';' || echo 'not listed')"
+            sleep 5
+          done
+          if [ "$connected" -ne 1 ]; then
+            echo "=== adb never reached 'device' state ===" >&2
+            adb devices -l >&2 || true
+            echo "=== full cloudflared log ===" >&2
+            cat /tmp/cloudflared.log >&2 || true
+            exit 1
+          fi
+          adb -s 127.0.0.1:5555 wait-for-device
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          adb -s 127.0.0.1:5555 push "$APK" /data/local/tmp/farside-update.apk
+          # Detached reinstall: the shell is parented to adbd (uid 2000), so it
+          # survives `pm install -r` killing Farside, finishes the install,
+          # cleans up, and restarts AdbTunnelService so the tunnel reconnects
+          # on its own. The adb session drops with the tunnel — the next step
+          # waits for it to come back.
+          adb -s 127.0.0.1:5555 shell "nohup sh -c 'pm install -r /data/local/tmp/farside-update.apk && rm -f /data/local/tmp/farside-update.apk && am start-foreground-service -n com.farside.workspace/.tunnel.AdbTunnelService' >/dev/null 2>&1 &"
+          echo "reinstall triggered"
+
+      - name: Wait for tunnel reconnect and verify install
+        env:
+          TUNNEL_SERVICE_TOKEN_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          TUNNEL_SERVICE_TOKEN_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          # The old access client died with the tunnel; start a fresh one.
+          kill "$(cat /tmp/cloudflared.pid)" 2>/dev/null || true
+          adb disconnect 127.0.0.1:5555 >/dev/null 2>&1 || true
+          HOST="${{ inputs.hostname }}"
+          if [ -z "$HOST" ]; then HOST="${{ secrets.ADB_TUNNEL_HOSTNAME }}"; fi
+          cloudflared access tcp --hostname "$HOST" --url 127.0.0.1:5555 > /tmp/cloudflared-reconnect.log 2>&1 &
+          echo $! > /tmp/cloudflared.pid
+          # `pm install -r` kills Farside, which kills the tunnel; the detached
+          # script restarts AdbTunnelService, so the tunnel comes back on its
+          # own. Poll for up to ~3 minutes.
+          connected=0
+          for i in $(seq 1 36); do
+            adb connect 127.0.0.1:5555 >/dev/null 2>&1 || true
+            if adb devices | grep -Eq "127\.0\.0\.1:5555[[:space:]]+device$"; then
+              connected=1
+              echo "tunnel reconnected on attempt $i"
+              break
+            fi
+            sleep 5
+          done
+          if [ "$connected" -ne 1 ]; then
+            echo "=== tunnel never reconnected after the reinstall ===" >&2
+            echo "The detached install script may have failed; check the headset." >&2
+            cat /tmp/cloudflared-reconnect.log >&2 || true
+            exit 1
+          fi
+          adb -s 127.0.0.1:5555 wait-for-device
+          # A failed `pm install -r` (e.g. signature mismatch — see the header
+          # note) leaves the old build in place without killing the tunnel, so
+          # confirm the installed versionCode matches the APK we just pushed.
+          AAPT="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name aapt -type f 2>/dev/null | head -1)"
+          if [ -n "$AAPT" ]; then
+            WANT_VERCODE="$("$AAPT" dump badging app/build/outputs/apk/debug/app-debug.apk | sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p")"
+            GOT_VERCODE="$(adb -s 127.0.0.1:5555 shell dumpsys package com.farside.workspace | sed -n 's/.*versionCode=\([0-9]*\).*/\1/p' | head -1 | tr -d '\r')"
+            echo "apk versionCode=$WANT_VERCODE installed versionCode=$GOT_VERCODE"
+            if [ -n "$WANT_VERCODE" ] && [ "$WANT_VERCODE" != "$GOT_VERCODE" ]; then
+              echo "Installed build does not match the pushed APK — the reinstall likely failed (wrong signature? see the header note)." >&2
+              exit 1
+            fi
+          else
+            echo "aapt not found; skipping versionCode check"
+          fi
+          adb -s 127.0.0.1:5555 shell dumpsys package com.farside.workspace | grep -iE "versionName" | head -1
+
+      - name: Close the tunnel
+        if: always()
+        run: kill "$(cat /tmp/cloudflared.pid)" || true
