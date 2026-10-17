@@ -116,9 +116,10 @@ object NetworkScanner {
         activeHosts.toList()
     }
 
-    /** Resolve only the saved name. A failed DNS lookup must not scan the LAN on connect. */
+    /** Resolve only the saved name. A failed DNS lookup must not scan the LAN on connect.
+     * Return the resolved IP address so native connect avoids fragile single-label getaddrinfo lookups. */
     suspend fun resolveRdpHost(hostname: String): String {
-        if (runCatching { InetAddress.getByName(hostname) }.isSuccess) return hostname
+        runCatching { InetAddress.getByName(hostname) }.getOrNull()?.hostAddress?.let { return it }
         return resolveNetBiosName(hostname) ?: hostname
     }
 
@@ -129,40 +130,47 @@ object NetworkScanner {
         }
         val broadcasts = linkedSetOf<InetAddress>()
         val interfaces = runCatching { NetworkInterface.getNetworkInterfaces() }.getOrNull()
-            ?: return@withContext null
-        while (interfaces.hasMoreElements()) {
-            val network = interfaces.nextElement()
-            runCatching {
-                if (network.isUp && !network.isLoopback) {
-                    network.interfaceAddresses.mapNotNullTo(broadcasts) { it.broadcast }
+        if (interfaces != null) {
+            while (interfaces.hasMoreElements()) {
+                val network = interfaces.nextElement()
+                runCatching {
+                    if (network.isUp && !network.isLoopback) {
+                        network.interfaceAddresses.mapNotNullTo(broadcasts) { it.broadcast }
+                    }
                 }
             }
         }
-        for (broadcast in broadcasts) {
-            try {
-                DatagramSocket().use { socket ->
-                    socket.broadcast = true
-                    socket.soTimeout = 750
-                    val transactionId = kotlin.random.Random.nextInt(0x10000)
-                    val query = netBiosNameQuery(hostname, transactionId)
-                    socket.send(DatagramPacket(query, query.size, broadcast, 137))
-                    val deadline = android.os.SystemClock.elapsedRealtime() + 750
-                    while (android.os.SystemClock.elapsedRealtime() < deadline) {
-                        val response = ByteArray(512)
-                        val packet = DatagramPacket(response, response.size)
-                        socket.soTimeout = (deadline - android.os.SystemClock.elapsedRealtime()).coerceAtLeast(1).toInt()
-                        socket.receive(packet)
-                        parseNetBiosNameQueryResponse(response, packet.length, hostname, transactionId)?.let {
-                            // Multi-homed PCs can advertise an unreachable adapter first. The
-                            // responding socket address is the interface that answered this LAN query.
-                            return@withContext packet.address.hostAddress
+        runCatching { broadcasts.add(InetAddress.getByName("255.255.255.255")) }
+
+        // Try up to 2 attempts with a 1000ms window per attempt to handle Wi-Fi packet drops
+        for (attempt in 1..2) {
+            for (broadcast in broadcasts) {
+                try {
+                    DatagramSocket().use { socket ->
+                        socket.broadcast = true
+                        val timeout = 1000
+                        socket.soTimeout = timeout
+                        val transactionId = kotlin.random.Random.nextInt(0x10000)
+                        val query = netBiosNameQuery(hostname, transactionId)
+                        socket.send(DatagramPacket(query, query.size, broadcast, 137))
+                        val deadline = android.os.SystemClock.elapsedRealtime() + timeout
+                        while (android.os.SystemClock.elapsedRealtime() < deadline) {
+                            val response = ByteArray(512)
+                            val packet = DatagramPacket(response, response.size)
+                            socket.soTimeout = (deadline - android.os.SystemClock.elapsedRealtime()).coerceAtLeast(1).toInt()
+                            socket.receive(packet)
+                            parseNetBiosNameQueryResponse(response, packet.length, hostname, transactionId)?.let {
+                                // Multi-homed PCs can advertise an unreachable adapter first. The
+                                // responding socket address is the interface that answered this LAN query.
+                                return@withContext packet.address.hostAddress
+                            }
                         }
                     }
+                } catch (_: java.net.SocketTimeoutException) {
+                    // No host with this name answered on this link.
+                } catch (_: Exception) {
+                    // A blocked or unavailable interface must not prevent other links from resolving.
                 }
-            } catch (_: java.net.SocketTimeoutException) {
-                // No host with this name answered on this link.
-            } catch (_: Exception) {
-                // A blocked or unavailable interface must not prevent other links from resolving.
             }
         }
         null
