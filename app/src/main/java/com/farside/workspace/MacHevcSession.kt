@@ -308,7 +308,7 @@ class MacHevcSession(
                 // Bit 2 (4): cmd = 2 (virtual multi-session separate login)
                 // Bit 1 (2): cmd = 1 (direct connect to console)
                 // Bit 0 (1): cmd = 0 (request console permission from active user)
-                val cmd = if ((sessionState and 4) != 0) 2 else 0
+                val cmd = if ((sessionState and 4) != 0) 2 else if ((sessionState and 2) != 0) 1 else 0
 
                 if (cmd == 2) {
                     // cmd = 2: Virtual multi-session login
@@ -343,7 +343,15 @@ class MacHevcSession(
                 }
 
                 // Read server response (82 bytes = u16 size 80 + 80 bytes)
-                val replySize = input.readUnsignedShort()
+                val replySize = try {
+                    input.readUnsignedShort()
+                } catch (e: java.net.SocketTimeoutException) {
+                    if (cmd == 2) {
+                        throw java.io.IOException("SessionSelect multi-session login timed out awaiting macOS off-console agent. Verify Fast User Switching is enabled in macOS System Settings.", e)
+                    } else {
+                        throw e
+                    }
+                }
                 val replyBytes = ByteArray(replySize).also { input.readFully(it) }
                 val replyVersion = if (replySize >= 2) ((replyBytes[0].toInt() and 0xff) shl 8) or (replyBytes[1].toInt() and 0xff) else -1
                 val replyStatus = if (replySize >= 3) (replyBytes[2].toInt() and 0xff) else -1
@@ -848,11 +856,21 @@ class MacHevcSession(
             val scaledH = ((data[4].toInt() and 0xff) shl 8) or (data[5].toInt() and 0xff)
             val backingW = ((data[6].toInt() and 0xff) shl 8) or (data[7].toInt() and 0xff)
             val backingH = ((data[8].toInt() and 0xff) shl 8) or (data[9].toInt() and 0xff)
-            return if (backingW in 200..8192 && backingH in 200..8192) {
-                Pair(backingW, backingH)
-            } else if (scaledW in 200..8192 && scaledH in 200..8192) {
-                Pair(scaledW, scaledH)
-            } else null
+            if (backingW in 200..8192 && backingH in 200..8192) {
+                return Pair(backingW, backingH)
+            }
+            if (scaledW in 200..8192 && scaledH in 200..8192) {
+                return Pair(scaledW, scaledH)
+            }
+            // Fallback: check display_record global bounds (+0x14 into 56-byte record, following 14-byte header)
+            if (data.size >= 14 + 56) {
+                val gw = ((data[14 + 0x18].toInt() and 0xff) shl 8) or (data[14 + 0x19].toInt() and 0xff)
+                val gh = ((data[14 + 0x1a].toInt() and 0xff) shl 8) or (data[14 + 0x1b].toInt() and 0xff)
+                if (gw in 200..8192 && gh in 200..8192) {
+                    return Pair(gw, gh)
+                }
+            }
+            return null
         }
     }
 
