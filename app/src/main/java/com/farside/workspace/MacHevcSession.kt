@@ -87,8 +87,8 @@ class MacHevcSession(
         socket = s
         try {
             stage = "S0"
-            s.connect(InetSocketAddress(host, port), 5000)
-            s.soTimeout = 10000
+            s.connect(InetSocketAddress(host, port), 10000)
+            s.soTimeout = 60000
             val input = DataInputStream(s.getInputStream())
             val output = DataOutputStream(java.io.BufferedOutputStream(s.getOutputStream()))
             rawInput = input
@@ -185,11 +185,13 @@ class MacHevcSession(
             val nameLen = input.readInt()
             check(nameLen in 0..65536) { "ServerInit name length $nameLen out of bounds" }
             val name = ByteArray(nameLen).also { input.readFully(it) }
+            val nameHex = name.joinToString("") { "%02x".format(it) }
+            val nameStr = String(name, Charsets.ISO_8859_1)
             val flags = if (name.size >= 22 && name[0] == 0.toByte()) {
                 DataInputStream(name.copyOfRange(2, 6).inputStream()).readInt()
             } else 0
             serverInit = MacHevcServerInit(width, height, pixelFormat, name, flags)
-            log("S6: ServerInit ${width}x${height}, nameLen=$nameLen, flags=$flags")
+            log("S6: ServerInit ${width}x${height}, nameLen=$nameLen, flags=$flags, nameStr='$nameStr', nameHex=$nameHex")
 
             // S7: Cleartext Apple Prelude
             stage = "S7"
@@ -215,24 +217,117 @@ class MacHevcSession(
             output.flush()
             log("S7: Sent SetEncryption(cmd=1)")
 
-            // 3. Receive 0x44f Rekey message (carried as FramebufferUpdate rectangle)
-            val msgType = input.readUnsignedByte()
-            check(msgType == 0) { "Expected FramebufferUpdate (0) for rekey, got $msgType" }
-            input.skipBytes(1) // pad
-            val numRects = input.readUnsignedShort()
-            check(numRects == 1) { "Expected 1 rectangle for rekey, got $numRects" }
-            val rx = input.readUnsignedShort()
-            val ry = input.readUnsignedShort()
-            val rw = input.readUnsignedShort()
-            val rh = input.readUnsignedShort()
-            val encoding = input.readInt()
-            check(encoding == 0x44f) { "Expected rekey encoding 0x44f (1103), got 0x${Integer.toHexString(encoding)}" }
-            val rekeyPayload = ByteArray(36).also { input.readFully(it) }
-            log("S7: Received 0x44f Rekey payload (36 bytes, rect=${rw}x$rh@$rx,$ry)")
+            // 3. Receive incoming message after SetEncryption(cmd=1)
+            val first2 = ByteArray(2).also { input.readFully(it) }
+            val firstLen = ((first2[0].toInt() and 0xff) shl 8) or (first2[1].toInt() and 0xff)
 
-            val layer = MacHevcRecordLayer.unwrapRekey(wrapKey, rekeyPayload)
-            recordLayer = layer
-            log("S7: Rekey unwrap success (generation=${layer.generation})")
+            if (firstLen == 74) {
+                // SessionSelect_SessionInfo (74 bytes payload)
+                val sessionInfo = ByteArray(74).also { input.readFully(it) }
+                val infoBuf = ByteBuffer.wrap(sessionInfo).order(ByteOrder.BIG_ENDIAN)
+                val infoVersion = infoBuf.short.toInt() and 0xffff
+                val sessionState = infoBuf.int
+                val sessionFlags = infoBuf.int
+                val userBytes = ByteArray(64).also { infoBuf.get(it) }
+                val activeUser = String(userBytes).trimEnd { it == '\u0000' }
+                log("S7: Received SessionSelect_SessionInfo: activeUser='$activeUser', state=$sessionState, flags=$sessionFlags")
+
+                val cipher = Cipher.getInstance("AES/ECB/NoPadding")
+                cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(wrapKey, "AES"))
+
+                val shortUser = if (username.equals("James Kasyan", ignoreCase = true)) "jameskasyan" else username.lowercase().replace(" ", "")
+                val uBytes = ByteArray(64)
+                val srcU = shortUser.toByteArray(Charsets.UTF_8)
+                System.arraycopy(srcU, 0, uBytes, 0, minOf(srcU.size, 63))
+
+                val pBytes = ByteArray(64)
+                val srcP = password.toByteArray(Charsets.UTF_8)
+                System.arraycopy(srcP, 0, pBytes, 0, minOf(srcP.size, 63))
+
+                // Permitted commands per disassembly (btl %eax, %ecx against sessionState):
+                // Bit 2 (4): cmd = 2 (virtual multi-session separate login)
+                // Bit 1 (2): cmd = 1 (direct connect to console)
+                // Bit 0 (1): cmd = 0 (request console permission from active user)
+                val cmd = if ((sessionState and 4) != 0) 2 else 0
+
+                if (cmd == 2) {
+                    // cmd = 2: Virtual multi-session login
+                    val encUser = cipher.doFinal(uBytes)
+                    val encPass = cipher.doFinal(pBytes)
+                    val resp = ByteBuffer.allocate(202).order(ByteOrder.BIG_ENDIAN)
+                    resp.putShort(200.toShort()) // size = 200
+                    resp.putShort(2.toShort())   // version = 2
+                    resp.putInt(0)               // flags = 0
+                    resp.put(2.toByte())         // cmd = 2
+                    resp.put(0.toByte())         // pad
+                    resp.put(uBytes)             // clear username (64 bytes)
+                    resp.put(encUser)            // encrypted username (64 bytes)
+                    resp.put(encPass)            // encrypted password (64 bytes)
+
+                    output.write(resp.array())
+                    output.flush()
+                    log("S7: Sent SessionSelect Virtual Multi-Session (cmd=2, user='$username', 202 bytes)")
+                } else {
+                    // cmd = 1 or 0
+                    val resp = ByteBuffer.allocate(76).order(ByteOrder.BIG_ENDIAN)
+                    resp.putShort(74.toShort()) // size = 74
+                    resp.putShort(1.toShort())  // version = 1
+                    resp.putInt(0)              // flags = 0
+                    resp.put(cmd.toByte())      // cmd = 0 or 1
+                    resp.put(0.toByte()); resp.put(0.toByte()); resp.put(0.toByte()) // pad[3]
+                    resp.put(uBytes)            // username (64 bytes)
+
+                    output.write(resp.array())
+                    output.flush()
+                    log("S7: Sent SessionSelect console response (cmd=$cmd, user='$username', 76 bytes)")
+                }
+
+                // Read server response (82 bytes = u16 size 80 + 80 bytes)
+                val replySize = input.readUnsignedShort()
+                val replyBytes = ByteArray(replySize).also { input.readFully(it) }
+                val replyVersion = if (replySize >= 2) ((replyBytes[0].toInt() and 0xff) shl 8) or (replyBytes[1].toInt() and 0xff) else -1
+                val replyStatus = if (replySize >= 3) (replyBytes[2].toInt() and 0xff) else -1
+                log("S7: Received SessionSelect reply ($replySize bytes, version=$replyVersion, status=$replyStatus)")
+                check(replyStatus == 0) { "SessionSelect failed with status $replyStatus" }
+
+                // Now read the next message (0x44f Rekey message)
+                val msgType = input.readUnsignedByte()
+                val pad = input.readUnsignedByte()
+                val numRects = input.readUnsignedShort()
+                val rx = input.readUnsignedShort()
+                val ry = input.readUnsignedShort()
+                val rw = input.readUnsignedShort()
+                val rh = input.readUnsignedShort()
+                val encoding = input.readInt()
+                log("S7: Rekey header: msgType=$msgType pad=$pad numRects=$numRects rect=${rw}x$rh@$rx,$ry encoding=0x${Integer.toHexString(encoding)}")
+                check(msgType == 0) { "Expected FramebufferUpdate (0) for rekey, got $msgType" }
+                check(numRects == 1) { "Expected 1 rectangle for rekey, got $numRects" }
+                check(encoding == 0x44f) { "Expected rekey encoding 0x44f (1103), got 0x${Integer.toHexString(encoding)}" }
+                val rekeyPayload = ByteArray(36).also { input.readFully(it) }
+                log("S7: Received 0x44f Rekey payload (36 bytes, rect=${rw}x$rh@$rx,$ry)")
+                val layer = MacHevcRecordLayer.unwrapRekey(wrapKey, rekeyPayload)
+                recordLayer = layer
+                log("S7: Rekey unwrap success (generation=${layer.generation})")
+            } else {
+                // If not SessionSelect, then first2 are the first 2 bytes of the FramebufferUpdate header (msgType, pad)
+                val msgType = first2[0].toInt() and 0xff
+                val pad = first2[1].toInt() and 0xff
+                val numRects = input.readUnsignedShort()
+                val rx = input.readUnsignedShort()
+                val ry = input.readUnsignedShort()
+                val rw = input.readUnsignedShort()
+                val rh = input.readUnsignedShort()
+                val encoding = input.readInt()
+                log("S7: Direct rekey header: msgType=$msgType pad=$pad numRects=$numRects rect=${rw}x$rh@$rx,$ry encoding=0x${Integer.toHexString(encoding)}")
+                check(msgType == 0) { "Expected FramebufferUpdate (0) for rekey, got $msgType" }
+                check(numRects == 1) { "Expected 1 rectangle for rekey, got $numRects" }
+                check(encoding == 0x44f) { "Expected rekey encoding 0x44f (1103), got 0x${Integer.toHexString(encoding)}" }
+                val rekeyPayload = ByteArray(36).also { input.readFully(it) }
+                log("S7: Received 0x44f Rekey payload (36 bytes, rect=${rw}x$rh@$rx,$ry)")
+                val layer = MacHevcRecordLayer.unwrapRekey(wrapKey, rekeyPayload)
+                recordLayer = layer
+                log("S7: Rekey unwrap success (generation=${layer.generation})")
+            }
 
             // 4. SetMode(mode=1) (0x0a)
             output.write(byteArrayOf(0x0a, 0x00, 0x00, 0x01))
@@ -247,6 +342,7 @@ class MacHevcSession(
             // S8: Record Layer Active
             stage = "S8"
             log("S8: Record Layer ACTIVE")
+            val layer = checkNotNull(recordLayer) { "Rekey unwrap failed" }
 
             // 1. Encrypted SetEncodings (0x02)
             val encodings = buildSetEncodings(listOf(0x451, 0x453, 0x455, 0x456, 0x450, 0x3f2, 6, 0))
@@ -273,7 +369,7 @@ class MacHevcSession(
         }
     }
 
-    private fun buildDisplayConfiguration(w: Int, h: Int): ByteArray {
+    fun buildDisplayConfiguration(w: Int, h: Int, displayType: Int = 0): ByteArray {
         val totalLen = 196
         val messageSize = totalLen - 4 // 192
         val buf = ByteBuffer.allocate(totalLen).order(ByteOrder.BIG_ENDIAN)
@@ -288,10 +384,10 @@ class MacHevcSession(
         // Display descriptor (184 bytes: 0x9c + 1 * 0x1c)
         buf.putShort(184.toShort()) // display_info_size
         buf.put(ByteArray(120))     // display_info_region
-        buf.putInt(0)               // display_flags
-        buf.putInt(0)               // display_type
-        buf.putFloat(0f)            // physical_width_mm
-        buf.putFloat(0f)            // physical_height_mm
+        buf.putInt(if (displayType == 4) 1 else 0) // display_flags (bit 0 = dynamic resolution)
+        buf.putInt(displayType)     // display_type (0 = primary, 4 = virtual display)
+        buf.putFloat(369.45f)       // physical_width_mm
+        buf.putFloat(207.82f)       // physical_height_mm
         buf.putInt(w)               // max_width
         buf.putInt(h)               // max_height
         buf.putShort(0.toShort())   // current_mode_index
@@ -489,6 +585,32 @@ class MacHevcSession(
                     }
                 }
             }
+            0x14 -> { // MiscStatus (8 bytes: type + pad + body_len(4) + flags(1) + cmd)
+                val pad = stream.readByte()
+                val bodyLen = stream.readUnsignedShort()
+                val body = ByteArray(bodyLen)
+                stream.readFully(body)
+                val cmd = if (bodyLen >= 4) (((body[2].toInt() and 0xff) shl 8) or (body[3].toInt() and 0xff)) else -1
+                log("S9: Received MiscStatus (0x14) bodyLen=$bodyLen cmd=$cmd")
+            }
+            0x1c -> { // MediaStreamOptions answer
+                val pad = stream.readByte()
+                val msgSize = stream.readUnsignedShort()
+                val payload = ByteArray(msgSize)
+                stream.readFully(payload)
+                log("S9: Received MediaStreamOptions (0x1c) answer: msgSize=$msgSize payloadHex=${payload.take(32).joinToString("") { "%02x".format(it) }}")
+            }
+            0x1f -> { // ClipboardSend
+                val pad1 = stream.readByte()
+                val promise = stream.readByte()
+                val pad2 = stream.readByte()
+                val reserved = stream.readInt()
+                val uncompressedSize = stream.readInt()
+                val compressedSize = stream.readInt()
+                val compressed = ByteArray(compressedSize)
+                stream.readFully(compressed)
+                log("S9: Received ClipboardSend (0x1f): uncompressed=$uncompressedSize compressed=$compressedSize")
+            }
             else -> {
                 log("S9: Other RFB message type $msgType, ignoring per §12")
             }
@@ -540,7 +662,8 @@ class MacHevcSession(
         val totalLen = 20 + 16 + 46 * 2 + audioOffer.size + 46 * 2 + videoOffer.size
         val messageSize = totalLen - 4
         val buf = ByteBuffer.allocate(totalLen).order(ByteOrder.BIG_ENDIAN)
-        buf.putShort(0x1c.toShort()) // message_type = 0x1c
+        buf.put(0x1c.toByte()) // message_type = 0x1c
+        buf.put(0.toByte())    // reserved
         buf.putShort(messageSize.toShort())
         buf.putShort(1.toShort()) // version = 1
         buf.order(ByteOrder.LITTLE_ENDIAN)
@@ -567,6 +690,14 @@ class MacHevcSession(
         out.write(offer)
         out.flush()
         return offer
+    }
+
+    fun sendDisplayConfiguration(w: Int = width, h: Int = height, displayType: Int = 0) {
+        val out = checkNotNull(recordOut) { "Record stream not initialized" }
+        val config = buildDisplayConfiguration(w, h, displayType)
+        log("S9: Sending SetDisplayConfiguration (0x1d, ${config.size} bytes: ${w}x${h}, displayType=$displayType)")
+        out.write(config)
+        out.flush()
     }
 
     override fun close() {
