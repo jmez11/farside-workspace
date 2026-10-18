@@ -440,23 +440,21 @@ class MacHevcSession(
                 log("S7: Sent ViewerInfo (0x21) + 0x12 followup")
                 Thread.sleep(100)
 
+                if (cmd == 2) {
+                    // Send SetDisplayConfiguration for virtual display (displayType = 4)
+                    val vdc = buildDisplayConfiguration(1920, 1080, displayType = 4)
+                    output.write(vdc)
+                    output.flush()
+                    log("S7: Sent SetDisplayConfiguration (0x1d, ${vdc.size} bytes)")
+                }
+
                 // Send plaintext SetEncodings
                 output.write(buildSetEncodings(HP_ENCODINGS_FULL))
                 output.flush()
                 log("S7: Sent plaintext SetEncodings (HP_ENCODINGS_FULL)")
 
-                // Read 0x44f Rekey
-                val msgType = input.readUnsignedByte()
-                val pad = input.readUnsignedByte()
-                val numRects = input.readUnsignedShort()
-                val rx = input.readUnsignedShort()
-                val ry = input.readUnsignedShort()
-                val rw = input.readUnsignedShort()
-                val rh = input.readUnsignedShort()
-                val encoding = input.readInt()
-                check(encoding == 0x44f) { "Expected rekey encoding 0x44f (1103), got 0x${Integer.toHexString(encoding)}" }
-                val rekeyPayload = ByteArray(36).also { input.readFully(it) }
-                val layer = MacHevcRecordLayer.unwrapRekey(wrapKey, rekeyPayload)
+                // Read until 0x44f Rekey (handles 0x14 UserSessionChanged and preceding rects)
+                val layer = readUntilEnc1103(input, wrapKey)
                 recordLayer = layer
                 log("S7: Rekey unwrap success (generation=${layer.generation})")
             } else {
@@ -505,13 +503,25 @@ class MacHevcSession(
             layer.writeRecord(output, fbur)
             log("S8: Sent encrypted 0x03 FBU request")
 
-            // Decrypt first record from server
-            val record = layer.readRecord(input)
-            val recType = record[0].toInt() and 0xff
-            log("S8 GATE PASS: Decrypted first record (type=0x${Integer.toHexString(recType)}, len=${record.size})")
+            // Decrypt records from server until we find canvas dimensions / 0x1c answer
+            var firstRecord: ByteArray? = null
+            var dims: Triple<Int, Int, Int>? = null
+            for (attempt in 0 until 10) {
+                val rec = layer.readRecord(input)
+                val recType = rec[0].toInt() and 0xff
+                log("S8: Decrypted record $attempt (type=0x${Integer.toHexString(recType)}, len=${rec.size})")
+                if (firstRecord == null) firstRecord = rec
+                val d = MacHevcOffers.extractCanvasDims(rec)
+                if (d != null) {
+                    dims = d
+                    firstRecord = rec
+                    break
+                }
+            }
+            val record = firstRecord ?: ByteArray(0)
+            log("S8 GATE PASS: Processed encrypted handshake records (len=${record.size})")
 
-            // Check if first record contains canvas dimensions
-            val dims = MacHevcOffers.extractCanvasDims(record)
+            // Check if record contains canvas dimensions
             if (dims != null) {
                 log("S8: Extracted canvas dimensions: ${dims.first}x${dims.second} (tiles=${dims.third})")
                 width = dims.first
@@ -543,39 +553,118 @@ class MacHevcSession(
         }
     }
 
-    fun buildDisplayConfiguration(w: Int, h: Int, displayType: Int = 0): ByteArray {
-        val totalLen = 196
-        val messageSize = totalLen - 4 // 192
+    private fun readUntilEnc1103(input: DataInputStream, wrapKey: ByteArray): MacHevcRecordLayer {
+        var layer: MacHevcRecordLayer? = null
+        while (layer == null) {
+            val msgType = input.readUnsignedByte()
+            if (msgType == 0x14) {
+                // UserSessionChanged (8 bytes total: type + 7 bytes)
+                val skip = ByteArray(7)
+                input.readFully(skip)
+                log("S7: Received UserSessionChanged (0x14)")
+                continue
+            }
+            if (msgType == 0x00) {
+                // FramebufferUpdate
+                val pad = input.readUnsignedByte()
+                val numRects = input.readUnsignedShort()
+                log("S7: Received FramebufferUpdate (0x00) with $numRects rects")
+                for (i in 0 until numRects) {
+                    val rx = input.readUnsignedShort()
+                    val ry = input.readUnsignedShort()
+                    val rw = input.readUnsignedShort()
+                    val rh = input.readUnsignedShort()
+                    val enc = input.readInt()
+                    if (enc == 0x44f || enc == 1103) {
+                        val rekey = ByteArray(36).also { input.readFully(it) }
+                        layer = MacHevcRecordLayer.unwrapRekey(wrapKey, rekey)
+                        log("S7: Found 0x44f Rekey in rect $i of $numRects, unwrapped successfully (generation=${layer.generation})")
+                        break
+                    } else if (enc == 1010 || enc == 1011) {
+                        val sz = input.readUnsignedShort()
+                        val skip = ByteArray(sz)
+                        input.readFully(skip)
+                    }
+                }
+                if (layer != null) {
+                    break
+                }
+            } else {
+                log("S7: Unexpected msgType 0x${Integer.toHexString(msgType)} while awaiting Rekey")
+            }
+        }
+        return checkNotNull(layer) { "Server did not send enc1103 Rekey" }
+    }
+
+    fun buildDisplayConfiguration(
+        w: Int = 1920,
+        h: Int = 1080,
+        displayType: Int = 4,
+        hidpiScale: Float = 2.0f,
+        hdr: Boolean = false,
+        displayName: String = "Farside Virtual Display"
+    ): ByteArray {
+        val modeCount = 5
+        val diSize = 0x9c + 28 * modeCount // 296
+        val msgSize = 8 + diSize // 304
+        val totalLen = 4 + msgSize // 308
         val buf = ByteBuffer.allocate(totalLen).order(ByteOrder.BIG_ENDIAN)
+
         // Front header (12 bytes)
-        buf.put(0x1d.toByte()) // type
-        buf.put(0.toByte())    // reserved
-        buf.putShort(messageSize.toShort())
-        buf.putShort(1.toShort()) // version
-        buf.putShort(1.toShort()) // display_count = 1
-        buf.putInt(0)             // flags = 0
+        buf.put(0x1d.toByte())        // message_type = 29 (0x1d)
+        buf.put(0.toByte())           // padding = 0
+        buf.putShort(msgSize.toShort()) // message_size = 304
+        buf.putShort(1.toShort())     // version = 1
+        buf.putShort(1.toShort())     // display_count = 1
+        buf.putInt(0)                 // flags = 0
 
-        // Display descriptor (184 bytes: 0x9c + 1 * 0x1c)
-        buf.putShort(184.toShort()) // display_info_size
-        buf.put(ByteArray(120))     // display_info_region
-        buf.putInt(if (displayType == 4) 1 else 0) // display_flags (bit 0 = dynamic resolution)
-        buf.putInt(displayType)     // display_type (0 = primary, 4 = virtual display)
-        buf.putFloat(369.45f)       // physical_width_mm
-        buf.putFloat(207.82f)       // physical_height_mm
-        buf.putInt(w)               // max_width
-        buf.putInt(h)               // max_height
-        buf.putShort(0.toShort())   // current_mode_index
-        buf.putShort(0.toShort())   // preferred_mode_index
-        buf.putInt(0)               // rotations = 0
-        buf.putShort(1.toShort())   // mode_count = 1
+        // Display descriptor (296 bytes)
+        buf.putShort(diSize.toShort()) // display_info_size = 296
+        val nameBytes = displayName.toByteArray(Charsets.UTF_8).let {
+            if (it.size > 119) it.copyOfRange(0, 119) else it
+        }
+        val nameRegion = ByteArray(120)
+        System.arraycopy(nameBytes, 0, nameRegion, 0, nameBytes.size)
+        buf.put(nameRegion)           // 120 bytes display_info_region
 
-        // Mode table (1 entry x 28 bytes)
-        buf.putInt(w)               // width
-        buf.putInt(h)               // height
-        buf.putInt(w)               // scaled_width
-        buf.putInt(h)               // scaled_height
-        buf.putDouble(60.0)         // refresh_rate_hz
-        buf.putInt(0)               // flags
+        buf.putInt(1)                 // display_flags = 1 (DYNAMIC_RESOLUTION)
+        buf.putInt(displayType)       // display_type (4 = virtual display)
+        buf.putFloat(369.45456f)      // physical_width_mm
+        buf.putFloat(207.81818f)      // physical_height_mm
+        buf.putInt(3840)              // max_width = 3840
+        buf.putInt(2160)              // max_height = 2160
+        buf.putShort(0.toShort())     // current_mode_index = 0
+        buf.putShort(0.toShort())     // preferred_mode_index = 0
+        buf.putInt(7)                 // rotations / reserved = 7
+        buf.putShort(modeCount.toShort()) // mode_count = 5
+
+        // Heterogeneous modes
+        val nativeModes = arrayOf(
+            intArrayOf(3840, 2160, 1920, 1080),
+            intArrayOf(2880, 1800, 1440, 900),
+            intArrayOf(3840, 2160, 1920, 1080),
+            intArrayOf(2880, 1620, 1440, 810),
+            intArrayOf(2624, 1696, 1312, 848)
+        )
+        val sx = if (w > 0) w.toDouble() / 1920.0 else 1.0
+        val sy = if (h > 0) h.toDouble() / 1080.0 else 1.0
+        val modeFlags = if (hdr) 1 else 0
+
+        for (i in 0 until modeCount) {
+            val base = nativeModes[i]
+            val msw = (base[2] * sx + 0.5).toInt()
+            val msh = (base[3] * sy + 0.5).toInt()
+            val mw = (msw * hidpiScale + 0.5).toInt()
+            val mh = (msh * hidpiScale + 0.5).toInt()
+
+            buf.putInt(mw)
+            buf.putInt(mh)
+            buf.putInt(msw)
+            buf.putInt(msh)
+            buf.putDouble(60.0)
+            buf.putInt(modeFlags)
+        }
+
         return buf.array()
     }
 
