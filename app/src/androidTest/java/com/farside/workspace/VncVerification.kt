@@ -10,6 +10,7 @@ import android.view.TextureView
 import android.view.View
 import android.view.ViewGroup
 import com.farside.workspace.data.*
+import com.farside.workspace.tunnel.CloudflaredTunnel
 import com.farside.workspace.utils.NetworkScanner
 import java.io.*
 import java.net.ServerSocket
@@ -44,6 +45,22 @@ internal class VncVerification(private val test: Instrumentation) {
         main { image = checkNotNull(texture(activity.window.decorView)?.bitmap) }
         File(test.targetContext.cacheDir, name).outputStream().use { image.compress(Bitmap.CompressFormat.PNG, 100, it) }
         return image
+    }
+    private inline fun <T> withVncEndpoint(profile: ConnectionProfile, block: (String, Int) -> T): T {
+        val tunnel = if (profile.useCloudflare || profile.proxyType == ProxyType.CLOUDFLARED) {
+            CloudflaredTunnel(test.targetContext)
+        } else null
+        var host = profile.host
+        var port = profile.port
+        if (tunnel != null) {
+            port = tunnel.start(profile.host, profile.cloudflaredParameters, {}, {}, accessSubcommand = "tcp")
+            host = "127.0.0.1"
+        }
+        return try {
+            block(host, port)
+        } finally {
+            tunnel?.close()
+        }
     }
     fun run(mode: String, profileId: String?, password: String? = null): String {
         results.writeText("")
@@ -136,93 +153,117 @@ internal class VncVerification(private val test: Instrumentation) {
             } else if (mode == "macHevcPhase1") {
                 val pm = ProfileManager(test.targetContext)
                 val profile = pm.getProfiles().firstOrNull {
-                    it.type == ConnectionType.VNC && (profileId == null || it.id == profileId || it.name == profileId)
+                    it.type == ConnectionType.VNC && (profileId == null || it.id == profileId.trim() || it.name.trim() == profileId.trim())
                 } ?: pm.getProfiles().first { it.type == ConnectionType.VNC }
                 val credential = pm.getCredentials().single { it.id == profile.credentialId }
-                MacHevcSession(profile.host, profile.port, credential.user, credential.pass) { logLine ->
-                    record(logLine)
-                }.use { session ->
-                    val firstRecord = session.start()
-                    check(session.stage == "S8") { "Did not reach S8: ${session.stage}" }
-                    check(session.recordLayer != null) { "Record layer null" }
-                    check(firstRecord.isNotEmpty()) { "Empty first record" }
-                    val recType = firstRecord[0].toInt() and 0xff
-                    record("PASS: Mac HEVC Phase 1 Gate - reached S8 (record active), decrypted control record type=0x${Integer.toHexString(recType)} len=${firstRecord.size}, recvSeq=${session.recordLayer!!.recvSeq}")
+                withVncEndpoint(profile) { host, port ->
+                    MacHevcSession(host, port, credential.user, credential.pass) { logLine ->
+                        record(logLine)
+                    }.use { session ->
+                        val firstRecord = session.start()
+                        check(session.stage == "S8") { "Did not reach S8: ${session.stage}" }
+                        check(session.recordLayer != null) { "Record layer null" }
+                        check(firstRecord.isNotEmpty()) { "Empty first record" }
+                        val recType = firstRecord[0].toInt() and 0xff
+                        record("PASS: Mac HEVC Phase 1 Gate - reached S8 (record active), decrypted control record type=0x${Integer.toHexString(recType)} len=${firstRecord.size}, recvSeq=${session.recordLayer!!.recvSeq}")
 
-                    // Negative gate: any integrity failure MUST close session, never continue
-                    val layer = session.recordLayer!!
-                    val dummyOuter = layer.encryptRecord(byteArrayOf(0x14, 0, 0, 0))
-                    val corruptedCiphertext = dummyOuter.copyOfRange(2, dummyOuter.size)
-                    corruptedCiphertext[corruptedCiphertext.size - 5] = (corruptedCiphertext[corruptedCiphertext.size - 5].toInt() xor 0x01).toByte()
-                    var integrityCaught = false
-                    try {
-                        layer.decryptRecord(corruptedCiphertext)
-                    } catch (e: MacHevcIntegrityException) {
-                        integrityCaught = true
+                        // Negative gate: any integrity failure MUST close session, never continue
+                        val layer = session.recordLayer!!
+                        val dummyOuter = layer.encryptRecord(byteArrayOf(0x14, 0, 0, 0))
+                        val corruptedCiphertext = dummyOuter.copyOfRange(2, dummyOuter.size)
+                        corruptedCiphertext[corruptedCiphertext.size - 5] = (corruptedCiphertext[corruptedCiphertext.size - 5].toInt() xor 0x01).toByte()
+                        var integrityCaught = false
+                        try {
+                            layer.decryptRecord(corruptedCiphertext)
+                        } catch (e: MacHevcIntegrityException) {
+                            integrityCaught = true
+                        }
+                        check(integrityCaught) { "Negative gate failed: integrity mismatch did not throw MacHevcIntegrityException" }
+                        record("PASS: Mac HEVC Phase 1 Negative Gate - integrity mismatch throws MacHevcIntegrityException and halts processing")
                     }
-                    check(integrityCaught) { "Negative gate failed: integrity mismatch did not throw MacHevcIntegrityException" }
-                    record("PASS: Mac HEVC Phase 1 Negative Gate - integrity mismatch throws MacHevcIntegrityException and halts processing")
                 }
             } else if (mode == "macHevcPhase2") {
                 val pm = ProfileManager(test.targetContext)
                 val profile = pm.getProfiles().firstOrNull {
-                    it.type == ConnectionType.VNC && (profileId == null || it.id == profileId || it.name == profileId)
+                    it.type == ConnectionType.VNC && (profileId == null || it.id == profileId.trim() || it.name.trim() == profileId.trim())
                 } ?: pm.getProfiles().first { it.type == ConnectionType.VNC }
                 val credential = pm.getCredentials().single { it.id == profile.credentialId }
-                MacHevcSession(profile.host, profile.port, credential.user, credential.pass) { logLine ->
-                    record(logLine)
-                }.use { session ->
-                    val firstRecord = session.start()
-                    check(session.stage == "S8") { "Did not reach S8: ${session.stage}" }
+                withVncEndpoint(profile) { host, port ->
+                    MacHevcSession(host, port, credential.user, credential.pass) { logLine ->
+                        record(logLine)
+                    }.use { session ->
+                        val firstRecord = session.start()
+                        check(session.stage == "S8") { "Did not reach S8: ${session.stage}" }
 
-                    // Initialize streaming record layer and transition to S9
-                    session.initStreamingLayer(firstRecord)
-                    check(session.stage == "S9") { "Did not reach S9: ${session.stage}" }
+                        // Initialize streaming record layer and transition to S9
+                        session.initStreamingLayer(firstRecord)
+                        check(session.stage == "S9") { "Did not reach S9: ${session.stage}" }
 
-                    // Read first framebuffer update (reassembling multi-record zlib stream)
-                    val update1 = session.readNextFramebufferUpdate()
-                    check(update1.messageType == 0) { "Expected FramebufferUpdate (0), got ${update1.messageType}" }
-                    check(update1.decompressedBytes > 0) { "No pixels decompressed" }
-                    check(update1.zlibRectCount > 0) { "No zlib rects decompressed" }
-                    record("PASS: S9 first update: ${update1.decompressedBytes} bytes (${update1.width}x${update1.height}), encodings=${update1.encodingsSeen}")
+                        // Read first framebuffer update (reassembling multi-record zlib stream)
+                        val update1 = session.readNextFramebufferUpdate()
+                        check(update1.messageType == 0) { "Expected FramebufferUpdate (0), got ${update1.messageType}" }
+                        check(update1.decompressedBytes > 0) { "No pixels decompressed" }
+                        check(update1.zlibRectCount > 0) { "No zlib rects decompressed" }
+                        record("PASS: S9 first update: ${update1.decompressedBytes} bytes (${update1.width}x${update1.height}), encodings=${update1.encodingsSeen}")
 
-                    // Send pointer motion over encrypted record layer
-                    session.sendPointer(100, 100, 0)
-                    session.sendPointer(120, 120, 0)
+                        // Send pointer motion over encrypted record layer
+                        session.sendPointer(100, 100, 0)
+                        session.sendPointer(120, 120, 0)
 
-                    // Request and receive next update
-                    session.requestUpdate(incremental = true)
-                    val update2 = session.readNextFramebufferUpdate()
-                    record("PASS: S9 steady-state update 2: ${update2.decompressedBytes} bytes, encodings=${update2.encodingsSeen}")
+                        // Request and receive next update
+                        session.requestUpdate(incremental = true)
+                        val update2 = session.readNextFramebufferUpdate()
+                        record("PASS: S9 steady-state update 2: ${update2.decompressedBytes} bytes, encodings=${update2.encodingsSeen}")
 
-                    record("PASS: Mac HEVC Phase 2 Gate - reached steady state (S9) on framebuffer path over encrypted record layer, decoded desktop frames, handled vendor encodings")
+                        record("PASS: Mac HEVC Phase 2 Gate - reached steady state (S9) on framebuffer path over encrypted record layer, decoded desktop frames, handled vendor encodings")
+                    }
                 }
             } else if (mode == "macHevcPhase3") {
                 val pm = ProfileManager(test.targetContext)
                 val profile = pm.getProfiles().firstOrNull {
-                    it.type == ConnectionType.VNC && (profileId == null || it.id == profileId || it.name == profileId)
+                    it.type == ConnectionType.VNC && (profileId == null || it.id == profileId.trim() || it.name.trim() == profileId.trim())
                 } ?: pm.getProfiles().first { it.type == ConnectionType.VNC }
                 val credential = pm.getCredentials().single { it.id == profile.credentialId }
-                MacHevcSession(profile.host, profile.port, credential.user, credential.pass) { logLine ->
-                    record(logLine)
-                }.use { session ->
-                    val firstRecord = session.start()
-                    check(session.stage == "S8") { "Did not reach S8: ${session.stage}" }
-                    session.initStreamingLayer(firstRecord)
-                    check(session.stage == "S9") { "Did not reach S9: ${session.stage}" }
+                withVncEndpoint(profile) { host, port ->
+                    MacHevcSession(host, port, credential.user, credential.pass) { logLine ->
+                        record(logLine)
+                    }.use { session ->
+                        val firstRecord = session.start()
+                        check(session.stage == "S8") { "Did not reach S8: ${session.stage}" }
+                        session.initStreamingLayer(firstRecord)
+                        check(session.stage == "S9") { "Did not reach S9: ${session.stage}" }
 
-                    val update1 = session.readNextFramebufferUpdate()
-                    record("S9 Framebuffer baseline: ${update1.decompressedBytes} bytes, encodings=${update1.encodingsSeen}")
+                        val update1 = session.readNextFramebufferUpdate()
+                        record("S9 Framebuffer baseline: ${update1.decompressedBytes} bytes, encodings=${update1.encodingsSeen}")
 
-                    // Send 0x1c MediaStreamOptions offer
-                    session.sendMediaStreamOffer()
+                        // Step 1: Probe 0x1d SetDisplayConfiguration (primary display)
+                        try {
+                            session.sendDisplayConfiguration(session.width, session.height, displayType = 0)
+                            session.requestUpdate(incremental = true)
+                            val resp1d = session.readNextFramebufferUpdate()
+                            record("S9 0x1d (displayType=0) result: msgType=${resp1d.messageType}, encodings=${resp1d.encodingsSeen}")
+                        } catch (e: Exception) {
+                            record("S9 0x1d (displayType=0) error: ${e.javaClass.simpleName}: ${e.message}")
+                        }
 
-                    // Attempt to read server response
-                    try {
-                        val response = session.readNextFramebufferUpdate()
-                        record("S9 Media response: msgType=${response.messageType}, encodings=${response.encodingsSeen}")
-                    } catch (e: Exception) {
-                        record("S9 Media exchange result: server terminated stream with ${e.javaClass.simpleName}: ${e.message}")
+                        // Step 2: Probe 0x1d SetDisplayConfiguration (virtual display: displayType = 4)
+                        try {
+                            session.sendDisplayConfiguration(1920, 1080, displayType = 4)
+                            session.requestUpdate(incremental = true)
+                            val respVirt = session.readNextFramebufferUpdate()
+                            record("S9 0x1d (displayType=4 virtual) result: msgType=${respVirt.messageType}, encodings=${respVirt.encodingsSeen}")
+                        } catch (e: Exception) {
+                            record("S9 0x1d (displayType=4 virtual) error: ${e.javaClass.simpleName}: ${e.message}")
+                        }
+
+                        // Step 3: Probe 0x1c MediaStreamOptions offer
+                        try {
+                            session.sendMediaStreamOffer()
+                            val resp1c = session.readNextFramebufferUpdate()
+                            record("S9 0x1c Media response: msgType=${resp1c.messageType}, encodings=${resp1c.encodingsSeen}")
+                        } catch (e: Exception) {
+                            record("S9 0x1c Media exchange error: ${e.javaClass.simpleName}: ${e.message}")
+                        }
                     }
                 }
             } else if (mode == "danglingPair") {
@@ -255,7 +296,7 @@ internal class VncVerification(private val test: Instrumentation) {
                 session(profile, null)
             } else if (mode == "live" || mode == "macPicker" || mode == "pointer" || mode == "login" || mode == "macLogin") {
                 var profile = ProfileManager(test.targetContext).getProfiles().firstOrNull {
-                    it.type == ConnectionType.VNC && (profileId == null || it.id == profileId || it.name == profileId)
+                    it.type == ConnectionType.VNC && (profileId == null || it.id == profileId.trim() || it.name.trim() == profileId.trim())
                 } ?: error("Save a VNC Mac profile and pass -e vncProfile <name/id>.")
                 if (mode == "macPicker") {
                     val found = runBlocking { NetworkScanner.scanLocalNetworkForVnc(test.targetContext) }
