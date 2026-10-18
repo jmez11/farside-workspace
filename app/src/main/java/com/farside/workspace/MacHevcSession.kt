@@ -17,6 +17,8 @@ import java.security.KeyFactory
 import java.security.KeyPairGenerator
 import java.security.MessageDigest
 import java.security.SecureRandom
+import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
 import java.util.zip.Inflater
 import javax.crypto.Cipher
 import javax.crypto.KeyAgreement
@@ -76,6 +78,9 @@ class MacHevcSession(
     var recordOut: DataOutputStream? = null
         private set
     private val zlibInflater = Inflater()
+    private val writerExecutor = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "MacHevc-Writer").apply { isDaemon = true }
+    }
 
     @Volatile var currentSurface: Surface? = null
     var onResolutionChanged: ((Int, Int) -> Unit)? = null
@@ -413,7 +418,7 @@ class MacHevcSession(
                     if (cmd == 2) {
                         throw java.io.IOException("SessionSelect multi-session login timed out awaiting macOS off-console agent. Verify Fast User Switching is enabled in macOS System Settings.", e)
                     } else {
-                        throw e
+                        throw java.io.IOException("Timed out waiting for Mac user to accept screen sharing request. Check the Mac screen and click 'Share Display'.", e)
                     }
                 }
                 val replyBytes = ByteArray(replySize).also { input.readFully(it) }
@@ -813,9 +818,19 @@ class MacHevcSession(
                             } else {
                                 log("S9: AppleDisplayLayout (${data.size} bytes), re-arming with 0x09 and 0x03")
                             }
-                            recordOut?.write(buildAutoFrameBufferUpdate(width, height))
-                            recordOut?.write(buildFramebufferUpdateRequest(width, height))
-                            recordOut?.flush()
+                            if (stage != "CLOSED" && !writerExecutor.isShutdown) {
+                                try {
+                                    writerExecutor.execute {
+                                        try {
+                                            recordOut?.write(buildAutoFrameBufferUpdate(width, height))
+                                            recordOut?.write(buildFramebufferUpdateRequest(width, height))
+                                            recordOut?.flush()
+                                        } catch (e: Exception) {
+                                            log("Error sending FBU re-arm: ${e.message}")
+                                        }
+                                    }
+                                } catch (ignored: RejectedExecutionException) {}
+                            }
                         }
                         0x453 -> { // VendorKeysymEncoding
                             val data = ByteArray(22)
@@ -909,40 +924,67 @@ class MacHevcSession(
     }
 
     fun sendPointer(x: Int, y: Int, buttonMask: Int = 0) {
-        val out = checkNotNull(recordOut) { "Record stream not initialized" }
-        val buf = ByteBuffer.allocate(6).order(ByteOrder.BIG_ENDIAN)
-        buf.put(5.toByte()) // PointerEvent
-        buf.put(buttonMask.toByte())
-        buf.putShort(x.toShort())
-        buf.putShort(y.toShort())
-        out.write(buf.array())
-        out.flush()
-        log("S9: Sent PointerEvent(x=$x, y=$y, mask=$buttonMask)")
+        if (stage == "CLOSED" || writerExecutor.isShutdown) return
+        try {
+            writerExecutor.execute {
+                try {
+                    val out = recordOut ?: return@execute
+                    val buf = ByteBuffer.allocate(6).order(ByteOrder.BIG_ENDIAN)
+                    buf.put(5.toByte()) // PointerEvent
+                    buf.put(buttonMask.toByte())
+                    buf.putShort(x.toShort())
+                    buf.putShort(y.toShort())
+                    out.write(buf.array())
+                    out.flush()
+                    log("S9: Sent PointerEvent(x=$x, y=$y, mask=$buttonMask)")
+                } catch (e: Exception) {
+                    log("sendPointer error: ${e.message}")
+                }
+            }
+        } catch (ignored: RejectedExecutionException) {}
     }
 
     fun requestUpdate(incremental: Boolean = true) {
-        val out = checkNotNull(recordOut) { "Record stream not initialized" }
-        val fbur = if (incremental) {
-            val buf = ByteBuffer.allocate(10).order(ByteOrder.BIG_ENDIAN)
-            buf.put(3.toByte())
-            buf.put(1.toByte()) // incremental = 1
-            buf.putShort(0); buf.putShort(0)
-            buf.putShort(width.toShort()); buf.putShort(height.toShort())
-            buf.array()
-        } else {
-            buildFramebufferUpdateRequest(width, height)
-        }
-        out.write(fbur)
-        out.flush()
-        log("S9: Requested FramebufferUpdate (incremental=$incremental)")
+        if (stage == "CLOSED" || writerExecutor.isShutdown) return
+        try {
+            writerExecutor.execute {
+                try {
+                    val out = recordOut ?: return@execute
+                    val fbur = if (incremental) {
+                        val buf = ByteBuffer.allocate(10).order(ByteOrder.BIG_ENDIAN)
+                        buf.put(3.toByte())
+                        buf.put(1.toByte()) // incremental = 1
+                        buf.putShort(0); buf.putShort(0)
+                        buf.putShort(width.toShort()); buf.putShort(height.toShort())
+                        buf.array()
+                    } else {
+                        buildFramebufferUpdateRequest(width, height)
+                    }
+                    out.write(fbur)
+                    out.flush()
+                    log("S9: Requested FramebufferUpdate (incremental=$incremental)")
+                } catch (e: Exception) {
+                    log("requestUpdate error: ${e.message}")
+                }
+            }
+        } catch (ignored: RejectedExecutionException) {}
     }
 
     fun sendDisplayConfiguration(w: Int = width, h: Int = height, displayType: Int = 0) {
-        val out = checkNotNull(recordOut) { "Record stream not initialized" }
-        val config = buildDisplayConfiguration(w, h, displayType)
-        log("S9: Sending SetDisplayConfiguration (0x1d, ${config.size} bytes: ${w}x${h}, displayType=$displayType)")
-        out.write(config)
-        out.flush()
+        if (stage == "CLOSED" || writerExecutor.isShutdown) return
+        try {
+            writerExecutor.execute {
+                try {
+                    val out = recordOut ?: return@execute
+                    val config = buildDisplayConfiguration(w, h, displayType)
+                    log("S9: Sending SetDisplayConfiguration (0x1d, ${config.size} bytes: ${w}x${h}, displayType=$displayType)")
+                    out.write(config)
+                    out.flush()
+                } catch (e: Exception) {
+                    log("sendDisplayConfiguration error: ${e.message}")
+                }
+            }
+        } catch (ignored: RejectedExecutionException) {}
     }
 
     fun sendMediaStreamOffer(tilesPerFrame: Int = 1, audioEnabled: Boolean = false): ByteArray {
@@ -977,15 +1019,24 @@ class MacHevcSession(
     }
 
     fun sendKeyEvent(keysym: Int, isDown: Boolean) {
-        val out = recordOut ?: return
-        val buf = ByteBuffer.allocate(8).order(ByteOrder.BIG_ENDIAN)
-        buf.put(4.toByte()) // KeyEvent
-        buf.put(if (isDown) 1.toByte() else 0.toByte())
-        buf.putShort(0.toShort()) // pad
-        buf.putInt(keysym)
-        out.write(buf.array())
-        out.flush()
-        log("S9: Sent KeyEvent(keysym=0x${Integer.toHexString(keysym)}, down=$isDown)")
+        if (stage == "CLOSED" || writerExecutor.isShutdown) return
+        try {
+            writerExecutor.execute {
+                try {
+                    val out = recordOut ?: return@execute
+                    val buf = ByteBuffer.allocate(8).order(ByteOrder.BIG_ENDIAN)
+                    buf.put(4.toByte()) // KeyEvent
+                    buf.put(if (isDown) 1.toByte() else 0.toByte())
+                    buf.putShort(0.toShort()) // pad
+                    buf.putInt(keysym)
+                    out.write(buf.array())
+                    out.flush()
+                    log("S9: Sent KeyEvent(keysym=0x${Integer.toHexString(keysym)}, down=$isDown)")
+                } catch (e: Exception) {
+                    log("sendKeyEvent error: ${e.message}")
+                }
+            }
+        } catch (ignored: RejectedExecutionException) {}
     }
 
     @Volatile private var isStreaming = false
@@ -1065,6 +1116,9 @@ class MacHevcSession(
 
     override fun close() {
         stopStreaming()
+        try {
+            writerExecutor.shutdownNow()
+        } catch (ignored: Exception) {}
         videoPipeline?.close()
         videoPipeline = null
         zlibInflater.end()
