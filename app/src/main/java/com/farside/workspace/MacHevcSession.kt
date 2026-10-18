@@ -173,7 +173,10 @@ class MacHevcSession(
             val types = ByteArray(count).also { input.readFully(it) }
             val typeList = types.map { it.toInt() and 0xff }
             log("S2: Security types offered: $typeList")
-            check(typeList.contains(30)) { "Server did not offer Apple DH type 30" }
+            if (!typeList.contains(30)) {
+                log("S2: Server did not offer Apple DH type 30 (offered: $typeList)")
+                throw VncAuthenticationException()
+            }
 
             // S3: Select Type 30
             stage = "S3"
@@ -232,7 +235,10 @@ class MacHevcSession(
             // S5: SecurityResult
             stage = "S5"
             val secResult = input.readInt()
-            check(secResult == 0) { "SecurityResult non-zero: $secResult" }
+            if (secResult != 0) {
+                log("S5: SecurityResult failed ($secResult)")
+                throw VncAuthenticationException()
+            }
             log("S5: SecurityResult = 0 (Authentication Success)")
 
             // S6: ClientInit & ServerInit
@@ -357,7 +363,10 @@ class MacHevcSession(
                 val replyVersion = if (replySize >= 2) ((replyBytes[0].toInt() and 0xff) shl 8) or (replyBytes[1].toInt() and 0xff) else -1
                 val replyStatus = if (replySize >= 3) (replyBytes[2].toInt() and 0xff) else -1
                 log("S7: Received SessionSelect reply ($replySize bytes, version=$replyVersion, status=$replyStatus)")
-                check(replyStatus == 0) { "SessionSelect failed with status $replyStatus" }
+                if (replyStatus != 0) {
+                    val detail = if (replyStatus == 1) "User rejected screen sharing permission" else "SessionSelect status $replyStatus"
+                    throw java.io.IOException("Mac Screen Sharing declined connection ($detail)")
+                }
 
                 // Now read the next message (0x44f Rekey message)
                 val msgType = input.readUnsignedByte()
