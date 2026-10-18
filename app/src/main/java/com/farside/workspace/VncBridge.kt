@@ -28,6 +28,7 @@ class VncBridge : DesktopSessionBridge {
     @Volatile override var clipboardListener: ((String) -> Unit)? = null
     @Volatile internal var disconnectListener: ((Int, Boolean) -> Unit)? = null
     private var active = 0L
+    private var macHevcSession: MacHevcSession? = null
     private val callbacks = android.os.Handler(android.os.Looper.getMainLooper())
     private val heldPrintable = mutableMapOf<Int, Int>()
 
@@ -36,6 +37,23 @@ class VncBridge : DesktopSessionBridge {
         httpProxy: ConnectionProfile? = null): Long {
         check(active == 0L)
         require(port in 1..65535)
+        if (httpProxy?.expMacHevc == true) {
+            val session = MacHevcSession(host.removeSurrounding("[", "]"), port, username, password) { line ->
+                Log.i("MacHevcBridge", line)
+            }
+            val firstRecord = session.start()
+            session.initStreamingLayer(firstRecord)
+            session.setSurface(surface)
+            session.onResolutionChanged = { w, h ->
+                Log.i("MacHevcBridge", "Resolution changed to ${w}x${h}")
+            }
+            session.startStreaming(surface) { error ->
+                callbacks.post { disconnectListener?.invoke(R.string.vnc_server_disconnected, true) }
+            }
+            macHevcSession = session
+            active = 0xCAFE0001L
+            return active
+        }
         if (authMode == VncAuthMode.VNC_PASSWORD) {
             if (!(password.isNotEmpty() && password.toByteArray(Charsets.ISO_8859_1).size <= 8 && password.all { it.code in 1..255 }))
                 throw LocalizableException(R.string.vnc_password_latin1)
@@ -122,28 +140,47 @@ class VncBridge : DesktopSessionBridge {
     }
     @Synchronized fun disconnect(instance: Long) {
         if (instance == 0L || instance != active) return
-        nativeDisconnect(instance)
+        if (macHevcSession != null) {
+            macHevcSession?.close()
+            macHevcSession = null
+        } else {
+            nativeDisconnect(instance)
+        }
         active = 0L
         heldPrintable.clear()
     }
-    @Synchronized fun setSurface(instance: Long, surface: Surface?) { if (instance != 0L && instance == active) nativeSetSurface(instance, surface) }
+    @Synchronized fun setSurface(instance: Long, surface: Surface?) {
+        if (instance != 0L && instance == active) {
+            if (macHevcSession != null) macHevcSession?.setSurface(surface)
+            else nativeSetSurface(instance, surface)
+        }
+    }
     @Synchronized fun sendPointerEvent(instance: Long, x: Int, y: Int, buttonMask: Int) {
-        if (instance != 0L && instance == active) nativePointer(instance, x, y, buttonMask)
+        if (instance != 0L && instance == active) {
+            if (macHevcSession != null) macHevcSession?.sendPointer(x, y, buttonMask)
+            else nativePointer(instance, x, y, buttonMask)
+        }
     }
     @Synchronized override fun sendMouseEvent(instance: Long, x: Int, y: Int, flags: Int) {
-        if (instance != 0L && instance == active) nativeMouse(instance, x, y, flags)
+        if (instance != 0L && instance == active) {
+            if (macHevcSession != null) macHevcSession?.sendMouseEvent(x, y, flags)
+            else nativeMouse(instance, x, y, flags)
+        }
     }
     /** XT scancodes from the shared strip map to X11 keysyms, including Command/Super. */
     @Synchronized override fun sendKeyEvent(instance: Long, scancode: Int, isDown: Boolean) {
         if (instance == 0L || instance != active) return
-        xtKeysym(scancode)?.let { nativeKey(instance, it, isDown) }
+        val keysym = xtKeysym(scancode) ?: return
+        if (macHevcSession != null) macHevcSession?.sendKeyEvent(keysym, isDown)
+        else nativeKey(instance, keysym, isDown)
     }
     /** Unicode is one X11 keysym, including supplementary code points. */
     @Synchronized override fun sendUnicodeKeyEvent(instance: Long, unicodeChar: Int, isDown: Boolean) {
         if (instance == 0L || instance != active || !Character.isValidCodePoint(unicodeChar)) return
         val keysym = when (unicodeChar) { 8 -> 0xff08; 9 -> 0xff09; 10, 13 -> 0xff0d; 27 -> 0xff1b
             else -> if (unicodeChar <= 255) unicodeChar else 0x01000000 or unicodeChar }
-        nativeKey(instance, keysym, isDown)
+        if (macHevcSession != null) macHevcSession?.sendKeyEvent(keysym, isDown)
+        else nativeKey(instance, keysym, isDown)
     }
     // Key release retains its down keysym if Shift/Ctrl changed in between.
     @Synchronized internal fun sendPhysicalKey(instance: Long, event: android.view.KeyEvent, down: Boolean) {
@@ -155,13 +192,22 @@ class VncBridge : DesktopSessionBridge {
             if (unicode <= 255) unicode else 0x01000000 or unicode
         } else androidKeysym(key) ?: return
         if (down) heldPrintable[key] = chosen
-        nativeKey(instance, chosen, down)
+        if (macHevcSession != null) macHevcSession?.sendKeyEvent(chosen, down)
+        else nativeKey(instance, chosen, down)
     }
     @Synchronized override fun sendClipboardText(instance: Long, text: String): Boolean =
-        instance != 0L && instance == active && nativeClipboard(instance, text.toByteArray(Charsets.UTF_8), text.toByteArray(Charsets.ISO_8859_1))
-    @Synchronized override fun getDesktopWidth(instance: Long): Int = if (instance != 0L && instance == active) nativeSize(instance, true) else 0
-    @Synchronized override fun getDesktopHeight(instance: Long): Int = if (instance != 0L && instance == active) nativeSize(instance, false) else 0
-    override fun updateDisplay(instance: Long, width: Int, height: Int, zoom: Float) = Unit // VNC follows server size; scale locally.
+        instance != 0L && instance == active && (macHevcSession != null || nativeClipboard(instance, text.toByteArray(Charsets.UTF_8), text.toByteArray(Charsets.ISO_8859_1)))
+    @Synchronized override fun getDesktopWidth(instance: Long): Int = if (instance != 0L && instance == active) {
+        if (macHevcSession != null) macHevcSession!!.width else nativeSize(instance, true)
+    } else 0
+    @Synchronized override fun getDesktopHeight(instance: Long): Int = if (instance != 0L && instance == active) {
+        if (macHevcSession != null) macHevcSession!!.height else nativeSize(instance, false)
+    } else 0
+    override fun updateDisplay(instance: Long, width: Int, height: Int, zoom: Float) {
+        if (instance != 0L && instance == active && macHevcSession != null) {
+            macHevcSession?.updateDisplay(width, height)
+        }
+    }
     @androidx.annotation.Keep fun onNativeDisconnected() { callbacks.post { disconnectListener?.invoke(R.string.vnc_server_disconnected, true) } }
     @androidx.annotation.Keep fun onNativeClipboardChanged(bytes: ByteArray, utf8: Boolean) {
         val text = bytes.toString(if (utf8) Charsets.UTF_8 else Charsets.ISO_8859_1)
