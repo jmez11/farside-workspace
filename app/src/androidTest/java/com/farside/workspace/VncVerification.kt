@@ -125,8 +125,35 @@ internal class VncVerification(private val test: Instrumentation) {
                         expMacHevc = true, expMacShareConsole = true))
                 }
 
+                // Fix "Unnamed" -> "Jeff Mac (WARP Direct)"
+                val unnamed = pm.getProfiles().firstOrNull { it.id == "34c0f05d-6711-4a0e-96fd-f8a7059159ee" || it.name == "Unnamed" || it.name == "Jeff Mac (WARP Direct)" }
+                if (unnamed != null) {
+                    pm.updateProfile(unnamed.copy(
+                        name = "Jeff Mac (WARP Direct)",
+                        host = "192.168.4.165",
+                        port = 5900,
+                        vncAuthMode = VncAuthMode.MAC_USER,
+                        credentialId = original.credentialId,
+                        proxyType = ProxyType.NONE,
+                        expMacHevc = false,
+                        expMacShareConsole = false
+                    ))
+                } else {
+                    pm.addProfile(original.copy(
+                        id = java.util.UUID.randomUUID().toString(),
+                        name = "Jeff Mac (WARP Direct)",
+                        host = "192.168.4.165",
+                        port = 5900,
+                        vncAuthMode = VncAuthMode.MAC_USER,
+                        credentialId = original.credentialId,
+                        proxyType = ProxyType.NONE,
+                        expMacHevc = false,
+                        expMacShareConsole = false
+                    ))
+                }
+
                 check(test.targetContext.getSharedPreferences("farside_profiles", 0).edit().commit())
-                record("PASS: configured Jeff Mac (HEVC) and Jeff Mac (HEVC Console) profiles; original Jeff Mac preserved unchanged")
+                record("PASS: configured Jeff Mac HEVC and WARP Direct profiles; original Jeff Mac preserved unchanged")
             } else if (mode == "macWrong") {
                 val pm = ProfileManager(test.targetContext)
                 val profile = pm.getProfiles().single { it.name == "Test MacBook Pro" && it.type == ConnectionType.VNC }
