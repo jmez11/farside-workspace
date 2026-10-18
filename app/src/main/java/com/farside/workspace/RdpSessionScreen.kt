@@ -491,7 +491,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
 
     // TextureView fills immediately; ask the server for matching resolution once resizing settles.
     LaunchedEffect(rdpInstance, currentWidth, currentHeight) {
-        if (!isVnc && rdpInstance != 0L && currentWidth > 0 && currentHeight > 0) {
+        if (rdpInstance != 0L && currentWidth > 0 && currentHeight > 0) {
             val targetWidth = currentWidth.coerceIn(200, 8192) and -2
             val targetHeight = currentHeight.coerceIn(200, 8192)
             if (monitor != null) {
