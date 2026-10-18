@@ -72,6 +72,8 @@ class FreeRDPBridge : DesktopSessionBridge {
     external override fun updateDisplay(instance: Long, width: Int, height: Int, zoom: Float)
     external override fun getDesktopWidth(instance: Long): Int
     external override fun getDesktopHeight(instance: Long): Int
+    override fun getDecoderDescription(instance: Long): String =
+        if (instance != 0L) "FreeRDP Native Pipeline" else "Disconnected"
 
     companion object {
         init {
