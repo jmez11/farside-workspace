@@ -19,6 +19,7 @@ interface DesktopSessionBridge {
     fun setCameraMuted(instance: Long, muted: Boolean) {}
     fun isCameraRecording(instance: Long): Boolean = false
     fun isCameraChannelConnected(instance: Long): Boolean = false
+    fun getDecoderDescription(instance: Long): String = "Default"
 }
 
 internal interface DesktopSessionConnection {
