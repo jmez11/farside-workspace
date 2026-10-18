@@ -52,6 +52,7 @@ class MacHevcSession(
     private val port: Int,
     private val username: String,
     private val password: String,
+    private val shareConsole: Boolean = false,
     private val logCallback: (String) -> Unit = {}
 ) : Closeable {
 
@@ -308,7 +309,7 @@ class MacHevcSession(
                 // Bit 2 (4): cmd = 2 (virtual multi-session separate login)
                 // Bit 1 (2): cmd = 1 (direct connect to console)
                 // Bit 0 (1): cmd = 0 (request console permission from active user)
-                val cmd = if ((sessionState and 4) != 0) 2 else if ((sessionState and 2) != 0) 1 else 0
+                val cmd = if (shareConsole) 0 else if ((sessionState and 4) != 0) 2 else if ((sessionState and 2) != 0) 1 else 0
 
                 if (cmd == 2) {
                     // cmd = 2: Virtual multi-session login
