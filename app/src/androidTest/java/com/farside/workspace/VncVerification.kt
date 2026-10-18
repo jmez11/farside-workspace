@@ -106,20 +106,27 @@ internal class VncVerification(private val test: Instrumentation) {
                 val pm = ProfileManager(test.targetContext)
                 val original = pm.getProfiles().firstOrNull { it.type == ConnectionType.VNC && it.name.trim() == "Jeff Mac" }
                     ?: pm.getProfiles().first { it.type == ConnectionType.VNC }
+
                 val existing = pm.getProfiles().firstOrNull { it.name == "Jeff Mac (HEVC)" }
                 if (existing != null) {
-                    pm.updateProfile(existing.copy(expMacHevc = true, host = original.host, port = original.port,
+                    pm.updateProfile(existing.copy(expMacHevc = true, expMacShareConsole = false, host = original.host, port = original.port,
                         credentialId = original.credentialId, proxyType = original.proxyType, vncAuthMode = original.vncAuthMode))
                 } else {
-                    val clone = original.copy(
-                        id = java.util.UUID.randomUUID().toString(),
-                        name = "Jeff Mac (HEVC)",
-                        expMacHevc = true
-                    )
-                    pm.addProfile(clone)
+                    pm.addProfile(original.copy(id = java.util.UUID.randomUUID().toString(), name = "Jeff Mac (HEVC)",
+                        expMacHevc = true, expMacShareConsole = false))
                 }
+
+                val existingConsole = pm.getProfiles().firstOrNull { it.name == "Jeff Mac (HEVC Console)" }
+                if (existingConsole != null) {
+                    pm.updateProfile(existingConsole.copy(expMacHevc = true, expMacShareConsole = true, host = original.host, port = original.port,
+                        credentialId = original.credentialId, proxyType = original.proxyType, vncAuthMode = original.vncAuthMode))
+                } else {
+                    pm.addProfile(original.copy(id = java.util.UUID.randomUUID().toString(), name = "Jeff Mac (HEVC Console)",
+                        expMacHevc = true, expMacShareConsole = true))
+                }
+
                 check(test.targetContext.getSharedPreferences("farside_profiles", 0).edit().commit())
-                record("PASS: configured Jeff Mac (HEVC) profile with expMacHevc=true; original Jeff Mac preserved unchanged")
+                record("PASS: configured Jeff Mac (HEVC) and Jeff Mac (HEVC Console) profiles; original Jeff Mac preserved unchanged")
             } else if (mode == "macWrong") {
                 val pm = ProfileManager(test.targetContext)
                 val profile = pm.getProfiles().single { it.name == "Test MacBook Pro" && it.type == ConnectionType.VNC }
