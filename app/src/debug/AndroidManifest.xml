@@ -5,5 +5,20 @@
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|screenLayout|density|uiMode">
             <meta-data android:name="com.oculus.vr.default_display_metrics" android:value="800x500" />
         </activity>
+        <activity android:name=".SpatialAudioFixtureActivity" android:exported="false"
+            android:documentLaunchMode="always" android:taskAffinity=""
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|screenLayout|density|uiMode">
+            <meta-data android:name="com.oculus.vr.default_display_metrics" android:value="1280x800" />
+        </activity>
+        <activity android:name=".SpatialAudioIsolatedActivity0" android:process=":audioProbe0" android:exported="false"
+            android:documentLaunchMode="always" android:taskAffinity=""
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|screenLayout|density|uiMode">
+            <meta-data android:name="com.oculus.vr.default_display_metrics" android:value="1280x800" />
+        </activity>
+        <activity android:name=".SpatialAudioIsolatedActivity1" android:process=":audioProbe1" android:exported="false"
+            android:documentLaunchMode="always" android:taskAffinity=""
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|screenLayout|density|uiMode">
+            <meta-data android:name="com.oculus.vr.default_display_metrics" android:value="1280x800" />
+        </activity>
     </application>
 </manifest>

@@ -83,9 +83,27 @@ class SessionActivity : ComponentActivity() {
     }
     internal var sessionSlot = 0
         private set
+    internal fun checkAndBindAudioSession() {
+        val bridge = rdpBridge ?: return
+        val space = QuestSpatialAudio.windowSpace(this) ?: return
+        bridge.audioWindowSpace = space
+        if (rdpInstance != 0L) {
+            val session = bridge.getAudioPlaybackSessionId(rdpInstance)
+            if (session > 0) bridge.onNativeAudioSessionChanged(session)
+        }
+    }
+
     private val movementObserver = WindowMovementObserver(this,
-        onMoved = { windowInteraction.value += 1L },
+        onMoved = {
+            windowInteraction.value += 1L
+            checkAndBindAudioSession()
+        },
         onPresented = { WindowLaunchMonitor.complete(intent.getStringExtra(WindowLaunchMonitor.EXTRA_REQUEST)) })
+
+    override fun onResume() {
+        super.onResume()
+        checkAndBindAudioSession()
+    }
 
     override fun onPostResume() {
         super.onPostResume()
@@ -94,6 +112,7 @@ class SessionActivity : ComponentActivity() {
             if (!isDestroyed) {
                 movementObserver.start()
                 WindowLaunchMonitor.observe(this)
+                checkAndBindAudioSession()
             }
         }
     }
@@ -110,7 +129,10 @@ class SessionActivity : ComponentActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) SessionCardActions.focused(this)
+        if (hasFocus) {
+            SessionCardActions.focused(this)
+            checkAndBindAudioSession()
+        }
         if (!hasFocus) controllerScroll.stop()
         if (!hasFocus) sshControllerScroll.stop()
         if (keyboardPanelState?.lifecycle?.value == metavrx.layout.window.compose.state.WindowLifecycle.Active) return
@@ -196,8 +218,16 @@ class SessionActivity : ComponentActivity() {
                         RdpSessionScreen(
                             session = profile.copy(reconnectAutomatically = profileManager.getProfiles().firstOrNull { it.id == profile.id }?.reconnectAutomatically ?: false),
                             windowInteraction = windowInteraction.value,
-                            onInstanceCreated = { rdpInstance = it; SessionCardActions.connected(this, it != 0L) },
-                            onBridgeCreated = { rdpBridge = it; it.displayCapture = displayCapture },
+                            onInstanceCreated = {
+                                rdpInstance = it
+                                SessionCardActions.connected(this, it != 0L)
+                                if (it != 0L) checkAndBindAudioSession()
+                            },
+                            onBridgeCreated = {
+                                rdpBridge = it
+                                it.displayCapture = displayCapture
+                                it.audioWindowSpace = QuestSpatialAudio.windowSpace(this)
+                            },
                             onClose = { finish() }
                         )
                         }

@@ -15,6 +15,7 @@ interface DesktopSessionBridge {
     // Media controls exist only in the RDP toolbar.
     fun setAudioMuted(instance: Long, speakerMuted: Boolean, micMuted: Boolean) {}
     fun isMicrophoneRecording(instance: Long): Boolean = false
+    fun getAudioPlaybackSessionId(instance: Long): Int = 0
     fun setCameraMuted(instance: Long, muted: Boolean) {}
     fun isCameraRecording(instance: Long): Boolean = false
     fun isCameraChannelConnected(instance: Long): Boolean = false

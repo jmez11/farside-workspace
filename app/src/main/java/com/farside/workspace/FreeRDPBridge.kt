@@ -6,6 +6,18 @@ class FreeRDPBridge : DesktopSessionBridge {
     @Volatile internal var disconnectListener: ((String, Boolean) -> Unit)? = null
     @Volatile override var clipboardListener: ((String) -> Unit)? = null
     @Volatile internal var displayCapture: DisplayCapturePermission? = null
+    @Volatile internal var audioWindowSpace: java.util.UUID? = null
+    @Volatile internal var audioSpatialBound = false
+        private set
+    private var audioSession = 0
+
+    // Called on the native channel thread before output starts, including format changes/reopen.
+    @androidx.annotation.Keep
+    @Synchronized fun onNativeAudioSessionChanged(sessionId: Int) {
+        if (audioSession != sessionId) QuestSpatialAudio.forget(audioSession)
+        audioSession = sessionId
+        audioSpatialBound = sessionId > 0 && audioWindowSpace?.let { QuestSpatialAudio.bind(sessionId, it) } == true
+    }
 
     @androidx.annotation.Keep
     fun onNativeDisplayStart(surface: Surface?): Boolean = displayCapture?.start(surface) ?: false
@@ -31,6 +43,7 @@ class FreeRDPBridge : DesktopSessionBridge {
     external fun certificateMatchesHost(pem: ByteArray, host: String): Boolean
     external override fun setAudioMuted(instance: Long, speakerMuted: Boolean, micMuted: Boolean)
     external override fun isMicrophoneRecording(instance: Long): Boolean
+    external override fun getAudioPlaybackSessionId(instance: Long): Int
     external override fun setCameraMuted(instance: Long, muted: Boolean)
     external override fun isCameraRecording(instance: Long): Boolean
     external fun isCameraMuted(instance: Long): Boolean
@@ -59,7 +72,6 @@ class FreeRDPBridge : DesktopSessionBridge {
         init {
             System.loadLibrary("freerdp-jni")
         }
-        
         // Mouse flags based on PTR_FLAGS
         const val PTR_FLAGS_WHEEL = 0x0200
         const val PTR_FLAGS_HWHEEL = 0x0400

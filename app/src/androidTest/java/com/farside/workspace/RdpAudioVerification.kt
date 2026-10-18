@@ -46,7 +46,12 @@ internal class RdpAudioVerification(private val test: Instrumentation) {
         return null
     }
     @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
-    fun run(mode: String, encodedProbe: String? = null) {
+    fun run(mode: String, encodedProbe: String? = null, verifySpatial: Boolean = false) {
+        if (mode == "spatial-live") { run("playback", encodedProbe, true); return }
+        if (mode in setOf("spatial-audio", "spatial-isolation", "spatial-same-process")) {
+            SpatialAudioVerification(test).run(mode, encodedProbe ?: "space")
+            return
+        }
         if (mode == "playback-close") {
             check(encodedProbe != null) { "playback-close needs a bounded Windows audioProbe" }
             repeat(3) { run("playback", encodedProbe) }
@@ -385,6 +390,25 @@ internal class RdpAudioVerification(private val test: Instrumentation) {
                     Thread.sleep(1000)
                     val unmuted = bridge.getAudioFrameCounts(activity.rdpInstance)
                     check(unmuted[2] > mutedEnd[2]) { "Speaker audio did not resume" }
+                    if (verifySpatial) {
+                        test.startActivitySync(Intent(test.targetContext, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                        Thread.sleep(600)
+                        val sessionId = bridge.getAudioPlaybackSessionId(activity.rdpInstance)
+                        check(activity.rdpBridge?.audioWindowSpace != null && activity.rdpBridge?.audioSpatialBound == true)
+                        val before = readHorizonAudioState(test)
+                        java.io.File(test.targetContext.cacheDir, "audio-spatial-live-launcher.txt").writeText(before)
+                        check(horizonSessionIsSpatial(before, sessionId)) { "Live RDP audio flattened when Launcher opened" }
+                        click("Keyboard")
+                        repeat(80) {
+                            if (activity.keyboardPanelState?.lifecycle?.value != metavrx.layout.window.compose.state.WindowLifecycle.Active) Thread.sleep(100)
+                        }
+                        check(activity.keyboardPanelState?.lifecycle?.value == metavrx.layout.window.compose.state.WindowLifecycle.Active)
+                        val during = readHorizonAudioState(test)
+                        java.io.File(test.targetContext.cacheDir, "audio-spatial-live-keyboard.txt").writeText(during)
+                        check(horizonSessionIsSpatial(during, sessionId)) { "Live RDP audio flattened when companion keyboard opened" }
+                        click("Keyboard")
+                        android.util.Log.i("RdpAudioVerification", "PASS live spatial session=$sessionId with Launcher and companion keyboard")
+                    }
                     android.util.Log.i("RdpAudioVerification", "PASS playback frames=${unmuted[0]} silence during mute, audio after unmute")
                     return
                 }

@@ -7,6 +7,9 @@ struct QuestAudioState {
     std::atomic<bool> speakerMuted{false};
     std::atomic<bool> micMuted{false};
     std::atomic<bool> recording{false};
+    std::atomic<int> playbackSessionId{0};
+    void* sessionOwner = nullptr;
+    void (*sessionChanged)(void*, int) = nullptr;
     std::atomic<unsigned long long> playbackFrames{0}, captureFrames{0};
     std::atomic<unsigned long long> playbackNonzeroSamples{0}, captureNonzeroSamples{0};
     std::atomic<unsigned long long> outputLatencyMs{0}, maxOutputLatencyMs{0};

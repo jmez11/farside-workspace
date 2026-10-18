@@ -219,6 +219,16 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
         }
     }
 
+    LaunchedEffect(rdpInstance) {
+        if (rdpInstance != 0L) {
+            val activity = context as? SessionActivity
+            while (true) {
+                activity?.checkAndBindAudioSession()
+                delay(500)
+            }
+        }
+    }
+
     // Bidirectional RDP Clipboard Synchronization
     if (session.redirectClipboard) {
         DisposableEffect(context, rdpInstance) {

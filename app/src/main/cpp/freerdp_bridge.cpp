@@ -71,6 +71,7 @@ struct RdpContext {
     jmethodID clipboardMethod;
     jmethodID displayStartMethod;
     jmethodID displayStopMethod;
+    jmethodID audioSessionChangedMethod;
     std::string certificateHost;
     pcRdpgfxSurfaceCommand origSurfaceCommand;
     std::atomic<uint32_t> codecCounts[16];
@@ -118,6 +119,17 @@ static void display_capture_stop(void* owner) {
     if (attached && ctx->javaVm->AttachCurrentThread(&env, nullptr) != JNI_OK) return;
     env->CallVoidMethod(ctx->eventReceiver, ctx->displayStopMethod);
     if (env->ExceptionCheck()) { env->ExceptionClear(); LOGE("Display capture stop failed"); }
+    if (attached) ctx->javaVm->DetachCurrentThread();
+}
+
+static void audio_session_changed(void* owner, int session) {
+    auto* ctx = static_cast<RdpContext*>(owner);
+    if (!ctx->javaVm || !ctx->eventReceiver || !ctx->audioSessionChangedMethod) return;
+    JNIEnv* env = nullptr;
+    const bool attached = ctx->javaVm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK;
+    if (attached && ctx->javaVm->AttachCurrentThread(&env, nullptr) != JNI_OK) return;
+    env->CallVoidMethod(ctx->eventReceiver, ctx->audioSessionChangedMethod, session);
+    if (env->ExceptionCheck()) { env->ExceptionClear(); LOGE("Audio window association callback failed"); }
     if (attached) ctx->javaVm->DetachCurrentThread();
 }
 
@@ -612,6 +624,7 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
     ctx->clipboardMethod = env->GetMethodID(bridgeClass, "onNativeClipboardChanged", "(Ljava/lang/String;)V");
     ctx->displayStartMethod = env->GetMethodID(bridgeClass, "onNativeDisplayStart", "(Landroid/view/Surface;)Z");
     ctx->displayStopMethod = env->GetMethodID(bridgeClass, "onNativeDisplayStop", "()V");
+    ctx->audioSessionChangedMethod = env->GetMethodID(bridgeClass, "onNativeAudioSessionChanged", "(I)V");
     env->DeleteLocalRef(bridgeClass);
     ctx->verifyCertificates = nullptr;
     if (certificateVerifier) {
@@ -627,6 +640,8 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
     ctx->origSurfaceCommand = nullptr;
     for (auto& count : ctx->codecCounts) new (&count) std::atomic<uint32_t>(0);  // destroyed in destroy_client()
     ctx->audio = new QuestAudioState();
+    ctx->audio->sessionOwner = ctx;
+    ctx->audio->sessionChanged = audio_session_changed;
     new (&ctx->windows) std::vector<ANativeWindow*>();  // destroyed in destroy_client()
     new (&ctx->windowMutex) std::mutex();  // destroyed in destroy_client()
     new (&ctx->render_running) std::atomic<bool>(false);
@@ -1243,6 +1258,13 @@ extern "C" JNIEXPORT jboolean JNICALL
 Java_com_farside_workspace_FreeRDPBridge_isMicrophoneRecording(JNIEnv*, jobject, jlong instance) {
     return instance && quest_audio_state(((freerdp*)instance)->context)->recording;
 }
+extern "C" JNIEXPORT jint JNICALL
+Java_com_farside_workspace_FreeRDPBridge_getAudioPlaybackSessionId(JNIEnv*, jobject, jlong instance) {
+    if (!instance) return 0;
+    auto* state = quest_audio_state(((freerdp*)instance)->context);
+    return state ? state->playbackSessionId.load() : 0;
+}
+
 extern "C" JNIEXPORT jlongArray JNICALL
 Java_com_farside_workspace_FreeRDPBridge_getAudioFrameCounts(JNIEnv* env, jobject, jlong instance) {
     jlong counts[4] = {};
@@ -1438,4 +1460,3 @@ Java_com_farside_workspace_FreeRDPBridge_sendClipboardText(JNIEnv* env, jobject,
     }
     return JNI_FALSE;
 }
-
