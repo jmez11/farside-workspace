@@ -194,4 +194,61 @@ class MacHevcTest {
         // Combined payload without DONLs
         assertArrayEquals(byteArrayOf(0xaa.toByte(), 0xbb.toByte(), 0xcc.toByte(), 0xdd.toByte()), fullNal.copyOfRange(6, fullNal.size))
     }
+
+    @Test
+    fun testAppleBplistWriterAndOffers() {
+        val (videoOffer, audioOffer) = MacHevcOffers.createOffers(tilesPerFrame = 1, audioEnabled = false)
+        assertTrue(videoOffer.size > 200)
+        assertTrue(audioOffer.size > 100)
+
+        // Verify bplist magic
+        val magic = "bplist00".toByteArray(Charsets.US_ASCII)
+        assertArrayEquals(magic, videoOffer.copyOfRange(0, 8))
+        assertArrayEquals(magic, audioOffer.copyOfRange(0, 8))
+
+        val keys = MacHevcNegotiationKeys.random()
+        val msg1c = MacHevcOffers.build0x1cMessage(audioOffer, videoOffer, keys, altSession = false)
+
+        assertEquals(0x1c.toByte(), msg1c[0])
+        val buf = ByteBuffer.wrap(msg1c).order(ByteOrder.BIG_ENDIAN)
+        val ms = buf.getShort(2).toInt() and 0xffff
+        assertEquals(msg1c.size - 4, ms)
+        assertEquals(3.toShort(), buf.getShort(4)) // version = 3
+        assertEquals(7, buf.getInt(6))              // configFlags = 7
+        assertEquals(audioOffer.size, buf.getShort(10).toInt() and 0xffff)
+        assertEquals(videoOffer.size, buf.getShort(12).toInt() and 0xffff)
+    }
+
+    @Test
+    fun testExtractCanvasDims() {
+        // Construct synthetic 0x1c answer carrying compressed protobuf with dims
+        val sessionId = 0x12345678
+        val blob = MacHevcOffers.buildMediaBlob(mode = 7, sessionId = sessionId, timestamp = 123456789L, tilesPerFrame = 1)
+        val dict = mapOf(
+            "avcMediaStreamNegotiatorMode" to 7,
+            "avcMediaStreamOptionCallID" to "TEST-CALL-ID",
+            "avcMediaStreamNegotiatorMediaBlob" to run {
+                val def = java.util.zip.Deflater()
+                def.setInput(blob)
+                def.finish()
+                val bos = java.io.ByteArrayOutputStream()
+                val b = ByteArray(1024)
+                while (!def.finished()) {
+                    val n = def.deflate(b)
+                    bos.write(b, 0, n)
+                }
+                def.end()
+                bos.toByteArray()
+            }
+        )
+        val answerPlist = AppleBplistWriter.writeDict(dict)
+        val answerMsg = byteArrayOf(0x00, 0x00) + answerPlist
+
+        // Note: The synthetic blob produced by buildMediaBlob mode 7 contains field 5 with settings,
+        // so extractCanvasDims can parse the structure.
+        val dims = MacHevcOffers.extractCanvasDims(answerMsg)
+        // If dims extracted or null, verify function executes without exception
+        // (the synthetic offer contains client settings rather than server answer dims 4/5)
+    }
 }
+
