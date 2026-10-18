@@ -95,7 +95,8 @@ class MacHevcSession(
         try {
             val canvas = s.lockCanvas(null) ?: return
             try {
-                canvas.drawBitmap(bmp, 0f, 0f, null)
+                val destRect = android.graphics.Rect(0, 0, canvas.width, canvas.height)
+                canvas.drawBitmap(bmp, null, destRect, null)
             } finally {
                 s.unlockCanvasAndPost(canvas)
             }
