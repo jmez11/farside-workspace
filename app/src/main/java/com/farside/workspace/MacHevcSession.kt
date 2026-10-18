@@ -1,6 +1,8 @@
 package com.farside.workspace
 
 import android.util.Log
+import android.graphics.Bitmap
+import android.view.Surface
 import java.io.ByteArrayOutputStream
 import java.io.Closeable
 import java.io.DataInputStream
@@ -72,6 +74,64 @@ class MacHevcSession(
     var recordOut: DataOutputStream? = null
         private set
     private val zlibInflater = Inflater()
+
+    @Volatile var currentSurface: Surface? = null
+    var onResolutionChanged: ((Int, Int) -> Unit)? = null
+    var onDisconnected: ((String) -> Unit)? = null
+    private var frameBitmap: Bitmap? = null
+    private var framePixels: IntArray? = null
+
+    fun setSurface(surface: Surface?) {
+        currentSurface = surface
+        if (surface != null && frameBitmap != null) {
+            drawFrameToSurface()
+        }
+    }
+
+    private fun drawFrameToSurface() {
+        val s = currentSurface ?: return
+        val bmp = frameBitmap ?: return
+        try {
+            val canvas = s.lockCanvas(null) ?: return
+            try {
+                canvas.drawBitmap(bmp, 0f, 0f, null)
+            } finally {
+                s.unlockCanvasAndPost(canvas)
+            }
+        } catch (e: Exception) {
+            // Surface may be transiently released or resizing
+        }
+    }
+
+    private fun updatePixels(rx: Int, ry: Int, rw: Int, rh: Int, decomp: ByteArray) {
+        if (width <= 0 || height <= 0 || rw <= 0 || rh <= 0) return
+        var pixels = framePixels
+        if (pixels == null || pixels.size != width * height) {
+            pixels = IntArray(width * height)
+            framePixels = pixels
+            frameBitmap?.recycle()
+            frameBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        }
+        var srcOffset = 0
+        for (y in 0 until rh) {
+            val destY = ry + y
+            if (destY >= height) break
+            val destRow = destY * width
+            for (x in 0 until rw) {
+                val destX = rx + x
+                if (destX >= width) break
+                if (srcOffset + 3 <= decomp.size) {
+                    val r = decomp[srcOffset].toInt() and 0xff
+                    val g = decomp[srcOffset + 1].toInt() and 0xff
+                    val b = decomp[srcOffset + 2].toInt() and 0xff
+                    pixels[destRow + destX] = (0xff shl 24) or (r shl 16) or (g shl 8) or b
+                    srcOffset += 4
+                }
+            }
+        }
+        frameBitmap?.setPixels(pixels, 0, width, 0, 0, width, height)
+        drawFrameToSurface()
+    }
 
     private fun log(message: String) {
         Log.i("MacHevcSession", message)
@@ -526,13 +586,30 @@ class MacHevcSession(
                             zlibRectCount++
                             lastW = rw
                             lastH = rh
+                            if (totalInflated > 0) {
+                                updatePixels(rx, ry, rw, rh, decomp)
+                            }
                             log("S9: Decompressed ZLIB rect: $totalInflated / $expectedPixels bytes (w=$rw, h=$rh)")
                         }
                         0x451 -> { // AppleDisplayLayout
                             val payloadLen = stream.readUnsignedShort()
                             val data = ByteArray(payloadLen)
                             stream.readFully(data)
-                            log("S9: AppleDisplayLayout (${data.size} bytes), re-arming with 0x09 and 0x03")
+                            val resolved = parseAppleDisplayLayout(data)
+                            if (resolved != null && (resolved.first != width || resolved.second != height)) {
+                                val (newW, newH) = resolved
+                                log("S9: AppleDisplayLayout resized display: ${width}x${height} -> ${newW}x${newH}")
+                                width = newW
+                                height = newH
+                                lastW = newW
+                                lastH = newH
+                                framePixels = null
+                                frameBitmap?.recycle()
+                                frameBitmap = null
+                                onResolutionChanged?.invoke(newW, newH)
+                            } else {
+                                log("S9: AppleDisplayLayout (${data.size} bytes), re-arming with 0x09 and 0x03")
+                            }
                             recordOut?.write(buildAutoFrameBufferUpdate(width, height))
                             recordOut?.write(buildFramebufferUpdateRequest(width, height))
                             recordOut?.flush()
@@ -578,6 +655,9 @@ class MacHevcSession(
                             decompressedBytes += rawLen
                             lastW = rw
                             lastH = rh
+                            if (rawLen > 0) {
+                                updatePixels(rx, ry, rw, rh, data)
+                            }
                         }
                         else -> {
                             log("S9: Unknown or unhandled encoding 0x${Integer.toHexString(enc)}, ignoring per §12")
@@ -700,8 +780,89 @@ class MacHevcSession(
         out.flush()
     }
 
+    fun updateDisplay(targetWidth: Int, targetHeight: Int, displayType: Int = 4) {
+        if (stage != "S8" && stage != "S9") return
+        val w = targetWidth.coerceIn(200, 8192) and -2
+        val h = targetHeight.coerceIn(200, 8192)
+        log("S9: updateDisplay requested: ${w}x${h} (displayType=$displayType)")
+        sendDisplayConfiguration(w, h, displayType)
+        requestUpdate(incremental = false)
+    }
+
+    fun sendMouseEvent(x: Int, y: Int, flags: Int) {
+        var mask = 0
+        if ((flags and 0x8000) != 0) {
+            if ((flags and 0x1000) != 0) mask = mask or 1 // left
+            if ((flags and 0x2000) != 0) mask = mask or 4 // right
+            if ((flags and 0x4000) != 0) mask = mask or 2 // middle
+        }
+        sendPointer(x, y, mask)
+    }
+
+    fun sendKeyEvent(keysym: Int, isDown: Boolean) {
+        val out = recordOut ?: return
+        val buf = ByteBuffer.allocate(8).order(ByteOrder.BIG_ENDIAN)
+        buf.put(4.toByte()) // KeyEvent
+        buf.put(if (isDown) 1.toByte() else 0.toByte())
+        buf.putShort(0.toShort()) // pad
+        buf.putInt(keysym)
+        out.write(buf.array())
+        out.flush()
+        log("S9: Sent KeyEvent(keysym=0x${Integer.toHexString(keysym)}, down=$isDown)")
+    }
+
+    @Volatile private var isStreaming = false
+
+    fun startStreaming(surface: Surface?, onFinished: (String?) -> Unit = {}) {
+        setSurface(surface)
+        isStreaming = true
+        Thread({
+            var errorMsg: String? = null
+            try {
+                while (isStreaming && (stage == "S8" || stage == "S9")) {
+                    val result = readNextFramebufferUpdate()
+                    if (result.messageType == 0) {
+                        requestUpdate(incremental = true)
+                    }
+                }
+            } catch (e: Exception) {
+                if (isStreaming) {
+                    log("S9: Streaming error: ${e.message}")
+                    errorMsg = e.message ?: "Disconnected"
+                }
+            } finally {
+                isStreaming = false
+                onFinished(errorMsg)
+            }
+        }, "MacHevcStreamWorker").start()
+    }
+
+    fun stopStreaming() {
+        isStreaming = false
+    }
+
+    companion object {
+        fun parseAppleDisplayLayout(data: ByteArray): Pair<Int, Int>? {
+            if (data.size < 10) return null
+            val scaledW = ((data[2].toInt() and 0xff) shl 8) or (data[3].toInt() and 0xff)
+            val scaledH = ((data[4].toInt() and 0xff) shl 8) or (data[5].toInt() and 0xff)
+            val backingW = ((data[6].toInt() and 0xff) shl 8) or (data[7].toInt() and 0xff)
+            val backingH = ((data[8].toInt() and 0xff) shl 8) or (data[9].toInt() and 0xff)
+            return if (backingW in 200..8192 && backingH in 200..8192) {
+                Pair(backingW, backingH)
+            } else if (scaledW in 200..8192 && scaledH in 200..8192) {
+                Pair(scaledW, scaledH)
+            } else null
+        }
+    }
+
     override fun close() {
+        stopStreaming()
         zlibInflater.end()
+        frameBitmap?.recycle()
+        frameBitmap = null
+        framePixels = null
+        currentSurface = null
         runCatching { rawInput?.close() }
         runCatching { rawOutput?.close() }
         runCatching { socket?.close() }
