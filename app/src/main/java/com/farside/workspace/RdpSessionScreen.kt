@@ -56,6 +56,8 @@ import androidx.compose.material.icons.filled.InvertColors
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Opacity
 import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Close
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
@@ -397,6 +399,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
     val density = LocalDensity.current
     var offsetY by remember { mutableStateOf(with(density) { 16.dp.toPx() }) }
     var showZoomSlider by remember { mutableStateOf(false) }
+    var showDebugInfo by remember { mutableStateOf(false) }
     var speakerMuted by (runtime?.speakerMuted ?: remember { mutableStateOf<Boolean>(false) })
     var micMuted by (runtime?.micMuted ?: remember { mutableStateOf<Boolean>(false) })
     var micRecording by remember { mutableStateOf(false) }
@@ -460,7 +463,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
 
     val isMediaRecording = micRecording || cameraRecording
     LaunchedEffect(windowInteraction, currentWidth, currentHeight, isMediaRecording) { revealToolbar() }
-    val keepToolbarVisible = isMediaRecording || runtime?.drag?.armed == true || runtime?.drag?.active == true
+    val keepToolbarVisible = showDebugInfo || isMediaRecording || runtime?.drag?.armed == true || runtime?.drag?.active == true
     LaunchedEffect(isOverlayVisible, toolbarPinned, toolbarActivity, offsetX, offsetY, keepToolbarVisible) {
         if (isOverlayVisible && !toolbarPinned && !keepToolbarVisible) {
             delay(3000)
@@ -843,6 +846,10 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                     IconButton(onClick = { showZoomSlider = !showZoomSlider }, modifier = Modifier.size(buttonSize)) {
                         Icon(Icons.Default.Search, stringResource(R.string.zoom), modifier = Modifier.size(iconSize), tint = if (showZoomSlider) MaterialTheme.colorScheme.primary else Color.White)
                     }
+                    IconButton(onClick = { showDebugInfo = !showDebugInfo; revealToolbar() }, modifier = Modifier.size(buttonSize)) {
+                        Icon(Icons.Default.Info, stringResource(R.string.debug_actions), modifier = Modifier.size(iconSize),
+                            tint = if (showDebugInfo) MaterialTheme.colorScheme.primary else Color.White)
+                    }
                     IconButton(onClick = { revealToolbar(); showSoftKeyboard = !showSoftKeyboard; if (!showSoftKeyboard) { keyboardController?.hide() } }, modifier = Modifier.size(buttonSize)) {
                         Icon(Icons.Default.Keyboard, stringResource(R.string.keyboard), modifier = Modifier.size(iconSize), tint = Color.White)
                     }
@@ -953,5 +960,102 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
             com.farside.workspace.sftp.SftpFilesEntry(onClose = { showVncFiles = false },
                 profileId = pairedSshId, allowDisabledPairedProfile = true)
         }
+        if (showDebugInfo) {
+            Surface(
+                modifier = Modifier
+                    .align(androidx.compose.ui.Alignment.TopEnd)
+                    .padding(top = 72.dp, end = 16.dp)
+                    .widthIn(max = 380.dp),
+                shape = RoundedCornerShape(16.dp),
+                color = Color(0xEE141414),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x44FFFFFF))
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "Connection Info",
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                        )
+                        IconButton(
+                            onClick = { showDebugInfo = false },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = stringResource(R.string.close),
+                                tint = Color.White.copy(alpha = 0.7f),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    val protocolLabel = when {
+                        !isVnc -> "RDP (FreeRDP 3.x)"
+                        effectiveSession.expMacHevc -> "VNC (Apple High-Performance)"
+                        else -> "VNC (Standard RFB 3.8)"
+                    }
+                    val transportLabel = when {
+                        effectiveSession.useCloudflare || effectiveSession.proxyType == com.farside.workspace.data.ProxyType.CLOUDFLARED -> "Cloudflare Tunnel (TCP)"
+                        effectiveSession.proxyType == com.farside.workspace.data.ProxyType.HTTP -> "HTTP CONNECT Proxy"
+                        else -> "Direct TCP (LAN / WARP)"
+                    }
+                    val decoderLabel = rdpBridge.getDecoderDescription(rdpInstance)
+                    val scalePct = (zoom * 100).toInt()
+                    val windowW = currentWidth
+                    val windowH = currentHeight
+                    val serverW = actualWidth
+                    val serverH = actualHeight
+                    val scaleFactor = if (serverW > 0) "%.2f".format(windowW.toFloat() / serverW) else "1.00"
+
+                    ConnectionInfoRow("Profile", session.name)
+                    ConnectionInfoRow("Host:Port", "${session.host}:${session.port}")
+                    ConnectionInfoRow("Protocol", protocolLabel)
+                    ConnectionInfoRow("Decoder", decoderLabel)
+                    ConnectionInfoRow("Transport", transportLabel)
+                    ConnectionInfoRow("Server Canvas", "${serverW} × ${serverH}")
+                    ConnectionInfoRow("Window Surface", "${windowW} × ${windowH}")
+                    ConnectionInfoRow("Scale / Zoom", "${scaleFactor}x (${scalePct}%)")
+                    if (isVnc) {
+                        ConnectionInfoRow("Mac Auth", "${effectiveSession.vncAuthMode}")
+                        ConnectionInfoRow("HEVC Enabled", "${effectiveSession.expMacHevc}")
+                        if (effectiveSession.expMacHevc) {
+                            ConnectionInfoRow("Share Console", "${effectiveSession.expMacShareConsole}")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ConnectionInfoRow(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+    ) {
+        Text(
+            label,
+            color = Color.White.copy(alpha = 0.65f),
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(end = 8.dp)
+        )
+        Text(
+            value,
+            color = Color.White,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+            maxLines = 2,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+        )
     }
 }
