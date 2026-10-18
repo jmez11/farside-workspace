@@ -98,6 +98,9 @@ internal fun processImeChange(
     sendUnicode: (Int, Boolean) -> Unit,
     sendKey: (Int, Boolean) -> Unit
 ): Long {
+    // Dismissing the IME can update selection or finish composition without editing text.
+    // Those callbacks must not replay the buffer (including the sentinel space).
+    if (previous?.text == next.text) return lastEnterTime
     // Horizon may submit the whole keyboard buffer with Return; its text was already streamed.
     if ('\n' in next.text) {
         if (now - lastEnterTime > 200) {
@@ -109,7 +112,7 @@ internal fun processImeChange(
     }
     var newLastEnterTime = lastEnterTime
     var newChars: String
-    if (previous?.composition != null) {
+    if (previous != null && (previous.composition != null || previous.text != " ")) {
         // Horizon composes whole words during ordinary typing. Stream each changed code point
         // immediately; finalizing the unchanged word must not send it a second time.
         val before = previous.text.removePrefix(" ").codePoints().toArray()
@@ -200,8 +203,9 @@ internal fun RemoteImeEditor(label: String, activation: Long, showInitially: Boo
                 sendKey = sendKey
             )
             explicitReplacement = false
-            // Keep composing ranges for incremental updates, without delaying their remote input.
-            text = if ('\n' !in next.text && next.composition != null) next else TextFieldValue(" ", selection = TextRange(1))
+            // Keep the streamed buffer through composition finalization and IME dismissal.
+            // Resetting it on commit makes Horizon restore and resend its cached text.
+            text = if ('\n' !in next.text && next.text.isNotEmpty()) next else TextFieldValue(" ", selection = TextRange(1))
         }, keyboardOptions = KeyboardOptions(imeAction = ImeAction.None, autoCorrectEnabled = false),
             modifier = Modifier.size(1.dp).alpha(0f).focusRequester(focus)
                 .onPreviewKeyEvent { event ->

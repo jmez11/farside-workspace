@@ -469,6 +469,11 @@ class SshFeaturesVerification(private val test: Instrumentation, private val ime
         Thread.sleep(600)
         lateinit var editor: View
         lateinit var connection: android.view.inputmethod.InputConnection
+        fun editorEnd(): Int = checkNotNull(connection.getExtractedText(android.view.inputmethod.ExtractedTextRequest(), 0)).text.length
+        fun replaceLastCharacter() {
+            val end = editorEnd()
+            check(connection.replaceText(end - 1, end, "/", 1, null))
+        }
         main {
             editor = checkNotNull(activity.keyboardEditorView)
             check(activity.keyboardEditorHasFocus) { "Compose SSH editor did not focus" }
@@ -480,7 +485,7 @@ class SshFeaturesVerification(private val test: Instrumentation, private val ime
         waitFor("Real SSH shell did not receive primary b") { shellBytes.contains('b'.code) }
         Thread.sleep(150)
         main {
-            check(connection.replaceText(0, 1, "/", 1, null)) { "Horizon replacement rejected" }
+            replaceLastCharacter()
         }
         try {
             waitFor("Real SSH shell did not receive alternative replacement") { shellBytes.contains(127) && shellBytes.contains('/'.code) }
@@ -503,7 +508,7 @@ class SshFeaturesVerification(private val test: Instrumentation, private val ime
         }
         waitFor("Primary input failed after drag") { shellBytes.contains('b'.code) }
         Thread.sleep(150)
-        main { check(connection.replaceText(0, 1, "/", 1, null)) }
+        main { replaceLastCharacter() }
         waitFor("Alternative input failed after drag") { shellBytes.contains(127) && shellBytes.contains('/'.code) }
         check(shellBytes.toList() == listOf('b'.code, 127, '/'.code)) { "Replacement after drag reordered: ${shellBytes.toList()}" }
         Thread.sleep(150)
@@ -523,7 +528,7 @@ class SshFeaturesVerification(private val test: Instrumentation, private val ime
         }
         waitFor("Composing b did not reach SSH before Return") { shellBytes.contains('b'.code) }
         Thread.sleep(900)
-        main { check(connection.replaceText(1, 2, "/", 1, null)) }
+        main { replaceLastCharacter() }
         waitFor("Composing alternative did not reach actual SSH shell") { shellBytes.isNotEmpty() }
         Thread.sleep(150)
         check(shellBytes.toList() == listOf('b'.code, 127, '/'.code)) { "Composing replacement left b or duplicated it: ${shellBytes.toList()}" }
@@ -543,14 +548,20 @@ class SshFeaturesVerification(private val test: Instrumentation, private val ime
         }
         waitFor("Cached-range primary did not reach SSH") { shellBytes.contains('b'.code) }
         Thread.sleep(150)
-        // Horizon's cached ExtractedText can still say selectionEnd=2 after sentinel reset.
-        main { check(connection.replaceText(1, 2, "/", 1, null)) }
+        // Retained editor text keeps ExtractedText ranges valid after commit.
+        main { replaceLastCharacter() }
         waitFor("Cached-range replacement did not reach SSH") { shellBytes.contains('/'.code) }
         check(shellBytes.toList() == listOf('b'.code, 127, '/'.code)) { "Cached-range alternative left b intact: ${shellBytes.toList()}" }
         Thread.sleep(150)
         main { shellBytes.clear() }
+        var wordStart = 0
+        main { wordStart = editorEnd() }
         for (prefix in listOf("w", "wo", "wor", "word")) {
-            main { check(connection.setComposingText(prefix, 1)) }
+            main {
+                // The running Horizon IME may finalize composition between synthetic calls.
+                check(connection.setComposingRegion(wordStart, editorEnd()))
+                check(connection.setComposingText(prefix, 1))
+            }
             waitFor("Composing $prefix waited for Return or duplicated a prefix") { shellBytes.size >= prefix.length }
             check(shellBytes.toList() == prefix.map { it.code }) { "Composing word duplicated text: ${shellBytes.toList()}" }
             Thread.sleep(150)
@@ -558,6 +569,17 @@ class SshFeaturesVerification(private val test: Instrumentation, private val ime
         main { check(connection.finishComposingText()) }
         Thread.sleep(150)
         check(shellBytes.toList() == "word".map { it.code }) { "Finish resent composing word" }
+        main {
+            shellBytes.clear()
+            check(connection.setSelection(0, 1))
+            check(connection.finishComposingText())
+        }
+        Thread.sleep(250)
+        check(shellBytes.isEmpty()) { "Keyboard dismissal callbacks sent keys: ${shellBytes.toList()}" }
+        main { check(connection.setSelection(editorEnd(), editorEnd())) }
+        Thread.sleep(150)
+        check(shellBytes.isEmpty()) { "Selection-only callback sent sentinel: ${shellBytes.toList()}" }
+        record("PASS: dismissal finish/selection callbacks on actual Compose InputConnection send zero SSH bytes")
         for (keyEventEnter in listOf(false, true)) {
             main {
                 shellBytes.clear()
@@ -588,11 +610,15 @@ class SshFeaturesVerification(private val test: Instrumentation, private val ime
         }
         record("PASS: buffered newline commit and Enter key event send only SSH Return, clear actual Compose buffer, and preserve next typing")
         if (imeOnly) {
+            main { shellBytes.clear() }
             click("Keyboard")
+            Thread.sleep(800)
+            check(shellBytes.isEmpty()) { "Closing keyboard sent buffered SSH input: ${shellBytes.toList()}" }
+            record("PASS: toolbar keyboard close sends zero SSH bytes with retained editor text")
             return
         }
         record("PASS: composing characters and whole-word increments reach SSH before Return; finish does not duplicate; composing alternative erases primary")
-        record("PASS: Horizon cached-range replaceText(1,2) erases a committed primary instead of appending b/")
+        record("PASS: ExtractedText replacement range erases a committed primary without resetting the buffer")
         record("PASS: real Compose InputConnection commitText(b)/replaceText(/) reaches actual SSH shell in order before/after terminal drag; 160-character burst intact; physical Horizon popup remains manual")
         waitFor("Paged companion editor was not prepared") { activity.keyboardPanelEditorView != null }
         main {
@@ -602,7 +628,7 @@ class SshFeaturesVerification(private val test: Instrumentation, private val ime
             check(connection.setComposingText("b", 1))
         }
         waitFor("Bank composing b waited for Return") { shellBytes.toList() == listOf('b'.code) }
-        main { check(connection.replaceText(1, 2, "/", 1, null)) }
+        main { replaceLastCharacter() }
         waitFor("Bank alternative left the primary") { shellBytes.toList() == listOf('b'.code, 127, '/'.code) }
         main {
             val strip = checkNotNull(activity.keyboardPanelEditorView)

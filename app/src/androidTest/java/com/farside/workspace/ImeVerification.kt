@@ -16,7 +16,34 @@ class ImeVerification(private val instrumentation: Instrumentation) {
         testMultiCharacterReplacement()
         testEmojiInput()
         testComposingTyping()
-        return "All IME input scenarios verified: alternative keys, standard typing, space, empty backspace, buffered Enter without text replay, enter debouncing, multi-char replacements, composing typing, and emojis."
+        testKeyboardDismissal()
+        return "All IME input scenarios verified: alternative keys, standard typing, space, empty backspace, buffered Enter without text replay, enter debouncing, multi-char replacements, composing typing, silent dismissal callbacks, and emojis."
+    }
+
+    private fun testKeyboardDismissal() {
+        for (buffer in listOf(" ", " word", " word\n", " \uD83D\uDE00")) {
+            for (composing in listOf(false, true)) {
+                val previous = TextFieldValue(buffer, TextRange(buffer.length),
+                    if (composing) TextRange(0, buffer.length) else null)
+                val events = mutableListOf<Pair<Int, Boolean>>()
+                val time = processImeChange(TextFieldValue(buffer, TextRange(0)),
+                    lastEnterTime = 500L, now = 1000L, previous = previous,
+                    explicitReplacement = true,
+                    sendUnicode = { code, down -> events.add(code to down) },
+                    sendKey = { code, down -> events.add(code to down) })
+                check(events.isEmpty() && time == 500L) { "IME dismissal replayed unchanged buffer: $events" }
+                if ('\n' !in buffer) {
+                    val keys = mutableListOf<Pair<Int, Boolean>>()
+                    processImeChange(TextFieldValue("$buffer!", TextRange(buffer.length + 1)),
+                        lastEnterTime = time, now = 1500L, previous = TextFieldValue(buffer),
+                        sendUnicode = { code, down -> events.add(code to down) },
+                        sendKey = { code, down -> keys.add(code to down) })
+                    check(keys.isEmpty() && events == listOf('!'.code to true, '!'.code to false)) {
+                        "Typing after finalization replayed retained buffer: $events $keys"
+                    }
+                }
+            }
+        }
     }
 
     private fun testBufferedEnter() {
