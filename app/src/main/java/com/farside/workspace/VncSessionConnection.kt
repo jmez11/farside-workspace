@@ -107,17 +107,30 @@ internal class VncSessionConnection(
                     return@execute
                 }
                 var failure: String? = null
+                val isMacAuth = profile.vncAuthMode == VncAuthMode.MAC_USER || profile.expMacHevc
                 instance = try { bridge.connect(host, port, credential.pass, next, credential.user, profile.vncAuthMode, profile) }
                     catch (error: VncAuthenticationException) { failure = context.getString(R.string.vnc_mac_auth_failed); 0L }
                     catch (error: IllegalArgumentException) {
-                        failure = error.localizedMessage(context) ?: context.getString(R.string.invalid_vnc_password); 0L
+                        failure = error.localizedMessage(context) ?: error.message?.takeIf { it.isNotBlank() } ?: context.getString(
+                            if (isMacAuth) R.string.vnc_mac_credential_required
+                            else R.string.invalid_vnc_password
+                        ); 0L
                     }
                     catch (error: java.io.IOException) { failure = error.message; 0L }
-                    catch (error: Exception) { android.util.Log.w("VncSession", "Connection failed", error); 0L }
+                    catch (error: Exception) {
+                        android.util.Log.w("VncSession", "Connection failed", error)
+                        failure = error.localizedMessage(context) ?: error.message
+                        0L
+                    }
                 if (instance == 0L) {
                     ended.set(true)
+                    val fallback = if (isMacAuth) {
+                        context.getString(R.string.vnc_mac_user_hint)
+                    } else {
+                        context.getString(R.string.vnc_connection_failed_help)
+                    }
                     main.post { if (!closed.get()) onDisconnected(
-                        failure ?: context.getString(R.string.vnc_connection_failed_help), false) }
+                        failure?.takeIf { it.isNotBlank() } ?: fallback, false) }
                 }
                 val connected = instance
                 this.connected.set(connected != 0L)
