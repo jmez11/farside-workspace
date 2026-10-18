@@ -16,38 +16,38 @@ class MacHevcTest {
     fun testBuildDisplayConfigurationFraming() {
         // Create dummy session to access buildDisplayConfiguration
         val session = MacHevcSession("127.0.0.1", 5900, "user", "pass")
-        val config = session.buildDisplayConfiguration(1920, 1080, displayType = 4)
+        val config = session.buildDisplayConfiguration(1920, 1080, displayType = 4, hidpiScale = 2.0f)
 
-        assertEquals(196, config.size)
+        assertEquals(308, config.size)
         val buf = ByteBuffer.wrap(config).order(ByteOrder.BIG_ENDIAN)
 
         // Front header (12 bytes)
         assertEquals(0x1d.toByte(), buf.get()) // type
         assertEquals(0.toByte(), buf.get())    // reserved
-        assertEquals(192.toShort(), buf.short) // message_size = 196 - 4
+        assertEquals(304.toShort(), buf.short) // message_size = 308 - 4
         assertEquals(1.toShort(), buf.short)   // version = 1
         assertEquals(1.toShort(), buf.short)   // display_count = 1
         assertEquals(0, buf.int)               // flags = 0
 
-        // Display descriptor
-        assertEquals(184.toShort(), buf.short) // display_info_size
+        // Display descriptor (296 bytes)
+        assertEquals(296.toShort(), buf.short) // display_info_size
         buf.position(buf.position() + 120)     // display_info_region (120 bytes)
         assertEquals(1, buf.int)               // display_flags (bit 0 = dynamic resolution)
         assertEquals(4, buf.int)               // display_type (4 = virtual display)
-        assertEquals(369.45f, buf.float, 0.01f) // physical_width_mm
-        assertEquals(207.82f, buf.float, 0.01f) // physical_height_mm
-        assertEquals(1920, buf.int)            // max_width
-        assertEquals(1080, buf.int)            // max_height
+        assertEquals(369.45456f, buf.float, 0.01f) // physical_width_mm
+        assertEquals(207.81818f, buf.float, 0.01f) // physical_height_mm
+        assertEquals(3840, buf.int)            // max_width
+        assertEquals(2160, buf.int)            // max_height
         assertEquals(0.toShort(), buf.short)   // current_mode_index
         assertEquals(0.toShort(), buf.short)   // preferred_mode_index
-        assertEquals(0, buf.int)               // rotations
-        assertEquals(1.toShort(), buf.short)   // mode_count
+        assertEquals(7, buf.int)               // rotations
+        assertEquals(5.toShort(), buf.short)   // mode_count
 
-        // Mode table entry (28 bytes)
-        assertEquals(1920, buf.int)            // width
-        assertEquals(1080, buf.int)            // height
-        assertEquals(1920, buf.int)            // scaled_width
-        assertEquals(1080, buf.int)            // scaled_height
+        // Mode table entry 0 (28 bytes)
+        assertEquals(3840, buf.int)            // width (backing mw)
+        assertEquals(2160, buf.int)            // height (backing mh)
+        assertEquals(1920, buf.int)            // scaled_width (msw)
+        assertEquals(1080, buf.int)            // scaled_height (msh)
         assertEquals(60.0, buf.double, 0.001)  // refresh_rate_hz
         assertEquals(0, buf.int)               // flags
     }
