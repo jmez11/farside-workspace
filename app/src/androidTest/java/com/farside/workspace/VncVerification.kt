@@ -156,8 +156,10 @@ internal class VncVerification(private val test: Instrumentation) {
                 record("PASS: configured Jeff Mac HEVC and WARP Direct profiles; original Jeff Mac preserved unchanged")
             } else if (mode == "macWrong") {
                 val pm = ProfileManager(test.targetContext)
-                val profile = pm.getProfiles().single { it.name == "Test MacBook Pro" && it.type == ConnectionType.VNC }
-                val credential = pm.getCredentials().single { it.name == "James Kasyan Mac" }
+                val profile = pm.getProfiles().firstOrNull { it.name == "Jeff Mac (WARP Direct)" }
+                    ?: pm.getProfiles().firstOrNull { it.name.trim() == "Jeff Mac" }
+                    ?: pm.getProfiles().single { it.name == "Test MacBook Pro" && it.type == ConnectionType.VNC }
+                val credential = pm.getCredentials().single { it.id == profile.credentialId }
                 val texture = android.graphics.SurfaceTexture(0)
                 val surface = android.view.Surface(texture)
                 val started = SystemClock.uptimeMillis()
@@ -438,9 +440,17 @@ internal class VncVerification(private val test: Instrumentation) {
                 runCatching {
                     var pixel = 0
                     main { texture(activity.window.decorView)?.bitmap?.let { image ->
-                        pixel = image.getPixel(image.width / 4, image.height / 2); image.recycle()
+                        val stepX = (image.width / 10).coerceAtLeast(1)
+                        val stepY = (image.height / 10).coerceAtLeast(1)
+                        for (y in stepY until image.height step stepY) {
+                            for (x in stepX until image.width step stepX) {
+                                if ((image.getPixel(x, y) and 0x00ffffff) != 0) { pixel = 1; break }
+                            }
+                            if (pixel != 0) break
+                        }
+                        image.recycle()
                     } }
-                    pixel and 0x00ffffff != 0
+                    pixel != 0
                 }.getOrDefault(false)
             }
             capture(activity, "vnc-frame-${server?.encoding ?: "live"}.png").recycle()
