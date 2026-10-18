@@ -856,6 +856,18 @@ class MacHevcSession(
         out.flush()
     }
 
+    fun sendMediaStreamOffer(tilesPerFrame: Int = 1, audioEnabled: Boolean = false): ByteArray {
+        val out = checkNotNull(recordOut) { "Record stream not initialized" }
+        val layer = checkNotNull(recordLayer) { "Record layer not established" }
+        val keys = negotiationKeys ?: MacHevcNegotiationKeys.random().also { negotiationKeys = it }
+        val (videoOffer, audioOffer) = MacHevcOffers.createOffers(tilesPerFrame, audioEnabled)
+        val offer = MacHevcOffers.build0x1cMessage(audioOffer, videoOffer, keys, altSession = false)
+        log("S9: Sending MediaStreamOptions offer (0x1c, ${offer.size} bytes)")
+        layer.writeRecord(out, offer)
+        out.flush()
+        return offer
+    }
+
     fun updateDisplay(targetWidth: Int, targetHeight: Int, displayType: Int = 4) {
         if (stage != "S8" && stage != "S9") return
         val w = targetWidth.coerceIn(200, 8192) and -2
