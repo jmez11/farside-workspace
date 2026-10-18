@@ -155,6 +155,7 @@
   <string name="wireless_adb_tunnel">Tunel bezdrátového ADB</string>
   <string name="reorder_hint">Přetažením změníte pořadí. Připojení s hvězdičkou zůstávají první.</string>
   <string name="open_or_place_hint">Kliknutím otevřete, nebo přetáhněte do prostoru pro umístění okna.</string>
+    <string name="click_to_open_hint">Kliknutím otevřete okno.</string>
   <string name="done_reordering">Změna pořadí dokončena</string>
   <string name="reorder">Změnit pořadí</string>
   <string name="cancelled">Zrušeno.</string>

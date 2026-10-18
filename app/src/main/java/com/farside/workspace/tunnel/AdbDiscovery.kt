@@ -17,7 +17,12 @@ data class AdbState(val developer: Boolean, val wireless: Boolean, val port: Int
 object AdbDiscovery {
     fun flags(context: Context): AdbState {
         fun enabled(key: String) = runCatching { Settings.Global.getInt(context.contentResolver, key, 0) == 1 }.getOrDefault(false)
-        return AdbState(enabled(Settings.Global.DEVELOPMENT_SETTINGS_ENABLED), enabled("adb_wifi_enabled"))
+        val wireless = enabled("adb_wifi_enabled")
+        // Horizon can leave the generic developer-options setting absent while
+        // debugging is enabled. Actual USB/wireless ADB also establishes access.
+        val developer = enabled(Settings.Global.DEVELOPMENT_SETTINGS_ENABLED) ||
+            enabled(Settings.Global.ADB_ENABLED) || wireless
+        return AdbState(developer, wireless)
     }
 
     @Synchronized

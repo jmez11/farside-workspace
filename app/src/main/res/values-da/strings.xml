@@ -155,6 +155,7 @@
   <string name="wireless_adb_tunnel">Trådløs ADB-tunnel</string>
   <string name="reorder_hint">Træk for at omarrangere. Stjernemarkerede forbindelser bliver først.</string>
   <string name="open_or_place_hint">Klik for at åbne, eller træk ud i rummet for at placere et vindue.</string>
+    <string name="click_to_open_hint">Klik for at åbne et vindue.</string>
   <string name="done_reordering">Færdig med omarrangering</string>
   <string name="reorder">Omarranger</string>
   <string name="cancelled">Annulleret.</string>

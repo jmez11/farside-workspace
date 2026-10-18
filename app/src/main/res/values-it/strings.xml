@@ -155,6 +155,7 @@
   <string name="wireless_adb_tunnel">Tunnel ADB wireless</string>
   <string name="reorder_hint">Trascina per riordinare. Le connessioni preferite restano prime.</string>
   <string name="open_or_place_hint">Tocca per aprire, o trascina nello spazio per posizionare una finestra.</string>
+    <string name="click_to_open_hint">Fai clic per aprire una finestra.</string>
   <string name="done_reordering">Fine riordino</string>
   <string name="reorder">Riordina</string>
   <string name="cancelled">Annullato.</string>

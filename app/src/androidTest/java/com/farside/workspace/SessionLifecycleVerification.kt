@@ -45,6 +45,10 @@ internal class SessionLifecycleVerification(private val test: Instrumentation) {
     }
 
     fun run(mode: String) {
+        if (mode == "capability") {
+            WindowCapabilityVerification(test).run()
+            return
+        }
         // Keep recovery in app-private cache in case an instrumentation process crashes.
         val backupFile = File(context.cacheDir, "lifecycle-verification-backup.json")
         if (backupFile.exists()) { restore(JSONObject(backupFile.readText())); backupFile.delete() }
@@ -484,7 +488,9 @@ internal class SessionLifecycleVerification(private val test: Instrumentation) {
             val resumedLauncher = launcher
             test.runOnMainSync { launcher.startActivity(android.content.Intent(context, MainActivity::class.java)
                 .addFlags(android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)) }
-            await("Click to open, or drag into space to place a window.")
+            val placementAvailable = WindowPlacementSupport.isAvailable()
+            val launchHint = context.getString(if (placementAvailable) R.string.open_or_place_hint else R.string.click_to_open_hint)
+            await(launchHint)
             check(find("Click to open") == null && find("Drag to place") == null) { "Separate launch-mode controls remain" }
 
             lateinit var clip: android.content.ClipData
@@ -522,7 +528,8 @@ internal class SessionLifecycleVerification(private val test: Instrumentation) {
             check(available == firstSlot)
             SessionWindowSlots.release(profile.id, available)
 
-            // Exercise the actual OS drag API as an ordinary app. No shell permission is adopted.
+            // Exercise the real entry point: unsupported OS versions must exit before
+            // preparing a request/token. No shell permission identity is adopted.
             var dragStarted = false
             android.os.ParcelFileDescriptor.AutoCloseInputStream(test.uiAutomation.executeShellCommand(
                 "am task focus ${resumedLauncher.taskId}")).use { it.readBytes() }
@@ -539,15 +546,17 @@ internal class SessionLifecycleVerification(private val test: Instrumentation) {
             test.runOnMainSync {
                 val root = resumedLauncher.window.decorView
                 dragStarted = ConnectionSpatialDrag.start(root, profile)
+                if (!placementAvailable) check(WindowLaunchMonitor.pendingCount == 0)
                 if (dragStarted) root.cancelDragAndDrop()
             }
-            val up = android.view.MotionEvent.obtain(touchTime, android.os.SystemClock.uptimeMillis(), android.view.MotionEvent.ACTION_UP,
+            val up = android.view.MotionEvent.obtain(touchTime, android.os.SystemClock.uptimeMillis(),
+                if (placementAvailable) android.view.MotionEvent.ACTION_UP else android.view.MotionEvent.ACTION_CANCEL,
                 nativeTouch.exactCenterX(), nativeTouch.exactCenterY(), 0).apply {
                 source = android.view.InputDevice.SOURCE_TOUCHSCREEN
             }
             test.uiAutomation.injectInputEvent(up, true) // Cancellation may already have released the touch focus.
             up.recycle()
-            check(dragStarted) { "Home rejected the native activity drag" }
+            check(dragStarted == placementAvailable) { "Native drag disagrees with OS support policy" }
             Thread.sleep(600)
             check(created.isEmpty()) { "Canceled native drag opened a session" }
 
@@ -566,14 +575,17 @@ internal class SessionLifecycleVerification(private val test: Instrumentation) {
                 try { test.uiAutomation.injectInputEvent(event, true) } finally { event.recycle() }
             }
             pointer(android.view.MotionEvent.ACTION_DOWN, bounds.exactCenterX())
-            Thread.sleep(60)
+            // The card starts placement on long press; respect the device's
+            // timeout before moving rather than relying on incidental test delays.
+            Thread.sleep(android.view.ViewConfiguration.getLongPressTimeout().toLong() + 100)
             pointer(android.view.MotionEvent.ACTION_MOVE, bounds.exactCenterX() + 70)
             Thread.sleep(300)
-            check(dragStarts() == beforeGesture + 1) { "Dragging the actual Compose connection card did not start placement" }
-            test.runOnMainSync { resumedLauncher.window.decorView.cancelDragAndDrop() }
+            check(dragStarts() == beforeGesture + if (placementAvailable) 1 else 0) { "Card drag disagrees with OS support policy" }
+            if (placementAvailable) test.runOnMainSync { resumedLauncher.window.decorView.cancelDragAndDrop() }
             pointer(android.view.MotionEvent.ACTION_UP, bounds.exactCenterX() + 70)
             Thread.sleep(600)
             check(created.isEmpty())
+            test.runOnMainSync { check(WindowLaunchMonitor.pendingCount == 0) }
 
             val capture = Bitmap.createBitmap(resumedLauncher.window.decorView.width, resumedLauncher.window.decorView.height, Bitmap.Config.ARGB_8888)
             val captured = CountDownLatch(1)
@@ -609,7 +621,7 @@ internal class SessionLifecycleVerification(private val test: Instrumentation) {
                 .put("shadowWidth", shadowSize.x).put("shadowHeight", shadowSize.y)
                 .put("sessionWidth", sessionWidth).put("sessionHeight", sessionHeight)
                 .put("nativeDragStarted", dragStarted).put("syntheticDropRequested", nativePose.encode())
-                .put("composeDragGesture", true)
+                .put("placementAvailable", placementAvailable).put("composeDragGesture", placementAvailable)
                 .put("syntheticDropActual", dropActual.encode()).put("homeHonoredDropOptions", near(dropActual, nativePose))
                 .put("slotReused", dropped.sessionSlot == firstSlot).toString(2))
             test.runOnMainSync { resumedLauncher.finish() }

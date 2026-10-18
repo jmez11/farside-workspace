@@ -19,9 +19,10 @@ class AdbTunnelVerification(private val instrumentation: Instrumentation) {
         "local" -> local()
         "live" -> live()
         "ui" -> ui()
+        "ui-gates" -> ui(startConnector = false)
         else -> error("Unknown ADB tunnel verification mode")
     }
-    private fun ui(): String {
+    private fun ui(startConnector: Boolean = true): String {
         val context = instrumentation.targetContext
         val real = AdbDiscovery.discover(context)
         check(real.port != null)
@@ -67,9 +68,11 @@ class AdbTunnelVerification(private val instrumentation: Instrumentation) {
             sample.set(real)
             val start = waitFor("Save & start tunnel")
             check(start.isEnabled) { "Start disabled with actual ADB discovered" }
-            click("Save & start tunnel")
-            repeat(60) { if (!AdbTunnelService.connectorReady) Thread.sleep(500) }
-            check(AdbTunnelService.running && AdbTunnelService.currentPort == real.port && AdbTunnelService.connectorReady) { "Settings start did not start healthy service" }
+            if (startConnector) {
+                click("Save & start tunnel")
+                repeat(60) { if (!AdbTunnelService.connectorReady) Thread.sleep(500) }
+                check(AdbTunnelService.running && AdbTunnelService.currentPort == real.port && AdbTunnelService.connectorReady) { "Settings start did not start healthy service" }
+            }
             val bitmap = android.graphics.Bitmap.createBitmap(activity.window.decorView.width, activity.window.decorView.height, android.graphics.Bitmap.Config.ARGB_8888)
             val done = java.util.concurrent.CountDownLatch(1)
             var result = -1
@@ -79,13 +82,16 @@ class AdbTunnelVerification(private val instrumentation: Instrumentation) {
             check(done.await(5, java.util.concurrent.TimeUnit.SECONDS) && result == android.view.PixelCopy.SUCCESS)
             File(context.cacheDir, "adb-tunnel-settings.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
             bitmap.recycle()
-            click("Stop tunnel")
-            Thread.sleep(3000)
-            check(!AdbTunnelService.running && AdbTunnelService.currentPort == null) { "Settings Stop failed" }
+            if (startConnector) {
+                click("Stop tunnel")
+                Thread.sleep(3000)
+                check(!AdbTunnelService.running && AdbTunnelService.currentPort == null) { "Settings Stop failed" }
+            }
         } finally {
-            instrumentation.runOnMainSync { AdbTunnelService.stop(context); activity.finish() }
+            instrumentation.runOnMainSync { if (startConnector) AdbTunnelService.stop(context); activity.finish() }
         }
-        return "Compose setup hidden with synthetic developer-off state, fields absent with synthetic wireless-off state, actual ADB shown, saved encrypted token retained by blank field, actual Start/Stop and connector readiness PASS. Real OS debugging switches preserved."
+        return if (startConnector) "Compose setup hidden with synthetic developer-off state, fields absent with synthetic wireless-off state, actual ADB shown, saved encrypted token retained by blank field, actual Start/Stop and connector readiness PASS. Real OS debugging switches preserved."
+            else "Actual headset discovery exposes the Compose tunnel controls and enables Start; synthetic developer-off hides the section and wireless-off hides setup. No token or connector required; real OS settings preserved."
     }
     private fun local(): String {
         val context = instrumentation.targetContext

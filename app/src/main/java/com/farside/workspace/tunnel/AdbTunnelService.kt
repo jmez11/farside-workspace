@@ -51,7 +51,7 @@ class AdbTunnelService : Service() {
     override fun onCreate() {
         super.onCreate()
         getSystemService(NotificationManager::class.java).createNotificationChannel(NotificationChannel(CHANNEL, getString(com.farside.workspace.R.string.wireless_adb_tunnel), NotificationManager.IMPORTANCE_LOW))
-        for (key in listOf(Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, "adb_wifi_enabled"))
+        for (key in listOf(Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, Settings.Global.ADB_ENABLED, "adb_wifi_enabled"))
             contentResolver.registerContentObserver(Settings.Global.getUriFor(key), false, observer)
     }
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

@@ -155,6 +155,7 @@
   <string name="wireless_adb_tunnel">Trådløs ADB-tunnel</string>
   <string name="reorder_hint">Dra for å endre rekkefølge. Stjernemerkede tilkoblinger blir først.</string>
   <string name="open_or_place_hint">Klikk for å åpne, eller dra ut i rommet for å plassere et vindu.</string>
+    <string name="click_to_open_hint">Klikk for å åpne et vindu.</string>
   <string name="done_reordering">Ferdig med å endre rekkefølge</string>
   <string name="reorder">Endre rekkefølge</string>
   <string name="cancelled">Avbrutt.</string>

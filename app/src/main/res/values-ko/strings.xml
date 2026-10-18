@@ -155,6 +155,7 @@
   <string name="wireless_adb_tunnel">무선 ADB 터널</string>
   <string name="reorder_hint">드래그하여 순서를 변경하세요. 별표 표시된 연결이 먼저 유지됩니다.</string>
   <string name="open_or_place_hint">클릭하여 열거나, 공간으로 드래그하여 창을 배치하세요.</string>
+    <string name="click_to_open_hint">클릭하여 창을 여세요.</string>
   <string name="done_reordering">순서 변경 완료</string>
   <string name="reorder">순서 변경</string>
   <string name="cancelled">취소됨.</string>

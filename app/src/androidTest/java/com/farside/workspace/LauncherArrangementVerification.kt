@@ -39,6 +39,7 @@ import java.util.concurrent.TimeUnit
 /** Fixture interactions use no remote sessions, no saved profiles, and a dedicated arrangement preference file. */
 internal class LauncherArrangementVerification(private val test: Instrumentation) {
     private val context get() = test.targetContext
+    private val launchHint get() = context.getString(if (WindowPlacementSupport.isAvailable()) R.string.open_or_place_hint else R.string.click_to_open_hint)
     private val preferenceName = "verification_launcher_arrangement"
     private fun nodes(): List<AccessibilityNodeInfo> {
         test.uiAutomation.clearCache()
@@ -64,7 +65,7 @@ internal class LauncherArrangementVerification(private val test: Instrumentation
     }
     private fun bounds(label: String): Rect = Rect().also { find(label).getBoundsInScreen(it); check(!it.isEmpty) }
 
-    fun run(): String {
+    fun run(arrangementOnly: Boolean = false): String {
         val emptyPassword = SavedCredential(name = "Validation fixture", user = "macuser", pass = "")
         val missingUser = emptyPassword.copy(user = "", pass = "secret")
         val invalidVnc = emptyPassword.copy(pass = "ninechars")
@@ -134,7 +135,7 @@ internal class LauncherArrangementVerification(private val test: Instrumentation
                     }
                 }
             }
-            find("Click to open, or drag into space to place a window.")
+            find(launchHint)
             var lastHover: Rect? = null
             fun hover(targetLabel: String, tooltipLabel: String = targetLabel) {
                 val target = bounds(targetLabel)
@@ -436,6 +437,7 @@ internal class LauncherArrangementVerification(private val test: Instrumentation
                 .put("starred", JSONArray(store.load().starred.toList())).put("order", JSONArray(ids(shown.value)))
                 .put("opens", JSONArray(opens.toList())).put("visibleBeforeEdgeScroll", visibleBefore).put("visibleAfterEdgeScroll", visibleAfter)
                 .put("isolatedArrangementPreferences", true).toString(2))
+            if (arrangementOnly) return "launcher click, favorites, ordering, reorder drag, return to clicks and edge scrolling"
             test.runOnMainSync {
                 activity.setContent {
                     MaterialTheme(colorScheme = darkColorScheme()) {
@@ -514,7 +516,7 @@ internal class LauncherArrangementVerification(private val test: Instrumentation
                     window.contains(bounds.centerX(), bounds.centerY())
                 }
             }
-            fun hasEmptyStateControls() = launcherNodes().any { it.text?.toString() == "Click to open, or drag into space to place a window." ||
+            fun hasEmptyStateControls() = launcherNodes().any { it.text?.toString() == launchHint ||
                 it.text?.toString() == "Reorder" || it.contentDescription?.toString() == "Files" }
             var emptyWaits = 0
             while (hasEmptyStateControls() && emptyWaits++ < 40) Thread.sleep(50)
@@ -581,7 +583,7 @@ internal class LauncherArrangementVerification(private val test: Instrumentation
                 }
             }
             find("Fixture A")
-            find("Click to open, or drag into space to place a window.")
+            find(launchHint)
             check(launcherNodes().none { it.text?.toString() == "Reorder" || it.contentDescription?.toString() == "Files" }) {
                 "Single non-SFTP connection shows Reorder or Files"
             }

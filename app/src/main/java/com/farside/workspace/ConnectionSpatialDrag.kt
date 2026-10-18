@@ -65,6 +65,7 @@ internal object ConnectionSpatialDrag {
     }
 
     fun start(view: View, profile: ConnectionProfile): Boolean {
+        if (!WindowPlacementSupport.isAvailable()) return false
         if (active != null) return false
         request = WindowLaunchMonitor.prepare(view.context)
         val (clip, pending) = try { payload(view, profile, request) } catch (error: RuntimeException) {

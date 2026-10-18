@@ -157,6 +157,7 @@
     <string name="wireless_adb_tunnel">Wireless ADB tunnel</string>
     <string name="reorder_hint">Drag to reorder. Starred connections stay first.</string>
     <string name="open_or_place_hint">Click to open, or drag into space to place a window.</string>
+    <string name="click_to_open_hint">Click to open a window.</string>
     <string name="done_reordering">Done reordering</string>
     <string name="reorder">Reorder</string>
     <string name="cancelled">Cancelled.</string>

@@ -5,6 +5,12 @@ import java.util.concurrent.atomic.AtomicInteger
 
 internal class WindowLaunchVerification(private val test: Instrumentation) {
     fun run(): String {
+        check(!WindowPlacementSupport.isAvailable { 207 })
+        check(!WindowPlacementSupport.isAvailable { 208 })
+        check(WindowPlacementSupport.isAvailable { 209 })
+        check(WindowPlacementSupport.isAvailable { 210 })
+        check(!WindowPlacementSupport.isAvailable { throw NoClassDefFoundError("Missing Meta OS API") })
+        check(!WindowPlacementSupport.isAvailable { throw SecurityException("Version unavailable") })
         // Actual native click/drag/drop; visible+drawn callback must complete the click request.
         SessionLifecycleVerification(test).run("launch")
         var pending = -1

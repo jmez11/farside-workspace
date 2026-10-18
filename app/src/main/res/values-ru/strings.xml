@@ -155,6 +155,7 @@
   <string name="wireless_adb_tunnel">Туннель беспроводного ADB</string>
   <string name="reorder_hint">Перетащите, чтобы изменить порядок. Избранные подключения остаются первыми.</string>
   <string name="open_or_place_hint">Нажмите, чтобы открыть, или перетащите в пространство, чтобы разместить окно.</string>
+    <string name="click_to_open_hint">Нажмите, чтобы открыть окно.</string>
   <string name="done_reordering">Изменение порядка завершено</string>
   <string name="reorder">Изменить порядок</string>
   <string name="cancelled">Отменено.</string>

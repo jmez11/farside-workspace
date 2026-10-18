@@ -155,6 +155,7 @@
   <string name="wireless_adb_tunnel">Wireless-ADB-Tunnel</string>
   <string name="reorder_hint">Zum Neuordnen ziehen. Markierte Verbindungen bleiben oben.</string>
   <string name="open_or_place_hint">Klicken zum Öffnen oder in den Raum ziehen, um ein Fenster zu platzieren.</string>
+    <string name="click_to_open_hint">Klicken, um ein Fenster zu öffnen.</string>
   <string name="done_reordering">Neuordnen abgeschlossen</string>
   <string name="reorder">Neuordnen</string>
   <string name="cancelled">Abgebrochen.</string>

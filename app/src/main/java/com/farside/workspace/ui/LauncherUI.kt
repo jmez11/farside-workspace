@@ -75,6 +75,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.semantics.onClick
 import com.farside.workspace.ConnectionSpatialDrag
+import com.farside.workspace.WindowPlacementSupport
 import com.farside.workspace.QuestWindowManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
@@ -116,6 +117,7 @@ fun LauncherScreen(
     val dragView = LocalView.current
     val context = LocalContext.current
     val windowManagerAvailable = remember(context) { QuestWindowManager.isAvailable(context) }
+    val placementAvailable = remember { WindowPlacementSupport.isAvailable() }
     DisposableEffect(dragView) {
         val detach = ConnectionSpatialDrag.attach(dragView)
         onDispose { detach() }
@@ -211,7 +213,7 @@ fun LauncherScreen(
                     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         Text(if (reordering) stringResource(R.string.reorder_hint)
-                            else stringResource(R.string.open_or_place_hint),
+                            else stringResource(if (placementAvailable) R.string.open_or_place_hint else R.string.click_to_open_hint),
                             style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
                         if (profiles.size > 1) {
                             OutlinedButton(onClick = { reordering = !reordering }) {
@@ -252,6 +254,7 @@ fun ProfileCard(profile: ConnectionProfile, onEdit: () -> Unit, onDelete: () -> 
     var menuExpanded by remember { mutableStateOf(false) }
     val view = LocalView.current
     val latestProfile by rememberUpdatedState(profile)
+    val placementAvailable = remember { WindowPlacementSupport.isAvailable() }
     val context = LocalContext.current
     val background = remember(profile.cardBackground) {
         profile.cardBackground?.let { name ->
@@ -260,10 +263,11 @@ fun ProfileCard(profile: ConnectionProfile, onEdit: () -> Unit, onDelete: () -> 
     }
     val launchModifier = if (!reordering) Modifier
         .semantics { onClick { onConnect(); true } }
-        .pointerInput(profile.id, view) {
+        .pointerInput(profile.id, view, placementAvailable) {
             detectTapGestures(
                 onTap = { onConnect() },
-                onLongPress = { ConnectionSpatialDrag.start(view, latestProfile) }
+                // Consume an unsupported hold so releasing it cannot become a tap.
+                onLongPress = { if (placementAvailable) ConnectionSpatialDrag.start(view, latestProfile) }
             )
         } else Modifier
     

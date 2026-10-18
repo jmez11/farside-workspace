@@ -155,6 +155,7 @@
   <string name="wireless_adb_tunnel">Túnel ADB sem fio</string>
   <string name="reorder_hint">Arraste para reordenar. Conexões favoritadas ficam primeiro.</string>
   <string name="open_or_place_hint">Clique para abrir ou arraste para o espaço para posicionar uma janela.</string>
+    <string name="click_to_open_hint">Clique para abrir uma janela.</string>
   <string name="done_reordering">Reordenação concluída</string>
   <string name="reorder">Reordenar</string>
   <string name="cancelled">Cancelado.</string>

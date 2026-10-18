@@ -155,6 +155,7 @@
   <string name="wireless_adb_tunnel">ワイヤレスADBトンネル</string>
   <string name="reorder_hint">ドラッグして並び替え。スター付き接続は先頭に固定されます。</string>
   <string name="open_or_place_hint">クリックで開く、または空間にドラッグしてウィンドウを配置。</string>
+    <string name="click_to_open_hint">クリックしてウィンドウを開きます。</string>
   <string name="done_reordering">並び替えを終了</string>
   <string name="reorder">並び替え</string>
   <string name="cancelled">キャンセルしました。</string>

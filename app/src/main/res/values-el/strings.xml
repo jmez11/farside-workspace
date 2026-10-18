@@ -155,6 +155,7 @@
   <string name="wireless_adb_tunnel">Σήραγγα ασύρματου ADB</string>
   <string name="reorder_hint">Σύρετε για αναδιάταξη. Οι συνδέσεις με αστέρι παραμένουν πρώτες.</string>
   <string name="open_or_place_hint">Κάντε κλικ για άνοιγμα ή σύρετε στον χώρο για τοποθέτηση παραθύρου.</string>
+    <string name="click_to_open_hint">Κάντε κλικ για να ανοίξετε ένα παράθυρο.</string>
   <string name="done_reordering">Η αναδιάταξη ολοκληρώθηκε</string>
   <string name="reorder">Αναδιάταξη</string>
   <string name="cancelled">Ακυρώθηκε.</string>

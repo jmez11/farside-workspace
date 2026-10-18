@@ -155,6 +155,7 @@
   <string name="wireless_adb_tunnel">无线 ADB 隧道</string>
   <string name="reorder_hint">拖动以重新排序。已加星标的连接保持在最前面。</string>
   <string name="open_or_place_hint">点击打开，或拖入空间以放置窗口。</string>
+    <string name="click_to_open_hint">点击打开窗口。</string>
   <string name="done_reordering">排序完成</string>
   <string name="reorder">重新排序</string>
   <string name="cancelled">已取消。</string>

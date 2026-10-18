@@ -18,6 +18,11 @@ class AdbCapabilityVerification(private val instrumentation: Instrumentation) {
         for (key in listOf(Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, Settings.Global.ADB_ENABLED, "adb_wifi_enabled")) {
             lines.add("$key=" + runCatching { Settings.Global.getInt(context.contentResolver, key) }.fold({ it.toString() }, { it.toString() }))
         }
+        val state = com.farside.workspace.tunnel.AdbDiscovery.flags(context)
+        val debuggingEnabled = listOf(Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, Settings.Global.ADB_ENABLED, "adb_wifi_enabled")
+            .any { Settings.Global.getInt(context.contentResolver, it, 0) == 1 }
+        check(state.developer == debuggingEnabled) { "Developer gate disagrees with the headset's debugging settings" }
+        lines.add("developerGate=${state.developer} wireless=${state.wireless}")
         val nsd = context.getSystemService(Context.NSD_SERVICE) as NsdManager
         val found = CountDownLatch(1)
         val listener = object : NsdManager.DiscoveryListener {

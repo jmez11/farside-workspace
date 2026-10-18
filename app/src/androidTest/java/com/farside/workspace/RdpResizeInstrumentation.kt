@@ -27,6 +27,7 @@ class RdpResizeInstrumentation : Instrumentation() {
     private var adbTunnelMode: String? = null
     private var lifecycleMode: String? = null
     private var launcherOnly = false
+    private var launcherArrangementOnly = false
     private var cloudflaredOnly = false
     private var cloudflaredHost: String? = null
     private var cloudflaredCredential: String? = null
@@ -75,6 +76,7 @@ class RdpResizeInstrumentation : Instrumentation() {
         cloudflaredCredential = arguments?.getString("cloudflaredCredential")
         lifecycleMode = arguments?.getString("lifecycleMode")
         launcherOnly = arguments?.getString("launcherOnly") == "true"
+        launcherArrangementOnly = arguments?.getString("launcherArrangementOnly") == "true"
         certificateMode = arguments?.getString("certificateMode")
         audioProbe = arguments?.getString("audioProbe")
         audioMode = arguments?.getString("audioMode")
@@ -201,8 +203,8 @@ class RdpResizeInstrumentation : Instrumentation() {
                 finish(0, results)
                 return
             }
-            if (launcherOnly) {
-                val report = LauncherArrangementVerification(this).run()
+            if (launcherOnly || launcherArrangementOnly) {
+                val report = LauncherArrangementVerification(this).run(arrangementOnly = launcherArrangementOnly)
                 results.putString("stream", "PASS: $report\n")
                 finish(0, results)
                 return

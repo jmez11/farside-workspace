@@ -155,6 +155,7 @@
   <string name="wireless_adb_tunnel">Tunel bezprzewodowego ADB</string>
   <string name="reorder_hint">Przeciągnij, aby zmienić kolejność. Połączenia oznaczone gwiazdką pozostają na górze.</string>
   <string name="open_or_place_hint">Kliknij, aby otworzyć, lub przeciągnij w przestrzeń, aby umieścić okno.</string>
+    <string name="click_to_open_hint">Kliknij, aby otworzyć okno.</string>
   <string name="done_reordering">Zakończono zmianę kolejności</string>
   <string name="reorder">Zmień kolejność</string>
   <string name="cancelled">Anulowano.</string>
