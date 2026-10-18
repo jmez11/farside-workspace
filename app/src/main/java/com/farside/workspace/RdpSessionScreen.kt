@@ -668,6 +668,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                             currentWidth = width
                             currentHeight = height
                             Log.i("RdpSession", "Texture resized ${width}x${height}")
+                            connection.attach(Surface(texture))
                         }
 
                         override fun onSurfaceTextureDestroyed(texture: SurfaceTexture): Boolean {
