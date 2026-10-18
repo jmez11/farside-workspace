@@ -209,6 +209,16 @@ class VncBridge : DesktopSessionBridge {
             macHevcSession?.updateDisplay(width, height)
         }
     }
+    val isMacHevc: Boolean get() = macHevcSession != null
+    val macHevcStage: String? get() = macHevcSession?.stage
+    @Synchronized override fun getDecoderDescription(instance: Long): String {
+        val mac = macHevcSession
+        return when {
+            mac != null -> "CPU Software ZLIB (MacHevcSession stage ${mac.stage})"
+            instance != 0L && instance == active -> "CPU Software (LibVNCClient / ZRLE / Raw)"
+            else -> "Disconnected"
+        }
+    }
     @androidx.annotation.Keep fun onNativeDisconnected() { callbacks.post { disconnectListener?.invoke(R.string.vnc_server_disconnected, true) } }
     @androidx.annotation.Keep fun onNativeClipboardChanged(bytes: ByteArray, utf8: Boolean) {
         val text = bytes.toString(if (utf8) Charsets.UTF_8 else Charsets.ISO_8859_1)
