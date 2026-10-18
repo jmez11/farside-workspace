@@ -38,7 +38,8 @@ class VncBridge : DesktopSessionBridge {
         check(active == 0L)
         require(port in 1..65535)
         if (httpProxy?.expMacHevc == true) {
-            val session = MacHevcSession(host.removeSurrounding("[", "]"), port, username, password) { line ->
+            val session = MacHevcSession(host.removeSurrounding("[", "]"), port, username, password,
+                shareConsole = httpProxy.expMacShareConsole) { line ->
                 Log.i("MacHevcBridge", line)
             }
             val firstRecord = session.start()
