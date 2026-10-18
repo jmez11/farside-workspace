@@ -151,9 +151,34 @@ internal class VncVerification(private val test: Instrumentation) {
                         expMacShareConsole = false
                     ))
                 }
+                // Provision "Jeff Mac (WARP Console)" for HEVC console sharing over WARP
+                val warpConsole = pm.getProfiles().firstOrNull { it.name == "Jeff Mac (WARP Console)" }
+                if (warpConsole != null) {
+                    pm.updateProfile(warpConsole.copy(
+                        host = "192.168.4.165",
+                        port = 5900,
+                        vncAuthMode = VncAuthMode.MAC_USER,
+                        credentialId = original.credentialId,
+                        proxyType = ProxyType.NONE,
+                        expMacHevc = true,
+                        expMacShareConsole = true
+                    ))
+                } else {
+                    pm.addProfile(original.copy(
+                        id = java.util.UUID.randomUUID().toString(),
+                        name = "Jeff Mac (WARP Console)",
+                        host = "192.168.4.165",
+                        port = 5900,
+                        vncAuthMode = VncAuthMode.MAC_USER,
+                        credentialId = original.credentialId,
+                        proxyType = ProxyType.NONE,
+                        expMacHevc = true,
+                        expMacShareConsole = true
+                    ))
+                }
 
                 check(test.targetContext.getSharedPreferences("farside_profiles", 0).edit().commit())
-                record("PASS: configured Jeff Mac HEVC and WARP Direct profiles; original Jeff Mac preserved unchanged")
+                record("PASS: configured Jeff Mac HEVC, WARP Direct, and WARP Console profiles; original Jeff Mac preserved unchanged")
             } else if (mode == "macWrong") {
                 val pm = ProfileManager(test.targetContext)
                 val profile = pm.getProfiles().firstOrNull { it.name == "Jeff Mac (WARP Direct)" }
