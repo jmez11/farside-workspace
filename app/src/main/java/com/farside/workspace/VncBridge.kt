@@ -214,7 +214,7 @@ class VncBridge : DesktopSessionBridge {
     @Synchronized override fun getDecoderDescription(instance: Long): String {
         val mac = macHevcSession
         return when {
-            mac != null -> "CPU Software ZLIB (MacHevcSession stage ${mac.stage})"
+            mac != null -> mac.getDecoderDescription()
             instance != 0L && instance == active -> "CPU Software (LibVNCClient / ZRLE / Raw)"
             else -> "Disconnected"
         }
