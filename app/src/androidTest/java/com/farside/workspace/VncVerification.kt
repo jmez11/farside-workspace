@@ -102,6 +102,24 @@ internal class VncVerification(private val test: Instrumentation) {
                     it.credentialId == credential.id && it.vncAuthMode == VncAuthMode.MAC_USER
                 })
                 record("PASS: saved Mac profile linked to named credential in Apple account mode")
+            } else if (mode == "macHevcSetup") {
+                val pm = ProfileManager(test.targetContext)
+                val original = pm.getProfiles().firstOrNull { it.type == ConnectionType.VNC && it.name.trim() == "Jeff Mac" }
+                    ?: pm.getProfiles().first { it.type == ConnectionType.VNC }
+                val existing = pm.getProfiles().firstOrNull { it.name == "Jeff Mac (HEVC)" }
+                if (existing != null) {
+                    pm.updateProfile(existing.copy(expMacHevc = true, host = original.host, port = original.port,
+                        credentialId = original.credentialId, proxyType = original.proxyType, vncAuthMode = original.vncAuthMode))
+                } else {
+                    val clone = original.copy(
+                        id = java.util.UUID.randomUUID().toString(),
+                        name = "Jeff Mac (HEVC)",
+                        expMacHevc = true
+                    )
+                    pm.addProfile(clone)
+                }
+                check(test.targetContext.getSharedPreferences("farside_profiles", 0).edit().commit())
+                record("PASS: configured Jeff Mac (HEVC) profile with expMacHevc=true; original Jeff Mac preserved unchanged")
             } else if (mode == "macWrong") {
                 val pm = ProfileManager(test.targetContext)
                 val profile = pm.getProfiles().single { it.name == "Test MacBook Pro" && it.type == ConnectionType.VNC }
