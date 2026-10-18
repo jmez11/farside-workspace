@@ -66,6 +66,7 @@ internal class SessionLifecycleVerification(private val test: Instrumentation) {
                 "launch" -> launchPlacement()
                 "manipulation" -> manipulation()
                 "back" -> launcherBack()
+                "backFixture" -> launcherBack(fixtureOnly = true)
                 "backLive" -> launcherBack(true)
                 "card" -> cardActions(profiles.firstOrNull { it.name == "LAPTOP-DDJV33M6" && it.type == ConnectionType.RDP }
                     ?: error("Saved LAPTOP-DDJV33M6 profile unavailable"), false)
@@ -319,7 +320,21 @@ internal class SessionLifecycleVerification(private val test: Instrumentation) {
         return checkNotNull(result)
     }
 
-    private fun launcherBack(liveOnly: Boolean = false) {
+    private fun windowVisible(activity: Activity): Boolean {
+        var visible = false
+        test.runOnMainSync {
+            val cls = Class.forName("horizonos.app.volumetricwindow.VolumetricWindowManager")
+            val manager = activity.getSystemService(cls)
+            val token = Class.forName("horizonos.app.ActivityExt")
+                .getMethod("getVolumetricWindowToken", Activity::class.java).invoke(null, activity)
+            val info = cls.getMethod("getWindowInfo", Class.forName("horizonos.view.VolumetricWindowToken")).invoke(manager, token)
+            visible = info.javaClass.getMethod("isVisible").invoke(info) as Boolean
+        }
+        return visible
+    }
+
+    private fun launcherBack(liveOnly: Boolean = false, fixtureOnly: Boolean = false) {
+        val replaceSession = !WindowPlacementSupport.isAvailable()
         val report = JSONArray()
         var launcher: MainActivity? = null
         val latest = java.util.concurrent.atomic.AtomicReference<MainActivity?>()
@@ -340,14 +355,16 @@ internal class SessionLifecycleVerification(private val test: Instrumentation) {
                 ProfileManager(context).addProfile(profile)
                 val session = launch(profile.id)
                 Thread.sleep(1200)
-                test.uiAutomation.adoptShellPermissionIdentity()
-                val source = if (type == ConnectionType.VNC)
+                val source = if (fixtureOnly) readPose(session) else if (type == ConnectionType.VNC)
                     SavedWindowPose(index * 0.4f, 0.2f, -1.5f, 0f, 0.70710677f, 0f, 0.70710677f)
                     else SavedWindowPose(index * 0.4f, 0.2f, -1.5f, 0f, 0f, 0f, 1f)
-                move(session, source)
-                test.uiAutomation.dropShellPermissionIdentity()
+                if (!fixtureOnly) {
+                    test.uiAutomation.adoptShellPermissionIdentity()
+                    move(session, source)
+                    test.uiAutomation.dropShellPermissionIdentity()
+                }
                 check(near(readPose(session), source)) { "Fixture session placement failed" }
-                val expected = if (type == ConnectionType.VNC) source.copy(x = source.x + 0.15f)
+                val expected = if (replaceSession) source else if (type == ConnectionType.VNC) source.copy(x = source.x + 0.15f)
                     else source.copy(z = source.z + 0.15f)
                 repeat(2) { attempt ->
                     test.runOnMainSync {
@@ -361,17 +378,34 @@ internal class SessionLifecycleVerification(private val test: Instrumentation) {
                         .filter { it.taskInfo.baseIntent.component?.className == MainActivity::class.java.name && it.taskInfo.isRunning }
                     check(tasks.size == 1) { "Expected one launcher task, found ${tasks.size}" }
                     val actual = readPose(current)
+                    val sessionVisible = windowVisible(session)
                     report.put(JSONObject().put("type", type.name).put("attempt", attempt).put("expected", expected.encode())
-                        .put("actual", actual.encode()).put("launcherTask", current.taskId).put("sessionAlive", !session.isDestroyed))
+                        .put("actual", actual.encode()).put("launcherTask", current.taskId).put("sessionAlive", !session.isDestroyed)
+                        .put("replaceSession", replaceSession).put("sessionVisible", sessionVisible)
+                        .put("poseMatched", near(actual, expected)))
                     File(context.cacheDir, "launcher-back-results.json").writeText(report.toString(2))
-                    check(near(actual, expected)) { "Launcher did not move in front of $type: ${actual.encode()} expected ${expected.encode()}" }
-                    check(kotlin.math.abs(actual.qy - expected.qy) < 0.001f && kotlin.math.abs(actual.qw - expected.qw) < 0.001f)
-                    check(near(readPose(session), source)) { "Back moved the session" }
+                    if (!fixtureOnly) {
+                        check(near(actual, expected)) { "Launcher did not move in front of $type: ${actual.encode()} expected ${expected.encode()}" }
+                        check(kotlin.math.abs(actual.qy - expected.qy) < 0.001f && kotlin.math.abs(actual.qw - expected.qw) < 0.001f)
+                    }
+                    if (!fixtureOnly) check(near(readPose(session), source)) { "Back moved the session" }
                     check(!session.isDestroyed) { "Back closed session" }
+                    check(sessionVisible == !replaceSession) { "Back session visibility disagrees with OS policy" }
                     if (attempt == 0) {
-                        test.uiAutomation.adoptShellPermissionIdentity()
-                        move(current, expected.copy(x = expected.x + 0.6f))
-                        test.uiAutomation.dropShellPermissionIdentity()
+                        if (!fixtureOnly) {
+                            test.uiAutomation.adoptShellPermissionIdentity()
+                            move(current, expected.copy(x = expected.x + 0.6f))
+                            test.uiAutomation.dropShellPermissionIdentity()
+                        }
+                        test.runOnMainSync {
+                            // Android task focus alone does not restore a Horizon-hidden window.
+                            // This is an owned-window API restore, not a physical Home gesture.
+                            if (replaceSession) LauncherWindowLauncher.setSessionVisible(session, true)
+                            context.getSystemService(android.app.ActivityManager::class.java).appTasks
+                                .first { it.taskInfo.taskId == session.taskId }.moveToFront()
+                        }
+                        Thread.sleep(800)
+                        check(windowVisible(session)) { "Minimized session did not restore when brought forward" }
                     }
                 }
                 close(session)
@@ -380,12 +414,12 @@ internal class SessionLifecycleVerification(private val test: Instrumentation) {
             check(kotlin.math.abs(rotated[0] - 0.15f) < 0.001f && kotlin.math.abs(rotated[2]) < 0.001f)
             val liveProfile = ProfileManager(context).getProfiles().firstOrNull { it.type == ConnectionType.RDP && it.name.startsWith("LAPTOP-") }
             check(!liveOnly || liveProfile != null) { "The first LAPTOP connection is unavailable" }
-            if (liveProfile != null) {
+            if (liveProfile != null && !fixtureOnly) {
                 val live = launch(liveProfile.id)
                 connected(live)
                 val instance = live.rdpInstance
                 val source = readPose(live)
-                val expected = LauncherWindowLauncher.inFront(floatArrayOf(source.x, source.y, source.z, source.qx, source.qy, source.qz, source.qw))
+                val expected = LauncherWindowLauncher.inFront(floatArrayOf(source.x, source.y, source.z, source.qx, source.qy, source.qz, source.qw), if (replaceSession) 0f else 0.15f)
                 repeat(2) {
                     latest.set(null)
                     test.runOnMainSync {
@@ -473,11 +507,20 @@ internal class SessionLifecycleVerification(private val test: Instrumentation) {
                 }
             }
             await(profile.name)
+            val launcherPose = readPose(launcher)
+            val placementAvailable = WindowPlacementSupport.isAvailable()
             click(profile.name)
             val opened = checkNotNull(created.poll(10, TimeUnit.SECONDS)) { "Click did not launch" }
             activities += opened
             Thread.sleep(1800)
             val actual = readPose(opened)
+            check(launcher.isDestroyed == !placementAvailable) { "Launcher replacement disagrees with OS policy" }
+            if (!placementAvailable) {
+                check(context.getSystemService(android.app.ActivityManager::class.java).appTasks.none {
+                    it.taskInfo.baseIntent.component?.className == MainActivity::class.java.name
+                }) { "Earlier-OS launch retained a launcher task" }
+                check(near(actual, launcherPose)) { "Session did not replace launcher pose: ${actual.encode()} vs ${launcherPose.encode()}" }
+            }
             check(!near(actual, unsafe)) { "Unsafe saved pose was restored" }
             check(kotlin.math.abs(actual.x) < 20 && kotlin.math.abs(actual.y) < 20 && kotlin.math.abs(actual.z) < 20)
             check(context.getSharedPreferences("session_window_positions", Context.MODE_PRIVATE).all.isEmpty()) { "Obsolete saved positions were not removed" }
@@ -485,10 +528,12 @@ internal class SessionLifecycleVerification(private val test: Instrumentation) {
             val sessionHeight = opened.window.decorView.height
             val firstSlot = opened.sessionSlot
             close(opened)
-            val resumedLauncher = launcher
-            test.runOnMainSync { launcher.startActivity(android.content.Intent(context, MainActivity::class.java)
-                .addFlags(android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)) }
-            val placementAvailable = WindowPlacementSupport.isAvailable()
+            val resumedLauncher = if (placementAvailable) {
+                test.runOnMainSync { launcher.startActivity(android.content.Intent(context, MainActivity::class.java)
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)) }
+                launcher
+            } else test.startActivitySync(android.content.Intent(context, MainActivity::class.java)
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
             val launchHint = context.getString(if (placementAvailable) R.string.open_or_place_hint else R.string.click_to_open_hint)
             await(launchHint)
             check(find("Click to open") == null && find("Drag to place") == null) { "Separate launch-mode controls remain" }
@@ -622,6 +667,7 @@ internal class SessionLifecycleVerification(private val test: Instrumentation) {
                 .put("sessionWidth", sessionWidth).put("sessionHeight", sessionHeight)
                 .put("nativeDragStarted", dragStarted).put("syntheticDropRequested", nativePose.encode())
                 .put("placementAvailable", placementAvailable).put("composeDragGesture", placementAvailable)
+                .put("launcherReplaced", !placementAvailable).put("launcherPose", launcherPose.encode())
                 .put("syntheticDropActual", dropActual.encode()).put("homeHonoredDropOptions", near(dropActual, nativePose))
                 .put("slotReused", dropped.sessionSlot == firstSlot).toString(2))
             test.runOnMainSync { resumedLauncher.finish() }

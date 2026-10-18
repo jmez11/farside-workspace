@@ -128,7 +128,6 @@ class MainActivity : ComponentActivity() {
                         },
                         onConnectProfile = { profileId ->
                             SessionWindowLauncher.launch(this@MainActivity, profileId)
-                            moveTaskToBack(true)
                         },
                         profileManager = profileManager,
                         starredIds = arrangement.starred,

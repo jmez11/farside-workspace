@@ -38,10 +38,15 @@ internal object SessionWindowLauncher {
         val slot = SessionWindowSlots.reserve(activity, profile)
         val request = WindowLaunchMonitor.prepare(activity) { SessionWindowSlots.release(profile, slot) }
         val intent = intent(activity, profile, slot).putExtra(WindowLaunchMonitor.EXTRA_REQUEST, request)
-        // Home owns placement, including native drag/drop and docking.
+        val replaceLauncher = activity is MainActivity && !WindowPlacementSupport.isAvailable()
+        // Earlier Home releases replace the launcher at its current pose.
         try {
-            activity.startActivity(intent)
+            activity.startActivity(intent, if (replaceLauncher) LauncherWindowLauncher.placement(activity, 0f) else null)
             WindowLaunchMonitor.watch(request)
+            if (activity is MainActivity) {
+                if (replaceLauncher) activity.finishAndRemoveTask()
+                else activity.moveTaskToBack(true)
+            }
         } catch (error: RuntimeException) {
             android.util.Log.w("SessionWindow", "Window launch rejected", error)
             WindowLaunchMonitor.fail(request)

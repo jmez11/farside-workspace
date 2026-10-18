@@ -100,8 +100,14 @@ class SessionActivity : ComponentActivity() {
         },
         onPresented = { WindowLaunchMonitor.complete(intent.getStringExtra(WindowLaunchMonitor.EXTRA_REQUEST)) })
 
+    internal var restoreVisibilityOnResume = false
+
     override fun onResume() {
         super.onResume()
+        if (restoreVisibilityOnResume) {
+            restoreVisibilityOnResume = false
+            LauncherWindowLauncher.setSessionVisible(this, true)
+        }
         checkAndBindAudioSession()
     }
 
