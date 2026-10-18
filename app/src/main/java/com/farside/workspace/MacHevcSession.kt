@@ -425,7 +425,7 @@ class MacHevcSession(
                 }
 
                 // Send ViewerInfo (0x21) with APPLE_VIEWER_COMMAND_MASK + APPLE_0X12_FOLLOWUP
-                val vInfo = ByteBuffer.allocate(42 + 32).order(ByteOrder.BIG_ENDIAN)
+                val vInfo = ByteBuffer.allocate(34 + 32).order(ByteOrder.BIG_ENDIAN)
                 vInfo.put(0x21.toByte())
                 vInfo.put(0.toByte())
                 vInfo.putShort(62.toShort()) // msgSize = 0x3e
@@ -437,7 +437,7 @@ class MacHevcSession(
                 output.write(vInfo.array())
                 output.write(APPLE_0X12_FOLLOWUP)
                 output.flush()
-                log("S7: Sent ViewerInfo (0x21) + 0x12 followup")
+                log("S7: Sent ViewerInfo (0x21, 66 bytes) + 0x12 followup (12 bytes)")
                 Thread.sleep(100)
 
                 if (cmd == 2) {
