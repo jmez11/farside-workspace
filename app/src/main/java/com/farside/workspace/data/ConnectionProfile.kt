@@ -88,7 +88,8 @@ data class ConnectionProfile(
     val terminalOpacity: Float = 1f,
     val reconnectAutomatically: Boolean = false,
     val cardBackground: String? = null,
-    val connectToConsole: Boolean = false
+    val connectToConsole: Boolean = false,
+    val expMacHevc: Boolean = false
 ) {
     fun toJson(): JSONObject {
         val json = JSONObject()
@@ -145,6 +146,7 @@ data class ConnectionProfile(
         json.put("cardBackground", cardBackground)
         json.put("adminMode", adminMode)
         json.put("connectToConsole", connectToConsole)
+        json.put("expMacHevc", expMacHevc)
         return json
     }
 
@@ -206,7 +208,8 @@ data class ConnectionProfile(
                 reconnectAutomatically = json.optBoolean("reconnectAutomatically", false),
                 cardBackground = json.optString("cardBackground").takeIf { it.isNotBlank() },
                 connectToConsole = json.optBoolean("connectToConsole", false),
-                adminMode = json.optBoolean("adminMode", false)
+                adminMode = json.optBoolean("adminMode", false),
+                expMacHevc = json.optBoolean("expMacHevc", false)
             )
         }
     }
