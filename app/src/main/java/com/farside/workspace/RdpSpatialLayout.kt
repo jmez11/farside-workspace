@@ -36,7 +36,7 @@ internal object RdpSpatialLayout {
 
 /** Own-window pose only. Never adopt shell/global window permission in production. */
 internal data class RdpPanelPose(val x: Float, val y: Float, val z: Float,
-    val qx: Float, val qy: Float, val qz: Float, val qw: Float, val parent: Any?) {
+    val qx: Float, val qy: Float, val qz: Float, val qw: Float, val parent: Any?, val visible: Boolean? = null) {
     fun project(other: RdpPanelPose): RdpPanelPoint {
         val dx = other.x - x; val dy = other.y - y; val dz = other.z - z
         // Dot with this panel's right/up axes, so a turned panel group still works.
@@ -55,10 +55,30 @@ internal data class RdpPanelPose(val x: Float, val y: Float, val z: Float,
                 val rot = pose.javaClass.getMethod("getOrientation").invoke(pose) ?: continue
                 fun c(o: Any, n: String) = (o.javaClass.getMethod(n).invoke(o) as Number).toFloat()
                 val result = RdpPanelPose(c(pos,"getX"), c(pos,"getY"), c(pos,"getZ"), c(rot,"getX"), c(rot,"getY"), c(rot,"getZ"), c(rot,"getW"),
-                    info.javaClass.getMethod("getParentToken").invoke(info))
+                    info.javaClass.getMethod("getParentToken").invoke(info), info.javaClass.getMethod("isVisible").invoke(info) as? Boolean)
                 if (listOf(result.x,result.y,result.z,result.qx,result.qy,result.qz,result.qw).all { it.isFinite() }) return result
             } catch (_: ReflectiveOperationException) { } catch (_: SecurityException) { }
             return null
         }
     }
+}
+
+/** A minimization animation can move a panel before its visible flag changes. Only
+ * settled visible poses replace its room placement; hidden tray poses never do. */
+internal class RdpPanelPoseTracker {
+    private data class Candidate(val pose: RdpPanelPose, val since: Long)
+    private val candidates = mutableMapOf<Long,Candidate>()
+    private val settled = mutableMapOf<Long,RdpPanelPose>()
+    fun retain(ids: Set<Long>) { candidates.keys.retainAll(ids); settled.keys.retainAll(ids) }
+    fun update(id: Long, pose: RdpPanelPose?, shown: Boolean, now: Long) {
+        if (pose == null || pose.visible == false || !shown) { candidates.remove(id); return }
+        val previous = candidates[id]
+        val changed = previous == null || previous.pose.parent != pose.parent ||
+            kotlin.math.sqrt((pose.x-previous.pose.x)*(pose.x-previous.pose.x)+(pose.y-previous.pose.y)*(pose.y-previous.pose.y)+
+                (pose.z-previous.pose.z)*(pose.z-previous.pose.z)) > .025f ||
+            kotlin.math.abs(pose.qx*previous.pose.qx+pose.qy*previous.pose.qy+pose.qz*previous.pose.qz+pose.qw*previous.pose.qw) < .9999f
+        if (changed) candidates[id] = Candidate(pose,now)
+        if (!changed && now-checkNotNull(previous).since >= 750) settled[id] = pose
+    }
+    fun poses(ids: List<Long>): List<RdpPanelPose>? = ids.map { settled[it] ?: return null }
 }

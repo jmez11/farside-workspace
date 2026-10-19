@@ -52,6 +52,16 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
         while (!control.isClickable && control.parent != null) control = control.parent
         check(control.isEnabled && control.performAction(AccessibilityNodeInfo.ACTION_CLICK)) { "Disabled/rejected action: $label" }
     }
+    private fun presentation(activity: SessionActivity): Pair<Boolean, Boolean> {
+        test.uiAutomation.adoptShellPermissionIdentity()
+        return try {
+            val cls = Class.forName("horizonos.app.volumetricwindow.VolumetricWindowManager")
+            val token = Class.forName("horizonos.app.ActivityExt").getMethod("getVolumetricWindowToken", android.app.Activity::class.java).invoke(null,activity)
+            val info = cls.getMethod("getWindowInfo",Class.forName("horizonos.view.VolumetricWindowToken")).invoke(activity.getSystemService(cls),token)
+            (info.javaClass.getMethod("isVisible").invoke(info) == true) to (info.javaClass.getMethod("isDrawn").invoke(info) == true)
+        } finally { test.uiAutomation.dropShellPermissionIdentity() }
+    }
+    fun geometryOnly(): String { geometryTests(); return "Monitor bounds, connectivity, stable wire IDs, unordered host matching, hidden-pose tracking and gesture ownership." }
     private fun geometryTests() {
         val row = RdpMonitorLayouts.row(listOf(RdpMonitorRect(10, 0, 0, 1281, 800), RdpMonitorRect(11, 0, 0, 1024, 768)))
         check(row[0].width == 1280 && row[1].x == 1280)
@@ -84,7 +94,26 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
             gesture.onTouch(event); event.recycle()
         }
         check(transfers == 1 && sent == listOf(FreeRDPBridge.PTR_FLAGS_BUTTON1 or FreeRDPBridge.PTR_FLAGS_DOWN,FreeRDPBridge.PTR_FLAGS_MOVE)) { "Transferred gesture sent an early release: $sent" }
-        report.put("layoutAndPointerBounds", true).put("signedLayoutsAndTransferredGesture",true)
+        val crossed = listOf(RdpMonitorRect(1,0,800,1280,800),RdpMonitorRect(2,2560,0,1024,768),
+            RdpMonitorRect(3,0,0,1280,800),RdpMonitorRect(4,1280,0,1280,800))
+        check(RdpMonitorLayouts.valid(crossed,16,8192,8192))
+        val stableWire = RdpMonitorLayouts.wire(crossed).toList().chunked(5)
+        check(stableWire.map { it[0] to it[1] } == listOf(0 to 0,2560 to -800,0 to -800,1280 to -800))
+        val tracker = RdpPanelPoseTracker()
+        val room = RdpPanelPose(0f,0f,0f,0f,0f,0f,1f,null,true)
+        tracker.update(1,room,true,0); tracker.update(1,room,true,1000)
+        check(tracker.poses(listOf(1L))?.single() == room)
+        tracker.update(1,room.copy(y=-1f),true,1100) // transient visible part of minimization
+        tracker.update(1,room.copy(y=-1f,visible=false),false,1400)
+        check(tracker.poses(listOf(1L))?.single() == room)
+        val restoredPose = room.copy(x=2f)
+        tracker.update(1,restoredPose,true,2000); tracker.update(1,restoredPose,true,2800)
+        check(tracker.poses(listOf(1L))?.single() == restoredPose)
+        check(!RdpMonitorLayouts.valid(listOf(row.first(),row.last().copy(x=10000)),16,8192,8192))
+        val raw = longArrayOf(1,16,8192,8192,2304,800,0,1,1,2,1280,0,2303,767,0,0,0,1279,799,1,1)
+        check(RdpMonitorLayouts.matches(raw,row)) { "Server enumeration order must not change monitor identity" }
+        check(!RdpMonitorLayouts.matches(raw.copyOf().also { it[4]=1280 },row)) { "Framebuffer bounds must also agree" }
+        report.put("layoutAndPointerBounds", true).put("signedLayoutsAndTransferredGesture",true).put("unorderedHostMonitors",true)
     }
     private fun dragEvent(action: Int, x: Float, y: Float, description: android.content.ClipDescription?): android.view.DragEvent {
         // Android 14 Parcelable field order, verified against the headset framework.
@@ -229,14 +258,17 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
                     main {
                         val raw = native.getMonitorLayoutState(handle)
                         val surfaces = native.getMonitorSurfaceState(handle).toList().chunked(8)
-                        ready = session.instance.value == handle && session.bridge === native && !session.busy &&
-                            session.monitors.size == count && raw.getOrNull(9) == count.toLong() && surfaces.size == count &&
-                            surfaces.all { it[7] > 0 && it[5] == raw[7] && it[6] == raw[7] }
+                        val attached = session.monitors.filter { it.surface != null && it.visible }
+                        ready = session.instance.value == handle && session.bridge === native && !session.busy && !session.layoutNeedsRetry && session.inputReady &&
+                            session.monitors.size == count && raw.getOrNull(9) == count.toLong() && surfaces.size == attached.size &&
+                            RdpMonitorLayouts.matches(RdpMonitorLayouts.normalized(raw),session.monitors.map { it.rect }) &&
+                            attached.all { m -> surfaces.any { it[0] == m.id && it[1] == m.rect.x.toLong() && it[2] == m.rect.y.toLong() &&
+                                it[3] == m.rect.width.toLong() && it[4] == m.rect.height.toLong() && it[7] > 0 && it[5] == raw[7] && it[6] == raw[7] } }
                     }
                     ready
                 }
             }
-            fun record(label: String) {
+            fun record(label: String, allowMinimized: Boolean = false) {
                 settled(session.monitors.size)
                 val stage = JSONObject().put("stage", label).put("sameNativeConnection", session.instance.value == handle)
                 val raw = native.getMonitorLayoutState(handle)
@@ -245,6 +277,14 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
                 session.monitors.toList().forEach { monitor ->
                     val activity = checkNotNull(monitor.host.get())
                     var bitmap: Bitmap? = null
+                    if (allowMinimized) {
+                        val (visible,drawn) = presentation(activity)
+                        if (!visible || !drawn || monitor.surface == null || texture(activity.window.decorView)?.isAvailable != true) {
+                            windows.put(JSONObject().put("monitor",monitor.id).put("task",activity.taskId).put("surfaceAttached",monitor.surface != null)
+                                .put("visible",visible).put("drawn",drawn))
+                            return@forEach
+                        }
+                    }
                     // This saved Windows desktop has a known non-flat image. Color is a test
                     // fixture condition, never the production readiness criterion (black is valid).
                     await("$label monitor ${monitor.id} actual desktop video", 15_000) {
@@ -263,20 +303,10 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
                     for (y in 0 until image.height step maxOf(1, image.height / 50)) for (x in 0 until image.width step maxOf(1, image.width / 50)) colors += image.getPixel(x, y)
                     var visible = false
                     var drawn = false
-                    // These diagnostic fields require shell identity on SDK 207; ordinary
-                    // owned-window lookup is sufficient for the production audio token only.
-                    test.uiAutomation.adoptShellPermissionIdentity()
-                    try {
-                        await("$label native window ${monitor.id} visible/drawn", 10_000) {
-                            val managerClass = Class.forName("horizonos.app.volumetricwindow.VolumetricWindowManager")
-                            val manager = activity.getSystemService(managerClass)
-                            val token = Class.forName("horizonos.app.ActivityExt").getMethod("getVolumetricWindowToken", android.app.Activity::class.java).invoke(null, activity)
-                            val info = managerClass.getMethod("getWindowInfo", Class.forName("horizonos.view.VolumetricWindowToken")).invoke(manager, token)
-                            visible = info.javaClass.getMethod("isVisible").invoke(info) == true
-                            drawn = info.javaClass.getMethod("isDrawn").invoke(info) == true
-                            visible && drawn
-                        }
-                    } finally { test.uiAutomation.dropShellPermissionIdentity() }
+                    await("$label native window ${monitor.id} visible/drawn", 10_000) {
+                        val state = presentation(activity); visible = state.first; drawn = state.second
+                        allowMinimized || visible && drawn
+                    }
                     windows.put(JSONObject().put("visible", visible).put("drawn", drawn).put("monitor", monitor.id).put("task", activity.taskId).put("width", monitor.rect.width).put("height", monitor.rect.height).put("x", monitor.rect.x).put("sampleColors", colors.size))
                     image.recycle()
                 }
@@ -298,33 +328,17 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
             click(context.getString(R.string.rdp_add_desktop)); settled(2); record("two")
             val second = session.monitors.last()
             report.put("ordinaryPanelPoses", JSONArray(session.monitors.map { RdpPanelPose.read(checkNotNull(it.host.get()))?.toString() ?: "unavailable" }))
-            fun arrangementAction(resource: Int) {
-                val activity = checkNotNull(second.host.get())
-                // Reveal this panel's toolbar; actual control dispatch uses its own display.
-                main { activity.onWindowFocusChanged(true) }
-                val display = activity.display!!.displayId
-                val action = context.getString(R.string.rdp_arrange_desktops)
-                await("arrangement toolbar") { node(action,display) != null }
-                click(action,display)
-                val button = context.getString(resource)
-                await("arrangement dialog") { node(button,display) != null }
-                click(button,display)
+            fun followPlacement() {
+                session.monitors.forEach { m -> main { m.host.get()?.onWindowFocusChanged(true) } }
+                val before = session.layoutSubmissions
+                val action = context.getString(R.string.rdp_layout_auto)
+                await("follow panel placement toolbar") { node(action) != null }
+                click(action)
+                await("toolbar re-reads and resubmits layout") { var ready = false; main { ready = session.layoutSubmissions > before && !session.busy && !session.layoutNeedsRetry }; ready }
+                settled(session.monitors.size)
             }
-            fun placement(label: String, dx: Int, dy: Int) {
-                arrangementAction(if (dx < 0) R.string.rdp_layout_left else if (dx > 0) R.string.rdp_layout_right else if (dy > 0) R.string.rdp_layout_above else R.string.rdp_layout_below)
-                await(label) { var ready = false; main { ready = !session.busy && session.inputReady &&
-                    (if (dx < 0) second.rect.x < first.rect.x else if (dx > 0) second.rect.x > first.rect.x else if (dy > 0) second.rect.y < first.rect.y else second.rect.y > first.rect.y) }; ready }
-                record(label)
-                check(RdpMonitorLayouts.matches(RdpMonitorLayouts.normalized(native.getMonitorLayoutState(handle)),session.monitors.map { it.rect }))
-            }
-            placement("second-left",-1,0)
-            placement("second-above",0,1)
-            placement("second-below",0,-1)
-            placement("second-right",1,0)
-            report.put("liveFourDirections",true)
-            nativeDrag(first,second)
-            arrangementAction(R.string.rdp_layout_auto)
-            report.put("arrangementToolbarAndDialog",true)
+            followPlacement()
+            report.put("followPlacementToolbarWithoutDialog",true)
             await("automatic layout from ordinary actual panel poses") {
                 var ready = false
                 main {
@@ -339,8 +353,6 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
             Thread.sleep(1500)
             record("automatic-actual-poses")
             report.put("automaticOrdinaryPanelPoses",true)
-            // Hold fixture geometry stable for the remaining lifecycle checks.
-            main { session.arrange(mapOf(first.id to RdpPanelPoint(0f,0f),second.id to RdpPanelPoint(1f,0f))) }
             settled(2)
             check(second.session === first.session && second.host.get()?.rdpBridge === native)
             // Native crop geometry and inverse pointer mapping share the same committed rectangle.
@@ -358,6 +370,89 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
             check(session.bridge === native && session.instance.value == handle)
             main { session.addWindow(checkNotNull(second.host.get())) }
             settled(3); record("three")
+            main { session.addWindow(checkNotNull(session.monitors.last().host.get())) }
+            settled(4)
+            report.put("fourOwnedWindowState",JSONArray(session.monitors.map { m ->
+                val activity = checkNotNull(m.host.get())
+                JSONObject().put("monitor",m.id).put("pose",RdpPanelPose.read(activity).toString())
+                    .put("shown",activity.window.decorView.isShown).put("windowVisibility",activity.window.decorView.windowVisibility)
+                    .put("lifecycle",activity.lifecycle.currentState.name).put("nativeVisible",presentation(activity).first)
+            }))
+            File(directory,"results.json").writeText(report.put("stages",stages).toString(2))
+            record("four",allowMinimized = true)
+            val fourth = session.monitors.last()
+            val ids = session.monitors.map { it.id }
+            val fourGeometry = session.monitors.map { it.rect }
+            Thread.sleep(1500)
+            settled(4)
+            check(session.monitors.map { it.rect } == fourGeometry) { "Minimized tray pose changed remote monitor geometry" }
+            report.put("minimizedTrayPoseIgnored",true)
+            // A server-side reset to one monitor previously exposed the atlas in one panel
+            // and stranded stale surfaces in the others. Recovery must retain all four IDs.
+            val previousRevision = native.getMonitorLayoutState(handle)[7]
+            main { check(native.requestMonitorLayout(handle,intArrayOf(0,0,1280,800,1))) }
+            await("unsolicited host topology recovered",30_000) {
+                var ready = false
+                main { ready = native.getMonitorLayoutState(handle)[7] > previousRevision &&
+                    native.getMonitorLayoutState(handle).getOrNull(9) == 4L && !session.busy && !session.layoutNeedsRetry }
+                ready
+            }
+            settled(4)
+            check(session.monitors.map { it.id } == ids && session.instance.value == handle)
+            report.put("unexpectedHostResetRecovered",true)
+            // Corrupt an attached local crop without changing the host, as a surface-restore
+            // regression fixture. Health checks must repair it without a remote reset loop.
+            val restored = session.monitors.last { it.surface != null && it.visible }
+            val beforeCropRepair = session.layoutSubmissions
+            main { val raw = native.getMonitorLayoutState(handle)
+                native.setMonitorSurface(handle,restored.id,restored.surface,0,0,raw[4].toInt(),raw[5].toInt(),0) }
+            settled(4)
+            Thread.sleep(500)
+            check(session.layoutSubmissions == beforeCropRepair)
+            report.put("staleLocalCropRepairedWithoutResetLoop",true)
+            // An oversized request exercises both failed attempts and the actual retry icon
+            // without disconnecting or deleting any of the four desktop windows.
+            val originalWidth = fourth.requestedWidth; val originalHeight = fourth.requestedHeight
+            val beforeFailure = session.layoutSubmissions
+            main { session.resize(fourth,8192,8192) }
+            await("automatic retry then actionable layout error") {
+                var ready = false
+                main { ready = session.layoutNeedsRetry && !session.busy && !session.inputReady && session.canRetryLayout &&
+                    session.layoutSubmissions >= beforeFailure + 2 }
+                ready
+            }
+            check(session.monitors.map { it.id } == ids)
+            session.monitors.forEach { m -> main { m.host.get()?.onWindowFocusChanged(true) } }
+            val retryLabel = context.getString(R.string.rdp_retry_layout)
+            await("retry layout toolbar action") { node(retryLabel) != null }
+            click(retryLabel)
+            main { session.resize(fourth,originalWidth,originalHeight) }
+            settled(4)
+            check(!session.layoutNeedsRetry && session.canAdd && session.monitors.map { it.id } == ids)
+            report.put("automaticRetryAndToolbarRecovery",true)
+            record("four-recovered",allowMinimized = true)
+            val hidden = session.monitors.firstOrNull { m -> !presentation(checkNotNull(m.host.get())).first }
+            if (hidden != null) {
+                val activity = checkNotNull(hidden.host.get())
+                main { LauncherWindowLauncher.setSessionVisible(activity,true) }
+                android.os.ParcelFileDescriptor.AutoCloseInputStream(test.uiAutomation.executeShellCommand("am task focus ${activity.taskId}")).use { it.readBytes() }
+                await("restore OS-hidden desktop") { val state = presentation(activity); state.first && state.second }
+                settled(4)
+                record("four-native-restored",allowMinimized = true)
+                report.put("ownedNativeVisibilityRestore",true)
+            }
+
+            val surfaceRestored = session.monitors.last { it.surface != null && it.visible }
+            val restoredTexture = checkNotNull(texture(checkNotNull(surfaceRestored.host.get()).window.decorView)?.surfaceTexture)
+            main { surfaceRestored.detach(); surfaceRestored.launchDeadline = android.os.SystemClock.elapsedRealtime()-1 }
+            Thread.sleep(600)
+            check(session.monitors.map { it.id } == ids) { "Minimized presented monitor reservation was removed" }
+            main { surfaceRestored.attach(android.view.Surface(restoredTexture)) }
+            settled(4)
+            report.put("fourMonitorSurfaceRestore",true)
+            followPlacement()
+            main { fourth.host.get()?.finishAndRemoveTask() }
+            settled(3)
             main { session.cameraMuted.value = true }
             await("session camera mute reaches shared native context") { native.isCameraMuted(handle) }
             check(first.session.cameraMuted === second.session.cameraMuted)
@@ -415,8 +510,15 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
             await("last monitor tears down session") { session.instance.value == 0L && session.monitors.isEmpty() }
             check(capture.isClosed)
             report.put("lastWindowClosed", true).put("result", "PASS")
-            return "Toolbar opened real same-session monitor windows; 1->2->3->2->1, secondary resize, per-monitor crops, pointer bounds, shared mute, primary audio transfer, transient surface reattach, final teardown."
+            return "Four same-session desktops; follow-placement toolbar, automatic host/crop recovery, bounded retry and retry toolbar, surface restore, resize, reconnect, shared ownership and teardown."
         } catch (error: Throwable) {
+            runtime?.let { session -> main {
+                val handle = session.instance.value
+                if (handle != 0L) report.put("failedServerLayout",JSONArray(session.bridge.getMonitorLayoutState(handle).toList()))
+                    .put("failedSurfaceState",JSONArray(session.bridge.getMonitorSurfaceState(handle).toList()))
+                    .put("failedRequestedGeometry",JSONArray(session.monitors.map { listOf(it.id,it.requestedWidth,it.requestedHeight) }))
+                    .put("failedLocalGeometry",JSONArray(session.monitors.map { it.rect.toString() }))
+            } }
             report.put("result", "FAIL").put("error", error.stackTraceToString())
             throw error
         } finally {

@@ -34,8 +34,20 @@ internal object RdpMonitorLayouts {
         return monitors.map { m -> m.copy(x = x, y = 0,
             width = (m.width.coerceIn(200, 8192) and -2), height = m.height.coerceIn(200, 8192)).also { x += it.width } }
     }
-    fun wire(row: List<RdpMonitorRect>) = row.flatMapIndexed { i, m ->
-        listOf(m.x - row.first().x, m.y - row.first().y, m.width, m.height, if (i == 0) 1 else 0) }.toIntArray()
+    private fun touches(a: RdpMonitorRect, b: RdpMonitorRect): Boolean =
+        ((a.x + a.width == b.x || b.x + b.width == a.x) && maxOf(a.y,b.y) <= minOf(a.y+a.height,b.y+b.height)) ||
+        ((a.y + a.height == b.y || b.y + b.height == a.y) && maxOf(a.x,b.x) <= minOf(a.x+a.width,b.x+b.width))
+    private fun connectedOrder(row: List<RdpMonitorRect>): List<RdpMonitorRect> {
+        if (row.isEmpty()) return row
+        val order = mutableListOf(row.first()); val remaining = row.drop(1).toMutableList()
+        while (remaining.isNotEmpty()) {
+            val next = remaining.firstOrNull { candidate -> order.any { touches(it,candidate) } } ?: break
+            order += next; remaining.remove(next)
+        }
+        return order
+    }
+    fun wire(row: List<RdpMonitorRect>) = row.flatMapIndexed { i,m ->
+        listOf(m.x-row.first().x,m.y-row.first().y,m.width,m.height,if (i == 0) 1 else 0) }.toIntArray()
     fun normalized(raw: LongArray): LongArray {
         val count = raw.getOrNull(9)?.toInt() ?: return raw
         if (count !in 1..16 || raw.size < 10 + count * 5) return raw
@@ -50,14 +62,16 @@ internal object RdpMonitorLayouts {
         return row.minOf { it.x } == 0 && row.minOf { it.y } == 0 && width <= 32766 && height <= 32766 &&
             row.all { it.width in 200..8192 && it.width % 2 == 0 && it.height in 200..8192 } &&
             row.withIndex().all { (i, a) -> row.drop(i + 1).none { b -> a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height } } &&
-            width * height <= MAX_PIXELS && row.sumOf { it.width.toLong() * it.height } <= minOf(budget, MAX_PIXELS)
+            connectedOrder(row).size == row.size && width * height <= MAX_PIXELS && row.sumOf { it.width.toLong() * it.height } <= minOf(budget, MAX_PIXELS)
     }
     fun pointer(rect: RdpMonitorRect, x: Int, y: Int) =
         (rect.x + x.coerceIn(0, rect.width - 1)) to (rect.y + y.coerceIn(0, rect.height - 1))
-    fun matches(raw: LongArray, row: List<RdpMonitorRect>): Boolean = raw.size >= 10 + row.size * 5 && raw[9] == row.size.toLong() &&
-        row.withIndex().all { (i, m) -> val p = 10 + i * 5
+    fun matches(raw: LongArray, row: List<RdpMonitorRect>): Boolean = row.isNotEmpty() && raw.size >= 10 + row.size * 5 && raw[9] == row.size.toLong() &&
+        raw[4] == row.maxOf { it.x.toLong()+it.width } && raw[5] == row.maxOf { it.y.toLong()+it.height } &&
+        row.withIndex().all { (i, m) -> (row.indices).any { j -> val p = 10 + j * 5
             raw[p] == m.x.toLong() && raw[p + 1] == m.y.toLong() && raw[p + 2] == (m.x + m.width - 1).toLong() &&
-                raw[p + 3] == (m.y + m.height - 1).toLong() && (raw[p + 4].toInt() and 1 != 0) == (i == 0) }
+                raw[p + 3] == (m.y + m.height - 1).toLong() && (raw[p + 4].toInt() and 1 != 0) == (i == 0) } }
+
 }
 
 internal class RdpMonitor(val session: RdpMonitorSession, val id: Long) : DesktopSessionConnection {
@@ -89,7 +103,7 @@ internal class RdpMonitor(val session: RdpMonitorSession, val id: Long) : Deskto
     }
     private fun key(code: Int, down: Boolean, unicode: Boolean) {
         val handle = session.instance.value
-        if (handle == 0L) return
+        if (handle == 0L || down && !session.inputReady) return
         val held = if (unicode) heldUnicode else heldKeys
         val wasHeld = code in held
         if (down) held.add(code) else held.remove(code)
@@ -98,6 +112,8 @@ internal class RdpMonitor(val session: RdpMonitorSession, val id: Long) : Deskto
             if (unicode) session.bridge.sendUnicodeKeyEvent(handle, code, down) else session.bridge.sendKeyEvent(handle, code, down)
         }
     }
+    var visible = true
+    var hadSurface = false
     var surface: Surface? = null
     var host = WeakReference<SessionActivity>(null)
     var presented = false
@@ -112,7 +128,7 @@ internal class RdpMonitor(val session: RdpMonitorSession, val id: Long) : Deskto
             set(value) { /* The session owns clipboard synchronization. */ }
         override fun sendClipboardText(instance: Long, text: String) = handle != 0L && native.sendClipboardText(handle, text)
         override fun sendMouseEvent(instance: Long, x: Int, y: Int, flags: Int) {
-            if (handle != 0L && session.inputReady && !session.drag.active) {
+            if (handle != 0L && session.acceptsInput(this@RdpMonitor) && !session.drag.active) {
                 val (remoteX, remoteY) = RdpMonitorLayouts.pointer(rect, x, y)
                 pointer = remoteX to remoteY
                 val button = flags and 0x7000
@@ -172,44 +188,58 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
         private set
     val drag = RdpSessionDrag(this)
     private var panelPoints: Map<Long, RdpPanelPoint> = emptyMap()
-    private var manualLayout = false
     private var nextPoseRead = 0L
     private var poseCandidate: List<RdpMonitorRect>? = null
     private var poseSince = 0L
     private var posePoints: Map<Long, RdpPanelPoint> = emptyMap()
-    fun arrange(points: Map<Long, RdpPanelPoint>) {
-        manualLayout = true; panelPoints = points; resizeAt = SystemClock.elapsedRealtime() + 300
+    private val visiblePoses = RdpPanelPoseTracker()
+    var layoutNeedsRetry by mutableStateOf(false)
+        private set
+    val canRetryLayout get() = instance.value != 0L && disconnectedReason.value == null && !busy && !drag.active
+    private var forceSync = false
+    private var retryBlocked = false
+    private var automaticRetries = 0
+    internal var layoutSubmissions = 0
+        private set
+    fun acceptsInput(monitor: RdpMonitor) = inputReady && monitor.visible &&
+        (committed.any { it == monitor.rect } || committed.isEmpty() && isOwner(monitor))
+    /** Re-read physical placement and reconcile both the remote topology and local outputs. */
+    fun followPanelLayout() {
+        if (closed || instance.value == 0L || busy || drag.active) return
+        nextPoseRead = 0; poseCandidate = null
+        observePanels(SystemClock.elapsedRealtime(), immediate = true)
+        retryBlocked = false; automaticRetries = 0; forceSync = true
+        busy = true; canAdd = false; inputReady = false
+        monitors.forEach { it.releaseInput(mouseOnly = true) }
+        resizeAt = SystemClock.elapsedRealtime() + 300
     }
-    fun arrangeRelative(monitor: RdpMonitor, anchor: RdpMonitor, dx: Int, dy: Int) {
-        if (monitor === anchor || monitor !in monitors || anchor !in monitors || busy || drag.active) return
-        val scale = monitors.maxOf { maxOf(it.rect.width, it.rect.height) }.toFloat()
-        val rows = monitors.map { it.rect.y }.distinct().sorted()
-        val points = monitors.associate { it.id to RdpPanelPoint(it.rect.x / scale, -rows.indexOf(it.rect.y).toFloat()) }.toMutableMap()
-        val a = points.getValue(anchor.id)
-        // Insert between existing neighbors rather than relying on a tie in creation order.
-        val offset = .5f
-        if (dy == 0) {
-            points.entries.filter { it.key != monitor.id && kotlin.math.abs(it.value.y-a.y) <= .25f &&
-                (if (dx > 0) it.value.x > a.x else it.value.x < a.x) }.forEach { it.setValue(it.value.copy(x=it.value.x+dx*offset)) }
-        } else {
-            points.entries.filter { it.key != monitor.id && (if (dy > 0) it.value.y > a.y else it.value.y < a.y) }
-                .forEach { it.setValue(it.value.copy(y=it.value.y+dy*offset)) }
-        }
-        points[monitor.id] = RdpPanelPoint(a.x + dx*offset, a.y + dy*offset)
-        arrange(points)
-    }
-    fun followPanelLayout() { manualLayout = false; nextPoseRead = 0; poseCandidate = null }
     private fun targetLayout(ready: List<RdpMonitor>) = RdpSpatialLayout.arrange(
         ready.map { RdpMonitorRect(it.id, 0, 0, it.requestedWidth, it.requestedHeight) }, panelPoints)
-    private fun observePanels(now: Long) {
-        if (manualLayout || now < nextPoseRead || monitors.size < 2 || drag.active) return
+    private fun observePanels(now: Long, immediate: Boolean = false) {
+        if ((!immediate && now < nextPoseRead) || drag.active) return
         nextPoseRead = now + 500
-        val poses = monitors.map { it.host.get()?.let(RdpPanelPose::read) ?: return }
+        val ids = monitors.map { it.id }
+        visiblePoses.retain(ids.toSet())
+        for (monitor in monitors) monitor.host.get()?.let { activity ->
+            val pose = RdpPanelPose.read(activity)
+            val shown = pose?.visible != false && activity.window.decorView.isShown
+            if (monitor.visible != shown) {
+                monitor.visible = shown
+                if (!shown) { drag.cancelFor(monitor); monitor.releaseInput() }
+                applySurface(monitor)
+            }
+            visiblePoses.update(monitor.id,pose,shown,now)
+        }
+        if (monitors.size < 2) return
+        // Home moves minimized panels into a lower tray before hiding them. Keep their
+        // last settled room pose until a visible restoration supplies a replacement.
+        val poses = visiblePoses.poses(ids) ?: return
         if (poses.any { it.parent != poses.first().parent }) return
         val points = monitors.mapIndexed { i, m -> m.id to poses.first().project(poses[i]) }.toMap()
         // Identity/local poses on some Home versions do not describe a shared arrangement.
         if (points.values.toList().withIndex().any { (i,a) -> points.values.drop(i+1).any { b -> kotlin.math.hypot(a.x-b.x,a.y-b.y) < .05f } }) return
         val target = RdpSpatialLayout.arrange(monitors.map { RdpMonitorRect(it.id,0,0,it.requestedWidth,it.requestedHeight) }, points)
+        if (immediate) { panelPoints = points; poseCandidate = target; posePoints = points; poseSince = now; return }
         if (target != poseCandidate || points.keys != posePoints.keys || points.any { (id,p) ->
             posePoints[id]?.let { kotlin.math.hypot(p.x-it.x,p.y-it.y) > .025f } != false }) {
             poseCandidate = target; posePoints = points; poseSince = now; return
@@ -226,10 +256,8 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
     private var committed = emptyList<RdpMonitorRect>()
     private var inFlight: List<RdpMonitorRect>? = null
     private var sentAt = 0L
-    private var sentRevision = 0L
     private var revision = 0L
     private var resizeAt = 0L
-    private var fallback = false
     private var layoutActive = false
     private var closed = false
     private var lastRaw = longArrayOf()
@@ -278,6 +306,7 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
     fun attach(monitor: RdpMonitor, next: Surface) {
         if (closed || monitor !in monitors) { next.release(); return }
         detachSurface(monitor)
+        monitor.hadSurface = true
         monitor.surface = next
         if (connection == null && !reconnecting) connect(next) else applySurface(monitor)
     }
@@ -292,8 +321,8 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
         if (handle == 0L) return
         val r = monitor.rect
         // A not-yet-confirmed new monitor gets no mirrored primary surface.
-        val surface = monitor.surface.takeIf { if (fallback) isOwner(monitor) else committed.isEmpty() && isOwner(monitor) || committed.any { it.id == monitor.id } }
-        bridge.setMonitorSurface(handle, monitor.id, surface, r.x, r.y, r.width, r.height, if (fallback) 0 else revision)
+        val surface = monitor.surface.takeIf { monitor.visible && (committed.isEmpty() && isOwner(monitor) || committed.any { it.id == monitor.id }) }
+        bridge.setMonitorSurface(handle, monitor.id, surface, r.x, r.y, r.width, r.height, revision)
     }
     fun resize(monitor: RdpMonitor, width: Int, height: Int) {
         val w = width.coerceIn(200, 8192) and -2; val h = height.coerceIn(200, 8192)
@@ -332,11 +361,49 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
         if (monitors.isEmpty()) { close(); return }
         resizeAt = SystemClock.elapsedRealtime() + 300
         if (inFlight == null) busy = false
+        if (retryBlocked) {
+            retryBlocked = false; automaticRetries = 0; forceSync = true; busy = true
+            observePanels(SystemClock.elapsedRealtime(), immediate = true)
+        }
         updateMediaHost()
+    }
+    private fun readyMonitors() = monitors.filter { it.presented && it.hadSurface || committed.any { r -> r.id == it.id } }
+    private fun nativeOutputs() = bridge.getMonitorSurfaceState(instance.value).toList().chunked(8).filter { it.size == 8 }.associateBy { it[0] }
+    private fun outputGeometry(output: List<Long>?, rect: RdpMonitorRect, version: Long): Boolean = output != null &&
+        output[1] == rect.x.toLong() && output[2] == rect.y.toLong() && output[3] == rect.width.toLong() &&
+        output[4] == rect.height.toLong() && output[5] == version
+    private fun outputsMatch(target: List<RdpMonitorRect>, version: Long): Boolean {
+        val outputs = nativeOutputs()
+        val attached = monitors.filter { m -> m.surface != null && m.visible && target.any { it.id == m.id } }
+        return outputs.size == attached.size && attached.all { m ->
+            val rect = target.first { it.id == m.id }; val output = outputs[m.id]
+            m.rect == rect && outputGeometry(output, rect, version) && output!![6] == version && output[7] > 0
+        }
+    }
+    private fun bindOutputs(target: List<RdpMonitorRect>, version: Long) {
+        val outputs = nativeOutputs()
+        for ((id, _) in outputs) if (monitors.none { m -> m.id == id && m.surface != null && m.visible && target.any { it.id == id } })
+            bridge.setMonitorSurface(instance.value, id, null, 0, 0, 0, 0, 0)
+        for (monitor in monitors) target.find { it.id == monitor.id }?.let { rect ->
+            monitor.rect = rect
+            if (monitor.surface != null && monitor.visible && !outputGeometry(outputs[monitor.id], rect, version)) applySurface(monitor)
+        }
+    }
+    private fun layoutFailed(now: Long) {
+        android.util.Log.w("RdpLayout", "Layout sync failed, automatic retries=$automaticRetries")
+        inFlight = null; inputReady = false; canAdd = false; layoutNeedsRetry = true
+        if (automaticRetries < 1) {
+            automaticRetries++; forceSync = true; busy = true; resizeAt = now + 1000
+            observePanels(now, immediate = true)
+        } else {
+            retryBlocked = true; forceSync = false; busy = false
+            message(R.string.rdp_monitor_layout_failed)
+        }
     }
     private fun tick() {
         val now = SystemClock.elapsedRealtime()
-        monitors.filter { it.launchDeadline > 0 && (!it.presented || it.surface == null) && now >= it.launchDeadline }.toList().forEach {
+        // A panel minimized after its first surface/presentation remains part of this session.
+        monitors.filter { it.launchDeadline > 0 && (!it.presented || !it.hadSurface) && now >= it.launchDeadline }.toList().forEach {
             it.host.get()?.finishAndRemoveTask(); remove(it); message(R.string.window_launch_failed)
         }
         observePanels(now)
@@ -345,6 +412,7 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
         val raw = RdpMonitorLayouts.normalized(bridge.getMonitorLayoutState(handle)); lastRaw = raw
         if (raw.size < 10) return
         val count = raw[9].toInt()
+        if (count !in 0..16 || raw.size < 10 + count * 5) return
         supportsAdditionalMonitors = profile.remoteApp.isNullOrBlank() && raw[0] == 1L && raw[8] == 1L && raw[1] > 1
         if (raw[8] == 1L && !layoutActive) { bridge.setMonitorLayoutActive(handle, true); layoutActive = true }
         if (raw[8] == 0L) {
@@ -362,54 +430,59 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
             first().rect = committed.first(); applySurface(first())
         }
         val painted = raw.getOrNull(10 + count * 5) == raw[7]
-        if (inFlight == null && committed.isNotEmpty() && raw[7] != revision) {
-            val observed = if (count == committed.size) committed.mapIndexed { i, old -> val p = 10 + i * 5
-                old.copy(x = raw[p].toInt(), y = raw[p + 1].toInt(), width = (raw[p + 2] - raw[p] + 1).toInt(), height = (raw[p + 3] - raw[p + 1] + 1).toInt()) } else emptyList()
-            revision = raw[7]
-            if (observed.isNotEmpty() && RdpMonitorLayouts.valid(observed, 16, 8192, 8192) && RdpMonitorLayouts.matches(raw, observed)) {
-                committed = observed
-                monitors.forEach { m -> committed.find { it.id == m.id }?.let { m.rect = it }; applySurface(m) }
-            } else {
-                fallback = true
-                first().rect = RdpMonitorRect(first().id, 0, 0, raw[4].toInt(), raw[5].toInt())
-                monitors.forEach { applySurface(it) }
-                message(R.string.rdp_monitor_layout_failed)
-            }
-        }
         inFlight?.let { target ->
-            if (raw[7] > sentRevision && RdpMonitorLayouts.matches(raw, target)) {
-                if (committed != target || revision != raw[7]) {
-                    committed = target; revision = raw[7]
-                    monitors.forEach { m -> if (target.any { it.id == m.id }) m.launchDeadline = 0 }
-                    monitors.forEach { m -> target.find { it.id == m.id }?.let { m.rect = it }; applySurface(m) }
-                }
-                inputReady = painted
-                if (painted) { inFlight = null; busy = false }
-            }
-            if (inFlight != null && (now - sentAt > 15_000 || raw[6] != 0L)) {
-                // Preserve access to every remote pixel if the server ignores a topology change.
-                inFlight = null; fallback = true; busy = false; inputReady = true
-                monitors.filter { m -> committed.none { it.id == m.id } }.toList().forEach { m -> m.host.get()?.finishAndRemoveTask(); remove(m) }
-                first().rect = RdpMonitorRect(first().id, 0, 0, raw[4].toInt(), raw[5].toInt())
-                monitors.forEach { applySurface(it) }; message(R.string.rdp_monitor_layout_failed)
-            }
-        }
-        if (inFlight == null && !fallback && raw[0] == 1L && raw[8] == 1L && now >= resizeAt && !drag.active && monitors.none { it.hasButtons }) {
-            val ready = monitors.filter { it.presented && it.surface != null || committed.any { r -> r.id == it.id } }
-            val target = targetLayout(ready)
-            if (target.isNotEmpty() && target != committed) {
-                if (RdpMonitorLayouts.valid(target, raw[1].toInt(), raw[2], raw[3]) && bridge.requestMonitorLayout(handle, RdpMonitorLayouts.wire(target))) {
-                    monitors.forEach { it.releaseInput(mouseOnly = true) }
-                    inFlight = target; sentAt = now; sentRevision = raw[7]; busy = true; inputReady = false
-                } else {
-                    ready.filter { m -> committed.none { it.id == m.id } }.forEach { m -> m.host.get()?.finishAndRemoveTask(); remove(m) }
-                    monitors.forEach { m -> committed.find { it.id == m.id }?.let { m.requestedWidth = it.width; m.requestedHeight = it.height } }
-                    busy = false; message(R.string.rdp_monitor_limit)
+            // An unchanged layout may be acknowledged without a new GFX reset. Rebind and
+            // verify posted crops too, rather than requiring a newer protocol revision.
+            if (RdpMonitorLayouts.matches(raw, target)) {
+                committed = target; revision = raw[7]
+                monitors.forEach { m -> if (target.any { it.id == m.id }) m.launchDeadline = 0 }
+                bindOutputs(target, revision)
+                if (painted && outputsMatch(target, revision)) {
+                    inFlight = null; busy = false; inputReady = true; layoutNeedsRetry = false
+                    automaticRetries = 0; retryBlocked = false
+                    android.util.Log.i("RdpLayout", "Synced monitors=${target.size} revision=$revision")
                 }
             }
+            if (inFlight != null && (now - sentAt > 15_000 || raw[6] != 0L)) layoutFailed(now)
         }
-        canAdd = profile.remoteApp.isNullOrBlank() && !fallback && !busy && !drag.active && monitors.all { it.presented } && raw[0] == 1L && raw[8] == 1L &&
-            monitors.size < minOf(raw[1], 16L) && RdpMonitorLayouts.valid(RdpSpatialLayout.arrange(committed + RdpMonitorRect(-1, 0, 0, 1280, 800), panelPoints), raw[1].toInt(), raw[2], raw[3])
+        // A revision is not the only source of drift: restored/replaced surfaces can also
+        // carry the wrong crop while the host still reports the expected topology.
+        if (inFlight == null && !forceSync && !retryBlocked && committed.isNotEmpty() && raw[0] == 1L &&
+            (!RdpMonitorLayouts.matches(raw, committed) || revision != raw[7] || !painted || !outputsMatch(committed, revision))) {
+            drag.cancel(); monitors.forEach { it.releaseInput(mouseOnly = true) }
+            inputReady = false; canAdd = false; busy = true
+            if (RdpMonitorLayouts.matches(raw, committed)) {
+                // A normal GFX reset or a restored surface needs local rebinding, not
+                // another identical remote reset (which could create a feedback loop).
+                inFlight = committed; sentAt = now; revision = raw[7]
+                bindOutputs(committed, revision)
+            } else {
+                layoutNeedsRetry = true; forceSync = true; automaticRetries = 0; resizeAt = now + 300
+                observePanels(now, immediate = true)
+            }
+        }
+        if (inFlight == null && !retryBlocked && raw[0] == 1L && raw[8] == 1L && now >= resizeAt &&
+            !drag.active && monitors.none { it.hasButtons }) {
+            val target = targetLayout(readyMonitors())
+            if (target.isNotEmpty() && (forceSync || target != committed)) {
+                drag.cancel(); monitors.forEach { it.releaseInput(mouseOnly = true) }
+                inputReady = false; canAdd = false
+                if (forceSync) {
+                    bridge.setMonitorLayoutActive(handle, true)
+                    bridge.setSurface(handle, null) // No legacy full-atlas output in monitor mode.
+                }
+                layoutSubmissions++
+                android.util.Log.i("RdpLayout", "Request retry=$automaticRetries rectangles=${target.map { listOf(it.x,it.y,it.width,it.height) }}")
+                if (RdpMonitorLayouts.valid(target, raw[1].toInt(), raw[2], raw[3]) &&
+                    bridge.requestMonitorLayout(handle, RdpMonitorLayouts.wire(target))) {
+                    inFlight = target; sentAt = now; busy = true; forceSync = false
+                } else layoutFailed(now)
+            }
+        }
+        canAdd = profile.remoteApp.isNullOrBlank() && !layoutNeedsRetry && !busy && !drag.active && inputReady &&
+            monitors.all { it.presented } && raw[0] == 1L && raw[8] == 1L &&
+            monitors.size < minOf(raw[1], 16L) && RdpMonitorLayouts.valid(
+                RdpSpatialLayout.arrange(committed + RdpMonitorRect(-1, 0, 0, 1280, 800), panelPoints), raw[1].toInt(), raw[2], raw[3])
     }
     fun reconnect() {
         drag.cancel()
@@ -418,7 +491,8 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
         val previous = connection; connection = null
         clipboard?.removePrimaryClipChangedListener(clipboardListener)
         certificateRequest.value = null; disconnectedReason.value = null; failureReason.value = ""; connectionFailed.value = false
-        committed = emptyList(); inFlight = null; fallback = false; revision = 0; busy = false; inputReady = true
+        committed = emptyList(); inFlight = null; revision = 0; busy = false; inputReady = true
+        layoutNeedsRetry = false; forceSync = false; retryBlocked = false; automaticRetries = 0
         fun restart() {
             if (closed) return
             reconnecting = false

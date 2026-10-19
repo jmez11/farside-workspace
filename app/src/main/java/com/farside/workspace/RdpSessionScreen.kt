@@ -27,6 +27,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.AddToQueue
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.ui.graphics.Path
@@ -538,8 +539,6 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
         )
     }
 
-    var showArrangement by remember { mutableStateOf(false) }
-    if (showArrangement && monitor != null) RdpDesktopArrangement(monitor) { showArrangement = false }
     val dragPoint by rememberUpdatedState(desktopPoint)
     DisposableEffect(monitor) {
         val view = (context as? SessionActivity)?.window?.decorView
@@ -746,15 +745,21 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                     }, modifier = Modifier.size(buttonSize)) {
                         Icon(Icons.Default.Dashboard, stringResource(R.string.window_manager), modifier = Modifier.size(iconSize), tint = Color.White)
                     }
-                    if (runtime != null && runtime.supportsAdditionalMonitors) IconButton(
-                        onClick = { (context as? android.app.Activity)?.let { runtime.addWindow(it) }; revealToolbar() },
-                        enabled = runtime.canAdd, modifier = Modifier.size(buttonSize)) {
-                        Icon(Icons.Default.AddToQueue, stringResource(R.string.rdp_add_desktop), modifier = Modifier.size(iconSize),
-                            tint = if (runtime.canAdd) Color.White else Color.Gray)
+                    if (runtime != null && (runtime.supportsAdditionalMonitors || runtime.layoutNeedsRetry)) {
+                        val retry = runtime.layoutNeedsRetry
+                        val enabled = if (retry) runtime.canRetryLayout else runtime.canAdd
+                        IconButton(onClick = {
+                            if (retry) runtime.followPanelLayout() else (context as? android.app.Activity)?.let { runtime.addWindow(it) }
+                            revealToolbar()
+                        }, enabled = enabled, modifier = Modifier.size(buttonSize)) {
+                            Icon(if (retry) Icons.Default.Refresh else Icons.Default.AddToQueue,
+                                stringResource(if (retry) R.string.rdp_retry_layout else R.string.rdp_add_desktop), modifier = Modifier.size(iconSize),
+                                tint = if (enabled) Color.White else Color.Gray)
+                        }
                     }
                     if (monitor != null && runtime != null && runtime.monitors.size > 1) IconButton(
-                        onClick = { showArrangement = true; revealToolbar() }, modifier = Modifier.size(buttonSize)) {
-                        Icon(Icons.Default.SwapHoriz, stringResource(R.string.rdp_arrange_desktops), modifier = Modifier.size(iconSize), tint = Color.White)
+                        onClick = { runtime.followPanelLayout(); revealToolbar() }, enabled = runtime.canRetryLayout, modifier = Modifier.size(buttonSize)) {
+                        Icon(Icons.Default.SwapHoriz, stringResource(R.string.rdp_layout_auto), modifier = Modifier.size(iconSize), tint = Color.White)
                     }
                     if (!isVnc) IconButton(onClick = { speakerMuted = !speakerMuted; revealToolbar() }, modifier = Modifier.size(buttonSize)) {
                         Icon(if (speakerMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,

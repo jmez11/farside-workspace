@@ -1360,6 +1360,7 @@ Java_com_farside_workspace_FreeRDPBridge_requestMonitorLayout(JNIEnv* env, jobje
     }
     if (maxX - minX > 32766 || maxY - minY > 32766 ||
         static_cast<uint64_t>(maxX - minX) * (maxY - minY) > 32ULL * 1024 * 1024) return JNI_FALSE;
+    p->sendResult = 0; // A previous failed write must not fail the newly queued attempt.
     p->pending = std::move(layouts);
     return JNI_TRUE;
 }

@@ -120,7 +120,7 @@ internal class RdpSessionConnection(
                 this.connected.set(connected != 0L)
                 if (connected == 0L) tunnel?.close()
                 main.post { if (!closed.get()) { onStatus(""); onConnected(connected) } }
-            } else {
+            } else if (!monitorMode) {
                 bridge.setSurface(instance, next)
             }
             if (!monitorMode) {
