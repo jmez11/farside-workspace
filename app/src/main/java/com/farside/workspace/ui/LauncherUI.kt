@@ -58,6 +58,8 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import android.content.Context
 import android.hardware.camera2.CameraManager
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import android.hardware.camera2.CameraCharacteristics
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -532,8 +534,73 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
     val sshPublicKeyShowNamedFmt = stringResource(R.string.ssh_public_key_show_named)
     val editNamedItemFmt = stringResource(R.string.edit_named_item)
     val deleteNamedItemFmt = stringResource(R.string.delete_named_item)
+    val backupExportSuccessMsg = stringResource(R.string.backup_export_success)
+    val backupExportFailedFmt = stringResource(R.string.backup_export_failed)
+    val backupRestoreSuccessFmt = stringResource(R.string.backup_restore_success)
+    val backupRestoreFailedFmt = stringResource(R.string.backup_restore_failed)
+    val backupInvalidPassphraseMsg = stringResource(R.string.backup_invalid_passphrase)
+    val backupPassphraseMismatchMsg = stringResource(R.string.backup_passphrase_mismatch)
+    val backupPassphraseEmptyMsg = stringResource(R.string.backup_passphrase_empty)
     var selectedTab by rememberSaveable(initialTab) { mutableStateOf(initialTab) }
-    
+
+    var backupStatusMessage by remember { mutableStateOf<String?>(null) }
+    var showExportDialog by remember { mutableStateOf(false) }
+    var showRestorePassphraseDialog by remember { mutableStateOf(false) }
+    var pendingRestoreUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    var exportPassphrase by remember { mutableStateOf("") }
+    var exportPassphraseConfirm by remember { mutableStateOf("") }
+    var exportPassphraseError by remember { mutableStateOf<String?>(null) }
+    var restorePassphrase by remember { mutableStateOf("") }
+    var restorePassphraseError by remember { mutableStateOf<String?>(null) }
+    var isExportingBackup by remember { mutableStateOf(false) }
+    var isRestoringBackup by remember { mutableStateOf(false) }
+    var showStoragePermissionNotice by remember { mutableStateOf(false) }
+    val backupCoroutineScope = rememberCoroutineScope()
+
+    val storagePermissionLauncherForBackup = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) {
+        showStoragePermissionNotice = false
+    }
+
+    val createBackupFileLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/octet-stream")
+    ) { uri ->
+        if (uri != null) {
+            val passChars = exportPassphrase.toCharArray()
+            isExportingBackup = true
+            backupCoroutineScope.launch {
+                try {
+                    withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        com.farside.workspace.data.BackupManager.exportToUri(context, profileManager, uri, passChars)
+                    }
+                    backupStatusMessage = backupExportSuccessMsg
+                } catch (e: Exception) {
+                    backupStatusMessage = String.format(backupExportFailedFmt, e.message ?: e.javaClass.simpleName)
+                } finally {
+                    java.util.Arrays.fill(passChars, '0')
+                    exportPassphrase = ""
+                    exportPassphraseConfirm = ""
+                    isExportingBackup = false
+                }
+            }
+        } else {
+            exportPassphrase = ""
+            exportPassphraseConfirm = ""
+        }
+    }
+
+    val openBackupFileLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            pendingRestoreUri = uri
+            restorePassphrase = ""
+            restorePassphraseError = null
+            showRestorePassphraseDialog = true
+        }
+    }
+
     var appPinVerifier by remember { mutableStateOf(profileManager.getAppPinVerifier()) }
     var systemPinEnabled by remember { mutableStateOf(profileManager.usesSystemPin()) }
     var enablingSystemPin by remember { mutableStateOf(false) }
@@ -715,6 +782,158 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
         )
     }
 
+    if (showStoragePermissionNotice) {
+        AlertDialog(
+            onDismissRequest = { showStoragePermissionNotice = false },
+            title = { Text(stringResource(R.string.backup_settings_title)) },
+            text = { Text(stringResource(R.string.storage_permission_needed_backup)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showStoragePermissionNotice = false
+                    com.farside.workspace.requestStoragePermission(context) { intent ->
+                        storagePermissionLauncherForBackup.launch(intent)
+                    }
+                }) { Text(stringResource(R.string.grant_permission)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showStoragePermissionNotice = false }) { Text(stringResource(R.string.cancel)) }
+            }
+        )
+    }
+
+    if (showExportDialog) {
+        AlertDialog(
+            onDismissRequest = { if (!isExportingBackup) showExportDialog = false },
+            title = { Text(stringResource(R.string.backup_passphrase_title)) },
+            text = {
+                Column {
+                    Text(stringResource(R.string.backup_passphrase_help), style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = exportPassphrase,
+                        onValueChange = { exportPassphrase = it; exportPassphraseError = null },
+                        label = { Text(stringResource(R.string.backup_passphrase_label)) },
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = exportPassphraseConfirm,
+                        onValueChange = { exportPassphraseConfirm = it; exportPassphraseError = null },
+                        label = { Text(stringResource(R.string.backup_passphrase_confirm_label)) },
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    exportPassphraseError?.let {
+                        Spacer(Modifier.height(4.dp))
+                        Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !isExportingBackup,
+                    onClick = {
+                        if (exportPassphrase.isBlank()) {
+                            exportPassphraseError = backupPassphraseEmptyMsg
+                            return@TextButton
+                        }
+                        if (exportPassphrase != exportPassphraseConfirm) {
+                            exportPassphraseError = backupPassphraseMismatchMsg
+                            return@TextButton
+                        }
+                        showExportDialog = false
+                        val dateStr = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
+                        createBackupFileLauncher.launch("farside_backup_$dateStr.fsbk")
+                    }
+                ) {
+                    Text(stringResource(R.string.export_backup))
+                }
+            },
+            dismissButton = {
+                TextButton(enabled = !isExportingBackup, onClick = { showExportDialog = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
+    }
+
+    if (showRestorePassphraseDialog && pendingRestoreUri != null) {
+        val targetUri = pendingRestoreUri!!
+        AlertDialog(
+            onDismissRequest = { if (!isRestoringBackup) { showRestorePassphraseDialog = false; pendingRestoreUri = null } },
+            title = { Text(stringResource(R.string.restore_passphrase_title)) },
+            text = {
+                Column {
+                    Text(stringResource(R.string.restore_passphrase_help), style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = restorePassphrase,
+                        onValueChange = { restorePassphrase = it; restorePassphraseError = null },
+                        label = { Text(stringResource(R.string.backup_passphrase_label)) },
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    restorePassphraseError?.let {
+                        Spacer(Modifier.height(4.dp))
+                        Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !isRestoringBackup,
+                    onClick = {
+                        if (restorePassphrase.isBlank()) {
+                            restorePassphraseError = backupPassphraseEmptyMsg
+                            return@TextButton
+                        }
+                        val passChars = restorePassphrase.toCharArray()
+                        isRestoringBackup = true
+                        backupCoroutineScope.launch {
+                            try {
+                                val result = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                    com.farside.workspace.data.BackupManager.importFromUri(context, profileManager, targetUri, passChars)
+                                }
+                                credentials = profileManager.getCredentials()
+                                sshKeys = profileManager.getSshKeys()
+                                appPinVerifier = profileManager.getAppPinVerifier()
+                                systemPinEnabled = profileManager.usesSystemPin()
+                                backupStatusMessage = String.format(backupRestoreSuccessFmt, result.profilesRestored, result.credentialsRestored, result.sshKeysRestored)
+                                showRestorePassphraseDialog = false
+                                pendingRestoreUri = null
+                            } catch (e: javax.crypto.AEADBadTagException) {
+                                restorePassphraseError = backupInvalidPassphraseMsg
+                            } catch (e: Exception) {
+                                restorePassphraseError = e.message ?: backupInvalidPassphraseMsg
+                            } finally {
+                                java.util.Arrays.fill(passChars, '0')
+                                restorePassphrase = ""
+                                isRestoringBackup = false
+                            }
+                        }
+                    }
+                ) {
+                    Text(stringResource(R.string.restore_backup))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !isRestoringBackup,
+                    onClick = {
+                        showRestorePassphraseDialog = false
+                        pendingRestoreUri = null
+                    }
+                ) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -759,7 +978,8 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                     Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text(stringResource(R.string.tunnels_global)) })
                     Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text(stringResource(R.string.credentials)) })
                     Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text(stringResource(R.string.ssh_keys)) })
-                    Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }, text = { Text(stringResource(R.string.about)) })
+                    Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }, text = { Text(stringResource(R.string.backup_restore)) })
+                    Tab(selected = selectedTab == 4, onClick = { selectedTab = 4 }, text = { Text(stringResource(R.string.about)) })
                 }
                 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -1095,6 +1315,58 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                         }
                     }
                     3 -> {
+                        SettingsHeader(stringResource(R.string.backup_settings_title))
+                        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                            Text(
+                                stringResource(R.string.backup_settings_help),
+                                color = Color.Gray,
+                                fontSize = 14.sp
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                Button(
+                                    onClick = {
+                                        if (!com.farside.workspace.hasStoragePermission(context)) {
+                                            showStoragePermissionNotice = true
+                                        } else {
+                                            exportPassphrase = ""
+                                            exportPassphraseConfirm = ""
+                                            exportPassphraseError = null
+                                            showExportDialog = true
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E88E5))
+                                ) {
+                                    Text(stringResource(R.string.export_backup))
+                                }
+
+                                OutlinedButton(
+                                    onClick = {
+                                        if (!com.farside.workspace.hasStoragePermission(context)) {
+                                            showStoragePermissionNotice = true
+                                        } else {
+                                            openBackupFileLauncher.launch(arrayOf("*/*"))
+                                        }
+                                    }
+                                ) {
+                                    Text(stringResource(R.string.restore_backup))
+                                }
+                            }
+                            backupStatusMessage?.let { status ->
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    status,
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.background(Color(0xFF2C2C2E), RoundedCornerShape(8.dp)).padding(12.dp)
+                                )
+                            }
+                        }
+                    }
+                    4 -> {
                         SettingsHeader(stringResource(R.string.about_open_source_licenses))
                         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                             Text(stringResource(R.string.farside_workspace), color = Color.White, style = MaterialTheme.typography.titleMedium)

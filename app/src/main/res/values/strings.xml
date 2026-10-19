@@ -610,4 +610,24 @@
     <string name="reconnect_prompt">Reconnect to %1$s?</string>
     <string name="reconnecting_in">Reconnecting in %1$d…</string>
     <string name="reconnect_now">Reconnect now</string>
+    <string name="backup_restore">Backup &amp; Restore</string>
+    <string name="backup_settings_title">Backup &amp; Restore Settings</string>
+    <string name="backup_settings_help">Export all connections, credentials, SSH keys, and PIN to an encrypted file, or restore from a backup.</string>
+    <string name="export_backup">Export Encrypted Backup</string>
+    <string name="restore_backup">Restore from Backup</string>
+    <string name="backup_passphrase_title">Encrypted Backup Passphrase</string>
+    <string name="backup_passphrase_help">Enter a strong passphrase to encrypt your backup. This passphrase is required to restore your settings and secrets on any device.</string>
+    <string name="backup_passphrase_label">Backup Passphrase</string>
+    <string name="backup_passphrase_confirm_label">Confirm Passphrase</string>
+    <string name="backup_passphrase_mismatch">Passphrases do not match.</string>
+    <string name="backup_passphrase_empty">Please enter a passphrase.</string>
+    <string name="restore_passphrase_title">Enter Backup Passphrase</string>
+    <string name="restore_passphrase_help">Enter the passphrase used when creating this backup file.</string>
+    <string name="backup_export_success">Backup successfully saved.</string>
+    <string name="backup_export_failed">Backup export failed: %1$s</string>
+    <string name="backup_restore_success">Restore complete (%1$d profiles, %2$d credentials, %3$d SSH keys restored).</string>
+    <string name="backup_restore_failed">Restore failed: %1$s</string>
+    <string name="backup_invalid_passphrase">Incorrect passphrase or corrupted backup file.</string>
+    <string name="storage_permission_needed_backup">Storage access is needed to save or load backup files. Please grant storage permissions.</string>
+    <string name="grant_permission">Grant Permission</string>
 </resources>

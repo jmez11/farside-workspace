@@ -118,6 +118,11 @@ class RdpResizeInstrumentation : Instrumentation() {
     override fun onStart() {
         val results = Bundle()
         try {
+            if (jumpArgs?.getString("backupRestoreOnly") == "true") {
+                results.putString("stream", BackupRestoreVerification(this).run() + "\n")
+                finish(0, results)
+                return
+            }
             if (jumpArgs?.getString("sshPublicOnly") == "true") {
                 results.putString("stream", SshPublicKeyVerification(this).run())
                 finish(0, results)
