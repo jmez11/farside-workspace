@@ -219,8 +219,11 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
         monitors.forEach { it.releaseInput(mouseOnly = true) }
         resizeAt = SystemClock.elapsedRealtime() + 300
     }
+    internal val confirmedLayout get() = committed.toList()
+    private fun sameGeometry(a: List<RdpMonitorRect>?, b: List<RdpMonitorRect>?) =
+        a != null && b != null && a.associateBy { it.id } == b.associateBy { it.id }
     private fun targetLayout(ready: List<RdpMonitor>) = RdpSpatialLayout.arrange(
-        ready.map { RdpMonitorRect(it.id, 0, 0, it.requestedWidth, it.requestedHeight) }, panelPoints)
+        ready.map { RdpMonitorRect(it.id,0,0,it.requestedWidth,it.requestedHeight) },panelPoints)
     private fun observePanels(now: Long, immediate: Boolean = false) {
         if ((!immediate && now < nextPoseRead) || drag.active) return
         nextPoseRead = now + 500
@@ -414,7 +417,7 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
             // confirmed topology (or request a simple row if a new monitor is missing).
             rejectedTarget = failed; recoveringLayout = true; forceSync = false; busy = true
             val ready = readyMonitors()
-            if (committed.map { it.id } == ready.map { it.id } && RdpMonitorLayouts.matches(raw, committed)) {
+            if (committed.map { it.id }.toSet() == ready.map { it.id }.toSet() && RdpMonitorLayouts.matches(raw, committed)) {
                 inFlight = committed; sentAt = now; revision = raw[7]
                 bindOutputs(committed, revision)
                 android.util.Log.i("RdpLayout", "Recovering last confirmed layout monitors=${committed.size}")
@@ -463,7 +466,8 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
                 monitors.forEach { m -> if (target.any { it.id == m.id }) m.launchDeadline = 0 }
                 bindOutputs(target, revision)
                 if (painted && outputsMatch(target, revision)) {
-                    inFlight = null; busy = false; inputReady = true; layoutNeedsRetry = rejectedTarget != null
+                    if (recoveringLayout && rejectedTarget != null) message(R.string.rdp_monitor_placement_failed)
+                    inFlight = null; busy = false; inputReady = true; layoutNeedsRetry = false
                     recoveringLayout = false
                     automaticRetries = 0; retryBlocked = false
                     android.util.Log.i("RdpLayout", "Synced monitors=${target.size} revision=$revision")
@@ -493,7 +497,7 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
             !drag.active && monitors.none { it.hasButtons }) {
             val target = fallbackTarget ?: targetLayout(readyMonitors())
             if (target.isNotEmpty() && (forceSync || recoveringLayout || target != committed) &&
-                (recoveringLayout || target != rejectedTarget)) {
+                (recoveringLayout || !sameGeometry(target,rejectedTarget))) {
                 if (!recoveringLayout) rejectedTarget = null
                 fallbackTarget = null
                 drag.cancel(); monitors.forEach { it.releaseInput(mouseOnly = true) }

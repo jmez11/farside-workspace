@@ -81,6 +81,20 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
         check(RdpMonitorLayouts.wire(reversed).contentEquals(intArrayOf(0,0,1280,800,1,-1024,0,1024,768,0)))
         val above = RdpSpatialLayout.arrange(row,mapOf(10L to RdpPanelPoint(0f,0f),11L to RdpPanelPoint(0f,1f)))
         check(above[0].y == 768 && above[1].y == 0 && RdpMonitorLayouts.valid(above,16,8192,8192))
+        val four = List(4) { RdpMonitorRect(it.toLong(),0,0,1280,800) }
+        val upperRight = RdpSpatialLayout.arrange(four,mapOf(0L to RdpPanelPoint(0f,0f),
+            1L to RdpPanelPoint(1f,0f),2L to RdpPanelPoint(2f,0f),3L to RdpPanelPoint(2f,1f)))
+        check(upperRight.take(3).map { it.x to it.y } == listOf(0 to 800,1280 to 800,2560 to 800))
+        check(kotlin.math.abs(upperRight[3].x-2560) <= 2 && upperRight[3].y == 0)
+        check(RdpMonitorLayouts.valid(upperRight,16,8192,8192))
+        val mixed = RdpSpatialLayout.arrange(four.mapIndexed { i,m -> if (i == 0) m.copy(height=768) else m },
+            mapOf(0L to RdpPanelPoint(0f,1f),1L to RdpPanelPoint(1f,1f),
+                2L to RdpPanelPoint(2f,1f),3L to RdpPanelPoint(0f,0f)))
+        check(RdpMonitorLayouts.valid(mixed,16,8192,8192))
+        val diagonal = RdpSpatialLayout.arrange(four.take(2),mapOf(0L to RdpPanelPoint(0f,0f),1L to RdpPanelPoint(-1f,-1f)))
+        check(diagonal[1].x < diagonal[0].x && diagonal[1].y > diagonal[0].y)
+        check(RdpMonitorLayouts.valid(diagonal,16,8192,8192))
+        report.put("crossRowHorizontalAlignment",true)
         check(!RdpMonitorLayouts.valid(listOf(row[0],row[1].copy(x=10)),16,8192,8192))
         val q = kotlin.math.sqrt(.5f)
         val base = RdpPanelPose(0f,0f,0f,0f,q,0f,q,null)
@@ -261,7 +275,7 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
                         val attached = session.monitors.filter { it.surface != null && it.visible }
                         ready = session.instance.value == handle && session.bridge === native && !session.busy && (allowRetry || !session.layoutNeedsRetry) && session.inputReady &&
                             session.monitors.size == count && raw.getOrNull(9) == count.toLong() && surfaces.size == attached.size &&
-                            RdpMonitorLayouts.matches(RdpMonitorLayouts.normalized(raw),session.monitors.map { it.rect }) &&
+                            RdpMonitorLayouts.matches(RdpMonitorLayouts.normalized(raw),session.confirmedLayout) &&
                             attached.all { m -> surfaces.any { it[0] == m.id && it[1] == m.rect.x.toLong() && it[2] == m.rect.y.toLong() &&
                                 it[3] == m.rect.width.toLong() && it[4] == m.rect.height.toLong() && it[7] > 0 && it[5] == raw[7] && it[6] == raw[7] } }
                     }
@@ -409,6 +423,39 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
             settled(3); record("three")
             main { session.addWindow(checkNotNull(session.monitors.last().host.get())) }
             settled(4)
+            if (test.arguments?.getString("rdpLayoutProbe") == "true") {
+                val handler = session.javaClass.getDeclaredField("main").apply { isAccessible=true }.get(session) as android.os.Handler
+                val poll = session.javaClass.getDeclaredField("poll").apply { isAccessible=true }.get(session) as Runnable
+                main { handler.removeCallbacks(poll) }
+                val probes = JSONArray()
+                try {
+                    fun probe(label: String, rectangles: List<RdpMonitorRect>) {
+                        main { check(native.requestMonitorLayout(handle,RdpMonitorLayouts.wire(rectangles))) }
+                        val end = android.os.SystemClock.elapsedRealtime()+2500
+                        var matched = false
+                        do {
+                            Thread.sleep(100)
+                            matched = RdpMonitorLayouts.matches(RdpMonitorLayouts.normalized(native.getMonitorLayoutState(handle)),rectangles)
+                        } while (!matched && android.os.SystemClock.elapsedRealtime()<end)
+                        probes.put(JSONObject().put("label",label).put("matched",matched)
+                            .put("requested",JSONArray(rectangles.map { it.toString() }))
+                            .put("actual",JSONArray(native.getMonitorLayoutState(handle).toList())))
+                        File(directory,"probe.json").writeText(probes.toString(2))
+                    }
+                    fun rects(width: Int,height: Int,xy: List<Pair<Int,Int>>) = xy.mapIndexed { i,(x,y) ->
+                        RdpMonitorRect(i.toLong(),x*width,y*height,width,height) }
+                    val l = listOf(2 to 1,1 to 1,0 to 1,0 to 0)
+                    val baseline = rects(1280,800,List(4) { it to 0 })
+                    for ((label,layout) in listOf(
+                        "L-no-corner-contacts" to listOf(RdpMonitorRect(0,2562,800,1280,800),RdpMonitorRect(1,1282,800,1280,800),RdpMonitorRect(2,2,800,1280,800),RdpMonitorRect(3,0,0,1280,800)),
+                        "grid-no-corner-contacts" to listOf(RdpMonitorRect(0,0,0,1280,800),RdpMonitorRect(1,1280,0,1280,800),RdpMonitorRect(2,2,800,1280,800),RdpMonitorRect(3,1282,800,1280,800)),
+                        "five-grid-no-corner-contacts" to listOf(RdpMonitorRect(0,0,0,1280,800),RdpMonitorRect(1,1280,0,1280,800),RdpMonitorRect(2,2560,0,1280,800),RdpMonitorRect(3,2,800,1280,800),RdpMonitorRect(4,1282,800,1280,800)))) {
+                        probe("baseline-$label",baseline); probe(label,layout)
+                    }
+                    report.put("protocolProbe",probes)
+                } finally { main { handler.post(poll) } }
+                return "Monitor topology probe completed."
+            }
             report.put("fourOwnedWindowState",JSONArray(session.monitors.map { m ->
                 val activity = checkNotNull(m.host.get())
                 JSONObject().put("monitor",m.id).put("pose",RdpPanelPose.read(activity).toString())
@@ -460,10 +507,6 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
             val beforeShape = session.layoutSubmissions
             main { session.resize(second,1280,800); session.followPanelLayout()
                 pointsField.set(session,failurePoints); poseReadField.setLong(session,Long.MAX_VALUE) }
-            await("pending spatial request keeps confirmed windows interactive") {
-                session.layoutSubmissions > beforeShape && session.busy && session.inputReady
-            }
-            verifyUiPointer(session.monitors.last { it.visible && it.surface != null },"uiPointerDuringPendingLayout")
             await("wearer layout accepted or recovered with functional windows",60_000) {
                 var ready = false
                 main { pointsField.set(session,failurePoints); poseReadField.setLong(session,Long.MAX_VALUE)
@@ -472,6 +515,10 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
             }
             settled(4,allowRetry = true)
             report.put("wearerRejectedShapeFunctionalRecovery",true).put("wearerShapeNeededFallback",session.layoutNeedsRetry)
+            val expectedWearerGeometry = RdpSpatialLayout.arrange(session.monitors.map { m ->
+                RdpMonitorRect(m.id,0,0,m.requestedWidth,m.requestedHeight) },failurePoints)
+            check(session.confirmedLayout.toSet() == expectedWearerGeometry.toSet()) { "Host did not apply the wearer spatial layout" }
+            report.put("wearerSpatialGeometryAppliedOnHost",true)
             val submissionsAfterRecovery = session.layoutSubmissions
             Thread.sleep(1500)
             check(session.inputReady && session.layoutSubmissions == submissionsAfterRecovery) { "Rejected placement retried in a loop" }
@@ -486,9 +533,13 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
             val originalWidth = fourth.requestedWidth; val originalHeight = fourth.requestedHeight
             val beforeFailure = session.layoutSubmissions
             main { session.resize(fourth,8192,8192) }
+            await("pending invalid placement keeps confirmed windows interactive") {
+                session.layoutSubmissions > beforeFailure && session.busy && session.inputReady
+            }
+            verifyUiPointer(session.monitors.last { it.visible && it.surface != null },"uiPointerDuringPendingLayout")
             await("automatic retry then actionable layout error") {
                 var ready = false
-                main { ready = session.layoutNeedsRetry && !session.busy && session.inputReady && session.canRetryLayout &&
+                main { ready = !session.layoutNeedsRetry && !session.busy && session.inputReady && session.canAdd &&
                     session.layoutSubmissions >= beforeFailure + 2 }
                 ready
             }
@@ -503,7 +554,7 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
             main { check(native.requestMonitorLayout(handle,intArrayOf(0,0,1280,800,1))) }
             await("rejected placement recovers all monitors through simple row",30_000) {
                 var ready = false
-                main { ready = session.inputReady && !session.busy && session.layoutNeedsRetry &&
+                main { ready = session.inputReady && !session.busy && !session.layoutNeedsRetry &&
                     native.getMonitorLayoutState(handle).getOrNull(9) == 4L &&
                     session.layoutSubmissions > recoveredSubmissions }
                 ready
@@ -549,12 +600,12 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
                 poseReadField.setLong(session,Long.MAX_VALUE)
                 session.resize(fourth,originalWidth,originalHeight) }
             settled(4)
-            check(session.canAdd && session.layoutSubmissions == beforeReturn)
+            check(session.canAdd)
             report.put("returnToConfirmedPlacementRestoresAdd",true)
             main { session.resize(fourth,8192,8192) }
-            await("retry state after second invalid request") { !session.busy && session.layoutNeedsRetry && session.inputReady }
+            await("recovered Add after second invalid request") { !session.busy && !session.layoutNeedsRetry && session.inputReady && session.layoutSubmissions > beforeReturn }
             session.monitors.forEach { m -> main { m.host.get()?.onWindowFocusChanged(true) } }
-            val retryLabel = context.getString(R.string.rdp_retry_layout)
+            val retryLabel = context.getString(R.string.rdp_layout_auto)
             await("retry layout toolbar action") { node(retryLabel) != null }
             click(retryLabel)
             main { session.resize(fourth,originalWidth,originalHeight) }
@@ -562,6 +613,28 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
             check(!session.layoutNeedsRetry && session.canAdd && session.monitors.map { it.id } == ids)
             report.put("automaticRetryAndToolbarRecovery",true)
             record("four-recovered",allowMinimized = true)
+            await("Add remains available after recovery") { node(context.getString(R.string.rdp_add_desktop)) != null }
+            click(context.getString(R.string.rdp_add_desktop))
+            settled(5)
+            check(session.monitors.take(4).map { it.id } == ids)
+            record("five",allowMinimized = true)
+            report.put("fifthDesktopAfterRecovery",true)
+            val fivePoints = session.monitors.mapIndexed { i,m -> m.id to
+                RdpPanelPoint((i % 3).toFloat(),if (i < 3) 1f else 0f) }.toMap()
+            val beforeFiveGrid = session.layoutSubmissions
+            main { session.followPanelLayout(); pointsField.set(session,fivePoints); poseReadField.setLong(session,Long.MAX_VALUE) }
+            await("five-panel grid submitted") { session.layoutSubmissions > beforeFiveGrid }
+            settled(5)
+            check(session.confirmedLayout.toSet() == RdpSpatialLayout.arrange(session.monitors.map { m ->
+                RdpMonitorRect(m.id,0,0,m.requestedWidth,m.requestedHeight) },fivePoints).toSet())
+            report.put("fivePanelGridAppliedOnHost",true)
+            record("five-grid",allowMinimized = true)
+            main { pointsField.set(session,oldPoints); poseReadField.setLong(session,0); session.followPanelLayout() }
+            settled(5)
+
+            main { session.monitors.last().host.get()?.finishAndRemoveTask() }
+            settled(4)
+
             val hidden = session.monitors.firstOrNull { m -> !presentation(checkNotNull(m.host.get())).first }
             if (hidden != null) {
                 val activity = checkNotNull(hidden.host.get())
@@ -593,6 +666,13 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
             report.put("sharedNativeCameraMute", true)
             val third = session.monitors.last()
             main { third.host.get()?.finishAndRemoveTask() }
+            settled(2)
+            session.monitors.filter { !presentation(checkNotNull(it.host.get())).first }.forEach { m ->
+                val activity = checkNotNull(m.host.get())
+                main { LauncherWindowLauncher.setSessionVisible(activity,true) }
+                android.os.ParcelFileDescriptor.AutoCloseInputStream(test.uiAutomation.executeShellCommand("am task focus ${activity.taskId}")).use { it.readBytes() }
+                await("two-window survivor restored after five-window minimization") { presentation(activity).first }
+            }
             settled(2); record("third-closed")
             // Cancel before Home presents the child: its late Intent must not create a new connection.
             main {

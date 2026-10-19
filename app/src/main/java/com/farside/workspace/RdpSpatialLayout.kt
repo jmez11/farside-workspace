@@ -20,17 +20,46 @@ internal object RdpSpatialLayout {
                 bands += mutableListOf(m)
             else band += m
         }
-        val placed = mutableMapOf<Long, RdpMonitorRect>()
+        val placed = mutableMapOf<Long,RdpMonitorRect>()
         var y = 0
+        var previous = emptyList<RdpMonitorRect>()
         for (band in bands) {
-            var x = 0
-            for (m in band.sortedWith(compareBy<RdpMonitorRect> { points.getValue(it.id).x }.thenBy { it.id })) {
-                val r = RdpMonitorLayouts.row(listOf(m)).single().copy(x = x, y = y)
-                placed[m.id] = r; x += r.width
-            }
-            y += band.maxOf { placed.getValue(it.id).height }
+            val local = RdpMonitorLayouts.row(band.sortedWith(
+                compareBy<RdpMonitorRect> { points.getValue(it.id).x }.thenBy { it.id }))
+            // Align the closest horizontal pair across adjacent rows. Packing every
+            // row from x=0 incorrectly moved a panel above the right desktop to the
+            // far left of the host layout. Use a full-height upper panel so the rows
+            // share a real edge even when monitor heights differ.
+            val pair = previous.filter { it.y + it.height == y }.flatMap { upper ->
+                local.map { lower -> upper to lower }
+            }.minByOrNull { (upper,lower) -> abs(points.getValue(upper.id).x-points.getValue(lower.id).x) }
+            val start = pair?.let { (upper,lower) ->
+                val delta = points.getValue(lower.id).x-points.getValue(upper.id).x
+                val shift = if (abs(delta) <= .25f) 0 else
+                    (kotlin.math.sign(delta)*minOf(upper.width,lower.width)*.75f).toInt()
+                upper.x + (upper.width-lower.width)/2 + shift - lower.x
+            } ?: 0
+            // Windows can silently reject a pair meeting only at one corner.
+            // Slightly stagger rows so every contact is an edge with nonzero span.
+            val offsets = (0..monitors.size*2).flatMap { if (it == 0) listOf(0) else listOf(it*2,-it*2) }
+            val offset = offsets.firstOrNull { n ->
+                val candidate = local.map { it.copy(x=it.x+start+n,y=y) }
+                val connected = pair?.let { (upper,lower) ->
+                    val next = candidate.first { it.id == lower.id }
+                    next.x < upper.x+upper.width && upper.x < next.x+next.width
+                } ?: true
+                connected && candidate.none { lower -> placed.values.any { upper ->
+                    (lower.x == upper.x+upper.width || upper.x == lower.x+lower.width) &&
+                        (lower.y == upper.y+upper.height || upper.y == lower.y+lower.height)
+                } }
+            } ?: 0
+            previous = local.map { it.copy(x=it.x+start+offset,y=y) }
+            previous.forEach { placed[it.id] = it }
+            y += previous.maxOf { it.height }
         }
-        return monitors.map { placed.getValue(it.id) }
+        val left = placed.values.minOf { it.x }
+        return monitors.map { placed.getValue(it.id).let { r -> r.copy(x=r.x-left) } }
+
     }
 }
 
