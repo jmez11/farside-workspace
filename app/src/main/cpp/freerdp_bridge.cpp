@@ -1337,12 +1337,18 @@ Java_com_farside_workspace_FreeRDPBridge_requestMonitorLayout(JNIEnv* env, jobje
     budget *= p->areaB;
     std::vector<DISPLAY_CONTROL_MONITOR_LAYOUT> layouts;
     uint64_t area = 0;
-    int nextLeft = 0;
+    int minX = 0, minY = 0, maxX = 0, maxY = 0;
     for (jsize i = 0; i < length; i += 5) {
         const int left = raw[i], top = raw[i + 1], width = raw[i + 2], height = raw[i + 3], primary = raw[i + 4];
-        // Stable client IDs are mapped to a contiguous top-aligned wire layout.
-        if (left != nextLeft || top != 0 || width < 200 || width > 8192 || width % 2 ||
-            height < 200 || height > 8192 || primary != (i == 0 ? 1 : 0) || left > 32766 - width) return JNI_FALSE;
+        if (width < 200 || width > 8192 || width % 2 || height < 200 || height > 8192 ||
+            left < -32766 || top < -32766 || left > 32766 - width || top > 32766 - height ||
+            primary != (i == 0 ? 1 : 0) || (primary && (left != 0 || top != 0))) return JNI_FALSE;
+        for (const auto& other : layouts) {
+            if (left < other.Left + static_cast<int>(other.Width) && other.Left < left + width &&
+                top < other.Top + static_cast<int>(other.Height) && other.Top < top + height) return JNI_FALSE;
+        }
+        minX = std::min(minX, left); minY = std::min(minY, top);
+        maxX = std::max(maxX, left + width); maxY = std::max(maxY, top + height);
         area += static_cast<uint64_t>(width) * height;
         if (area > budget || area > 32ULL * 1024 * 1024) return JNI_FALSE;
         DISPLAY_CONTROL_MONITOR_LAYOUT layout = {};
@@ -1350,8 +1356,10 @@ Java_com_farside_workspace_FreeRDPBridge_requestMonitorLayout(JNIEnv* env, jobje
         layout.Flags = primary ? DISPLAY_CONTROL_MONITOR_PRIMARY : 0;
         layout.DesktopScaleFactor = layout.DeviceScaleFactor = 100;
         layouts.push_back(layout);
-        nextLeft += width;
+
     }
+    if (maxX - minX > 32766 || maxY - minY > 32766 ||
+        static_cast<uint64_t>(maxX - minX) * (maxY - minY) > 32ULL * 1024 * 1024) return JNI_FALSE;
     p->pending = std::move(layouts);
     return JNI_TRUE;
 }

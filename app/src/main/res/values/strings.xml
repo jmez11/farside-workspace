@@ -633,4 +633,12 @@
     <string name="rdp_add_desktop">Add desktop</string>
     <string name="rdp_monitor_layout_failed">The server did not confirm the monitor change. The primary window now shows the full remote desktop. Reconnect to try again.</string>
     <string name="rdp_monitor_limit">This monitor layout exceeds the session display limits.</string>
+    <string name="rdp_arrange_desktops">Arrange desktops</string>
+    <string name="rdp_arrangement_hint">Place this desktop relative to another desktop in this session. Use this when automatic placement does not match your panels.</string>
+    <string name="rdp_desktop_number">Desktop %1$d</string>
+    <string name="rdp_layout_left">Left</string>
+    <string name="rdp_layout_right">Right</string>
+    <string name="rdp_layout_above">Above</string>
+    <string name="rdp_layout_below">Below</string>
+    <string name="rdp_layout_auto">Follow panel placement</string>
 </resources>

@@ -34,12 +34,23 @@ internal object RdpMonitorLayouts {
         return monitors.map { m -> m.copy(x = x, y = 0,
             width = (m.width.coerceIn(200, 8192) and -2), height = m.height.coerceIn(200, 8192)).also { x += it.width } }
     }
-    fun wire(row: List<RdpMonitorRect>) = row.flatMapIndexed { i, m -> listOf(m.x, m.y, m.width, m.height, if (i == 0) 1 else 0) }.toIntArray()
+    fun wire(row: List<RdpMonitorRect>) = row.flatMapIndexed { i, m ->
+        listOf(m.x - row.first().x, m.y - row.first().y, m.width, m.height, if (i == 0) 1 else 0) }.toIntArray()
+    fun normalized(raw: LongArray): LongArray {
+        val count = raw.getOrNull(9)?.toInt() ?: return raw
+        if (count !in 1..16 || raw.size < 10 + count * 5) return raw
+        val x = (0 until count).minOf { raw[10 + it * 5] }; val y = (0 until count).minOf { raw[11 + it * 5] }
+        return raw.copyOf().also { out -> repeat(count) { val p = 10 + it * 5
+            out[p] -= x; out[p+2] -= x; out[p+1] -= y; out[p+3] -= y } }
+    }
     fun valid(row: List<RdpMonitorRect>, maximum: Int, areaA: Long, areaB: Long): Boolean {
         if (row.isEmpty() || row.size > minOf(maximum, 16) || maximum <= 0 || areaA <= 0 || areaB <= 0) return false
         val budget = runCatching { Math.multiplyExact(Math.multiplyExact(maximum.toLong(), areaA), areaB) }.getOrNull() ?: return false
-        return row.last().x.toLong() + row.last().width <= 32766 &&
-            row.sumOf { it.width.toLong() * it.height } <= minOf(budget, MAX_PIXELS)
+        val width = row.maxOf { it.x.toLong() + it.width }; val height = row.maxOf { it.y.toLong() + it.height }
+        return row.minOf { it.x } == 0 && row.minOf { it.y } == 0 && width <= 32766 && height <= 32766 &&
+            row.all { it.width in 200..8192 && it.width % 2 == 0 && it.height in 200..8192 } &&
+            row.withIndex().all { (i, a) -> row.drop(i + 1).none { b -> a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height } } &&
+            width * height <= MAX_PIXELS && row.sumOf { it.width.toLong() * it.height } <= minOf(budget, MAX_PIXELS)
     }
     fun pointer(rect: RdpMonitorRect, x: Int, y: Int) =
         (rect.x + x.coerceIn(0, rect.width - 1)) to (rect.y + y.coerceIn(0, rect.height - 1))
@@ -55,7 +66,13 @@ internal class RdpMonitor(val session: RdpMonitorSession, val id: Long) : Deskto
     var requestedHeight = 1080
     private val heldKeys = mutableSetOf<Int>()
     private val heldUnicode = mutableSetOf<Int>()
+    internal val hasButtons get() = buttons != 0
     private var buttons = 0
+    internal fun takePrimaryButton(): Boolean {
+        val down = buttons and 0x1000 != 0
+        buttons = buttons and 0x1000.inv()
+        return down
+    }
     private var pointer = 0 to 0
     fun releaseInput(mouseOnly: Boolean = false) {
         val handle = session.instance.value
@@ -95,7 +112,7 @@ internal class RdpMonitor(val session: RdpMonitorSession, val id: Long) : Deskto
             set(value) { /* The session owns clipboard synchronization. */ }
         override fun sendClipboardText(instance: Long, text: String) = handle != 0L && native.sendClipboardText(handle, text)
         override fun sendMouseEvent(instance: Long, x: Int, y: Int, flags: Int) {
-            if (handle != 0L && session.inputReady) {
+            if (handle != 0L && session.inputReady && !session.drag.active) {
                 val (remoteX, remoteY) = RdpMonitorLayouts.pointer(rect, x, y)
                 pointer = remoteX to remoteY
                 val button = flags and 0x7000
@@ -153,6 +170,52 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
         private set
     var inputReady = true
         private set
+    val drag = RdpSessionDrag(this)
+    private var panelPoints: Map<Long, RdpPanelPoint> = emptyMap()
+    private var manualLayout = false
+    private var nextPoseRead = 0L
+    private var poseCandidate: List<RdpMonitorRect>? = null
+    private var poseSince = 0L
+    private var posePoints: Map<Long, RdpPanelPoint> = emptyMap()
+    fun arrange(points: Map<Long, RdpPanelPoint>) {
+        manualLayout = true; panelPoints = points; resizeAt = SystemClock.elapsedRealtime() + 300
+    }
+    fun arrangeRelative(monitor: RdpMonitor, anchor: RdpMonitor, dx: Int, dy: Int) {
+        if (monitor === anchor || monitor !in monitors || anchor !in monitors || busy || drag.active) return
+        val scale = monitors.maxOf { maxOf(it.rect.width, it.rect.height) }.toFloat()
+        val rows = monitors.map { it.rect.y }.distinct().sorted()
+        val points = monitors.associate { it.id to RdpPanelPoint(it.rect.x / scale, -rows.indexOf(it.rect.y).toFloat()) }.toMutableMap()
+        val a = points.getValue(anchor.id)
+        // Insert between existing neighbors rather than relying on a tie in creation order.
+        val offset = .5f
+        if (dy == 0) {
+            points.entries.filter { it.key != monitor.id && kotlin.math.abs(it.value.y-a.y) <= .25f &&
+                (if (dx > 0) it.value.x > a.x else it.value.x < a.x) }.forEach { it.setValue(it.value.copy(x=it.value.x+dx*offset)) }
+        } else {
+            points.entries.filter { it.key != monitor.id && (if (dy > 0) it.value.y > a.y else it.value.y < a.y) }
+                .forEach { it.setValue(it.value.copy(y=it.value.y+dy*offset)) }
+        }
+        points[monitor.id] = RdpPanelPoint(a.x + dx*offset, a.y + dy*offset)
+        arrange(points)
+    }
+    fun followPanelLayout() { manualLayout = false; nextPoseRead = 0; poseCandidate = null }
+    private fun targetLayout(ready: List<RdpMonitor>) = RdpSpatialLayout.arrange(
+        ready.map { RdpMonitorRect(it.id, 0, 0, it.requestedWidth, it.requestedHeight) }, panelPoints)
+    private fun observePanels(now: Long) {
+        if (manualLayout || now < nextPoseRead || monitors.size < 2 || drag.active) return
+        nextPoseRead = now + 500
+        val poses = monitors.map { it.host.get()?.let(RdpPanelPose::read) ?: return }
+        if (poses.any { it.parent != poses.first().parent }) return
+        val points = monitors.mapIndexed { i, m -> m.id to poses.first().project(poses[i]) }.toMap()
+        // Identity/local poses on some Home versions do not describe a shared arrangement.
+        if (points.values.toList().withIndex().any { (i,a) -> points.values.drop(i+1).any { b -> kotlin.math.hypot(a.x-b.x,a.y-b.y) < .05f } }) return
+        val target = RdpSpatialLayout.arrange(monitors.map { RdpMonitorRect(it.id,0,0,it.requestedWidth,it.requestedHeight) }, points)
+        if (target != poseCandidate || points.keys != posePoints.keys || points.any { (id,p) ->
+            posePoints[id]?.let { kotlin.math.hypot(p.x-it.x,p.y-it.y) > .025f } != false }) {
+            poseCandidate = target; posePoints = points; poseSince = now; return
+        }
+        if (now - poseSince >= 750 && points != panelPoints) { panelPoints = points; resizeAt = now + 300 }
+    }
     private var nextId = 1L
     private val main = Handler(Looper.getMainLooper())
     private var connection: RdpSessionConnection? = null
@@ -219,6 +282,7 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
         if (connection == null && !reconnecting) connect(next) else applySurface(monitor)
     }
     fun detachSurface(monitor: RdpMonitor) {
+        drag.cancelFor(monitor)
         monitor.releaseInput()
         if (instance.value != 0L) bridge.setMonitorSurface(instance.value, monitor.id, null, 0, 0, 0, 0, 0)
         monitor.surface?.release(); monitor.surface = null
@@ -238,7 +302,7 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
         resizeAt = SystemClock.elapsedRealtime() + 300
     }
     fun addWindow(activity: Activity) {
-        if (!canAdd || closed) return
+        if (!canAdd || closed || drag.active) return
         val monitor = RdpMonitor(this, nextId++).also {
             it.requestedWidth = 1280; it.requestedHeight = 800
             it.launchDeadline = SystemClock.elapsedRealtime() + 10_000
@@ -261,6 +325,7 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
     }
     fun remove(monitor: RdpMonitor) {
         if (monitor !in monitors) return
+        drag.cancel()
         WindowLaunchMonitor.complete(monitor.launchRequest)
         monitor.launchSlot?.let { SessionWindowSlots.release(profile.id, it) }
         detachSurface(monitor); monitors.remove(monitor)
@@ -274,9 +339,10 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
         monitors.filter { it.launchDeadline > 0 && (!it.presented || it.surface == null) && now >= it.launchDeadline }.toList().forEach {
             it.host.get()?.finishAndRemoveTask(); remove(it); message(R.string.window_launch_failed)
         }
+        observePanels(now)
         val handle = instance.value
         if (handle == 0L || disconnectedReason.value != null) return
-        val raw = bridge.getMonitorLayoutState(handle); lastRaw = raw
+        val raw = RdpMonitorLayouts.normalized(bridge.getMonitorLayoutState(handle)); lastRaw = raw
         if (raw.size < 10) return
         val count = raw[9].toInt()
         supportsAdditionalMonitors = profile.remoteApp.isNullOrBlank() && raw[0] == 1L && raw[8] == 1L && raw[1] > 1
@@ -300,7 +366,7 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
             val observed = if (count == committed.size) committed.mapIndexed { i, old -> val p = 10 + i * 5
                 old.copy(x = raw[p].toInt(), y = raw[p + 1].toInt(), width = (raw[p + 2] - raw[p] + 1).toInt(), height = (raw[p + 3] - raw[p + 1] + 1).toInt()) } else emptyList()
             revision = raw[7]
-            if (observed.isNotEmpty() && observed == RdpMonitorLayouts.row(observed) && RdpMonitorLayouts.matches(raw, observed)) {
+            if (observed.isNotEmpty() && RdpMonitorLayouts.valid(observed, 16, 8192, 8192) && RdpMonitorLayouts.matches(raw, observed)) {
                 committed = observed
                 monitors.forEach { m -> committed.find { it.id == m.id }?.let { m.rect = it }; applySurface(m) }
             } else {
@@ -328,9 +394,9 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
                 monitors.forEach { applySurface(it) }; message(R.string.rdp_monitor_layout_failed)
             }
         }
-        if (inFlight == null && !fallback && raw[0] == 1L && raw[8] == 1L && now >= resizeAt) {
+        if (inFlight == null && !fallback && raw[0] == 1L && raw[8] == 1L && now >= resizeAt && !drag.active && monitors.none { it.hasButtons }) {
             val ready = monitors.filter { it.presented && it.surface != null || committed.any { r -> r.id == it.id } }
-            val target = RdpMonitorLayouts.row(ready.map { RdpMonitorRect(it.id, 0, 0, it.requestedWidth, it.requestedHeight) })
+            val target = targetLayout(ready)
             if (target.isNotEmpty() && target != committed) {
                 if (RdpMonitorLayouts.valid(target, raw[1].toInt(), raw[2], raw[3]) && bridge.requestMonitorLayout(handle, RdpMonitorLayouts.wire(target))) {
                     monitors.forEach { it.releaseInput(mouseOnly = true) }
@@ -342,10 +408,11 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
                 }
             }
         }
-        canAdd = profile.remoteApp.isNullOrBlank() && !fallback && !busy && monitors.all { it.presented } && raw[0] == 1L && raw[8] == 1L &&
-            monitors.size < minOf(raw[1], 16L) && RdpMonitorLayouts.valid(RdpMonitorLayouts.row(committed + RdpMonitorRect(-1, 0, 0, 1280, 800)), raw[1].toInt(), raw[2], raw[3])
+        canAdd = profile.remoteApp.isNullOrBlank() && !fallback && !busy && !drag.active && monitors.all { it.presented } && raw[0] == 1L && raw[8] == 1L &&
+            monitors.size < minOf(raw[1], 16L) && RdpMonitorLayouts.valid(RdpSpatialLayout.arrange(committed + RdpMonitorRect(-1, 0, 0, 1280, 800), panelPoints), raw[1].toInt(), raw[2], raw[3])
     }
     fun reconnect() {
+        drag.cancel()
         monitors.forEach { it.releaseInput() }; keyboardOwner.value = null
         instance.value = 0L; canAdd = false; supportsAdditionalMonitors = false; inputReady = false; reconnecting = true
         val previous = connection; connection = null
@@ -384,6 +451,7 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
     }
     private fun message(resource: Int) = Toast.makeText(context, resource, Toast.LENGTH_LONG).show()
     private fun close() {
+        drag.cancel()
         closed = true; instance.value = 0L; canAdd = false
         main.removeCallbacks(poll); clipboard?.removePrimaryClipChangedListener(clipboardListener)
         connection?.close(); connection = null; capture?.close(); capture = null

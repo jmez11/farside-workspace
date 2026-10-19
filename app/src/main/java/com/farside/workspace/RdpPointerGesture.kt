@@ -37,8 +37,12 @@ internal fun mapScreenToDesktop(
 internal class RdpPointerGesture(
     var touchSlop: Float,
     private val send: (Float, Float, Int) -> Unit,
-    private val showHold: (Pair<Float, Float>?, Long) -> Unit
+    private val showHold: (Pair<Float, Float>?, Long) -> Unit,
+    private val startWindowDrag: ((Float, Float) -> Boolean)? = null,
+    private val windowDragEligible: (Float, Float) -> Boolean = { _,_ -> true }
 ) {
+    private var transferred = false
+    private var triedTransfer = false
     private var active = false
     private var dragging = false
     private var button = FreeRDPBridge.PTR_FLAGS_BUTTON1
@@ -55,6 +59,7 @@ internal class RdpPointerGesture(
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 if (active) cancel()
+                transferred = false; triedTransfer = false
                 active = true
                 startX = event.x
                 startY = event.y
@@ -78,6 +83,14 @@ internal class RdpPointerGesture(
                     send(startX, startY, button or FreeRDPBridge.PTR_FLAGS_DOWN)
                 }
                 if (dragging) send(event.x, event.y, FreeRDPBridge.PTR_FLAGS_MOVE)
+                if (dragging && !triedTransfer && startWindowDrag != null && button == FreeRDPBridge.PTR_FLAGS_BUTTON1 && windowDragEligible(event.x,event.y)) {
+                    triedTransfer = true; transferred = true
+                    if (startWindowDrag.invoke(event.x, event.y)) {
+                        active = false; dragging = false; previousTapTime = -1L; showHold(null, 0L)
+                        return
+                    }
+                    transferred = false
+                }
             }
             MotionEvent.ACTION_UP -> if (active) {
                 showHold(null, 0L)
@@ -107,7 +120,7 @@ internal class RdpPointerGesture(
 
     fun cancel() {
         previousTapTime = -1L
-        if (active && dragging) send(lastX, lastY, button)
+        if (active && dragging && !transferred) send(lastX, lastY, button)
         active = false
         dragging = false
         showHold(null, 0L)

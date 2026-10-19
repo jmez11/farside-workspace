@@ -37,6 +37,7 @@ import androidx.compose.ui.geometry.Rect
 import android.os.SystemClock
 import android.view.ViewConfiguration
 import android.view.MotionEvent
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.Icons
 import androidx.compose.foundation.background
 import androidx.compose.material.icons.filled.FullscreenExit
@@ -518,8 +519,34 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
             showHold = { point, started ->
                 holdPoint = point?.let { Offset(it.first, it.second) }
                 holdStarted = started
+            },
+            startWindowDrag = { x, y ->
+                val point = desktopPoint(x, y)
+                val activity = context as? SessionActivity
+                monitor != null && activity != null && monitor.session.drag.start(activity.window.decorView, monitor, point.first, point.second)
+            },
+            windowDragEligible = { x,y ->
+                if (monitor == null) false else {
+                    val r = monitor.rect
+                    val peers = monitor.session.monitors.filter { it !== monitor }
+                    (x <= 20f && peers.any { it.rect.x < r.x }) ||
+                        (x >= currentWidth - 20f && peers.any { it.rect.x > r.x }) ||
+                        (y <= 20f && peers.any { it.rect.y < r.y }) ||
+                        (y >= currentHeight - 20f && peers.any { it.rect.y > r.y })
+                }
             }
         )
+    }
+
+    var showArrangement by remember { mutableStateOf(false) }
+    if (showArrangement && monitor != null) RdpDesktopArrangement(monitor) { showArrangement = false }
+    val dragPoint by rememberUpdatedState(desktopPoint)
+    DisposableEffect(monitor) {
+        val view = (context as? SessionActivity)?.window?.decorView
+        if (monitor != null) view?.setOnDragListener { _, event -> monitor.session.drag.event(monitor, event, dragPoint) }
+        onDispose {
+            if (monitor != null) { view?.setOnDragListener(null); monitor.session.drag.cancelFor(monitor) }
+        }
     }
 
     Box(
@@ -705,7 +732,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
             val buttonSize = 36.dp
             Column(modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp), horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
                 Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                    Text(session.name, color = Color.White, style = MaterialTheme.typography.bodyMedium, maxLines = 1,
+                    Text(if (monitor != null && runtime != null && runtime.monitors.size > 1) stringResource(R.string.rdp_desktop_number, runtime.monitors.indexOf(monitor)+1) + " - " + session.name else session.name, color = Color.White, style = MaterialTheme.typography.bodyMedium, maxLines = 1,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         modifier = Modifier.widthIn(max = 160.dp).padding(horizontal = 6.dp))
                     IconButton(onClick = { toolbarPinned = !toolbarPinned; revealToolbar() }, modifier = Modifier.size(buttonSize)) {
@@ -724,6 +751,10 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                         enabled = runtime.canAdd, modifier = Modifier.size(buttonSize)) {
                         Icon(Icons.Default.AddToQueue, stringResource(R.string.rdp_add_desktop), modifier = Modifier.size(iconSize),
                             tint = if (runtime.canAdd) Color.White else Color.Gray)
+                    }
+                    if (monitor != null && runtime != null && runtime.monitors.size > 1) IconButton(
+                        onClick = { showArrangement = true; revealToolbar() }, modifier = Modifier.size(buttonSize)) {
+                        Icon(Icons.Default.SwapHoriz, stringResource(R.string.rdp_arrange_desktops), modifier = Modifier.size(iconSize), tint = Color.White)
                     }
                     if (!isVnc) IconButton(onClick = { speakerMuted = !speakerMuted; revealToolbar() }, modifier = Modifier.size(buttonSize)) {
                         Icon(if (speakerMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
