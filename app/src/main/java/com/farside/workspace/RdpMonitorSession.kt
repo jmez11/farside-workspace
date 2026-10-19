@@ -103,6 +103,7 @@ internal class RdpMonitor(val session: RdpMonitorSession, val id: Long) : Deskto
     }
     private fun key(code: Int, down: Boolean, unicode: Boolean) {
         val handle = session.instance.value
+        if (down && code == 1 && !unicode) session.drag.cancel()
         if (handle == 0L || down && !session.inputReady) return
         val held = if (unicode) heldUnicode else heldKeys
         val wasHeld = code in held
@@ -130,6 +131,7 @@ internal class RdpMonitor(val session: RdpMonitorSession, val id: Long) : Deskto
         override fun sendMouseEvent(instance: Long, x: Int, y: Int, flags: Int) {
             if (flags and 0x8000 != 0) android.util.Log.d("RdpInput",
                 "Pointer monitor=$id ready=${session.inputReady} visible=$visible accepted=${session.acceptsInput(this@RdpMonitor)} busy=${session.busy} drag=${session.drag.active}")
+            if (handle != 0L && session.drag.pointer(this@RdpMonitor,x,y,flags)) return
             if (handle != 0L && session.acceptsInput(this@RdpMonitor) && !session.drag.active) {
                 val (remoteX, remoteY) = RdpMonitorLayouts.pointer(rect, x, y)
                 pointer = remoteX to remoteY

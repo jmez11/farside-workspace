@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.PanTool
 import androidx.compose.material.icons.filled.AddToQueue
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.ui.graphics.Path
@@ -434,8 +435,9 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
 
     val isMediaRecording = micRecording || cameraRecording
     LaunchedEffect(windowInteraction, currentWidth, currentHeight, isMediaRecording) { revealToolbar() }
-    LaunchedEffect(isOverlayVisible, toolbarPinned, toolbarActivity, offsetX, offsetY, isMediaRecording) {
-        if (isOverlayVisible && !toolbarPinned && !isMediaRecording) {
+    val keepToolbarVisible = isMediaRecording || runtime?.drag?.armed == true || runtime?.drag?.active == true
+    LaunchedEffect(isOverlayVisible, toolbarPinned, toolbarActivity, offsetX, offsetY, keepToolbarVisible) {
+        if (isOverlayVisible && !toolbarPinned && !keepToolbarVisible) {
             delay(3000)
             isOverlayVisible = false
         }
@@ -530,10 +532,10 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                 if (monitor == null) false else {
                     val r = monitor.rect
                     val peers = monitor.session.monitors.filter { it !== monitor }
-                    (x <= 20f && peers.any { it.rect.x < r.x }) ||
-                        (x >= currentWidth - 20f && peers.any { it.rect.x > r.x }) ||
-                        (y <= 20f && peers.any { it.rect.y < r.y }) ||
-                        (y >= currentHeight - 20f && peers.any { it.rect.y > r.y })
+                    (x <= 64f && peers.any { it.rect.x < r.x }) ||
+                        (x >= currentWidth - 64f && peers.any { it.rect.x > r.x }) ||
+                        (y <= 64f && peers.any { it.rect.y < r.y }) ||
+                        (y >= currentHeight - 64f && peers.any { it.rect.y > r.y })
                 }
             }
         )
@@ -588,7 +590,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
             }
             .pointerInput(Unit) {
                 awaitPointerEventScope {
-                    var lastVncHover = 0L
+                    var lastRemoteHover = 0L
                     while (true) {
                         val event = awaitPointerEvent()
                         if (event.type == PointerEventType.Move || event.type == PointerEventType.Press) {
@@ -599,11 +601,11 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                         }
                         // Compose hover is not delivered through pointerInteropFilter's touch
                         // callback. VNC needs it to position its negotiated software cursor.
-                        if (isVnc && rdpInstance != 0L && event.changes.none { it.pressed } &&
+                        if ((isVnc || runtime?.drag?.carrying == true) && rdpInstance != 0L && event.changes.none { it.pressed } &&
                             (event.type == PointerEventType.Move || event.type == PointerEventType.Enter)) {
                             val now = SystemClock.uptimeMillis()
-                            if (now - lastVncHover >= 16) {
-                                lastVncHover = now
+                            if (now - lastRemoteHover >= 16) {
+                                lastRemoteHover = now
                                 val pos = event.changes.first().position
                                 val (x, y) = desktopPoint(pos.x, pos.y)
                                 remotePointer[0] = x; remotePointer[1] = y
@@ -744,6 +746,16 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                         revealToolbar()
                     }, modifier = Modifier.size(buttonSize)) {
                         Icon(Icons.Default.Dashboard, stringResource(R.string.window_manager), modifier = Modifier.size(iconSize), tint = Color.White)
+                    }
+                    if (runtime != null && runtime.monitors.size > 1) {
+                        val selected = runtime.drag.armed || runtime.drag.carrying
+                        IconButton(onClick = { runtime.drag.toggleCarry(); revealToolbar() },
+                            enabled = runtime.inputReady && !runtime.busy || selected,
+                            modifier = Modifier.size(buttonSize)) {
+                            Icon(Icons.Default.PanTool,
+                                contentDescription = stringResource(if (selected) R.string.rdp_cancel_carry else R.string.rdp_carry_content),
+                                modifier = Modifier.size(iconSize), tint = if (selected) Color(0xFFFFC107) else Color.White)
+                        }
                     }
                     if (runtime != null && (runtime.supportsAdditionalMonitors || runtime.layoutNeedsRetry)) {
                         val retry = runtime.layoutNeedsRetry

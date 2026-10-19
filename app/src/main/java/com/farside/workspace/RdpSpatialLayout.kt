@@ -28,32 +28,34 @@ internal object RdpSpatialLayout {
                 compareBy<RdpMonitorRect> { points.getValue(it.id).x }.thenBy { it.id }))
             // Align the closest horizontal pair across adjacent rows. Packing every
             // row from x=0 incorrectly moved a panel above the right desktop to the
-            // far left of the host layout. Use a full-height upper panel so the rows
-            // share a real edge even when monitor heights differ.
-            val pair = previous.filter { it.y + it.height == y }.flatMap { upper ->
-                local.map { lower -> upper to lower }
-            }.minByOrNull { (upper,lower) -> abs(points.getValue(upper.id).x-points.getValue(lower.id).x) }
-            val start = pair?.let { (upper,lower) ->
+            // far left of the host layout. Alignment and edge connectivity can use
+            // different upper panels when their heights differ.
+            val pairs = previous.flatMap { upper -> local.map { lower -> upper to lower } }
+                .sortedBy { (upper,lower) -> abs(points.getValue(upper.id).x-points.getValue(lower.id).x) }
+            fun startAt(pair: Pair<RdpMonitorRect,RdpMonitorRect>): Int {
+                val (upper,lower) = pair
                 val delta = points.getValue(lower.id).x-points.getValue(upper.id).x
                 val shift = if (abs(delta) <= .25f) 0 else
                     (kotlin.math.sign(delta)*minOf(upper.width,lower.width)*.75f).toInt()
-                upper.x + (upper.width-lower.width)/2 + shift - lower.x
-            } ?: 0
-            // Windows can silently reject a pair meeting only at one corner.
-            // Slightly stagger rows so every contact is an edge with nonzero span.
+                return upper.x + (upper.width-lower.width)/2 + shift - lower.x
+            }
+            // Prefer the closest room alignment, including shorter upper monitors.
+            // Another tall upper monitor may supply the connecting edge; it needn't
+            // be the alignment anchor. Stagger away from corner-only contacts.
             val offsets = (0..monitors.size*2).flatMap { if (it == 0) listOf(0) else listOf(it*2,-it*2) }
-            val offset = offsets.firstOrNull { n ->
-                val candidate = local.map { it.copy(x=it.x+start+n,y=y) }
-                val connected = pair?.let { (upper,lower) ->
-                    val next = candidate.first { it.id == lower.id }
-                    next.x < upper.x+upper.width && upper.x < next.x+next.width
-                } ?: true
+            val starts = if (pairs.isEmpty()) sequenceOf(0) else pairs.asSequence().flatMap { pair ->
+                offsets.asSequence().map { startAt(pair)+it }
+            }
+            val start = starts.firstOrNull { x ->
+                val candidate = local.map { it.copy(x=it.x+x,y=y) }
+                val connected = previous.isEmpty() || previous.any { upper -> upper.y+upper.height == y &&
+                    candidate.any { lower -> lower.x < upper.x+upper.width && upper.x < lower.x+lower.width } }
                 connected && candidate.none { lower -> placed.values.any { upper ->
                     (lower.x == upper.x+upper.width || upper.x == lower.x+lower.width) &&
                         (lower.y == upper.y+upper.height || upper.y == lower.y+lower.height)
                 } }
-            } ?: 0
-            previous = local.map { it.copy(x=it.x+start+offset,y=y) }
+            } ?: pairs.firstOrNull()?.let(::startAt) ?: 0
+            previous = local.map { it.copy(x=it.x+start,y=y) }
             previous.forEach { placed[it.id] = it }
             y += previous.maxOf { it.height }
         }
@@ -68,9 +70,18 @@ internal data class RdpPanelPose(val x: Float, val y: Float, val z: Float,
     val qx: Float, val qy: Float, val qz: Float, val qw: Float, val parent: Any?, val visible: Boolean? = null) {
     fun project(other: RdpPanelPose): RdpPanelPoint {
         val dx = other.x - x; val dy = other.y - y; val dz = other.z - z
-        // Dot with this panel's right/up axes, so a turned panel group still works.
-        return RdpPanelPoint(dx * (1 - 2 * (qy*qy + qz*qz)) + dy * (2*(qx*qy + qw*qz)) + dz * (2*(qx*qz - qw*qy)),
-            dx * (2*(qx*qy - qw*qz)) + dy * (1 - 2*(qx*qx + qz*qz)) + dz * (2*(qy*qz + qw*qx)))
+        // Room gravity defines rows. Projecting into a tilted panel's up axis
+        // mixes depth into height and can put a same-tier neighbor above it.
+        var rightX = 1-2*(qy*qy+qz*qz)
+        var rightZ = 2*(qx*qz-qw*qy)
+        var length = kotlin.math.hypot(rightX,rightZ)
+        if (length < .01f) {
+            rightX = 1-2*(qx*qx+qy*qy)
+            rightZ = -2*(qx*qz+qw*qy)
+            length = kotlin.math.hypot(rightX,rightZ)
+        }
+        return RdpPanelPoint(if (length < .01f) dx else (dx*rightX+dz*rightZ)/length,dy)
+
     }
     companion object {
         fun read(activity: Activity): RdpPanelPose? {

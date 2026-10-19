@@ -631,6 +631,8 @@
     <string name="storage_permission_needed_backup">Storage access is needed to save or load backup files. Please grant storage permissions.</string>
     <string name="grant_permission">Grant Permission</string>
     <string name="rdp_add_desktop">Add desktop</string>
+    <string name="rdp_carry_content">Pick up content, then drop in another desktop</string>
+    <string name="rdp_cancel_carry">Cancel content move</string>
     <string name="rdp_monitor_placement_failed">Desktop windows recovered, but the host did not accept panel placement.</string>
     <string name="rdp_monitor_layout_failed">Could not sync the desktop windows. Use Retry desktop layout.</string>
     <string name="rdp_monitor_limit">This monitor layout exceeds the session display limits.</string>

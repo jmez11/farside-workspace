@@ -90,6 +90,10 @@ internal class RdpPointerGesture(
                         return
                     }
                     transferred = false
+                    // Home may cancel touch synchronously even when native start
+                    // fails. Cancel deferred this release during handoff; finish it
+                    // now if there is no remaining local gesture to send UP.
+                    if (!active) { send(event.x,event.y,button); dragging=false; previousTapTime=-1L }
                 }
             }
             MotionEvent.ACTION_UP -> if (active) {

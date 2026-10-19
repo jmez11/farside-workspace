@@ -61,6 +61,14 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
             (info.javaClass.getMethod("isVisible").invoke(info) == true) to (info.javaClass.getMethod("isDrawn").invoke(info) == true)
         } finally { test.uiAutomation.dropShellPermissionIdentity() }
     }
+    private fun tiltedWearerPoints(): Map<Long,RdpPanelPoint> {
+        val base=RdpPanelPose(0f,0f,0f,.16253603f,.7082294f,-.17314187f,.6648421f,null)
+        return listOf(base,base.copy(x=.9063796f,y=-1.1579264f,z=-1.0021642f),
+            base.copy(x=.9059247f,y=-1.1579264f,z=.89892785f),
+            base.copy(x=.562718f,y=-1.157951f,z=-.05170028f),
+            base.copy(x=1.0291275f,y=-.19774865f,z=-1.4102644f))
+            .mapIndexed { i,p -> (i+1L) to base.project(p) }.toMap()
+    }
     fun geometryOnly(): String { geometryTests(); return "Monitor bounds, connectivity, stable wire IDs, unordered host matching, hidden-pose tracking and gesture ownership." }
     private fun geometryTests() {
         val row = RdpMonitorLayouts.row(listOf(RdpMonitorRect(10, 0, 0, 1281, 800), RdpMonitorRect(11, 0, 0, 1024, 768)))
@@ -94,6 +102,15 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
         val diagonal = RdpSpatialLayout.arrange(four.take(2),mapOf(0L to RdpPanelPoint(0f,0f),1L to RdpPanelPoint(-1f,-1f)))
         check(diagonal[1].x < diagonal[0].x && diagonal[1].y > diagonal[0].y)
         check(RdpMonitorLayouts.valid(diagonal,16,8192,8192))
+        val wearerPoints=tiltedWearerPoints()
+        check(wearerPoints.getValue(5).y in -.25f..0f && wearerPoints.getValue(5).x > 1f)
+        val wearer = RdpSpatialLayout.arrange(List(5) { i ->
+            RdpMonitorRect(i+1L,0,0,if(i==4)1790 else 1280,if(i==4)937 else 800) },wearerPoints)
+        check(wearer[0].y == wearer[4].y && wearer[4].x > wearer[0].x)
+        check(wearer.drop(1).take(3).all { it.y > wearer[0].y })
+        check(kotlin.math.abs(wearer[0].x-wearer[3].x) <= 2) { "Larger fifth panel shifted the first four" }
+        check(RdpMonitorLayouts.valid(wearer,16,8192,8192))
+        report.put("tiltedMixedSizeWearerLayout",true)
         report.put("crossRowHorizontalAlignment",true)
         check(!RdpMonitorLayouts.valid(listOf(row[0],row[1].copy(x=10)),16,8192,8192))
         val q = kotlin.math.sqrt(.5f)
@@ -108,6 +125,18 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
             gesture.onTouch(event); event.recycle()
         }
         check(transfers == 1 && sent == listOf(FreeRDPBridge.PTR_FLAGS_BUTTON1 or FreeRDPBridge.PTR_FLAGS_DOWN,FreeRDPBridge.PTR_FLAGS_MOVE)) { "Transferred gesture sent an early release: $sent" }
+        val failedFlags=mutableListOf<Int>()
+        lateinit var failedGesture: RdpPointerGesture
+        failedGesture=RdpPointerGesture(8f,{_,_,flag->failedFlags+=flag},{_,_->},
+            {_,_->failedGesture.cancel();false})
+        for((action,x) in listOf(android.view.MotionEvent.ACTION_DOWN to 10f,android.view.MotionEvent.ACTION_MOVE to 40f,
+            android.view.MotionEvent.ACTION_UP to 40f)) {
+            val event=android.view.MotionEvent.obtain(100,200,action,x,10f,0)
+            failedGesture.onTouch(event);event.recycle()
+        }
+        check(failedFlags==listOf(FreeRDPBridge.PTR_FLAGS_BUTTON1 or FreeRDPBridge.PTR_FLAGS_DOWN,
+            FreeRDPBridge.PTR_FLAGS_MOVE,FreeRDPBridge.PTR_FLAGS_BUTTON1))
+        report.put("failedNativeStartAfterTouchCancelReleasesOnce",true)
         val crossed = listOf(RdpMonitorRect(1,0,800,1280,800),RdpMonitorRect(2,2560,0,1024,768),
             RdpMonitorRect(3,0,0,1280,800),RdpMonitorRect(4,1280,0,1280,800))
         check(RdpMonitorLayouts.valid(crossed,16,8192,8192))
@@ -389,6 +418,95 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
                 settled(session.monitors.size)
             }
             followPlacement()
+            // Open only the harmless Run dialog, locate its new pixels, pick up its
+            // title through the actual carry toolbar and pointer UI, then drop it on
+            // the other monitor. No remote command, document or saved profile changes.
+            fun chord(code: Int) { main {
+                first.bridge.sendKeyEvent(handle,0x15b,true); first.bridge.sendKeyEvent(handle,code,true)
+                first.bridge.sendKeyEvent(handle,code,false); first.bridge.sendKeyEvent(handle,0x15b,false)
+            } }
+            fun snap(m: RdpMonitor): Bitmap { var result: Bitmap?=null
+                main { result=texture(checkNotNull(m.host.get()).window.decorView)?.bitmap }; return checkNotNull(result) }
+            fun touchUi(m: RdpMonitor,x: Float,y: Float) { val a=checkNotNull(m.host.get());main {
+                val now=android.os.SystemClock.uptimeMillis()
+                for ((action,t) in listOf(android.view.MotionEvent.ACTION_DOWN to now,android.view.MotionEvent.ACTION_UP to now+80)) {
+                    val event=android.view.MotionEvent.obtain(now,t,action,x,y,0)
+                    try { a.dispatchTouchEvent(event) } finally { event.recycle() }
+                }
+            } }
+            val beforeRun=session.monitors.associate { it.id to snap(it) }
+            var runOpened=false
+            try {
+                chord(0x13); runOpened=true; Thread.sleep(600)
+                // Largest connected changed region excludes taskbar/cursor updates.
+                var bestMonitor: RdpMonitor?=null; var bestBounds: android.graphics.Rect?=null; var bestArea=0
+                for (m in session.monitors) {
+                    val before=beforeRun.getValue(m.id); val after=snap(m); val step=4
+                    val cols=before.width/step; val rows=(before.height-64)/step
+                    val changed=BooleanArray(cols*rows); val seen=BooleanArray(changed.size)
+                    for(y in 0 until rows) for(x in 0 until cols) {
+                        val a=before.getPixel(x*step,y*step);val b=after.getPixel(x*step,y*step)
+                        changed[y*cols+x]=kotlin.math.abs((a and 255)-(b and 255))+kotlin.math.abs((a shr 8 and 255)-(b shr 8 and 255))+kotlin.math.abs((a shr 16 and 255)-(b shr 16 and 255))>40
+                    }
+                    for(index in changed.indices) if(changed[index] && !seen[index]) {
+                        val queue=java.util.ArrayDeque<Int>();queue.add(index);seen[index]=true
+                        var count=0;var left=cols;var top=rows;var right=0;var bottom=0
+                        while(queue.isNotEmpty()) { val i=queue.removeFirst();val x=i%cols;val y=i/cols;count++
+                            left=minOf(left,x);right=maxOf(right,x);top=minOf(top,y);bottom=maxOf(bottom,y)
+                            for(n in listOf(i-1,i+1,i-cols,i+cols)) if(n in changed.indices && !seen[n] && changed[n] && kotlin.math.abs(n%cols-x)+kotlin.math.abs(n/cols-y)==1){seen[n]=true;queue.add(n)}
+                        }
+                        if(count>bestArea && (right-left)*step>200 && (bottom-top)*step>80) {
+                            bestArea=count;bestMonitor=m;bestBounds=android.graphics.Rect(left*step,top*step,(right+1)*step,(bottom+1)*step)
+                        }
+                    }
+                    File(directory,"carry-run-${m.id}.png").outputStream().use { after.compress(Bitmap.CompressFormat.PNG,100,it) };after.recycle()
+                }
+                val source=checkNotNull(bestMonitor) { "Run dialog pixel region not found" };val bounds=checkNotNull(bestBounds)
+                val target=session.monitors.first { it !== source };val targetBefore=snap(target)
+                val carryLabel=context.getString(R.string.rdp_carry_content)
+                await("pick up/drop toolbar action") { node(carryLabel)!=null };click(carryLabel)
+                check(session.drag.armed)
+                touchUi(source,bounds.exactCenterX(),bounds.top+20f)
+                check(session.drag.carrying && !session.monitors.any { it.hasButtons })
+                val targetView=checkNotNull(target.host.get()).window.decorView
+                val x=targetView.width/2f;val y=targetView.height/2f
+                main { val now=android.os.SystemClock.uptimeMillis()
+                    val hover=android.view.MotionEvent.obtain(now,now,android.view.MotionEvent.ACTION_HOVER_MOVE,x,y,0).apply { this.source=android.view.InputDevice.SOURCE_MOUSE }
+                    try { checkNotNull(target.host.get()).dispatchGenericMotionEvent(hover) } finally { hover.recycle() }
+                }
+                await("carry hover moves held pointer across desktops") { session.drag.position == RdpMonitorLayouts.pointer(target.rect,target.rect.width/2,target.rect.height/2) }
+                touchUi(target,x,y)
+                check(!session.drag.active && !session.drag.armed)
+                await("carried Run dialog appears on destination monitor",10_000) {
+                    val after=snap(target);var changed=0
+                    for(y0 in 0 until after.height step 10) for(x0 in 0 until after.width step 10) if(after.getPixel(x0,y0)!=targetBefore.getPixel(x0,y0))changed++
+                    if(changed>200)File(directory,"carry-dropped.png").outputStream().use { after.compress(Bitmap.CompressFormat.PNG,100,it) }
+                    after.recycle();changed>200
+                }
+                targetBefore.recycle()
+                report.put("uiCarryRemoteRunDialogBetweenMonitors",true)
+                // A lost post-drop UP must not consume the next gesture's release.
+                main {
+                    session.drag.toggleCarry()
+                    for (flag in listOf(FreeRDPBridge.PTR_FLAGS_BUTTON1 or FreeRDPBridge.PTR_FLAGS_DOWN,
+                        FreeRDPBridge.PTR_FLAGS_BUTTON1,
+                        FreeRDPBridge.PTR_FLAGS_BUTTON1 or FreeRDPBridge.PTR_FLAGS_DOWN,
+                        FreeRDPBridge.PTR_FLAGS_BUTTON1 or FreeRDPBridge.PTR_FLAGS_DOWN,
+                        FreeRDPBridge.PTR_FLAGS_BUTTON1)) target.bridge.sendMouseEvent(handle,target.rect.width/2,target.rect.height/2,flag)
+                    check(!target.hasButtons && !session.drag.active)
+                }
+                report.put("carryLostReleaseDoesNotStrandNextDrag",true)
+
+                // Cancel and Escape use the same button-release path; no stranded drag.
+                click(carryLabel);check(session.drag.armed)
+                main { first.bridge.sendKeyEvent(handle,1,true);first.bridge.sendKeyEvent(handle,1,false) }
+                check(!session.drag.active && !session.drag.armed)
+                report.put("carryEscapeCancellation",true)
+                if(test.arguments?.getString("rdpNativeDragProbe")=="true") nativeDrag(first,second)
+            } finally {
+                main { session.drag.cancel();if(runOpened){first.bridge.sendKeyEvent(handle,1,true);first.bridge.sendKeyEvent(handle,1,false)} }
+                beforeRun.values.forEach { it.recycle() }
+            }
             report.put("followPlacementToolbarWithoutDialog",true)
             await("automatic layout from ordinary actual panel poses") {
                 var ready = false
@@ -629,6 +747,18 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
                 RdpMonitorRect(m.id,0,0,m.requestedWidth,m.requestedHeight) },fivePoints).toSet())
             report.put("fivePanelGridAppliedOnHost",true)
             record("five-grid",allowMinimized = true)
+            val wearerPoints=tiltedWearerPoints().entries.associate { (id,p) -> session.monitors[id.toInt()-1].id to p }
+            val fifth=session.monitors.last();val beforeWearer=session.layoutSubmissions
+            main { session.resize(fifth,1790,937);session.followPanelLayout();pointsField.set(session,wearerPoints);poseReadField.setLong(session,Long.MAX_VALUE) }
+            await("current tilted five-panel wearer layout submitted") { session.layoutSubmissions>beforeWearer }
+            settled(5)
+            check(first.rect.y==fifth.rect.y && fifth.rect.x>first.rect.x)
+            check(kotlin.math.abs(first.rect.x-session.monitors[3].rect.x)<=2)
+            report.put("currentTiltedWearerLayoutAppliedOnHost",true)
+            Thread.sleep(1500) // Inspect the completed server redraw after mixed-size reconfiguration.
+            record("tilted-five-wearer",allowMinimized=true)
+            main { session.resize(fifth,1280,800) }
+
             main { pointsField.set(session,oldPoints); poseReadField.setLong(session,0); session.followPanelLayout() }
             settled(5)
 
