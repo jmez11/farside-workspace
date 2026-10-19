@@ -64,6 +64,10 @@ class FreeRDPBridge : DesktopSessionBridge {
     external override fun sendUnicodeKeyEvent(instance: Long, unicodeChar: Int, isDown: Boolean)
     external fun addSurface(instance: Long, surface: Surface)
     external fun removeSurface(instance: Long, surface: Surface)
+    // Temporary debug protocol investigation; release native builds refuse these operations.
+    external fun setDisplayProbeActive(instance: Long, active: Boolean): Boolean
+    external fun getDisplayProbeState(instance: Long): LongArray
+    external fun requestDisplayProbeLayout(instance: Long, row: IntArray): Boolean
     external override fun updateDisplay(instance: Long, width: Int, height: Int, zoom: Float)
     external override fun getDesktopWidth(instance: Long): Int
     external override fun getDesktopHeight(instance: Long): Int

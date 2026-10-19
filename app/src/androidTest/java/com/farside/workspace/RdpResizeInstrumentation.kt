@@ -118,6 +118,11 @@ class RdpResizeInstrumentation : Instrumentation() {
     override fun onStart() {
         val results = Bundle()
         try {
+            jumpArgs?.getString("rdpMonitorProbe")?.let { mode ->
+                results.putString("stream", "PASS: ${RdpMonitorProbeVerification(this).run(mode)}\n")
+                finish(0, results)
+                return
+            }
             if (jumpArgs?.getString("backupRestoreOnly") == "true") {
                 results.putString("stream", BackupRestoreVerification(this).run() + "\n")
                 finish(0, results)

@@ -9,6 +9,8 @@ import metavrx.layout.window.compose.state.WindowLifecycle
 
 internal class WindowCapacityVerification(private val test: Instrumentation) {
     fun run(): String {
+        val mainCount = test.arguments?.getString("windowCapacityMainCount")?.toIntOrNull() ?: 6
+        check(mainCount in 1..6)
         val activities = mutableListOf<WindowCapacityFixtureActivity>()
         val report = StringBuilder()
         fun snapshot(stage: String) {
@@ -34,7 +36,7 @@ internal class WindowCapacityVerification(private val test: Instrumentation) {
             File(test.targetContext.cacheDir, "window-capacity.txt").writeText(report.toString())
         }
         try {
-            repeat(6) { index ->
+            repeat(mainCount) { index ->
                 val a = test.startActivitySync(Intent(test.targetContext, WindowCapacityFixtureActivity::class.java)
                     .setData(android.net.Uri.parse("farside://capacity/$index/${System.nanoTime()}"))
                     .putExtra("number", index + 1)
@@ -42,12 +44,12 @@ internal class WindowCapacityVerification(private val test: Instrumentation) {
                 activities += a
                 Thread.sleep(1000)
             }
-            snapshot("six-main")
+            snapshot("$mainCount-main")
             val parent = activities.last()
             for (count in 1..2) {
                 test.runOnMainSync { parent.childCount = count }
                 Thread.sleep(2000)
-                snapshot("six-main-$count-children")
+                snapshot("$mainCount-main-$count-children")
                 check(parent.children.take(count).all { it.lifecycle.value == WindowLifecycle.Active }) { "Child $count not active" }
                 check(activities.none { it.isDestroyed }) { "Main activity displaced/destroyed" }
             }
@@ -60,7 +62,7 @@ internal class WindowCapacityVerification(private val test: Instrumentation) {
         }
         Thread.sleep(1000)
         File(test.targetContext.cacheDir, "window-capacity.txt").writeText(report.toString())
-        return "Six main windows remain visible/drawn with two active children. This is a capacity observation, not a fixed launcher limit."
+        return "$mainCount main windows remain visible/drawn with two active children. This is a capacity observation, not a fixed launcher limit."
     }
 
 }
