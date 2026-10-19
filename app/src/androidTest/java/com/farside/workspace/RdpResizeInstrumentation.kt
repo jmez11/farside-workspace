@@ -118,6 +118,16 @@ class RdpResizeInstrumentation : Instrumentation() {
     override fun onStart() {
         val results = Bundle()
         try {
+            if (jumpArgs?.getString("rdpLayoutGeometryOnly") == "true") {
+                results.putString("stream", "PASS: ${RdpMonitorWindowsVerification(this).geometryOnly()}\n")
+                finish(0, results)
+                return
+            }
+            if (jumpArgs?.getString("rdpMonitorsOnly") == "true") {
+                results.putString("stream", "PASS: ${RdpMonitorWindowsVerification(this).run()}\n")
+                finish(0, results)
+                return
+            }
             if (jumpArgs?.getString("backupRestoreOnly") == "true") {
                 results.putString("stream", BackupRestoreVerification(this).run() + "\n")
                 finish(0, results)

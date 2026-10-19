@@ -16,6 +16,7 @@ internal class RdpSessionConnection(
     private val profile: ConnectionProfile,
     private val bridge: FreeRDPBridge,
     private val certificates: RdpCertificateVerifier,
+    private val monitorMode: Boolean = false,
     private val onDisconnected: (String, Boolean) -> Unit,
     private val onStatus: (String) -> Unit = {},
     private val onConnected: (Long) -> Unit,
@@ -114,15 +115,18 @@ internal class RdpSessionConnection(
                     if (connectionProxy) profile.proxyHost?.trim() else null, if (connectionProxy) profile.proxyPort ?: 0 else 0,
                     if (connectionProxy) profile.proxyUser else null, if (connectionProxy) profile.proxyPass else null,
                     profile.proxyType == ProxyType.SOCKS5 && connectionProxy)
+                if (monitorMode && instance != 0L) bridge.setSurface(instance, null)
                 val connected = instance
                 this.connected.set(connected != 0L)
                 if (connected == 0L) tunnel?.close()
                 main.post { if (!closed.get()) { onStatus(""); onConnected(connected) } }
-            } else {
+            } else if (!monitorMode) {
                 bridge.setSurface(instance, next)
             }
-            surface?.release()
-            surface = next
+            if (!monitorMode) {
+                surface?.release()
+                surface = next
+            }
         }
     }
 
@@ -135,7 +139,9 @@ internal class RdpSessionConnection(
         }
     }
 
-    override fun close() {
+    override fun close() = closeWhenDone {}
+
+    fun closeWhenDone(onClosed: () -> Unit) {
         if (!closed.compareAndSet(false, true)) return
         bridge.displayCapture?.close()
         bridge.disconnectListener = null
@@ -146,6 +152,7 @@ internal class RdpSessionConnection(
             instance = 0L
             surface?.release()
             surface = null
+            main.post { onClosed() }
         }
         worker.shutdown()
     }

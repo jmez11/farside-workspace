@@ -17,9 +17,11 @@ import com.farside.workspace.data.ProfileManager
 import metavrx.layout.compose.SpatialScene
 
 class SessionActivity : ComponentActivity() {
+    internal var rdpMonitor: RdpMonitor? = null
     internal var cardConnected = false
     internal var sshCaptureView: android.view.View? = null
-    internal val displayCapture = DisplayCapturePermission(this)
+    internal lateinit var displayCapture: DisplayCapturePermission
+        private set
     internal var keyboardPanelState: metavrx.layout.window.compose.state.WindowState? = null
     internal var keyboardBankState: metavrx.layout.window.compose.state.WindowState? = null
     internal var keyboardBankEditorView: android.view.View? = null
@@ -84,6 +86,7 @@ class SessionActivity : ComponentActivity() {
     internal var sessionSlot = 0
         private set
     internal fun checkAndBindAudioSession() {
+        rdpMonitor?.let { if (it.session.isOwner(it)) it.session.updateMediaHost(); return }
         val bridge = rdpBridge ?: return
         val space = QuestSpatialAudio.windowSpace(this) ?: return
         bridge.audioWindowSpace = space
@@ -118,6 +121,12 @@ class SessionActivity : ComponentActivity() {
             if (!isDestroyed) {
                 movementObserver.start()
                 WindowLaunchMonitor.observe(this)
+                rdpMonitor?.let { monitor ->
+                    window.decorView.viewTreeObserver.registerFrameCommitCallback {
+                        if (!isDestroyed && window.decorView.isShown) monitor.session.presented(monitor)
+                    }
+                    window.decorView.invalidate()
+                }
                 checkAndBindAudioSession()
             }
         }
@@ -127,7 +136,11 @@ class SessionActivity : ComponentActivity() {
         SessionCardActions.unregister(this)
         sshControllerScroll.stop()
         credentialPrefs?.unregisterOnSharedPreferenceChangeListener(credentialListener)
-        displayCapture.close()
+        rdpMonitor?.let { monitor ->
+            if (isChangingConfigurations) { if (monitor.host.get() === this) monitor.host.clear() } else monitor.session.remove(monitor)
+        }
+        displayCapture.detachHost()
+        if (rdpMonitor == null) displayCapture.close()
         movementObserver.close()
         if (!isChangingConfigurations) sessionProfile?.let { SessionWindowSlots.release(it, sessionSlot) }
         super.onDestroy()
@@ -148,6 +161,7 @@ class SessionActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        displayCapture = DisplayCapturePermission(this)
         onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = LauncherWindowLauncher.show(this@SessionActivity)
         })
@@ -167,6 +181,16 @@ class SessionActivity : ComponentActivity() {
         if (profile == null) {
             finish()
             return
+        }
+        if (profile.type == ConnectionType.RDP) {
+            val group = intent.getStringExtra(RdpMonitorSessions.EXTRA_SESSION)
+            val monitorId = intent.getLongExtra(RdpMonitorSessions.EXTRA_MONITOR, 0L)
+            rdpMonitor = if (group != null) RdpMonitorSessions.find(group, monitorId) else RdpMonitorSessions.create(this, profile)
+            if (rdpMonitor == null || rdpMonitor?.session?.profile?.id != profile.id) { finishAndRemoveTask(); return }
+            val monitor = rdpMonitor!!
+            intent.putExtra(RdpMonitorSessions.EXTRA_SESSION, monitor.session.id)
+            intent.putExtra(RdpMonitorSessions.EXTRA_MONITOR, monitor.id)
+            monitor.session.bindHost(monitor, this)
         }
         sessionProfile = profile.id
         SessionCardActions.register(this, profile.id)
@@ -200,7 +224,7 @@ class SessionActivity : ComponentActivity() {
             val appPinVerifier = profileManager.getAppPinVerifier()
             val systemPin = profileManager.usesSystemPin()
             val requiresPin = ((credential?.requirePin == true) || (sshKey?.requirePin == true)) && (systemPin || appPinVerifier != null)
-            var unlocked by remember { mutableStateOf(!requiresPin || if (systemPin) DeviceCredentialAuth.hasRememberedUnlock(this)
+            var unlocked by remember { mutableStateOf(rdpMonitor?.session?.hasConnected?.value == true || !requiresPin || if (systemPin) DeviceCredentialAuth.hasRememberedUnlock(this)
                 else appPinVerifier != null && CredentialPin.hasValidCachedPin(appPinVerifier)) }
             MaterialTheme(colorScheme = darkColorScheme()) {
                 Surface(
@@ -224,6 +248,7 @@ class SessionActivity : ComponentActivity() {
                         RdpSessionScreen(
                             session = profile.copy(reconnectAutomatically = profileManager.getProfiles().firstOrNull { it.id == profile.id }?.reconnectAutomatically ?: false),
                             windowInteraction = windowInteraction.value,
+                            monitor = rdpMonitor,
                             onInstanceCreated = {
                                 rdpInstance = it
                                 SessionCardActions.connected(this, it != 0L)
@@ -231,8 +256,10 @@ class SessionActivity : ComponentActivity() {
                             },
                             onBridgeCreated = {
                                 rdpBridge = it
-                                it.displayCapture = displayCapture
-                                it.audioWindowSpace = QuestSpatialAudio.windowSpace(this)
+                                if (rdpMonitor == null) {
+                                    it.displayCapture = displayCapture
+                                    it.audioWindowSpace = QuestSpatialAudio.windowSpace(this)
+                                }
                             },
                             onClose = { finish() }
                         )
