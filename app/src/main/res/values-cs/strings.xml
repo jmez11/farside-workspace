@@ -182,7 +182,7 @@
   <string name="trusted_certificates_cleared">Všechny uložené důvěryhodné certifikáty vymazány.</string>
   <string name="permissions_revoke_scheduled">Oprávnění budou odebrána po zavření aplikace.</string>
   <string name="permissions_revoke_requires_android_13">Odebrání oprávnění vyžaduje Android 13+.</string>
-  <string name="set_app_pin_first">Nejprve nastavte PIN aplikace v nastavení Tunely a globální.</string>
+  <string name="set_app_pin_first">Nejprve nastavte PIN aplikace v nastavení Obecné.</string>
   <string name="cloudflare_logins_cleared">Uložená přihlášení Cloudflare Access vymazána. Pro nové přihlášení se znovu připojte.</string>
   <string name="cloudflare_logins_clear_failed">Nepodařilo se vymazat přihlášení Cloudflare.</string>
   <string name="discovery_no_services">Nebyly nalezeny žádné místní služby. Zadejte hostitele ručně nebo zkontrolujte Sdílení obrazovky a síť LAN.</string>
@@ -647,4 +647,5 @@
   <string name="backup_invalid_passphrase">Nesprávná heslová fráze nebo poškozený soubor zálohy.</string>
   <string name="storage_permission_needed_backup">K ukládání nebo načítání souborů záloh je nutný přístup k úložišti. Udělte oprávnění k úložišti.</string>
   <string name="grant_permission">Udělit oprávnění</string>
+    <string name="connect_to_console">Připojit ke konzoli</string>
 </resources>

@@ -182,7 +182,7 @@
   <string name="trusted_certificates_cleared">Wyczyszczono wszystkie zapisane zaufane certyfikaty.</string>
   <string name="permissions_revoke_scheduled">Uprawnienia zostaną cofnięte po zamknięciu aplikacji.</string>
   <string name="permissions_revoke_requires_android_13">Cofanie uprawnień wymaga systemu Android 13+.</string>
-  <string name="set_app_pin_first">Najpierw ustaw PIN aplikacji w ustawieniach Tunele &amp; globalne.</string>
+  <string name="set_app_pin_first">Najpierw ustaw PIN aplikacji w ustawieniach Ogólne.</string>
   <string name="cloudflare_logins_cleared">Wyczyszczono logowania Cloudflare Access z pamięci podręcznej. Połącz ponownie, aby się zalogować.</string>
   <string name="cloudflare_logins_clear_failed">Nie można wyczyścić logowań Cloudflare.</string>
   <string name="discovery_no_services">Nie znaleziono usług lokalnych. Wpisz host ręcznie lub sprawdź Udostępnianie ekranu i sieć LAN.</string>
@@ -645,4 +645,5 @@
   <string name="backup_invalid_passphrase">Nieprawidłowa fraza hasła lub uszkodzony plik kopii.</string>
   <string name="storage_permission_needed_backup">Dostęp do pamięci jest wymagany, aby zapisywać lub wczytywać pliki kopii. Przyznaj uprawnienia pamięci.</string>
   <string name="grant_permission">Przyznaj uprawnienie</string>
+    <string name="connect_to_console">Połącz z konsolą</string>
 </resources>

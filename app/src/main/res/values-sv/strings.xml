@@ -182,7 +182,7 @@
   <string name="trusted_certificates_cleared">Alla sparade betrodda certifikat har rensats.</string>
   <string name="permissions_revoke_scheduled">Behörigheter kommer att återkallas när appen stängs.</string>
   <string name="permissions_revoke_requires_android_13">Återkallande av behörigheter kräver Android 13 eller senare.</string>
-  <string name="set_app_pin_first">Ställ först in en app-PIN i inställningarna för Tunnlar &amp; globalt.</string>
+  <string name="set_app_pin_first">Ställ först in en app-PIN i inställningarna för Allmänt.</string>
   <string name="cloudflare_logins_cleared">Cachade Cloudflare Access-inloggningar har rensats. Anslut igen för att logga in på nytt.</string>
   <string name="cloudflare_logins_clear_failed">Kunde inte rensa Cloudflare Access-inloggningar.</string>
   <string name="discovery_no_services">Inga lokala tjänster hittades. Ange värden manuellt eller kontrollera skärmdelning och LAN.</string>
@@ -630,4 +630,5 @@
   <string name="backup_invalid_passphrase">Felaktig lösenfras eller skadad säkerhetskopia.</string>
   <string name="storage_permission_needed_backup">Lagringsåtkomst krävs för att spara eller läsa in säkerhetskopior. Bevilja lagringsbehörighet.</string>
   <string name="grant_permission">Bevilja behörighet</string>
+    <string name="connect_to_console">Anslut till konsolen</string>
 </resources>

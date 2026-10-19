@@ -648,7 +648,8 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
         jint proxyPort,
         jstring proxyUser,
         jstring proxyPassword,
-        jboolean socksProxy) {
+        jboolean socksProxy,
+        jboolean connectToConsole) {
         
     if (!getenv("HOME")) {
         setenv("HOME", "/data/data/com.farside.workspace/files", 1);
@@ -775,6 +776,7 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
     }
     freerdp_settings_set_string(instance->context->settings, FreeRDP_Username, user_c);
     freerdp_settings_set_string(instance->context->settings, FreeRDP_Password, pass_c);
+    freerdp_settings_set_bool(instance->context->settings, FreeRDP_ConsoleSession, connectToConsole == JNI_TRUE);
     freerdp_settings_set_bool(instance->context->settings, FreeRDP_RestrictedAdminModeRequired, adminMode == JNI_TRUE);
     
     LOGI("Applying performance optimizations");
@@ -1666,4 +1668,18 @@ Java_com_farside_workspace_FreeRDPBridge_sendClipboardText(JNIEnv* env, jobject,
         return res == CHANNEL_RC_OK ? JNI_TRUE : JNI_FALSE;
     }
     return JNI_FALSE;
+}
+
+// Test-APK-only caller: inspect the settings on the actual connected FreeRDP instance.
+extern "C" JNIEXPORT jint JNICALL
+Java_com_farside_workspace_QuestRdpSessionModeVerification_getFlags(JNIEnv*, jclass, jlong handle) {
+#ifndef NDEBUG
+    auto* instance = reinterpret_cast<freerdp*>(handle);
+    if (!instance || !instance->context || !instance->context->settings) return -1;
+    const auto* settings = instance->context->settings;
+    return (freerdp_settings_get_bool(settings, FreeRDP_ConsoleSession) ? 1 : 0) |
+           (freerdp_settings_get_bool(settings, FreeRDP_RestrictedAdminModeRequired) ? 2 : 0);
+#else
+    return -1;
+#endif
 }

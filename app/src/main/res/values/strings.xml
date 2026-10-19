@@ -186,7 +186,7 @@
     <string name="trusted_certificates_cleared">All saved trusted certificates cleared.</string>
     <string name="permissions_revoke_scheduled">Permissions scheduled to revoke when app is closed.</string>
     <string name="permissions_revoke_requires_android_13">Permission revocation requires Android 13+.</string>
-    <string name="set_app_pin_first">Set an App PIN in Tunnels &amp; Global settings first.</string>
+    <string name="set_app_pin_first">Set an App PIN in General settings first.</string>
     <string name="cloudflare_logins_cleared">Cached Cloudflare Access logins cleared. Reconnect to sign in again.</string>
     <string name="cloudflare_logins_clear_failed">Could not clear Cloudflare logins.</string>
     <string name="discovery_no_services">No local services found. Enter the host manually or check Screen Sharing and the LAN.</string>
@@ -639,4 +639,5 @@
     <string name="rdp_desktop_number">Desktop %1$d</string>
     <string name="rdp_layout_auto">Follow panel placement</string>
     <string name="rdp_retry_layout">Retry desktop layout</string>
+    <string name="connect_to_console">Connect to console</string>
 </resources>

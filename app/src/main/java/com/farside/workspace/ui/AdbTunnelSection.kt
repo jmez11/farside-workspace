@@ -53,7 +53,7 @@ fun AdbTunnelSection(discovery: (suspend () -> AdbState)? = null) {
         Text(stringResource(R.string.adb_bridge_help, port),
             color = Color.Gray, modifier = Modifier.padding(16.dp))
         Row(Modifier.padding(horizontal = 16.dp)) {
-            Button(enabled = state.port != null && !active, onClick = {
+            OutlinedButton(enabled = state.port != null && !active, onClick = {
                 try {
                     val config = AdbTunnelConfig(token.ifBlank { store.load()?.token ?: "" }, hostname, port.toIntOrNull() ?: 0).validate()
                     require(config.port != state.port) { portConflictMsg }
@@ -66,7 +66,7 @@ fun AdbTunnelSection(discovery: (suspend () -> AdbState)? = null) {
                     error = null
                 } catch (failure: Exception) { error = failure.localizedMessage(context) ?: tunnelStartFailedMsg }
             }) { Text(stringResource(R.string.save_start_tunnel)) }
-            if (active) TextButton(onClick = { AdbTunnelService.stop(context); active = false }) { Text(stringResource(R.string.stop_tunnel)) }
+            if (active) OutlinedButton(onClick = { AdbTunnelService.stop(context); active = false }) { Text(stringResource(R.string.stop_tunnel)) }
         }
         preview?.let { yaml ->
             Text(stringResource(R.string.adb_tunnel_config_preview, yaml), color = Color.Gray, modifier = Modifier.padding(16.dp))
@@ -78,5 +78,5 @@ fun AdbTunnelSection(discovery: (suspend () -> AdbState)? = null) {
         error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp)) }
     }
     Text(if (status.isEmpty()) stringResource(R.string.stopped) else status, color = Color.White, modifier = Modifier.padding(16.dp))
-    if (active && !state.wireless) TextButton(onClick = { AdbTunnelService.stop(context); active = false }) { Text(stringResource(R.string.stop_tunnel)) }
+    if (active && !state.wireless) OutlinedButton(onClick = { AdbTunnelService.stop(context); active = false }) { Text(stringResource(R.string.stop_tunnel)) }
 }

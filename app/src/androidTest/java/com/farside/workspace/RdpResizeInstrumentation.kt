@@ -118,6 +118,16 @@ class RdpResizeInstrumentation : Instrumentation() {
     override fun onStart() {
         val results = Bundle()
         try {
+            if (jumpArgs?.getString("consoleSessionOnly") == "true") {
+                results.putString("stream", QuestRdpSessionModeVerification.run(this) + "\n")
+                finish(0, results)
+                return
+            }
+            if (jumpArgs?.getString("generalSettingsOnly") == "true") {
+                results.putString("stream", CredentialUiVerification(this).verifyGeneralSettings() + "\n")
+                finish(0, results)
+                return
+            }
             if (jumpArgs?.getString("rdpLayoutGeometryOnly") == "true") {
                 results.putString("stream", "PASS: ${RdpMonitorWindowsVerification(this).geometryOnly()}\n")
                 finish(0, results)

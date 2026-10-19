@@ -1,5 +1,6 @@
 package com.farside.workspace
 
+import androidx.activity.compose.setContent
 import android.app.Instrumentation
 import android.content.Context
 import android.content.Intent
@@ -9,6 +10,96 @@ import android.view.accessibility.AccessibilityNodeInfo
 /** Exercises actual Compose navigation using Android accessibility actions; no Horizon gestures. */
 class CredentialUiVerification(private val instrumentation: Instrumentation) {
     private val automation get() = instrumentation.uiAutomation
+
+    fun verifyGeneralSettings(): String {
+        automation.serviceInfo = automation.serviceInfo.apply {
+            flags = flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+        }
+        val context = instrumentation.targetContext
+        fun label(id: Int) = context.getString(id)
+        fun find(label: String) = this.find(label, topmostScroll = true)
+        val activity = instrumentation.startActivitySync(Intent(context, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
+        try {
+            click(label(R.string.settings))
+            val tabs = listOf(R.string.credentials, R.string.ssh_keys, R.string.general).map { find(label(it)) }
+            val bounds = tabs.map { android.graphics.Rect().also(it::getBoundsInScreen) }
+            check(bounds.zipWithNext().all { (left, right) -> left.centerX() < right.centerX() }) {
+                "Settings order must be Credentials, SSH Keys, General"
+            }
+            click(label(R.string.credentials))
+            find(label(R.string.user_management))
+            click(label(R.string.ssh_keys))
+            find(label(R.string.new_ssh_key))
+            click(label(R.string.general))
+            find(label(R.string.app_security))
+            capture(activity, "general-settings-top.png")
+            find(label(R.string.backup_settings_title))
+            check(find(label(R.string.export_backup)).isEnabled)
+            check(find(label(R.string.restore_backup)).isEnabled)
+            find(label(R.string.about_open_source_licenses))
+            find(label(R.string.license_freerdp))
+            capture(activity, "general-settings-bottom.png")
+            // Tabs stay in the top bar while General content scrolls.
+            val generalBounds = android.graphics.Rect().also { find(label(R.string.general)).getBoundsInScreen(it) }
+            check(generalBounds.top == bounds.last().top)
+            click(label(R.string.close))
+            val fixture = com.farside.workspace.data.ConnectionProfile(
+                id = "form-console-verification", name = "Form verification", type = com.farside.workspace.data.ConnectionType.RDP,
+                host = "127.0.0.1", user = "fixture", pass = "")
+            val current = androidx.compose.runtime.mutableStateOf(fixture)
+            instrumentation.runOnMainSync {
+                activity.setContent {
+                    androidx.compose.material3.MaterialTheme(colorScheme = androidx.compose.material3.darkColorScheme()) {
+                        com.farside.workspace.ui.LauncherScreen(listOf(current.value),
+                            onAddProfile = { current.value = it }, onDeleteProfile = {}, onConnectProfile = {},
+                            profileManager = com.farside.workspace.data.ProfileManager(context))
+                    }
+                }
+            }
+            click(label(R.string.add_connection))
+            val types = com.farside.workspace.data.ConnectionType.entries
+            val typeLabels = types.map { if (it == com.farside.workspace.data.ConnectionType.VNC) R.string.mac_vnc else it.labelResId }
+            val typeBounds = typeLabels.map { android.graphics.Rect().also { rect -> find(label(it)).getBoundsInScreen(rect) } }
+            check(typeBounds.map { it.top }.distinct().size == 1)
+            capture(activity, "connection-form-top.png")
+            for (id in typeLabels.drop(1) + typeLabels.first()) click(label(id))
+            click(label(R.string.close))
+            click(label(R.string.more_options))
+            click(label(R.string.edit))
+            find(label(R.string.back))
+            var adminNode: AccessibilityNodeInfo? = find(label(R.string.admin_mode))
+            while (adminNode != null) {
+                if (adminNode.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SHOW_ON_SCREEN.id)) break
+                adminNode = adminNode.parent
+            }
+            Thread.sleep(600)
+            val consoleBounds = android.graphics.Rect().also { find(label(R.string.connect_to_console)).getBoundsInScreen(it) }
+            val adminBounds = android.graphics.Rect().also { find(label(R.string.admin_mode)).getBoundsInScreen(it) }
+            check(!consoleBounds.isEmpty && !adminBounds.isEmpty && consoleBounds.top < adminBounds.top) { "Console/admin bounds: $consoleBounds / $adminBounds" }
+            click(label(R.string.connect_to_console))
+            capture(activity, "connection-form-console.png")
+            click(label(R.string.save_uppercase))
+            check(current.value.connectToConsole && !current.value.adminMode)
+            val encoded = current.value.toJson()
+            check(com.farside.workspace.data.ConnectionProfile.fromJson(encoded).connectToConsole)
+            encoded.remove("connectToConsole")
+            check(!com.farside.workspace.data.ConnectionProfile.fromJson(encoded).connectToConsole)
+            click(label(R.string.more_options))
+            click(label(R.string.edit))
+            click(label(R.string.connect_to_console))
+            click(label(R.string.save_uppercase))
+            check(!current.value.connectToConsole && !current.value.adminMode)
+            click(label(R.string.more_options))
+            click(label(R.string.edit))
+            click(label(R.string.back))
+            find(label(R.string.add_connection))
+            return "PASS: fixed Settings/type tab rows, General security/backup/restore/licenses, add X/edit Back navigation, console above admin, console save/edit/JSON/default-off and independent admin state (accessibility actions; saved user data unchanged)."
+
+        } finally {
+            instrumentation.runOnMainSync { activity.finish() }
+        }
+    }
 
     fun verifyLiveDeletion() {
         val manager = com.farside.workspace.data.ProfileManager(instrumentation.targetContext)
@@ -49,7 +140,7 @@ class CredentialUiVerification(private val instrumentation: Instrumentation) {
             node.getChild(index)?.let(::descendants).orEmpty()
         }
 
-    private fun find(label: String, editable: Boolean = false): AccessibilityNodeInfo {
+    private fun find(label: String, editable: Boolean = false, topmostScroll: Boolean = false): AccessibilityNodeInfo {
         repeat(60) {
             automation.clearCache()
             val displays = automation.windowsOnAllDisplays
@@ -67,8 +158,8 @@ class CredentialUiVerification(private val instrumentation: Instrumentation) {
             }
             if (it > 0 && it % 5 == 0) {
                 val action = if (it % 30 < 20) AccessibilityNodeInfo.ACTION_SCROLL_FORWARD else AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
-                nodes.firstOrNull { it.isScrollable && it.packageName == instrumentation.targetContext.packageName }
-                    ?.performAction(action)
+                val scrollable = nodes.filter { it.isScrollable && it.packageName == instrumentation.targetContext.packageName }
+                (if (topmostScroll) scrollable.lastOrNull() else scrollable.firstOrNull())?.performAction(action)
             }
             Thread.sleep(200)
         }
@@ -199,11 +290,11 @@ class CredentialUiVerification(private val instrumentation: Instrumentation) {
         click("Edit")
         // 1. Toggling Require PIN without App PIN set should show an error
         click("Require PIN")
-        find("Set an App PIN in Tunnels & Global settings first.")
+        find("Set an App PIN in General settings first.")
         click("Cancel Edit")
 
-        // 2. Go to Tunnels & Global and set App PIN
-        click("Tunnels & Global")
+        // 2. Go to General and set App PIN
+        click("General")
         enter("New PIN (4–12 digits)", "246810")
         enter("Confirm PIN", "135790")
         click("Save PIN")

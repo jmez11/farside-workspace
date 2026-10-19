@@ -182,7 +182,7 @@
   <string name="trusted_certificates_cleared">Alle lagrede klarerte sertifikater er fjernet.</string>
   <string name="permissions_revoke_scheduled">Tillatelser er planlagt tilbakekalt når appen lukkes.</string>
   <string name="permissions_revoke_requires_android_13">Tilbakekalling av tillatelser krever Android 13 eller nyere.</string>
-  <string name="set_app_pin_first">Angi først en app-PIN i innstillingene for Tunneler &amp; globalt.</string>
+  <string name="set_app_pin_first">Angi først en app-PIN i innstillingene for Generelt.</string>
   <string name="cloudflare_logins_cleared">Bufrede Cloudflare Access-pålogginger er fjernet. Koble til på nytt for å logge inn igjen.</string>
   <string name="cloudflare_logins_clear_failed">Kunne ikke fjerne Cloudflare Access-pålogginger.</string>
   <string name="discovery_no_services">Ingen lokale tjenester funnet. Skriv inn verten manuelt eller sjekk skjermdeling og LAN-et.</string>
@@ -630,4 +630,5 @@
   <string name="backup_invalid_passphrase">Feil passordfrase eller skadet sikkerhetskopifil.</string>
   <string name="storage_permission_needed_backup">Lagringstilgang er nødvendig for å lagre eller laste inn sikkerhetskopifiler. Gi lagringstillatelser.</string>
   <string name="grant_permission">Gi tillatelse</string>
+    <string name="connect_to_console">Koble til konsollen</string>
 </resources>

@@ -182,7 +182,7 @@
   <string name="trusted_certificates_cleared">Todos os certificados confiáveis salvos foram apagados.</string>
   <string name="permissions_revoke_scheduled">Permissões serão revogadas ao fechar o app.</string>
   <string name="permissions_revoke_requires_android_13">A revogação de permissões requer Android 13+.</string>
-  <string name="set_app_pin_first">Defina um PIN do app primeiro em Túneis &amp; global.</string>
+  <string name="set_app_pin_first">Defina um PIN do app primeiro em Geral.</string>
   <string name="cloudflare_logins_cleared">Logins do Cloudflare Access em cache apagados. Reconecte para entrar novamente.</string>
   <string name="cloudflare_logins_clear_failed">Não foi possível limpar os logins do Cloudflare.</string>
   <string name="discovery_no_services">Nenhum serviço local encontrado. Digite o host manualmente ou verifique o Compartilhamento de Tela e a LAN.</string>
@@ -630,4 +630,5 @@
   <string name="backup_invalid_passphrase">Frase de segurança incorreta ou arquivo de backup corrompido.</string>
   <string name="storage_permission_needed_backup">É necessário acesso ao armazenamento para salvar ou carregar arquivos de backup. Conceda as permissões de armazenamento.</string>
   <string name="grant_permission">Conceder permissão</string>
+    <string name="connect_to_console">Conectar ao console</string>
 </resources>

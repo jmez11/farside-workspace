@@ -182,7 +182,7 @@
   <string name="trusted_certificates_cleared">保存済みの信頼証明書をすべてクリアしました。</string>
   <string name="permissions_revoke_scheduled">アプリ終了時に権限を取り消すよう予約しました。</string>
   <string name="permissions_revoke_requires_android_13">権限の取り消しにはAndroid 13以降が必要です。</string>
-  <string name="set_app_pin_first">先に「トンネル &amp; 全般」設定でアプリPINを設定してください。</string>
+  <string name="set_app_pin_first">先に「全般」設定でアプリPINを設定してください。</string>
   <string name="cloudflare_logins_cleared">キャッシュされたCloudflare Accessログインをクリアしました。再度サインインするには再接続してください。</string>
   <string name="cloudflare_logins_clear_failed">Cloudflareログインをクリアできませんでした。</string>
   <string name="discovery_no_services">ローカルサービスが見つかりません。ホストを手動で入力するか、画面共有とLANを確認してください。</string>
@@ -632,4 +632,5 @@
   <string name="backup_invalid_passphrase">パスフレーズが正しくないか、バックアップファイルが破損しています。</string>
   <string name="storage_permission_needed_backup">バックアップファイルの保存または読み込みにはストレージへのアクセスが必要です。ストレージの権限を許可してください。</string>
   <string name="grant_permission">権限を許可</string>
+    <string name="connect_to_console">コンソールに接続</string>
 </resources>

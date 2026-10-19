@@ -182,7 +182,7 @@
   <string name="trusted_certificates_cleared">Kaikki tallennetut luotetut varmenteet tyhjennetty.</string>
   <string name="permissions_revoke_scheduled">Luvat on ajoitettu peruttavaksi, kun sovellus suljetaan.</string>
   <string name="permissions_revoke_requires_android_13">Lupien peruminen vaatii Android 13+.</string>
-  <string name="set_app_pin_first">Aseta ensin sovelluksen PIN-koodi Tunnelit ja yleiset -asetuksissa.</string>
+  <string name="set_app_pin_first">Aseta ensin sovelluksen PIN-koodi Yleiset -asetuksissa.</string>
   <string name="cloudflare_logins_cleared">Välimuistiin tallennetut Cloudflare Access -kirjautumiset tyhjennetty. Yhdistä uudelleen kirjautuaksesi sisään.</string>
   <string name="cloudflare_logins_clear_failed">Cloudflare-kirjautumisten tyhjentäminen epäonnistui.</string>
   <string name="discovery_no_services">Paikallisia palveluita ei löytynyt. Anna isäntä manuaalisesti tai tarkista näytön jakaminen ja lähiverkko.</string>
@@ -630,4 +630,5 @@
   <string name="backup_invalid_passphrase">Virheellinen tunnuslause tai vioittunut varmuuskopiotiedosto.</string>
   <string name="storage_permission_needed_backup">Tallennustilan käyttöoikeus tarvitaan varmuuskopiotiedostojen tallentamiseen tai lataamiseen. Myönnä tallennustilan käyttöoikeudet.</string>
   <string name="grant_permission">Myönnä käyttöoikeus</string>
+    <string name="connect_to_console">Yhdistä konsoliin</string>
 </resources>

@@ -182,7 +182,7 @@
   <string name="trusted_certificates_cleared">Alle opgeslagen vertrouwde certificaten gewist.</string>
   <string name="permissions_revoke_scheduled">Machtigingen worden ingetrokken wanneer de app wordt gesloten.</string>
   <string name="permissions_revoke_requires_android_13">Voor het intrekken van machtigingen is Android 13+ vereist.</string>
-  <string name="set_app_pin_first">Stel eerst een app-PIN in bij Tunnels &amp; algemeen.</string>
+  <string name="set_app_pin_first">Stel eerst een app-PIN in bij Algemeen.</string>
   <string name="cloudflare_logins_cleared">Opgeslagen Cloudflare Access-aanmeldingen gewist. Maak opnieuw verbinding om u aan te melden.</string>
   <string name="cloudflare_logins_clear_failed">Cloudflare-aanmeldingen konden niet worden gewist.</string>
   <string name="discovery_no_services">Geen lokale services gevonden. Voer de host handmatig in of controleer Schermdeling en het LAN.</string>
@@ -630,4 +630,5 @@
   <string name="backup_invalid_passphrase">Onjuiste wachtwoordzin of beschadigd back-upbestand.</string>
   <string name="storage_permission_needed_backup">Opslagtoegang is nodig om back-upbestanden op te slaan of te laden. Verleen de opslagmachtigingen.</string>
   <string name="grant_permission">Machtiging verlenen</string>
+    <string name="connect_to_console">Verbinding maken met console</string>
 </resources>

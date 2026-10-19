@@ -182,7 +182,7 @@
   <string name="trusted_certificates_cleared">저장된 신뢰할 수 있는 인증서가 모두 지워졌습니다.</string>
   <string name="permissions_revoke_scheduled">앱이 닫힐 때 권한이 취소되도록 예약되었습니다.</string>
   <string name="permissions_revoke_requires_android_13">권한 취소에는 Android 13 이상이 필요합니다.</string>
-  <string name="set_app_pin_first">먼저 터널 및 전역 설정에서 앱 PIN을 설정하세요.</string>
+  <string name="set_app_pin_first">먼저 일반 설정에서 앱 PIN을 설정하세요.</string>
   <string name="cloudflare_logins_cleared">캐시된 Cloudflare Access 로그인이 지워졌습니다. 다시 연결하여 로그인하세요.</string>
   <string name="cloudflare_logins_clear_failed">Cloudflare 로그인을 지울 수 없습니다.</string>
   <string name="discovery_no_services">로컬 서비스를 찾을 수 없습니다. 호스트를 수동으로 입력하거나 화면 공유 및 LAN을 확인하세요.</string>
@@ -630,4 +630,5 @@
   <string name="backup_invalid_passphrase">암호가 올바르지 않거나 백업 파일이 손상되었습니다.</string>
   <string name="storage_permission_needed_backup">백업 파일을 저장하거나 불러오려면 저장소 접근 권한이 필요합니다. 저장소 권한을 허용해 주세요.</string>
   <string name="grant_permission">권한 허용</string>
+    <string name="connect_to_console">콘솔에 연결</string>
 </resources>

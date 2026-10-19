@@ -52,6 +52,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.*
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Divider
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.*
@@ -134,8 +135,8 @@ fun LauncherScreen(
                     isAdding = false
                     editingProfile = null
                 },
-                onCancel = { 
-                    isAdding = false 
+                onCancel = {
+                    isAdding = false
                     editingProfile = null
                 },
                 profileManager = profileManager,
@@ -232,7 +233,7 @@ fun LauncherScreen(
 
             }
         }
-        
+
         if (isSettingsOpen) {
             SettingsScreen(
                 onClose = {
@@ -272,7 +273,7 @@ fun ProfileCard(profile: ConnectionProfile, onEdit: () -> Unit, onDelete: () -> 
                 onLongPress = { if (placementAvailable) ConnectionSpatialDrag.start(view, latestProfile) }
             )
         } else Modifier
-    
+
     val cardHeight = if (reordering) 196.dp else 220.dp
     Card(
         modifier = Modifier.padding(8.dp).fillMaxWidth().height(cardHeight).then(launchModifier),
@@ -313,7 +314,7 @@ fun ProfileCard(profile: ConnectionProfile, onEdit: () -> Unit, onDelete: () -> 
                     color = if (jumpLabel.startsWith("\u26A0")) Color(0xFFFFB300) else MaterialTheme.colorScheme.primary,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            
+
             Row(modifier = Modifier.align(Alignment.TopStart).padding(start = 8.dp, top = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 val starLabel = if (starred) stringResource(R.string.unstar_connection, profile.name)
@@ -460,11 +461,26 @@ private fun FormValidationField(message: String?, content: @Composable () -> Uni
 
 
 @Composable
+private fun FormTabs(labels: List<Int>, selectedIndex: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
+    TabRow(selectedTabIndex = selectedIndex, modifier = modifier,
+        containerColor = MaterialTheme.colorScheme.background, contentColor = MaterialTheme.colorScheme.primary,
+        indicator = { positions ->
+            TabRowDefaults.Indicator(Modifier.tabIndicatorOffset(positions[selectedIndex]), color = MaterialTheme.colorScheme.primary)
+        }) {
+        labels.forEachIndexed { index, label ->
+            Tab(selected = index == selectedIndex, onClick = { onSelect(index) },
+                selectedContentColor = MaterialTheme.colorScheme.primary, unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                text = { Text(stringResource(label), style = MaterialTheme.typography.titleSmall) })
+        }
+    }
+}
+
+@Composable
 fun SettingsHeader(text: String) {
     Text(
-        text = text.uppercase(),
-        color = Color(0xFF1E88E5), // Blue accent
-        style = MaterialTheme.typography.labelSmall,
+        text = text,
+        color = Color.White,
+        style = MaterialTheme.typography.titleSmall,
         fontWeight = FontWeight.Bold,
         modifier = Modifier.padding(start = 16.dp, top = 24.dp, bottom = 8.dp)
     )
@@ -473,9 +489,9 @@ fun SettingsHeader(text: String) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsTextField(
-    value: String, 
-    onValueChange: (String) -> Unit, 
-    placeholder: String = "", 
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String = "",
     visualTransformation: androidx.compose.ui.text.input.VisualTransformation = androidx.compose.ui.text.input.VisualTransformation.None,
     keyboardOptions: androidx.compose.foundation.text.KeyboardOptions = androidx.compose.foundation.text.KeyboardOptions.Default,
     isError: Boolean = false,
@@ -499,7 +515,7 @@ fun SettingsTextField(
         colors = TextFieldDefaults.colors(
             focusedContainerColor = Color(0xFF1C1C1E),
             unfocusedContainerColor = Color(0xFF1C1C1E),
-            focusedIndicatorColor = Color(0xFF1E88E5),
+            focusedIndicatorColor = MaterialTheme.colorScheme.primary,
             unfocusedIndicatorColor = Color.DarkGray,
             errorIndicatorColor = Color.Red,
             focusedTextColor = Color.White,
@@ -716,7 +732,7 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
         AlertDialog(onDismissRequest = { publicKeyError = null },
             title = { Text(stringResource(R.string.ssh_public_key_title)) },
             text = { Text(message) },
-            confirmButton = { TextButton(onClick = { publicKeyError = null }) { Text(stringResource(R.string.ssh_public_key_close)) } })
+            confirmButton = { OutlinedButton(onClick = { publicKeyError = null }) { Text(stringResource(R.string.ssh_public_key_close)) } })
     }
     publicKeyShown?.let { (name, publicKey) ->
         AlertDialog(onDismissRequest = { publicKeyShown = null },
@@ -726,12 +742,12 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                 Spacer(Modifier.height(12.dp))
                 SelectionContainer { Text(publicKey.line, fontFamily = FontFamily.Monospace) }
             } },
-            confirmButton = { TextButton(onClick = {
+            confirmButton = { OutlinedButton(onClick = {
                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                 clipboard.setPrimaryClip(android.content.ClipData.newPlainText(sshPublicKeyTitleLabel, publicKey.line))
                 android.widget.Toast.makeText(context.applicationContext, sshPublicKeyCopiedMsg, android.widget.Toast.LENGTH_SHORT).show()
             }) { Text(stringResource(R.string.ssh_public_key_copy)) } },
-            dismissButton = { TextButton(onClick = { publicKeyShown = null }) { Text(stringResource(R.string.ssh_public_key_close)) } })
+            dismissButton = { OutlinedButton(onClick = { publicKeyShown = null }) { Text(stringResource(R.string.ssh_public_key_close)) } })
     }
     if (pendingPinDisable) {
         if (systemPinEnabled) SystemCredentialDialog(title = stringResource(R.string.remove_pin_requirement), allowRemembered = false,
@@ -788,7 +804,7 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
             title = { Text(stringResource(R.string.backup_settings_title)) },
             text = { Text(stringResource(R.string.storage_permission_needed_backup)) },
             confirmButton = {
-                TextButton(onClick = {
+                OutlinedButton(onClick = {
                     showStoragePermissionNotice = false
                     com.farside.workspace.requestStoragePermission(context) { intent ->
                         storagePermissionLauncherForBackup.launch(intent)
@@ -796,7 +812,7 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                 }) { Text(stringResource(R.string.grant_permission)) }
             },
             dismissButton = {
-                TextButton(onClick = { showStoragePermissionNotice = false }) { Text(stringResource(R.string.cancel)) }
+                OutlinedButton(onClick = { showStoragePermissionNotice = false }) { Text(stringResource(R.string.cancel)) }
             }
         )
     }
@@ -833,16 +849,16 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                 }
             },
             confirmButton = {
-                TextButton(
+                OutlinedButton(
                     enabled = !isExportingBackup,
                     onClick = {
                         if (exportPassphrase.isBlank()) {
                             exportPassphraseError = backupPassphraseEmptyMsg
-                            return@TextButton
+                            return@OutlinedButton
                         }
                         if (exportPassphrase != exportPassphraseConfirm) {
                             exportPassphraseError = backupPassphraseMismatchMsg
-                            return@TextButton
+                            return@OutlinedButton
                         }
                         showExportDialog = false
                         val dateStr = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
@@ -853,7 +869,7 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                 }
             },
             dismissButton = {
-                TextButton(enabled = !isExportingBackup, onClick = { showExportDialog = false }) {
+                OutlinedButton(enabled = !isExportingBackup, onClick = { showExportDialog = false }) {
                     Text(stringResource(R.string.cancel))
                 }
             }
@@ -884,12 +900,12 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                 }
             },
             confirmButton = {
-                TextButton(
+                OutlinedButton(
                     enabled = !isRestoringBackup,
                     onClick = {
                         if (restorePassphrase.isBlank()) {
                             restorePassphraseError = backupPassphraseEmptyMsg
-                            return@TextButton
+                            return@OutlinedButton
                         }
                         val passChars = restorePassphrase.toCharArray()
                         isRestoringBackup = true
@@ -921,7 +937,7 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                 }
             },
             dismissButton = {
-                TextButton(
+                OutlinedButton(
                     enabled = !isRestoringBackup,
                     onClick = {
                         showRestorePassphraseDialog = false
@@ -934,56 +950,38 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
         )
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-    ) {
-        // Top App Bar
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Button(
-                onClick = onClose,
-                enabled = !savingCredential && !savingSshKey,
-                modifier = Modifier.heightIn(min = 56.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E88E5), contentColor = Color.White)
-            ) {
-                Icon(Icons.Default.ArrowBack, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.back), fontWeight = FontWeight.Bold, fontSize = 18.sp)
+    BoxWithConstraints(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        val formWidth = minOf(700.dp, (maxWidth - 192.dp).coerceAtLeast(128.dp))
+        Column(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 16.dp, vertical = 8.dp),
+            contentAlignment = Alignment.Center) {
+            val editing = editingCredentialId != null || editingSshKeyId != null
+            IconButton(onClick = {
+                if (editingCredentialId != null) {
+                    editingCredentialId = null
+                    newCredName = ""; newCredUser = ""; newCredPass = ""; requirePin = false; pinError = null
+                } else if (editingSshKeyId != null) {
+                    editingSshKeyId = null
+                    newKeyName = ""; newKeyPrivate = ""; newKeyPassphrase = ""; keyRequirePin = false; keyPinError = null
+                } else onClose()
+            }, enabled = !savingCredential && !savingSshKey, modifier = Modifier.align(Alignment.CenterStart)) {
+                Icon(if (editing) Icons.Default.ArrowBack else Icons.Default.Close,
+                    contentDescription = stringResource(if (editing) R.string.back else R.string.close), tint = Color.White)
             }
-            Spacer(Modifier.width(16.dp))
-            Text(stringResource(R.string.app_settings), color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            FormTabs(listOf(R.string.credentials, R.string.ssh_keys, R.string.general),
+                when (selectedTab) { 1 -> 0; 2 -> 1; else -> 2 },
+                { selectedTab = listOf(1, 2, 0)[it] }, Modifier.width(formWidth).padding(horizontal = 16.dp))
         }
-        
-        Divider(color = Color.DarkGray, thickness = 1.dp)
-
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
             Column(
                 modifier = Modifier
-                    .widthIn(max = 700.dp)
+                    .width(formWidth)
                     .fillMaxHeight()
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(remember(selectedTab) { androidx.compose.foundation.ScrollState(0) })
                     .padding(bottom = 32.dp)
             ) {
-                TabRow(
-                    selectedTabIndex = selectedTab,
-                    containerColor = Color.Black,
-                    contentColor = Color.White
-                ) {
-                    Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text(stringResource(R.string.tunnels_global)) })
-                    Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text(stringResource(R.string.credentials)) })
-                    Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text(stringResource(R.string.ssh_keys)) })
-                    Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }, text = { Text(stringResource(R.string.backup_restore)) })
-                    Tab(selected = selectedTab == 4, onClick = { selectedTab = 4 }, text = { Text(stringResource(R.string.about)) })
-                }
-                
                 Spacer(modifier = Modifier.height(16.dp))
-                
+
                 when (selectedTab) {
                     0 -> {
                         SettingsHeader(stringResource(R.string.app_security))
@@ -993,7 +991,7 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                                 color = Color.Gray, modifier = Modifier.padding(horizontal = 16.dp))
                         } else {
                             if (com.farside.workspace.DeviceCredentialAuth.SYSTEM_PIN_SWITCH_VISIBLE) {
-                                TextButton(onClick = { enablingSystemPin = true }) { Text(stringResource(R.string.use_headset_passcode_instead)) }
+                                OutlinedButton(onClick = { enablingSystemPin = true }) { Text(stringResource(R.string.use_headset_passcode_instead)) }
                             }
                             if (appPinVerifier == null || settingAppPin) {
                                 Text(if (settingAppPin) stringResource(R.string.enter_new_app_pin) else stringResource(R.string.set_app_pin_help),
@@ -1008,14 +1006,14 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword))
                                 appPinError?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 16.dp)) }
                                 Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                                    TextButton(onClick = {
+                                    OutlinedButton(onClick = {
                                         if (!com.farside.workspace.CredentialPin.valid(appPinNew)) {
                                             appPinError = pinLengthErrorMsg
-                                            return@TextButton
+                                            return@OutlinedButton
                                         }
                                         if (appPinNew != appPinConfirm) {
                                             appPinError = pinMismatchMsg
-                                            return@TextButton
+                                            return@OutlinedButton
                                         }
                                         val verifier = com.farside.workspace.CredentialPin.create(appPinNew)
                                         profileManager.setAppPinVerifier(verifier)
@@ -1024,10 +1022,10 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                                         appPinNew = ""
                                         appPinConfirm = ""
                                         appPinError = null
-                                    }) { Text(stringResource(R.string.save_pin), color = Color(0xFF1E88E5)) }
+                                    }) { Text(stringResource(R.string.save_pin)) }
                                     if (settingAppPin) {
-                                        TextButton(onClick = { settingAppPin = false; appPinNew = ""; appPinConfirm = ""; appPinError = null }) {
-                                            Text(stringResource(R.string.cancel), color = Color.Gray)
+                                        OutlinedButton(onClick = { settingAppPin = false; appPinNew = ""; appPinConfirm = ""; appPinError = null }) {
+                                            Text(stringResource(R.string.cancel))
                                         }
                                     }
                                 }
@@ -1042,16 +1040,66 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                                         Text(stringResource(R.string.secures_credentials_with_require_pin_enabled), color = Color.Gray, fontSize = 12.sp)
                                     }
                                     Row {
-                                        TextButton(onClick = { changingAppPin = true }) {
-                                            Text(stringResource(R.string.change_pin), color = Color(0xFF1E88E5))
+                                        OutlinedButton(onClick = { changingAppPin = true }) {
+                                            Text(stringResource(R.string.change_pin))
                                         }
-                                        TextButton(onClick = { removingAppPin = true }) {
-                                            Text(stringResource(R.string.remove_pin), color = Color.Red)
+                                        OutlinedButton(onClick = { removingAppPin = true }) {
+                                            Text(stringResource(R.string.remove_pin))
                                         }
                                     }
                                 }
                             }
 
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SettingsHeader(stringResource(R.string.backup_settings_title))
+                        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                            Text(
+                                stringResource(R.string.backup_settings_help),
+                                color = Color.Gray,
+                                fontSize = 14.sp
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = {
+                                        if (!com.farside.workspace.hasStoragePermission(context)) {
+                                            showStoragePermissionNotice = true
+                                        } else {
+                                            exportPassphrase = ""
+                                            exportPassphraseConfirm = ""
+                                            exportPassphraseError = null
+                                            showExportDialog = true
+                                        }
+                                    }
+                                ) {
+                                    Text(stringResource(R.string.export_backup))
+                                }
+
+                                OutlinedButton(
+                                    onClick = {
+                                        if (!com.farside.workspace.hasStoragePermission(context)) {
+                                            showStoragePermissionNotice = true
+                                        } else {
+                                            openBackupFileLauncher.launch(arrayOf("*/*"))
+                                        }
+                                    }
+                                ) {
+                                    Text(stringResource(R.string.restore_backup))
+                                }
+                            }
+                            backupStatusMessage?.let { status ->
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    status,
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.background(Color(0xFF2C2C2E), RoundedCornerShape(8.dp)).padding(12.dp)
+                                )
+                            }
                         }
                         Spacer(modifier = Modifier.height(16.dp))
                         AdbTunnelSection()
@@ -1114,6 +1162,18 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                                 )
                             }
                         }
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SettingsHeader(stringResource(R.string.about_open_source_licenses))
+                        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                            Text(stringResource(R.string.farside_workspace), color = Color.White, style = MaterialTheme.typography.titleMedium)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(stringResource(R.string.licenses_in_use), color = Color.LightGray, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.license_freerdp), color = Color.Gray)
+                            Text(stringResource(R.string.license_sshj), color = Color.Gray)
+                            Text(stringResource(R.string.license_termux), color = Color.Gray)
+                            Text(stringResource(R.string.license_compose), color = Color.Gray)
+                            Text(stringResource(R.string.license_meta), color = Color.Gray)
+                        }
                     }
                     1 -> {
                         SettingsHeader(stringResource(R.string.user_management))
@@ -1126,18 +1186,18 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                                         if (cred.requirePin) Text(stringResource(R.string.pin_required), color = Color.Gray, fontSize = 12.sp)
                                     }
                                     Row {
-                                        TextButton(enabled = !savingCredential, onClick = {
+                                        OutlinedButton(enabled = !savingCredential, onClick = {
                                             credentialAction(cred, "edit")
-                                        }) { Text(stringResource(R.string.edit), color = Color(0xFF1E88E5)) }
-                                        TextButton(enabled = !savingCredential, onClick = {
+                                        }) { Text(stringResource(R.string.edit)) }
+                                        OutlinedButton(enabled = !savingCredential, onClick = {
                                             credentialAction(cred, "delete")
-                                        }) { Text(stringResource(R.string.delete), color = Color.Red) }
+                                        }) { Text(stringResource(R.string.delete)) }
                                     }
                                 }
                             }
-                            
+
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text(if (editingCredentialId == null) stringResource(R.string.new_credential) else stringResource(R.string.edit_credential), color = Color(0xFF1E88E5), fontSize = 14.sp)
+                            Text(if (editingCredentialId == null) stringResource(R.string.new_credential) else stringResource(R.string.edit_credential), color = Color.White, fontSize = 14.sp)
                             SettingsTextField(newCredName, { newCredName = it }, stringResource(R.string.account_display_name))
                             SettingsTextField(newCredUser, { newCredUser = it }, stringResource(R.string.username_optional_for_vnc),
                                 modifier = Modifier.onFocusChanged { focusState ->
@@ -1164,7 +1224,7 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                                 }
                             })
                             pinError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                            TextButton(enabled = !savingCredential && !pendingPinDisable, onClick = {
+                            OutlinedButton(enabled = !savingCredential && !pendingPinDisable, onClick = {
                                 val credentialName = if (editingCredentialId == null && newCredName.isBlank()) newCredUser else newCredName
                                 if (credentialName.isNotBlank()) {
                                     val credential = com.farside.workspace.data.SavedCredential(
@@ -1191,10 +1251,10 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                                     }
                                 }
                             }, modifier = Modifier.align(Alignment.End)) {
-                                Text(if (editingCredentialId == null) stringResource(R.string.save_credential) else stringResource(R.string.save_changes), color = Color(0xFF1E88E5))
+                                Text(if (editingCredentialId == null) stringResource(R.string.save_credential) else stringResource(R.string.save_changes))
                             }
                             if (editingCredentialId != null) {
-                                TextButton(enabled = !savingCredential && !pendingPinDisable, onClick = {
+                                OutlinedButton(enabled = !savingCredential && !pendingPinDisable, onClick = {
                                     editingCredentialId = null
                                     newCredName = ""
                                     newCredUser = ""
@@ -1223,27 +1283,27 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                                             modifier = Modifier.semantics { contentDescription = sshPublicKeyShowNamedFmt.format(key.name) },
                                             enabled = !savingSshKey,
                                             onClick = { if (key.requirePin) publicKeyPending = key else showPublicKey(key) }
-                                        ) { Icon(Icons.Default.VpnKey, contentDescription = null, tint = Color(0xFF1E88E5)) }
-                                        TextButton(
+                                        ) { Icon(Icons.Default.VpnKey, contentDescription = null, tint = Color.White) }
+                                        OutlinedButton(
                                             modifier = Modifier.semantics { contentDescription = editNamedItemFmt.format(key.name) },
                                             enabled = !savingSshKey,
                                             onClick = {
                                                 sshKeyAction(key, "edit")
                                             }
-                                        ) { Text(stringResource(R.string.edit), color = Color(0xFF1E88E5)) }
-                                        TextButton(
+                                        ) { Text(stringResource(R.string.edit)) }
+                                        OutlinedButton(
                                             modifier = Modifier.semantics { contentDescription = deleteNamedItemFmt.format(key.name) },
                                             enabled = !savingSshKey,
                                             onClick = {
                                                 sshKeyAction(key, "delete")
                                             }
-                                        ) { Text(stringResource(R.string.delete), color = Color.Red) }
+                                        ) { Text(stringResource(R.string.delete)) }
                                     }
                                 }
                             }
-                            
+
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text(if (editingSshKeyId == null) stringResource(R.string.new_ssh_key) else stringResource(R.string.edit_ssh_key), color = Color(0xFF1E88E5), fontSize = 14.sp)
+                            Text(if (editingSshKeyId == null) stringResource(R.string.new_ssh_key) else stringResource(R.string.edit_ssh_key), color = Color.White, fontSize = 14.sp)
                             SettingsTextField(newKeyName, { newKeyName = it }, stringResource(R.string.key_display_name))
                             SettingsTextField(
                                 value = newKeyPrivate,
@@ -1273,7 +1333,7 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                                 }
                             })
                             keyPinError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                            TextButton(enabled = !savingSshKey && !pendingKeyPinDisable, onClick = {
+                            OutlinedButton(enabled = !savingSshKey && !pendingKeyPinDisable, onClick = {
                                 if (newKeyName.isNotBlank() && newKeyPrivate.isNotBlank()) {
                                     val keyToSave = com.farside.workspace.data.SavedSshKey(
                                         id = editingSshKeyId ?: java.util.UUID.randomUUID().toString(),
@@ -1300,10 +1360,10 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                                     }
                                 }
                             }, modifier = Modifier.align(Alignment.End)) {
-                                Text(if (editingSshKeyId == null) stringResource(R.string.save_ssh_key) else stringResource(R.string.save_changes), color = Color(0xFF1E88E5))
+                                Text(if (editingSshKeyId == null) stringResource(R.string.save_ssh_key) else stringResource(R.string.save_changes))
                             }
                             if (editingSshKeyId != null) {
-                                TextButton(enabled = !savingSshKey && !pendingKeyPinDisable, onClick = {
+                                OutlinedButton(enabled = !savingSshKey && !pendingKeyPinDisable, onClick = {
                                     editingSshKeyId = null
                                     newKeyName = ""
                                     newKeyPrivate = ""
@@ -1314,75 +1374,11 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                             }
                         }
                     }
-                    3 -> {
-                        SettingsHeader(stringResource(R.string.backup_settings_title))
-                        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                            Text(
-                                stringResource(R.string.backup_settings_help),
-                                color = Color.Gray,
-                                fontSize = 14.sp
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(16.dp)
-                            ) {
-                                Button(
-                                    onClick = {
-                                        if (!com.farside.workspace.hasStoragePermission(context)) {
-                                            showStoragePermissionNotice = true
-                                        } else {
-                                            exportPassphrase = ""
-                                            exportPassphraseConfirm = ""
-                                            exportPassphraseError = null
-                                            showExportDialog = true
-                                        }
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E88E5))
-                                ) {
-                                    Text(stringResource(R.string.export_backup))
-                                }
-
-                                OutlinedButton(
-                                    onClick = {
-                                        if (!com.farside.workspace.hasStoragePermission(context)) {
-                                            showStoragePermissionNotice = true
-                                        } else {
-                                            openBackupFileLauncher.launch(arrayOf("*/*"))
-                                        }
-                                    }
-                                ) {
-                                    Text(stringResource(R.string.restore_backup))
-                                }
-                            }
-                            backupStatusMessage?.let { status ->
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Text(
-                                    status,
-                                    color = Color.White,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    modifier = Modifier.background(Color(0xFF2C2C2E), RoundedCornerShape(8.dp)).padding(12.dp)
-                                )
-                            }
-                        }
-                    }
-                    4 -> {
-                        SettingsHeader(stringResource(R.string.about_open_source_licenses))
-                        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                            Text(stringResource(R.string.farside_workspace), color = Color.White, style = MaterialTheme.typography.titleMedium)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(stringResource(R.string.licenses_in_use), color = Color.LightGray, fontWeight = FontWeight.Bold)
-                            Text(stringResource(R.string.license_freerdp), color = Color.Gray)
-                            Text(stringResource(R.string.license_sshj), color = Color.Gray)
-                            Text(stringResource(R.string.license_termux), color = Color.Gray)
-                            Text(stringResource(R.string.license_compose), color = Color.Gray)
-                            Text(stringResource(R.string.license_meta), color = Color.Gray)
-                        }
-                    }
                 }
             }
         }
     }
+}
 }
 
 @Composable
@@ -1425,29 +1421,11 @@ fun SettingsSwitchRow(label: String, checked: Boolean, onCheckedChange: (Boolean
             modifier = Modifier.semantics { contentDescription = label },
             checked = checked,
             onCheckedChange = onCheckedChange,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
-                checkedTrackColor = Color(0xFF1E88E5),
-                uncheckedThumbColor = Color.LightGray,
-                uncheckedTrackColor = Color.DarkGray
-            )
+            colors = SwitchDefaults.colors()
         )
     }
 }
 
-@Composable
-fun SettingsSegmentedControl(selectedType: ConnectionType, onTypeSelected: (ConnectionType) -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally)) {
-        ConnectionType.entries.forEach { type ->
-            FilterChip(selected = selectedType == type, onClick = { onTypeSelected(type) },
-                label = { Text(stringResource(if (type == ConnectionType.VNC) R.string.mac_vnc else type.labelResId)) }, colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = Color(0xFF1E88E5), selectedLabelColor = Color.White))
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CameraResolutionSelector(
     selectedResolution: com.farside.workspace.data.CameraResolution,
@@ -1476,7 +1454,7 @@ fun CameraResolutionSelector(
                     enabled = enabled,
                     label = { Text(stringResource(res.labelResId)) },
                     colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = Color(0xFF1E88E5),
+                        selectedContainerColor = Color.White,
                         selectedLabelColor = Color.White,
                         containerColor = Color(0xFF2C2C2E),
                         labelColor = Color.LightGray,
@@ -1508,7 +1486,7 @@ fun ProxyTypeSelector(selectedType: com.farside.workspace.data.ProxyType, errorM
             colors = ExposedDropdownMenuDefaults.textFieldColors(
                 focusedContainerColor = Color(0xFF1C1C1E),
                 unfocusedContainerColor = Color(0xFF1C1C1E),
-                focusedIndicatorColor = Color(0xFF1E88E5),
+                focusedIndicatorColor = MaterialTheme.colorScheme.primary,
                 unfocusedIndicatorColor = Color.DarkGray,
                 errorIndicatorColor = Color.Red,
                 focusedTextColor = Color.White,
@@ -1556,7 +1534,7 @@ fun ResolutionDropdown(selectedRes: String, onResSelected: (String) -> Unit) {
             colors = ExposedDropdownMenuDefaults.textFieldColors(
                 focusedContainerColor = Color(0xFF1C1C1E),
                 unfocusedContainerColor = Color(0xFF1C1C1E),
-                focusedIndicatorColor = Color(0xFF1E88E5),
+                focusedIndicatorColor = MaterialTheme.colorScheme.primary,
                 unfocusedIndicatorColor = Color.DarkGray,
                 focusedTextColor = Color.White,
                 unfocusedTextColor = Color.White
@@ -1575,7 +1553,7 @@ fun ResolutionDropdown(selectedRes: String, onResSelected: (String) -> Unit) {
                         expanded = false
                     },
                     trailingIcon = {
-                        RadioButton(selected = selectedRes == res, onClick = null, colors = RadioButtonDefaults.colors(selectedColor = Color(0xFF1E88E5)))
+                        RadioButton(selected = selectedRes == res, onClick = null, colors = RadioButtonDefaults.colors(selectedColor = MaterialTheme.colorScheme.primary))
                     }
                 )
             }
@@ -1612,8 +1590,8 @@ internal fun profileCredentialErrorRes(type: ConnectionType, vncMode: com.farsid
 @Composable
 fun AddProfileForm(
     initialProfile: ConnectionProfile? = null,
-    onSave: (ConnectionProfile) -> Unit, 
-    onCancel: () -> Unit, 
+    onSave: (ConnectionProfile) -> Unit,
+    onCancel: () -> Unit,
     profileManager: com.farside.workspace.data.ProfileManager,
     savedProfiles: List<ConnectionProfile> = profileManager.getProfiles(),
     onNavigateToSettings: (Int) -> Unit = {},
@@ -1637,9 +1615,9 @@ fun AddProfileForm(
     var savedJumpHostId by rememberSaveable { mutableStateOf(initialProfile?.jumpHostProfileId ?: "") }
     var vncAuthMode by rememberSaveable { mutableStateOf(initialProfile?.vncAuthMode ?: com.farside.workspace.data.VncAuthMode.MAC_USER) }
     var sftpPairProfileId by rememberSaveable { mutableStateOf(initialProfile?.sftpPairProfileId ?: "") }
-    
+
     var remoteApp by rememberSaveable { mutableStateOf(initialProfile?.remoteApp ?: "") }
-    
+
     var discoveredHosts by remember { mutableStateOf<List<com.farside.workspace.utils.DiscoveredHost>>(emptyList()) }
     var isScanning by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
@@ -1651,7 +1629,7 @@ fun AddProfileForm(
     val thisProfileName = stringResource(R.string.this_profile)
     val jumpRouteSeparator = stringResource(R.string.jump_route_separator)
     val jumpRoutePreviewFmt = stringResource(R.string.jump_route_preview)
-    
+
     var proxyType by rememberSaveable { mutableStateOf(if (initialProfile?.useCloudflare == true) com.farside.workspace.data.ProxyType.CLOUDFLARED else initialProfile?.proxyType ?: com.farside.workspace.data.ProxyType.NONE) }
     var cloudflaredParameters by remember { mutableStateOf(initialProfile?.cloudflaredParameters ?: "") }
     var showCloudflaredParameters by remember { mutableStateOf(false) }
@@ -1663,7 +1641,7 @@ fun AddProfileForm(
     var proxyPass by remember { mutableStateOf(initialProfile?.proxyPass ?: "") }
     var proxyExclude by rememberSaveable { mutableStateOf(initialProfile?.proxyExclude ?: "") }
     var proxyCommand by rememberSaveable { mutableStateOf(initialProfile?.proxyCommand ?: "") }
-    
+
     // RDP Specific Options
     var soundRedirection by rememberSaveable { mutableStateOf(initialProfile?.soundRedirection ?: com.farside.workspace.data.SoundRedirection.PLAY_ON_DEVICE) }
     var redirectMicrophone by rememberSaveable {
@@ -1704,6 +1682,7 @@ fun AddProfileForm(
     var showSshForwards by remember { mutableStateOf(false) }
     if (showSshForwards) SshForwardingDialog(sshForwards, onChange = { sshForwards = it }, onDismiss = { showSshForwards = false })
 
+    var connectToConsole by rememberSaveable { mutableStateOf(initialProfile?.connectToConsole ?: false) }
     var adminMode by rememberSaveable { mutableStateOf(initialProfile?.adminMode ?: false) }
 
     var showValidationErrors by rememberSaveable { mutableStateOf(false) }
@@ -1711,28 +1690,25 @@ fun AddProfileForm(
     val credentialErrorRes = profileCredentialErrorRes(type, vncAuthMode, selectedCredential, user)
     val credentialErrorMessage = if (showValidationErrors) credentialErrorRes?.let { stringResource(it) } else null
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-    ) {
-        // Top App Bar
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            IconButton(onClick = onCancel) {
-                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.close), tint = Color(0xFF1E88E5))
+    BoxWithConstraints(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        val formWidth = minOf(700.dp, (maxWidth - 192.dp).coerceAtLeast(128.dp))
+        Column(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 16.dp, vertical = 8.dp),
+            contentAlignment = Alignment.Center) {
+            IconButton(onClick = onCancel, modifier = Modifier.align(Alignment.CenterStart)) {
+                Icon(if (initialProfile == null) Icons.Default.Close else Icons.Default.ArrowBack,
+                    contentDescription = stringResource(if (initialProfile == null) R.string.close else R.string.back), tint = Color.White)
             }
-            Text(stringResource(if (initialProfile == null) R.string.add_connection else R.string.edit_connection),
-                color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            TextButton(onClick = {
+            FormTabs(ConnectionType.entries.map { if (it == ConnectionType.VNC) R.string.mac_vnc else it.labelResId },
+                ConnectionType.entries.indexOf(type), { index ->
+                    type = ConnectionType.entries[index]
+                    port = when (type) { ConnectionType.RDP -> "3389"; ConnectionType.SSH -> "22"; ConnectionType.VNC -> "5900" }
+                    discoveredHosts = emptyList()
+                }, Modifier.width(formWidth).padding(horizontal = 16.dp))
+            OutlinedButton(modifier = Modifier.align(Alignment.CenterEnd), onClick = {
                     showValidationErrors = true
                     if (proxyType !in com.farside.workspace.data.ProxyType.choices) {
-                        return@TextButton
+                        return@OutlinedButton
                     }
                     val creds = profileManager.getCredentials()
                     val selectedCred = creds.find { it.id == savedCredId }
@@ -1740,16 +1716,16 @@ fun AddProfileForm(
                         port.toIntOrNull() !in 1..65535 ||
                         (proxyType in listOf(com.farside.workspace.data.ProxyType.HTTP, com.farside.workspace.data.ProxyType.SOCKS5) &&
                             (proxyHost.isBlank() || proxyPort.toIntOrNull() !in 1..65535))) {
-                        return@TextButton
+                        return@OutlinedButton
                     }
                     if (proxyType == com.farside.workspace.data.ProxyType.CLOUDFLARED) {
                         cloudflaredHostError = runCatching { com.farside.workspace.tunnel.CloudflaredOptions.hostname(host) }
                             .exceptionOrNull()?.localizedMessage(context)
                         cloudflaredParametersError = runCatching { com.farside.workspace.tunnel.CloudflaredOptions.parse(cloudflaredParameters) }
                             .exceptionOrNull()?.localizedMessage(context)
-                        if (cloudflaredHostError != null || cloudflaredParametersError != null) return@TextButton
+                        if (cloudflaredHostError != null || cloudflaredParametersError != null) return@OutlinedButton
                     }
-                    
+
                     onSave(
                         ConnectionProfile(
                             id = initialProfile?.id ?: UUID.randomUUID().toString(),
@@ -1796,35 +1772,26 @@ fun AddProfileForm(
                         terminalScrollback = initialProfile?.terminalScrollback ?: 2000,
                         terminalFontSize = initialProfile?.terminalFontSize ?: 14,
                         terminalOpacity = initialProfile?.terminalOpacity ?: 1f,
+                        connectToConsole = connectToConsole,
                         adminMode = adminMode,
                         reconnectAutomatically = reconnectAutomatically
                     )
                 )
             }) {
-                Text(stringResource(R.string.save_uppercase), color = Color(0xFF1E88E5), fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.save_uppercase))
             }
         }
-        
+
         Divider(color = Color.DarkGray, thickness = 1.dp)
             // Settings List centered in a wide window
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
             Column(
                 modifier = Modifier
-                    .widthIn(max = 700.dp)
+                    .width(formWidth)
                     .fillMaxHeight()
                     .verticalScroll(rememberScrollState())
                     .padding(bottom = 32.dp)
             ) {
-                SettingsSegmentedControl(type) { 
-                    type = it
-                    port = when (it) { ConnectionType.RDP -> "3389"; ConnectionType.SSH -> "22"; ConnectionType.VNC -> "5900" }
-                    discoveredHosts = emptyList()
-                }
-
-                if (type == ConnectionType.RDP) {
-
-                }
-
                 SettingsHeader(stringResource(R.string.connection_name))
                 SettingsTextField(name, { name = it; nameAutoFilled = false }, stringResource(R.string.enter_display_name),
                     errorMessage = if (showValidationErrors && name.isBlank()) stringResource(R.string.profile_name_required) else null)
@@ -1844,7 +1811,7 @@ fun AddProfileForm(
                 SettingsHeader(stringResource(R.string.host_server))
                 if (type == ConnectionType.RDP || type == ConnectionType.VNC) {
                     Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).zIndex(1f), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Button(enabled = !isScanning && (type != ConnectionType.VNC || vncAuthMode == com.farside.workspace.data.VncAuthMode.MAC_USER), onClick = {
+                        OutlinedButton(enabled = !isScanning && (type != ConnectionType.VNC || vncAuthMode == com.farside.workspace.data.VncAuthMode.MAC_USER), onClick = {
                             focusManager.clearFocus()
                             val scanType = type
                             isScanning = true
@@ -1859,7 +1826,7 @@ fun AddProfileForm(
                                     android.widget.Toast.makeText(context, error.message ?: discoveryFailedMsg, android.widget.Toast.LENGTH_LONG).show()
                                 } finally { isScanning = false }
                             }
-                        }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E88E5), contentColor = Color.White)) {
+                        }) {
                             Text(if (isScanning && type == ConnectionType.VNC) stringResource(R.string.finding_local_macs)
                                 else if (isScanning) stringResource(R.string.finding_local_sessions, stringResource(type.labelResId))
                                 else if (type == ConnectionType.VNC) stringResource(R.string.find_local_macs)
@@ -1880,7 +1847,7 @@ fun AddProfileForm(
                                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                                 colors = ExposedDropdownMenuDefaults.textFieldColors(
                                     focusedContainerColor = Color(0xFF1C1C1E), unfocusedContainerColor = Color(0xFF1C1C1E),
-                                    focusedIndicatorColor = Color(0xFF1E88E5), unfocusedIndicatorColor = Color.DarkGray,
+                                    focusedIndicatorColor = MaterialTheme.colorScheme.primary, unfocusedIndicatorColor = Color.DarkGray,
                                     focusedTextColor = Color.White, unfocusedTextColor = Color.White
                                 ),
                                 modifier = Modifier.menuAnchor().fillMaxWidth()
@@ -1911,8 +1878,8 @@ fun AddProfileForm(
                     errorMessage = if (showValidationErrors && host.isBlank()) stringResource(R.string.profile_host_required)
                         else if (proxyType == com.farside.workspace.data.ProxyType.CLOUDFLARED) cloudflaredHostError else null)
                 SettingsTextField(
-                    value = port, 
-                    onValueChange = { port = it }, 
+                    value = port,
+                    onValueChange = { port = it },
                     placeholder = stringResource(R.string.port_rdp_3389_ssh_22_vnc_5900),
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
                     errorMessage = if (showValidationErrors && port.toIntOrNull() !in 1..65535) stringResource(R.string.profile_port_invalid) else null
@@ -1920,7 +1887,7 @@ fun AddProfileForm(
 
                 SettingsHeader(when (type) { ConnectionType.SSH -> stringResource(R.string.user_account_optional_for_ssh); ConnectionType.VNC -> stringResource(if (vncAuthMode == com.farside.workspace.data.VncAuthMode.MAC_USER) R.string.vnc_auth_mac_user else R.string.vnc_password_credential); else -> stringResource(R.string.user_account) })
                 var expandedCreds by rememberSaveable { mutableStateOf(false) }
-                
+
                 FormValidationField(credentialErrorMessage) {
                 ExposedDropdownMenuBox(
                     expanded = expandedCreds,
@@ -1934,7 +1901,7 @@ fun AddProfileForm(
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedCreds) },
                         colors = ExposedDropdownMenuDefaults.textFieldColors(
                             focusedContainerColor = Color(0xFF1C1C1E), unfocusedContainerColor = Color(0xFF1C1C1E),
-                            focusedIndicatorColor = Color(0xFF1E88E5), unfocusedIndicatorColor = Color.DarkGray,
+                            focusedIndicatorColor = MaterialTheme.colorScheme.primary, unfocusedIndicatorColor = Color.DarkGray,
                             errorIndicatorColor = Color.Red,
                             focusedTextColor = Color.White, unfocusedTextColor = Color.White
                         ),
@@ -2011,7 +1978,7 @@ fun AddProfileForm(
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedSshKeys) },
                             colors = ExposedDropdownMenuDefaults.textFieldColors(
                                 focusedContainerColor = Color(0xFF1C1C1E), unfocusedContainerColor = Color(0xFF1C1C1E),
-                                focusedIndicatorColor = Color(0xFF1E88E5), unfocusedIndicatorColor = Color.DarkGray,
+                                focusedIndicatorColor = MaterialTheme.colorScheme.primary, unfocusedIndicatorColor = Color.DarkGray,
                                 focusedTextColor = Color.White, unfocusedTextColor = Color.White
                             ),
                             modifier = Modifier.menuAnchor().fillMaxWidth()
@@ -2064,7 +2031,7 @@ fun AddProfileForm(
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedJump) },
                             colors = ExposedDropdownMenuDefaults.textFieldColors(
                                 focusedContainerColor = Color(0xFF1C1C1E), unfocusedContainerColor = Color(0xFF1C1C1E),
-                                focusedIndicatorColor = Color(0xFF1E88E5), unfocusedIndicatorColor = Color.DarkGray,
+                                focusedIndicatorColor = MaterialTheme.colorScheme.primary, unfocusedIndicatorColor = Color.DarkGray,
                                 errorIndicatorColor = Color.Red,
                                 focusedTextColor = Color.White, unfocusedTextColor = Color.White
                             ),
@@ -2093,7 +2060,7 @@ fun AddProfileForm(
                         Text(previewText, fontSize = 12.sp, color = Color.Gray,
                             modifier = Modifier.padding(horizontal = 16.dp))
                     }                }
-                
+
                 if (type == ConnectionType.SSH) {
                     SettingsHeader(stringResource(R.string.files))
                     SettingsSwitchRow(stringResource(R.string.enable_sftp_file_access), enableSftp, { enabled ->
@@ -2164,9 +2131,11 @@ fun AddProfileForm(
                         else com.farside.workspace.requestStoragePermission(context) { intent -> storagePermissionLauncher.launch(intent) }
                     })
                     SettingsSwitchRow(stringResource(R.string.redirect_clipboard), redirectClipboard, { redirectClipboard = it })
+                    SettingsSwitchRow(stringResource(R.string.connect_to_console), connectToConsole, { connectToConsole = it })
                     SettingsSwitchRow(stringResource(R.string.admin_mode), adminMode, { adminMode = it })
                 }
             }
         }
     }
+}
 }

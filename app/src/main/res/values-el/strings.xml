@@ -182,7 +182,7 @@
   <string name="trusted_certificates_cleared">Όλα τα αποθηκευμένα έμπιστα πιστοποιητικά εκκαθαρίστηκαν.</string>
   <string name="permissions_revoke_scheduled">Οι άδειες προγραμματίστηκαν να ανακληθούν όταν κλείσει η εφαρμογή.</string>
   <string name="permissions_revoke_requires_android_13">Η ανάκληση άδειας απαιτεί Android 13+.</string>
-  <string name="set_app_pin_first">Ορίστε πρώτα ένα PIN εφαρμογής στις ρυθμίσεις Σήραγγες &amp; Καθολικά.</string>
+  <string name="set_app_pin_first">Ορίστε πρώτα ένα PIN εφαρμογής στις ρυθμίσεις Γενικά.</string>
   <string name="cloudflare_logins_cleared">Οι αποθηκευμένες συνδέσεις Cloudflare Access εκκαθαρίστηκαν. Επανασυνδεθείτε για να συνδεθείτε ξανά.</string>
   <string name="cloudflare_logins_clear_failed">Δεν ήταν δυνατή η εκκαθάριση των συνδέσεων Cloudflare.</string>
   <string name="discovery_no_services">Δεν βρέθηκαν τοπικές υπηρεσίες. Εισαγάγετε τον κεντρικό υπολογιστή μη αυτόματα ή ελέγξτε την Κοινή χρήση οθόνης και το LAN.</string>
@@ -631,4 +631,5 @@
   <string name="backup_invalid_passphrase">Εσφαλμένη φράση πρόσβασης ή κατεστραμμένο αρχείο αντιγράφου.</string>
   <string name="storage_permission_needed_backup">Απαιτείται πρόσβαση στον αποθηκευτικό χώρο για την αποθήκευση ή τη φόρτωση αρχείων αντιγράφων. Παραχωρήστε δικαιώματα αποθηκευτικού χώρου.</string>
   <string name="grant_permission">Παραχώρηση δικαιώματος</string>
+    <string name="connect_to_console">Σύνδεση στην κονσόλα</string>
 </resources>

@@ -182,7 +182,7 @@
   <string name="trusted_certificates_cleared">Tous les certificats de confiance enregistrés ont été effacés.</string>
   <string name="permissions_revoke_scheduled">Révocation des autorisations prévue à la fermeture de l\'application.</string>
   <string name="permissions_revoke_requires_android_13">La révocation des autorisations nécessite Android 13 ou version ultérieure.</string>
-  <string name="set_app_pin_first">Définissez d\'abord un PIN d\'application dans les paramètres Tunnels et global.</string>
+  <string name="set_app_pin_first">Définissez d\'abord un PIN d\'application dans les paramètres Général.</string>
   <string name="cloudflare_logins_cleared">Connexions Cloudflare Access en cache effacées. Reconnectez-vous pour vous connecter à nouveau.</string>
   <string name="cloudflare_logins_clear_failed">Impossible d\'effacer les connexions Cloudflare.</string>
   <string name="discovery_no_services">Aucun service local trouvé. Saisissez l\'hôte manuellement ou vérifiez le partage d\'écran et le réseau local.</string>
@@ -630,4 +630,5 @@
   <string name="backup_invalid_passphrase">Phrase de passe incorrecte ou fichier de sauvegarde corrompu.</string>
   <string name="storage_permission_needed_backup">L\'accès au stockage est nécessaire pour enregistrer ou charger des fichiers de sauvegarde. Veuillez accorder les autorisations de stockage.</string>
   <string name="grant_permission">Accorder l\'autorisation</string>
+    <string name="connect_to_console">Se connecter à la console</string>
 </resources>

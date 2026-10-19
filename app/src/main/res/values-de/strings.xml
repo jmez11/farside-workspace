@@ -182,7 +182,7 @@
   <string name="trusted_certificates_cleared">Alle gespeicherten vertrauenswürdigen Zertifikate gelöscht.</string>
   <string name="permissions_revoke_scheduled">Berechtigungen werden beim Schließen der App widerrufen.</string>
   <string name="permissions_revoke_requires_android_13">Berechtigungswiderruf erfordert Android 13+.</string>
-  <string name="set_app_pin_first">Lege zuerst eine App-PIN in den Einstellungen „Tunnel &amp; Global" fest.</string>
+  <string name="set_app_pin_first">Lege zuerst eine App-PIN in den Einstellungen „Allgemein" fest.</string>
   <string name="cloudflare_logins_cleared">Zwischengespeicherte Cloudflare-Access-Logins gelöscht. Erneut verbinden, um dich anzumelden.</string>
   <string name="cloudflare_logins_clear_failed">Cloudflare-Logins konnten nicht gelöscht werden.</string>
   <string name="discovery_no_services">Keine lokalen Dienste gefunden. Host manuell eingeben oder Bildschirmfreigabe und LAN prüfen.</string>
@@ -630,4 +630,5 @@
   <string name="backup_invalid_passphrase">Falsche Passphrase oder beschädigte Sicherungsdatei.</string>
   <string name="storage_permission_needed_backup">Zum Speichern oder Laden von Sicherungsdateien ist Speicherzugriff erforderlich. Bitte erteilen Sie die Speicherberechtigungen.</string>
   <string name="grant_permission">Berechtigung erteilen</string>
+    <string name="connect_to_console">Mit Konsole verbinden</string>
 </resources>

@@ -182,7 +182,7 @@
   <string name="trusted_certificates_cleared">Tutti i certificati attendibili salvati sono stati cancellati.</string>
   <string name="permissions_revoke_scheduled">Revoca dei permessi pianificata alla chiusura dell\'app.</string>
   <string name="permissions_revoke_requires_android_13">La revoca dei permessi richiede Android 13+.</string>
-  <string name="set_app_pin_first">Imposta prima un PIN dell\'app in Tunnel e globali.</string>
+  <string name="set_app_pin_first">Imposta prima un PIN dell\'app in Generali.</string>
   <string name="cloudflare_logins_cleared">Accessi Cloudflare Access memorizzati cancellati. Riconnettiti per accedere di nuovo.</string>
   <string name="cloudflare_logins_clear_failed">Impossibile cancellare gli accessi Cloudflare.</string>
   <string name="discovery_no_services">Nessun servizio locale trovato. Inserisci l\'host manualmente o controlla Condivisione schermo e la LAN.</string>
@@ -630,4 +630,5 @@
   <string name="backup_invalid_passphrase">Passphrase errata o file di backup danneggiato.</string>
   <string name="storage_permission_needed_backup">È necessario l\'accesso allo spazio di archiviazione per salvare o caricare i file di backup. Concedi le autorizzazioni di archiviazione.</string>
   <string name="grant_permission">Concedi autorizzazione</string>
+    <string name="connect_to_console">Connetti alla console</string>
 </resources>

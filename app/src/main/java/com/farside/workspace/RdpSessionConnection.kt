@@ -114,7 +114,7 @@ internal class RdpSessionConnection(
                     profile.enableCamera && hasCameraPermission(context), profile.redirectMicrophone && hasMicrophonePermission(context), profile.redirectStorage && hasStoragePermission(context), next, profile.host.removeSurrounding("[", "]"), certificates,
                     if (connectionProxy) profile.proxyHost?.trim() else null, if (connectionProxy) profile.proxyPort ?: 0 else 0,
                     if (connectionProxy) profile.proxyUser else null, if (connectionProxy) profile.proxyPass else null,
-                    profile.proxyType == ProxyType.SOCKS5 && connectionProxy)
+                    profile.proxyType == ProxyType.SOCKS5 && connectionProxy, profile.connectToConsole)
                 if (monitorMode && instance != 0L) bridge.setSurface(instance, null)
                 val connected = instance
                 this.connected.set(connected != 0L)

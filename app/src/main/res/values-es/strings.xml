@@ -182,7 +182,7 @@
   <string name="trusted_certificates_cleared">Se borraron todos los certificados de confianza guardados.</string>
   <string name="permissions_revoke_scheduled">Los permisos se revocarán cuando se cierre la app.</string>
   <string name="permissions_revoke_requires_android_13">La revocación de permisos requiere Android 13 o superior.</string>
-  <string name="set_app_pin_first">Establezca primero un PIN de la app en los ajustes de Túneles y globales.</string>
+  <string name="set_app_pin_first">Establezca primero un PIN de la app en los ajustes de General.</string>
   <string name="cloudflare_logins_cleared">Se borraron los inicios de sesión en caché de Cloudflare Access. Vuelva a conectar para iniciar sesión de nuevo.</string>
   <string name="cloudflare_logins_clear_failed">No se pudieron borrar los inicios de sesión de Cloudflare.</string>
   <string name="discovery_no_services">No se encontraron servicios locales. Introduzca el host manualmente o revise Compartir pantalla y la LAN.</string>
@@ -630,4 +630,5 @@
   <string name="backup_invalid_passphrase">Frase de contraseña incorrecta o archivo de copia de seguridad dañado.</string>
   <string name="storage_permission_needed_backup">Se necesita acceso al almacenamiento para guardar o cargar archivos de copia de seguridad. Conceda los permisos de almacenamiento.</string>
   <string name="grant_permission">Conceder permiso</string>
+    <string name="connect_to_console">Conectar a la consola</string>
 </resources>

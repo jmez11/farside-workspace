@@ -182,7 +182,7 @@
   <string name="trusted_certificates_cleared">Toate certificatele de încredere salvate au fost șterse.</string>
   <string name="permissions_revoke_scheduled">Permisiunile vor fi revocate la închiderea aplicației.</string>
   <string name="permissions_revoke_requires_android_13">Revocarea permisiunilor necesită Android 13+.</string>
-  <string name="set_app_pin_first">Setați mai întâi un PIN al aplicației în setările Tuneluri &amp; Global.</string>
+  <string name="set_app_pin_first">Setați mai întâi un PIN al aplicației în setările General.</string>
   <string name="cloudflare_logins_cleared">Autentificările Cloudflare Access din cache au fost șterse. Reconectați-vă pentru a vă autentifica din nou.</string>
   <string name="cloudflare_logins_clear_failed">Nu s-au putut șterge autentificările Cloudflare.</string>
   <string name="discovery_no_services">Nu s-au găsit servicii locale. Introduceți hostul manual sau verificați Partajarea ecranului și rețeaua LAN.</string>
@@ -642,4 +642,5 @@
   <string name="backup_invalid_passphrase">Frază de acces incorectă sau fișier de rezervă corupt.</string>
   <string name="storage_permission_needed_backup">Este necesar accesul la stocare pentru a salva sau încărca fișiere de rezervă. Acordați permisiunile de stocare.</string>
   <string name="grant_permission">Acordați permisiunea</string>
+    <string name="connect_to_console">Conectare la consolă</string>
 </resources>

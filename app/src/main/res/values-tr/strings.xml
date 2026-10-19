@@ -182,7 +182,7 @@
   <string name="trusted_certificates_cleared">Kayıtlı tüm güvenilir sertifikalar temizlendi.</string>
   <string name="permissions_revoke_scheduled">Uygulama kapatıldığında izinler geri alınacak şekilde zamanlandı.</string>
   <string name="permissions_revoke_requires_android_13">İzinlerin geri alınması için Android 13 veya üzeri gerekir.</string>
-  <string name="set_app_pin_first">Önce Tüneller &amp; Genel ayarlarında bir Uygulama PIN\'i belirleyin.</string>
+  <string name="set_app_pin_first">Önce Genel ayarlarında bir Uygulama PIN\'i belirleyin.</string>
   <string name="cloudflare_logins_cleared">Önbelleğe alınmış Cloudflare Access oturumları temizlendi. Tekrar oturum açmak için yeniden bağlanın.</string>
   <string name="cloudflare_logins_clear_failed">Cloudflare Access oturumları temizlenemedi.</string>
   <string name="discovery_no_services">Yerel hizmet bulunamadı. Ana bilgisayarı el ile girin veya Ekran Paylaşımı\'nı ve LAN\'i denetleyin.</string>
@@ -631,4 +631,5 @@
   <string name="backup_invalid_passphrase">Yanlış parola veya bozuk yedekleme dosyası.</string>
   <string name="storage_permission_needed_backup">Yedekleme dosyalarını kaydetmek veya yüklemek için depolama erişimi gereklidir. Depolama izinlerini verin.</string>
   <string name="grant_permission">İzin ver</string>
+    <string name="connect_to_console">Konsola bağlan</string>
 </resources>

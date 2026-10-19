@@ -182,7 +182,7 @@
   <string name="trusted_certificates_cleared">已清除所有已儲存的信任憑證。</string>
   <string name="permissions_revoke_scheduled">權限將在應用程式關閉時撤銷。</string>
   <string name="permissions_revoke_requires_android_13">撤銷權限需要 Android 13 以上版本。</string>
-  <string name="set_app_pin_first">請先在「通道與全域」設定中設定應用程式 PIN。</string>
+  <string name="set_app_pin_first">請先在「一般」設定中設定應用程式 PIN。</string>
   <string name="cloudflare_logins_cleared">已清除快取的 Cloudflare Access 登入。請重新連線以再次登入。</string>
   <string name="cloudflare_logins_clear_failed">無法清除 Cloudflare 登入。</string>
   <string name="discovery_no_services">找不到本機服務。請手動輸入主機，或檢查螢幕分享和 LAN。</string>
@@ -632,4 +632,5 @@
   <string name="backup_invalid_passphrase">密碼不正確或備份檔案已毀損。</string>
   <string name="storage_permission_needed_backup">儲存或載入備份檔案需要儲存存取權限。請授予儲存權限。</string>
   <string name="grant_permission">授予權限</string>
+    <string name="connect_to_console">連線至主控台</string>
 </resources>
