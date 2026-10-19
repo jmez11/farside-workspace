@@ -128,6 +128,8 @@ internal class RdpMonitor(val session: RdpMonitorSession, val id: Long) : Deskto
             set(value) { /* The session owns clipboard synchronization. */ }
         override fun sendClipboardText(instance: Long, text: String) = handle != 0L && native.sendClipboardText(handle, text)
         override fun sendMouseEvent(instance: Long, x: Int, y: Int, flags: Int) {
+            if (flags and 0x8000 != 0) android.util.Log.d("RdpInput",
+                "Pointer monitor=$id ready=${session.inputReady} visible=$visible accepted=${session.acceptsInput(this@RdpMonitor)} busy=${session.busy} drag=${session.drag.active}")
             if (handle != 0L && session.acceptsInput(this@RdpMonitor) && !session.drag.active) {
                 val (remoteX, remoteY) = RdpMonitorLayouts.pointer(rect, x, y)
                 pointer = remoteX to remoteY
@@ -213,7 +215,7 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
         observePanels(SystemClock.elapsedRealtime(), immediate = true)
         retryBlocked = false; automaticRetries = 0; forceSync = true
         rejectedTarget = null; fallbackTarget = null; recoveringLayout = false
-        busy = true; canAdd = false; inputReady = false
+        busy = true; canAdd = false
         monitors.forEach { it.releaseInput(mouseOnly = true) }
         resizeAt = SystemClock.elapsedRealtime() + 300
     }
@@ -512,6 +514,10 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
             RdpMonitorLayouts.matches(raw, committed)) {
             rejectedTarget = null; layoutNeedsRetry = false
         }
+        // A pending/rejected placement does not invalidate the host's old layout.
+        // Keep those confirmed crops interactive during the acknowledgement timeout.
+        // Freeze only while the actual atlas/crops disagree, including a GFX transition.
+        inputReady = RdpMonitorLayouts.matches(raw, committed) && painted && outputsMatch(committed, revision)
         canAdd = profile.remoteApp.isNullOrBlank() && !layoutNeedsRetry && !busy && !drag.active && inputReady &&
             monitors.all { it.presented } && raw[0] == 1L && raw[8] == 1L &&
             monitors.size < minOf(raw[1], 16L) && RdpMonitorLayouts.valid(

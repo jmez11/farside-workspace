@@ -268,6 +268,43 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
                     ready
                 }
             }
+            fun verifyUiPointer(monitor: RdpMonitor, label: String) {
+                val activity = checkNotNull(monitor.host.get())
+                var before: Bitmap? = null
+                var delivered = 0
+                main { before = texture(activity.window.decorView)?.bitmap
+                    activity.onTouchDebug = { _,_,_,_ -> delivered++ }
+                    val view = activity.window.decorView
+                    val now = android.os.SystemClock.uptimeMillis()
+                    val x = view.width / 2f; val y = view.height / 2f
+                    val down = android.view.MotionEvent.obtain(now,now,android.view.MotionEvent.ACTION_DOWN,x,y,0)
+                    val up = android.view.MotionEvent.obtain(now,now+1100,android.view.MotionEvent.ACTION_UP,x,y,0)
+                    try { activity.dispatchTouchEvent(down); activity.dispatchTouchEvent(up) }
+                    finally { down.recycle(); up.recycle() }
+                }
+                try {
+                    check(delivered >= 2) { "$label did not reach desktop pointer UI" }
+                    val original = checkNotNull(before)
+                    await("$label pointer causes remote context menu in its own crop",10_000) {
+                        var changed = 0
+                        main { texture(activity.window.decorView)?.bitmap?.let { after ->
+                            if (after.width == original.width && after.height == original.height) {
+                                for (y in 0 until after.height step 10) for (x in 0 until after.width step 10)
+                                    if (original.getPixel(x,y) != after.getPixel(x,y)) changed++
+                            }
+                            if (changed > 100) File(directory,"$label.png").outputStream().use {
+                                after.compress(Bitmap.CompressFormat.PNG,100,it) }
+                            after.recycle()
+                        } }
+                        changed > 100
+                    }
+                    report.put(label,true)
+                } finally {
+                    main { activity.onTouchDebug = null
+                        monitor.bridge.sendKeyEvent(handle,1,true); monitor.bridge.sendKeyEvent(handle,1,false) }
+                    before?.recycle()
+                }
+            }
             fun record(label: String, allowMinimized: Boolean = false) {
                 settled(session.monitors.size)
                 val stage = JSONObject().put("stage", label).put("sameNativeConnection", session.instance.value == handle)
@@ -423,6 +460,10 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
             val beforeShape = session.layoutSubmissions
             main { session.resize(second,1280,800); session.followPanelLayout()
                 pointsField.set(session,failurePoints); poseReadField.setLong(session,Long.MAX_VALUE) }
+            await("pending spatial request keeps confirmed windows interactive") {
+                session.layoutSubmissions > beforeShape && session.busy && session.inputReady
+            }
+            verifyUiPointer(session.monitors.last { it.visible && it.surface != null },"uiPointerDuringPendingLayout")
             await("wearer layout accepted or recovered with functional windows",60_000) {
                 var ready = false
                 main { pointsField.set(session,failurePoints); poseReadField.setLong(session,Long.MAX_VALUE)
@@ -530,6 +571,7 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
                 settled(4)
                 record("four-native-restored",allowMinimized = true)
                 report.put("ownedNativeVisibilityRestore",true)
+                verifyUiPointer(hidden,"uiPointerAfterNativeRestore")
             }
 
             val surfaceRestored = session.monitors.last { it.surface != null && it.visible }
