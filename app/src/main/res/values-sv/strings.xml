@@ -610,4 +610,24 @@
   <string name="window_manager">Fönsterhanterare</string>
   <string name="find_local_macs">Klicka här för att hitta lokala Macs</string>
   <string name="finding_local_macs">Hittar lokala Macs…</string>
+  <string name="backup_restore">Säkerhetskopiering och återställning</string>
+  <string name="backup_settings_title">Inställningar för säkerhetskopiering och återställning</string>
+  <string name="backup_settings_help">Exportera alla anslutningar, inloggningsuppgifter, SSH-nycklar och PIN-kod till en krypterad fil, eller återställ från en säkerhetskopia.</string>
+  <string name="export_backup">Exportera krypterad säkerhetskopia</string>
+  <string name="restore_backup">Återställ från säkerhetskopia</string>
+  <string name="backup_passphrase_title">Lösenfras för krypterad säkerhetskopia</string>
+  <string name="backup_passphrase_help">Ange en stark lösenfras för att kryptera din säkerhetskopia. Denna lösenfras krävs för att återställa dina inställningar och hemligheter på valfri enhet.</string>
+  <string name="backup_passphrase_label">Lösenfras för säkerhetskopia</string>
+  <string name="backup_passphrase_confirm_label">Bekräfta lösenfras</string>
+  <string name="backup_passphrase_mismatch">Lösenfraserna stämmer inte överens.</string>
+  <string name="backup_passphrase_empty">Ange en lösenfras.</string>
+  <string name="restore_passphrase_title">Ange lösenfras för säkerhetskopia</string>
+  <string name="restore_passphrase_help">Ange den lösenfras som användes när den här säkerhetskopian skapades.</string>
+  <string name="backup_export_success">Säkerhetskopian har sparats.</string>
+  <string name="backup_export_failed">Export av säkerhetskopia misslyckades: %1$s</string>
+  <string name="backup_restore_success">Återställning slutförd (%1$d profiler, %2$d inloggningsuppgifter, %3$d SSH-nycklar återställda).</string>
+  <string name="backup_restore_failed">Återställning misslyckades: %1$s</string>
+  <string name="backup_invalid_passphrase">Felaktig lösenfras eller skadad säkerhetskopia.</string>
+  <string name="storage_permission_needed_backup">Lagringsåtkomst krävs för att spara eller läsa in säkerhetskopior. Bevilja lagringsbehörighet.</string>
+  <string name="grant_permission">Bevilja behörighet</string>
 </resources>

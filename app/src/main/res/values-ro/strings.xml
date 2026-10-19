@@ -622,4 +622,24 @@
   <string name="window_manager">Manager ferestre</string>
   <string name="find_local_macs">Faceți clic aici pentru a găsi Macs locale</string>
   <string name="finding_local_macs">Se caută Macs locale...</string>
+  <string name="backup_restore">Copie de rezervă și restaurare</string>
+  <string name="backup_settings_title">Setări pentru copie de rezervă și restaurare</string>
+  <string name="backup_settings_help">Exportați toate conexiunile, acreditările, cheile SSH și codul PIN într-un fișier criptat sau restaurați dintr-o copie de rezervă.</string>
+  <string name="export_backup">Exportați copia de rezervă criptată</string>
+  <string name="restore_backup">Restaurați din copia de rezervă</string>
+  <string name="backup_passphrase_title">Fraza de acces a copiei criptate</string>
+  <string name="backup_passphrase_help">Introduceți o frază de acces puternică pentru a cripta copia de rezervă. Această frază de acces este necesară pentru a vă restaura setările și secretele pe orice dispozitiv.</string>
+  <string name="backup_passphrase_label">Fraza de acces a copiei de rezervă</string>
+  <string name="backup_passphrase_confirm_label">Confirmați fraza de acces</string>
+  <string name="backup_passphrase_mismatch">Frazele de acces nu se potrivesc.</string>
+  <string name="backup_passphrase_empty">Introduceți o frază de acces.</string>
+  <string name="restore_passphrase_title">Introduceți fraza de acces a copiei de rezervă</string>
+  <string name="restore_passphrase_help">Introduceți fraza de acces utilizată la crearea acestui fișier de rezervă.</string>
+  <string name="backup_export_success">Copia de rezervă a fost salvată.</string>
+  <string name="backup_export_failed">Exportul copiei a eșuat: %1$s</string>
+  <string name="backup_restore_success">Restaurare finalizată (restaurate: %1$d profiluri, %2$d acreditări, %3$d chei SSH).</string>
+  <string name="backup_restore_failed">Restaurarea a eșuat: %1$s</string>
+  <string name="backup_invalid_passphrase">Frază de acces incorectă sau fișier de rezervă corupt.</string>
+  <string name="storage_permission_needed_backup">Este necesar accesul la stocare pentru a salva sau încărca fișiere de rezervă. Acordați permisiunile de stocare.</string>
+  <string name="grant_permission">Acordați permisiunea</string>
 </resources>

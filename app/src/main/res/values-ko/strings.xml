@@ -610,4 +610,24 @@
   <string name="window_manager">창 관리자</string>
   <string name="find_local_macs">여기를 클릭하여 로컬 Macs 찾기</string>
   <string name="finding_local_macs">로컬 Macs 검색 중...</string>
+  <string name="backup_restore">백업 및 복원</string>
+  <string name="backup_settings_title">백업 및 복원 설정</string>
+  <string name="backup_settings_help">모든 연결, 자격 증명, SSH 키, PIN을 암호화된 파일로 내보내거나 백업에서 복원합니다.</string>
+  <string name="export_backup">암호화된 백업 내보내기</string>
+  <string name="restore_backup">백업에서 복원</string>
+  <string name="backup_passphrase_title">암호화된 백업의 암호</string>
+  <string name="backup_passphrase_help">백업을 암호화하려면 강력한 암호를 입력하세요. 이 암호는 모든 기기에서 설정과 보안 정보를 복원하는 데 필요합니다.</string>
+  <string name="backup_passphrase_label">백업 암호</string>
+  <string name="backup_passphrase_confirm_label">암호 확인</string>
+  <string name="backup_passphrase_mismatch">암호가 일치하지 않습니다.</string>
+  <string name="backup_passphrase_empty">암호를 입력하세요.</string>
+  <string name="restore_passphrase_title">백업 암호 입력</string>
+  <string name="restore_passphrase_help">이 백업 파일을 만들 때 사용한 암호를 입력하세요.</string>
+  <string name="backup_export_success">백업이 저장되었습니다.</string>
+  <string name="backup_export_failed">백업 내보내기 실패: %1$s</string>
+  <string name="backup_restore_success">복원 완료(프로필 %1$d개, 자격 증명 %2$d개, SSH 키 %3$d개 복원됨).</string>
+  <string name="backup_restore_failed">복원 실패: %1$s</string>
+  <string name="backup_invalid_passphrase">암호가 올바르지 않거나 백업 파일이 손상되었습니다.</string>
+  <string name="storage_permission_needed_backup">백업 파일을 저장하거나 불러오려면 저장소 접근 권한이 필요합니다. 저장소 권한을 허용해 주세요.</string>
+  <string name="grant_permission">권한 허용</string>
 </resources>

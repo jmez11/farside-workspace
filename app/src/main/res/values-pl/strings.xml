@@ -625,4 +625,24 @@
   <string name="window_manager">Menedżer okien</string>
   <string name="find_local_macs">Kliknij tutaj, aby znaleźć lokalne Macs</string>
   <string name="finding_local_macs">Wyszukiwanie lokalnych Macs...</string>
+  <string name="backup_restore">Kopia zapasowa i przywracanie</string>
+  <string name="backup_settings_title">Ustawienia kopii zapasowej i przywracania</string>
+  <string name="backup_settings_help">Wyeksportuj wszystkie połączenia, poświadczenia, klucze SSH i kod PIN do zaszyfrowanego pliku lub przywróć z kopii zapasowej.</string>
+  <string name="export_backup">Eksportuj zaszyfrowaną kopię</string>
+  <string name="restore_backup">Przywróć z kopii zapasowej</string>
+  <string name="backup_passphrase_title">Fraza hasła zaszyfrowanej kopii</string>
+  <string name="backup_passphrase_help">Wprowadź silną frazę hasła, aby zaszyfrować kopię zapasową. Ta fraza hasła jest wymagana, aby przywrócić ustawienia i sekrety na dowolnym urządzeniu.</string>
+  <string name="backup_passphrase_label">Fraza hasła kopii</string>
+  <string name="backup_passphrase_confirm_label">Potwierdź frazę hasła</string>
+  <string name="backup_passphrase_mismatch">Frazy hasła nie są zgodne.</string>
+  <string name="backup_passphrase_empty">Wprowadź frazę hasła.</string>
+  <string name="restore_passphrase_title">Wprowadzanie frazy hasła kopii</string>
+  <string name="restore_passphrase_help">Wprowadź frazę hasła użytą podczas tworzenia tego pliku kopii.</string>
+  <string name="backup_export_success">Kopia zapasowa została zapisana.</string>
+  <string name="backup_export_failed">Eksport kopii nie powiódł się: %1$s</string>
+  <string name="backup_restore_success">Przywracanie zakończone (przywrócono: profili — %1$d, poświadczeń — %2$d, kluczy SSH — %3$d).</string>
+  <string name="backup_restore_failed">Przywracanie nie powiodło się: %1$s</string>
+  <string name="backup_invalid_passphrase">Nieprawidłowa fraza hasła lub uszkodzony plik kopii.</string>
+  <string name="storage_permission_needed_backup">Dostęp do pamięci jest wymagany, aby zapisywać lub wczytywać pliki kopii. Przyznaj uprawnienia pamięci.</string>
+  <string name="grant_permission">Przyznaj uprawnienie</string>
 </resources>

@@ -611,4 +611,24 @@
   <!-- UNCERTAIN: "kept 'Macs' untranslated; dropped the accusative suffix Turkish grammar would want" -->
   <string name="find_local_macs">Yerel Macs Bulmak için buraya tıklayın</string>
   <string name="finding_local_macs">Yerel Macs aranıyor…</string>
+  <string name="backup_restore">Yedekleme ve geri yükleme</string>
+  <string name="backup_settings_title">Yedekleme ve geri yükleme ayarları</string>
+  <string name="backup_settings_help">Tüm bağlantıları, kimlik bilgilerini, SSH anahtarlarını ve PIN kodunu şifreli bir dosyaya aktarın veya bir yedekten geri yükleyin.</string>
+  <string name="export_backup">Şifreli yedeği dışa aktar</string>
+  <string name="restore_backup">Yedekten geri yükle</string>
+  <string name="backup_passphrase_title">Şifreli yedekleme parolası</string>
+  <string name="backup_passphrase_help">Yedeğinizi şifrelemek için güçlü bir parola girin. Bu parola, ayarlarınızı ve gizli bilgilerinizi herhangi bir cihazda geri yüklemek için gereklidir.</string>
+  <string name="backup_passphrase_label">Yedekleme parolası</string>
+  <string name="backup_passphrase_confirm_label">Parolayı onayla</string>
+  <string name="backup_passphrase_mismatch">Parolalar eşleşmiyor.</string>
+  <string name="backup_passphrase_empty">Lütfen bir parola girin.</string>
+  <string name="restore_passphrase_title">Yedekleme parolasını girin</string>
+  <string name="restore_passphrase_help">Bu yedekleme dosyasını oluştururken kullanılan parolayı girin.</string>
+  <string name="backup_export_success">Yedekleme kaydedildi.</string>
+  <string name="backup_export_failed">Yedekleme dışa aktarılamadı: %1$s</string>
+  <string name="backup_restore_success">Geri yükleme tamamlandı (%1$d profil, %2$d kimlik bilgisi, %3$d SSH anahtarı geri yüklendi).</string>
+  <string name="backup_restore_failed">Geri yükleme başarısız: %1$s</string>
+  <string name="backup_invalid_passphrase">Yanlış parola veya bozuk yedekleme dosyası.</string>
+  <string name="storage_permission_needed_backup">Yedekleme dosyalarını kaydetmek veya yüklemek için depolama erişimi gereklidir. Depolama izinlerini verin.</string>
+  <string name="grant_permission">İzin ver</string>
 </resources>

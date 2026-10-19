@@ -610,4 +610,24 @@
   <string name="window_manager">Fenster-Manager</string>
   <string name="find_local_macs">Hier klicken, um lokale Macs zu finden</string>
   <string name="finding_local_macs">Lokale Macs werden gesucht…</string>
+  <string name="backup_restore">Sicherung &amp; Wiederherstellung</string>
+  <string name="backup_settings_title">Einstellungen für Sicherung &amp; Wiederherstellung</string>
+  <string name="backup_settings_help">Alle Verbindungen, Anmeldedaten, SSH-Schlüssel und die PIN in eine verschlüsselte Datei exportieren oder aus einer Sicherung wiederherstellen.</string>
+  <string name="export_backup">Verschlüsselte Sicherung exportieren</string>
+  <string name="restore_backup">Aus Sicherung wiederherstellen</string>
+  <string name="backup_passphrase_title">Passphrase für verschlüsselte Sicherung</string>
+  <string name="backup_passphrase_help">Geben Sie eine starke Passphrase ein, um Ihre Sicherung zu verschlüsseln. Diese Passphrase ist erforderlich, um Ihre Einstellungen und Geheimnisse auf einem beliebigen Gerät wiederherzustellen.</string>
+  <string name="backup_passphrase_label">Sicherungs-Passphrase</string>
+  <string name="backup_passphrase_confirm_label">Passphrase bestätigen</string>
+  <string name="backup_passphrase_mismatch">Die Passphrasen stimmen nicht überein.</string>
+  <string name="backup_passphrase_empty">Bitte geben Sie eine Passphrase ein.</string>
+  <string name="restore_passphrase_title">Sicherungs-Passphrase eingeben</string>
+  <string name="restore_passphrase_help">Geben Sie die Passphrase ein, die beim Erstellen dieser Sicherungsdatei verwendet wurde.</string>
+  <string name="backup_export_success">Sicherung erfolgreich gespeichert.</string>
+  <string name="backup_export_failed">Sicherungsexport fehlgeschlagen: %1$s</string>
+  <string name="backup_restore_success">Wiederherstellung abgeschlossen (%1$d Profile, %2$d Anmeldedaten, %3$d SSH-Schlüssel wiederhergestellt).</string>
+  <string name="backup_restore_failed">Wiederherstellung fehlgeschlagen: %1$s</string>
+  <string name="backup_invalid_passphrase">Falsche Passphrase oder beschädigte Sicherungsdatei.</string>
+  <string name="storage_permission_needed_backup">Zum Speichern oder Laden von Sicherungsdateien ist Speicherzugriff erforderlich. Bitte erteilen Sie die Speicherberechtigungen.</string>
+  <string name="grant_permission">Berechtigung erteilen</string>
 </resources>

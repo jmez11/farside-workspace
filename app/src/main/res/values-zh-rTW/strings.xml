@@ -612,4 +612,24 @@
   <string name="find_local_macs">按一下這裡以尋找本機Mac</string>
   <!-- UNCERTAIN: "used 'Mac' not 'Macs'; Chinese does not mark plurals" -->
   <string name="finding_local_macs">正在尋找本機Mac…</string>
+  <string name="backup_restore">備份與還原</string>
+  <string name="backup_settings_title">備份與還原設定</string>
+  <string name="backup_settings_help">將所有連線、認證、SSH 金鑰和 PIN 匯出至加密檔案，或從備份還原。</string>
+  <string name="export_backup">匯出加密備份</string>
+  <string name="restore_backup">從備份還原</string>
+  <string name="backup_passphrase_title">加密備份密碼</string>
+  <string name="backup_passphrase_help">輸入高強度密碼以加密備份。在任何裝置上還原設定和密鑰都需要此密碼。</string>
+  <string name="backup_passphrase_label">備份密碼</string>
+  <string name="backup_passphrase_confirm_label">確認密碼</string>
+  <string name="backup_passphrase_mismatch">兩次輸入的密碼不一致。</string>
+  <string name="backup_passphrase_empty">請輸入密碼。</string>
+  <string name="restore_passphrase_title">輸入備份密碼</string>
+  <string name="restore_passphrase_help">輸入建立此備份檔案時使用的密碼。</string>
+  <string name="backup_export_success">備份已儲存。</string>
+  <string name="backup_export_failed">備份匯出失敗：%1$s</string>
+  <string name="backup_restore_success">還原完成（已還原 %1$d 個設定檔、%2$d 個認證、%3$d 個 SSH 金鑰）。</string>
+  <string name="backup_restore_failed">還原失敗：%1$s</string>
+  <string name="backup_invalid_passphrase">密碼不正確或備份檔案已毀損。</string>
+  <string name="storage_permission_needed_backup">儲存或載入備份檔案需要儲存存取權限。請授予儲存權限。</string>
+  <string name="grant_permission">授予權限</string>
 </resources>

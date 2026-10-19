@@ -610,4 +610,24 @@
   <string name="window_manager">Administrador de ventanas</string>
   <string name="find_local_macs">Toque aquí para buscar Macs locales</string>
   <string name="finding_local_macs">Buscando Macs locales…</string>
+  <string name="backup_restore">Copia de seguridad y restauración</string>
+  <string name="backup_settings_title">Ajustes de copia de seguridad y restauración</string>
+  <string name="backup_settings_help">Exporte todas las conexiones, credenciales, claves SSH y el PIN a un archivo cifrado, o restaure desde una copia de seguridad.</string>
+  <string name="export_backup">Exportar copia de seguridad cifrada</string>
+  <string name="restore_backup">Restaurar desde una copia de seguridad</string>
+  <string name="backup_passphrase_title">Frase de contraseña de la copia cifrada</string>
+  <string name="backup_passphrase_help">Introduzca una frase de contraseña segura para cifrar su copia de seguridad. Esta frase de contraseña es necesaria para restaurar sus ajustes y secretos en cualquier dispositivo.</string>
+  <string name="backup_passphrase_label">Frase de contraseña de la copia</string>
+  <string name="backup_passphrase_confirm_label">Confirmar frase de contraseña</string>
+  <string name="backup_passphrase_mismatch">Las frases de contraseña no coinciden.</string>
+  <string name="backup_passphrase_empty">Introduzca una frase de contraseña.</string>
+  <string name="restore_passphrase_title">Introducir frase de contraseña de la copia</string>
+  <string name="restore_passphrase_help">Introduzca la frase de contraseña utilizada al crear este archivo de copia de seguridad.</string>
+  <string name="backup_export_success">Copia de seguridad guardada correctamente.</string>
+  <string name="backup_export_failed">Error al exportar la copia de seguridad: %1$s</string>
+  <string name="backup_restore_success">Restauración completada (%1$d perfiles, %2$d credenciales, %3$d claves SSH restaurados).</string>
+  <string name="backup_restore_failed">Error al restaurar: %1$s</string>
+  <string name="backup_invalid_passphrase">Frase de contraseña incorrecta o archivo de copia de seguridad dañado.</string>
+  <string name="storage_permission_needed_backup">Se necesita acceso al almacenamiento para guardar o cargar archivos de copia de seguridad. Conceda los permisos de almacenamiento.</string>
+  <string name="grant_permission">Conceder permiso</string>
 </resources>

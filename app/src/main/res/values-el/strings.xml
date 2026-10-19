@@ -611,4 +611,24 @@
   <string name="window_manager">Διαχειριστής παραθύρων</string>
   <string name="find_local_macs">Κάντε κλικ εδώ για Εύρεση τοπικών Macs</string>
   <string name="finding_local_macs">Εύρεση τοπικών Macs...</string>
+  <string name="backup_restore">Δημιουργία αντιγράφων ασφαλείας και επαναφορά</string>
+  <string name="backup_settings_title">Ρυθμίσεις δημιουργίας αντιγράφων ασφαλείας και επαναφοράς</string>
+  <string name="backup_settings_help">Εξαγάγετε όλες τις συνδέσεις, τα διαπιστευτήρια, τα κλειδιά SSH και το PIN σε κρυπτογραφημένο αρχείο ή επαναφέρετε από αντίγραφο ασφαλείας.</string>
+  <string name="export_backup">Εξαγωγή κρυπτογραφημένου αντιγράφου</string>
+  <string name="restore_backup">Επαναφορά από αντίγραφο ασφαλείας</string>
+  <string name="backup_passphrase_title">Φράση πρόσβασης κρυπτογραφημένου αντιγράφου</string>
+  <string name="backup_passphrase_help">Εισαγάγετε μια ισχυρή φράση πρόσβασης για την κρυπτογράφηση του αντιγράφου ασφαλείας. Αυτή η φράση πρόσβασης απαιτείται για την επαναφορά των ρυθμίσεων και των μυστικών σας σε οποιαδήποτε συσκευή.</string>
+  <string name="backup_passphrase_label">Φράση πρόσβασης αντιγράφου</string>
+  <string name="backup_passphrase_confirm_label">Επιβεβαίωση φράσης πρόσβασης</string>
+  <string name="backup_passphrase_mismatch">Οι φράσεις πρόσβασης δεν ταιριάζουν.</string>
+  <string name="backup_passphrase_empty">Εισαγάγετε μια φράση πρόσβασης.</string>
+  <string name="restore_passphrase_title">Εισαγωγή φράσης πρόσβασης αντιγράφου</string>
+  <string name="restore_passphrase_help">Εισαγάγετε τη φράση πρόσβασης που χρησιμοποιήθηκε κατά τη δημιουργία αυτού του αρχείου αντιγράφου.</string>
+  <string name="backup_export_success">Το αντίγραφο ασφαλείας αποθηκεύτηκε.</string>
+  <string name="backup_export_failed">Η εξαγωγή του αντιγράφου απέτυχε: %1$s</string>
+  <string name="backup_restore_success">Η επαναφορά ολοκληρώθηκε (επαναφέρθηκαν %1$d προφίλ, %2$d διαπιστευτήρια, %3$d κλειδιά SSH).</string>
+  <string name="backup_restore_failed">Η επαναφορά απέτυχε: %1$s</string>
+  <string name="backup_invalid_passphrase">Εσφαλμένη φράση πρόσβασης ή κατεστραμμένο αρχείο αντιγράφου.</string>
+  <string name="storage_permission_needed_backup">Απαιτείται πρόσβαση στον αποθηκευτικό χώρο για την αποθήκευση ή τη φόρτωση αρχείων αντιγράφων. Παραχωρήστε δικαιώματα αποθηκευτικού χώρου.</string>
+  <string name="grant_permission">Παραχώρηση δικαιώματος</string>
 </resources>

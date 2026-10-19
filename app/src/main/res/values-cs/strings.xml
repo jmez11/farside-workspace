@@ -627,4 +627,24 @@
   <string name="window_manager">Správce oken</string>
   <string name="find_local_macs">Kliknutím zde najdete místní Macs</string>
   <string name="finding_local_macs">Hledám místní Macs...</string>
+  <string name="backup_restore">Zálohování a obnovení</string>
+  <string name="backup_settings_title">Nastavení zálohování a obnovení</string>
+  <string name="backup_settings_help">Exportujte všechna připojení, přihlašovací údaje, klíče SSH a PIN do šifrovaného souboru, nebo obnovte ze zálohy.</string>
+  <string name="export_backup">Exportovat šifrovanou zálohu</string>
+  <string name="restore_backup">Obnovit ze zálohy</string>
+  <string name="backup_passphrase_title">Heslová fráze šifrované zálohy</string>
+  <string name="backup_passphrase_help">Zadejte silnou heslovou frázi pro zašifrování zálohy. Tato heslová fráze je nutná k obnovení nastavení a tajemství na jakémkoli zařízení.</string>
+  <string name="backup_passphrase_label">Heslová fráze zálohy</string>
+  <string name="backup_passphrase_confirm_label">Potvrdit heslovou frázi</string>
+  <string name="backup_passphrase_mismatch">Heslové fráze se neshodují.</string>
+  <string name="backup_passphrase_empty">Zadejte heslovou frázi.</string>
+  <string name="restore_passphrase_title">Zadání heslové fráze zálohy</string>
+  <string name="restore_passphrase_help">Zadejte heslovou frázi použitou při vytvoření tohoto souboru zálohy.</string>
+  <string name="backup_export_success">Záloha byla úspěšně uložena.</string>
+  <string name="backup_export_failed">Export zálohy se nezdařil: %1$s</string>
+  <string name="backup_restore_success">Obnovení dokončeno (obnoveno: profilů — %1$d, přihlašovacích údajů — %2$d, klíčů SSH — %3$d).</string>
+  <string name="backup_restore_failed">Obnovení se nezdařilo: %1$s</string>
+  <string name="backup_invalid_passphrase">Nesprávná heslová fráze nebo poškozený soubor zálohy.</string>
+  <string name="storage_permission_needed_backup">K ukládání nebo načítání souborů záloh je nutný přístup k úložišti. Udělte oprávnění k úložišti.</string>
+  <string name="grant_permission">Udělit oprávnění</string>
 </resources>

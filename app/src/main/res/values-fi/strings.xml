@@ -610,4 +610,24 @@
   <string name="window_manager">Ikkunanhallinta</string>
   <string name="find_local_macs">Napsauta tästä etsiäksesi paikallisia Macs</string>
   <string name="finding_local_macs">Etsitään paikallisia Macs...</string>
+  <string name="backup_restore">Varmuuskopiointi ja palautus</string>
+  <string name="backup_settings_title">Varmuuskopioinnin ja palautuksen asetukset</string>
+  <string name="backup_settings_help">Vie kaikki yhteydet, tunnistetiedot, SSH-avaimet ja PIN-koodi salattuun tiedostoon tai palauta varmuuskopiosta.</string>
+  <string name="export_backup">Vie salattu varmuuskopio</string>
+  <string name="restore_backup">Palauta varmuuskopiosta</string>
+  <string name="backup_passphrase_title">Salatun varmuuskopion tunnuslause</string>
+  <string name="backup_passphrase_help">Anna vahva tunnuslause varmuuskopion salaamiseen. Tätä tunnuslausetta tarvitaan asetusten ja salaisuuksien palauttamiseen millä tahansa laitteella.</string>
+  <string name="backup_passphrase_label">Varmuuskopion tunnuslause</string>
+  <string name="backup_passphrase_confirm_label">Vahvista tunnuslause</string>
+  <string name="backup_passphrase_mismatch">Tunnuslauseet eivät täsmää.</string>
+  <string name="backup_passphrase_empty">Anna tunnuslause.</string>
+  <string name="restore_passphrase_title">Anna varmuuskopion tunnuslause</string>
+  <string name="restore_passphrase_help">Anna tunnuslause, jota käytettiin tämän varmuuskopiotiedoston luomiseen.</string>
+  <string name="backup_export_success">Varmuuskopio tallennettu.</string>
+  <string name="backup_export_failed">Varmuuskopion vienti epäonnistui: %1$s</string>
+  <string name="backup_restore_success">Palautus valmis (%1$d profiilia, %2$d tunnistetietoa, %3$d SSH-avainta palautettu).</string>
+  <string name="backup_restore_failed">Palautus epäonnistui: %1$s</string>
+  <string name="backup_invalid_passphrase">Virheellinen tunnuslause tai vioittunut varmuuskopiotiedosto.</string>
+  <string name="storage_permission_needed_backup">Tallennustilan käyttöoikeus tarvitaan varmuuskopiotiedostojen tallentamiseen tai lataamiseen. Myönnä tallennustilan käyttöoikeudet.</string>
+  <string name="grant_permission">Myönnä käyttöoikeus</string>
 </resources>

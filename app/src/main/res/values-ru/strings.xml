@@ -627,4 +627,24 @@
   <string name="find_local_macs">Нажмите здесь, чтобы найти локальные Macs</string>
   <!-- UNCERTAIN: "kept 'Macs' untranslated per brand-token rule; natural Russian would use 'компьютеров Mac'" -->
   <string name="finding_local_macs">Поиск локальных Macs...</string>
+  <string name="backup_restore">Резервное копирование и восстановление</string>
+  <string name="backup_settings_title">Настройки резервного копирования и восстановления</string>
+  <string name="backup_settings_help">Экспортируйте все подключения, учётные данные, SSH-ключи и PIN-код в зашифрованный файл или восстановите данные из резервной копии.</string>
+  <string name="export_backup">Экспортировать зашифрованную копию</string>
+  <string name="restore_backup">Восстановить из резервной копии</string>
+  <string name="backup_passphrase_title">Парольная фраза зашифрованной копии</string>
+  <string name="backup_passphrase_help">Введите надёжную парольную фразу, чтобы зашифровать резервную копию. Эта парольная фраза потребуется для восстановления настроек и секретов на любом устройстве.</string>
+  <string name="backup_passphrase_label">Парольная фраза копии</string>
+  <string name="backup_passphrase_confirm_label">Подтвердите парольную фразу</string>
+  <string name="backup_passphrase_mismatch">Парольные фразы не совпадают.</string>
+  <string name="backup_passphrase_empty">Введите парольную фразу.</string>
+  <string name="restore_passphrase_title">Ввод парольной фразы копии</string>
+  <string name="restore_passphrase_help">Введите парольную фразу, использованную при создании этого файла копии.</string>
+  <string name="backup_export_success">Резервная копия успешно сохранена.</string>
+  <string name="backup_export_failed">Не удалось экспортировать копию: %1$s</string>
+  <string name="backup_restore_success">Восстановление завершено (восстановлено: профилей — %1$d, учётных данных — %2$d, SSH-ключей — %3$d).</string>
+  <string name="backup_restore_failed">Не удалось восстановить: %1$s</string>
+  <string name="backup_invalid_passphrase">Неверная парольная фраза или повреждённый файл копии.</string>
+  <string name="storage_permission_needed_backup">Для сохранения или загрузки файлов копий нужен доступ к хранилищу. Предоставьте разрешения на доступ к хранилищу.</string>
+  <string name="grant_permission">Предоставить разрешение</string>
 </resources>

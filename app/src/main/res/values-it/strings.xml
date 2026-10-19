@@ -610,4 +610,24 @@
   <string name="window_manager">Gestore finestre</string>
   <string name="find_local_macs">Tocca qui per trovare i Macs locali</string>
   <string name="finding_local_macs">Ricerca Macs locali...</string>
+  <string name="backup_restore">Backup e ripristino</string>
+  <string name="backup_settings_title">Impostazioni di backup e ripristino</string>
+  <string name="backup_settings_help">Esporta tutte le connessioni, le credenziali, le chiavi SSH e il PIN in un file crittografato, oppure ripristina da un backup.</string>
+  <string name="export_backup">Esporta backup crittografato</string>
+  <string name="restore_backup">Ripristina da backup</string>
+  <string name="backup_passphrase_title">Passphrase del backup crittografato</string>
+  <string name="backup_passphrase_help">Inserisci una passphrase robusta per crittografare il tuo backup. Questa passphrase è necessaria per ripristinare le impostazioni e i segreti su qualsiasi dispositivo.</string>
+  <string name="backup_passphrase_label">Passphrase del backup</string>
+  <string name="backup_passphrase_confirm_label">Conferma passphrase</string>
+  <string name="backup_passphrase_mismatch">Le passphrase non corrispondono.</string>
+  <string name="backup_passphrase_empty">Inserisci una passphrase.</string>
+  <string name="restore_passphrase_title">Inserisci la passphrase del backup</string>
+  <string name="restore_passphrase_help">Inserisci la passphrase utilizzata durante la creazione di questo file di backup.</string>
+  <string name="backup_export_success">Backup salvato correttamente.</string>
+  <string name="backup_export_failed">Esportazione del backup non riuscita: %1$s</string>
+  <string name="backup_restore_success">Ripristino completato (%1$d profili, %2$d credenziali, %3$d chiavi SSH ripristinate).</string>
+  <string name="backup_restore_failed">Ripristino non riuscito: %1$s</string>
+  <string name="backup_invalid_passphrase">Passphrase errata o file di backup danneggiato.</string>
+  <string name="storage_permission_needed_backup">È necessario l\'accesso allo spazio di archiviazione per salvare o caricare i file di backup. Concedi le autorizzazioni di archiviazione.</string>
+  <string name="grant_permission">Concedi autorizzazione</string>
 </resources>

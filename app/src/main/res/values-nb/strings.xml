@@ -610,4 +610,24 @@
   <string name="window_manager">Vindusbehandler</string>
   <string name="find_local_macs">Klikk her for å finne lokale Macs</string>
   <string name="finding_local_macs">Finner lokale Macs…</string>
+  <string name="backup_restore">Sikkerhetskopiering og gjenoppretting</string>
+  <string name="backup_settings_title">Innstillinger for sikkerhetskopiering og gjenoppretting</string>
+  <string name="backup_settings_help">Eksporter alle tilkoblinger, påloggingsinformasjon, SSH-nøkler og PIN-kode til en kryptert fil, eller gjenopprett fra en sikkerhetskopi.</string>
+  <string name="export_backup">Eksporter kryptert sikkerhetskopi</string>
+  <string name="restore_backup">Gjenopprett fra sikkerhetskopi</string>
+  <string name="backup_passphrase_title">Passordfrase for kryptert sikkerhetskopi</string>
+  <string name="backup_passphrase_help">Skriv inn en sterk passordfrase for å kryptere sikkerhetskopien. Denne passordfrasen kreves for å gjenopprette innstillingene og hemmelighetene dine på en hvilken som helst enhet.</string>
+  <string name="backup_passphrase_label">Passordfrase for sikkerhetskopi</string>
+  <string name="backup_passphrase_confirm_label">Bekreft passordfrase</string>
+  <string name="backup_passphrase_mismatch">Passordfrasene samsvarer ikke.</string>
+  <string name="backup_passphrase_empty">Skriv inn en passordfrase.</string>
+  <string name="restore_passphrase_title">Skriv inn passordfrase for sikkerhetskopi</string>
+  <string name="restore_passphrase_help">Skriv inn passordfrasen som ble brukt da denne sikkerhetskopifilen ble opprettet.</string>
+  <string name="backup_export_success">Sikkerhetskopi lagret.</string>
+  <string name="backup_export_failed">Eksport av sikkerhetskopi mislyktes: %1$s</string>
+  <string name="backup_restore_success">Gjenoppretting fullført (%1$d profiler, %2$d påloggingsinformasjoner, %3$d SSH-nøkler gjenopprettet).</string>
+  <string name="backup_restore_failed">Gjenoppretting mislyktes: %1$s</string>
+  <string name="backup_invalid_passphrase">Feil passordfrase eller skadet sikkerhetskopifil.</string>
+  <string name="storage_permission_needed_backup">Lagringstilgang er nødvendig for å lagre eller laste inn sikkerhetskopifiler. Gi lagringstillatelser.</string>
+  <string name="grant_permission">Gi tillatelse</string>
 </resources>

@@ -610,4 +610,24 @@
   <string name="window_manager">Gestor de janelas</string>
   <string name="find_local_macs">Clique aqui para Localizar Macs locais</string>
   <string name="finding_local_macs">A localizar Macs locais...</string>
+  <string name="backup_restore">Cópia de segurança e restauro</string>
+  <string name="backup_settings_title">Definições de cópia de segurança e restauro</string>
+  <string name="backup_settings_help">Exporte todas as ligações, credenciais, chaves SSH e o PIN para um ficheiro encriptado, ou restaure a partir de uma cópia de segurança.</string>
+  <string name="export_backup">Exportar cópia de segurança encriptada</string>
+  <string name="restore_backup">Restaurar a partir de uma cópia de segurança</string>
+  <string name="backup_passphrase_title">Frase-passe da cópia de segurança encriptada</string>
+  <string name="backup_passphrase_help">Introduza uma frase-passe forte para encriptar a sua cópia de segurança. Esta frase-passe é necessária para restaurar as suas definições e segredos em qualquer dispositivo.</string>
+  <string name="backup_passphrase_label">Frase-passe da cópia de segurança</string>
+  <string name="backup_passphrase_confirm_label">Confirmar frase-passe</string>
+  <string name="backup_passphrase_mismatch">As frases-passe não coincidem.</string>
+  <string name="backup_passphrase_empty">Introduza uma frase-passe.</string>
+  <string name="restore_passphrase_title">Introduzir frase-passe da cópia de segurança</string>
+  <string name="restore_passphrase_help">Introduza a frase-passe utilizada ao criar este ficheiro de cópia de segurança.</string>
+  <string name="backup_export_success">Cópia de segurança guardada com sucesso.</string>
+  <string name="backup_export_failed">Falha ao exportar a cópia de segurança: %1$s</string>
+  <string name="backup_restore_success">Restauro concluído (%1$d perfis, %2$d credenciais, %3$d chaves SSH restaurados).</string>
+  <string name="backup_restore_failed">Falha no restauro: %1$s</string>
+  <string name="backup_invalid_passphrase">Frase-passe incorreta ou ficheiro de cópia de segurança danificado.</string>
+  <string name="storage_permission_needed_backup">É necessário acesso ao armazenamento para guardar ou carregar ficheiros de cópia de segurança. Conceda as permissões de armazenamento.</string>
+  <string name="grant_permission">Conceder permissão</string>
 </resources>

@@ -610,4 +610,24 @@
   <string name="window_manager">Vindueshåndtering</string>
   <string name="find_local_macs">Klik her for at finde lokale Macs</string>
   <string name="finding_local_macs">Finder lokale Macs…</string>
+  <string name="backup_restore">Sikkerhedskopiering og gendannelse</string>
+  <string name="backup_settings_title">Indstillinger for sikkerhedskopiering og gendannelse</string>
+  <string name="backup_settings_help">Eksportér alle forbindelser, legitimationsoplysninger, SSH-nøgler og PIN-kode til en krypteret fil, eller gendan fra en sikkerhedskopi.</string>
+  <string name="export_backup">Eksportér krypteret sikkerhedskopi</string>
+  <string name="restore_backup">Gendan fra sikkerhedskopi</string>
+  <string name="backup_passphrase_title">Adgangssætning til krypteret sikkerhedskopi</string>
+  <string name="backup_passphrase_help">Indtast en stærk adgangssætning for at kryptere din sikkerhedskopi. Denne adgangssætning er påkrævet for at gendanne dine indstillinger og hemmeligheder på enhver enhed.</string>
+  <string name="backup_passphrase_label">Adgangssætning til sikkerhedskopi</string>
+  <string name="backup_passphrase_confirm_label">Bekræft adgangssætning</string>
+  <string name="backup_passphrase_mismatch">Adgangssætningerne stemmer ikke overens.</string>
+  <string name="backup_passphrase_empty">Indtast en adgangssætning.</string>
+  <string name="restore_passphrase_title">Indtast adgangssætning til sikkerhedskopi</string>
+  <string name="restore_passphrase_help">Indtast den adgangssætning, der blev brugt ved oprettelsen af denne sikkerhedskopifil.</string>
+  <string name="backup_export_success">Sikkerhedskopi gemt.</string>
+  <string name="backup_export_failed">Eksport af sikkerhedskopi mislykkedes: %1$s</string>
+  <string name="backup_restore_success">Gendannelse fuldført (%1$d profiler, %2$d legitimationsoplysninger, %3$d SSH-nøgler gendannet).</string>
+  <string name="backup_restore_failed">Gendannelse mislykkedes: %1$s</string>
+  <string name="backup_invalid_passphrase">Forkert adgangssætning eller beskadiget sikkerhedskopifil.</string>
+  <string name="storage_permission_needed_backup">Lageradgang er nødvendig for at gemme eller indlæse sikkerhedskopifiler. Giv lagertilladelser.</string>
+  <string name="grant_permission">Giv tilladelse</string>
 </resources>

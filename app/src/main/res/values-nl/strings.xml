@@ -610,4 +610,24 @@
   <string name="window_manager">Vensterbeheer</string>
   <string name="find_local_macs">Klik hier om lokale Macs te zoeken</string>
   <string name="finding_local_macs">Lokale Macs zoeken...</string>
+  <string name="backup_restore">Back-up en herstellen</string>
+  <string name="backup_settings_title">Instellingen voor back-up en herstellen</string>
+  <string name="backup_settings_help">Exporteer alle verbindingen, inloggegevens, SSH-sleutels en PIN naar een versleuteld bestand, of herstel vanuit een back-up.</string>
+  <string name="export_backup">Versleutelde back-up exporteren</string>
+  <string name="restore_backup">Herstellen vanuit een back-up</string>
+  <string name="backup_passphrase_title">Wachtwoordzin van versleutelde back-up</string>
+  <string name="backup_passphrase_help">Voer een sterke wachtwoordzin in om uw back-up te versleutelen. Deze wachtwoordzin is vereist om uw instellingen en geheimen op elk apparaat te herstellen.</string>
+  <string name="backup_passphrase_label">Wachtwoordzin van back-up</string>
+  <string name="backup_passphrase_confirm_label">Wachtwoordzin bevestigen</string>
+  <string name="backup_passphrase_mismatch">De wachtwoordzinnen komen niet overeen.</string>
+  <string name="backup_passphrase_empty">Voer een wachtwoordzin in.</string>
+  <string name="restore_passphrase_title">Wachtwoordzin van back-up invoeren</string>
+  <string name="restore_passphrase_help">Voer de wachtwoordzin in die is gebruikt bij het maken van dit back-upbestand.</string>
+  <string name="backup_export_success">Back-up opgeslagen.</string>
+  <string name="backup_export_failed">Exporteren van back-up mislukt: %1$s</string>
+  <string name="backup_restore_success">Herstellen voltooid (%1$d profielen, %2$d inloggegevens, %3$d SSH-sleutels hersteld).</string>
+  <string name="backup_restore_failed">Herstellen mislukt: %1$s</string>
+  <string name="backup_invalid_passphrase">Onjuiste wachtwoordzin of beschadigd back-upbestand.</string>
+  <string name="storage_permission_needed_backup">Opslagtoegang is nodig om back-upbestanden op te slaan of te laden. Verleen de opslagmachtigingen.</string>
+  <string name="grant_permission">Machtiging verlenen</string>
 </resources>

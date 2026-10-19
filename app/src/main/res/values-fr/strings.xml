@@ -610,4 +610,24 @@
   <string name="window_manager">Gestionnaire de fenêtres</string>
   <string name="find_local_macs">Cliquez ici pour rechercher les Macs locaux</string>
   <string name="finding_local_macs">Recherche de Macs locaux…</string>
+  <string name="backup_restore">Sauvegarde et restauration</string>
+  <string name="backup_settings_title">Paramètres de sauvegarde et de restauration</string>
+  <string name="backup_settings_help">Exportez toutes les connexions, les identifiants, les clés SSH et le PIN dans un fichier chiffré, ou restaurez à partir d\'une sauvegarde.</string>
+  <string name="export_backup">Exporter la sauvegarde chiffrée</string>
+  <string name="restore_backup">Restaurer depuis une sauvegarde</string>
+  <string name="backup_passphrase_title">Phrase de passe de la sauvegarde chiffrée</string>
+  <string name="backup_passphrase_help">Saisissez une phrase de passe robuste pour chiffrer votre sauvegarde. Cette phrase de passe est nécessaire pour restaurer vos paramètres et vos secrets sur n\'importe quel appareil.</string>
+  <string name="backup_passphrase_label">Phrase de passe de sauvegarde</string>
+  <string name="backup_passphrase_confirm_label">Confirmer la phrase de passe</string>
+  <string name="backup_passphrase_mismatch">Les phrases de passe ne correspondent pas.</string>
+  <string name="backup_passphrase_empty">Veuillez saisir une phrase de passe.</string>
+  <string name="restore_passphrase_title">Saisir la phrase de passe de sauvegarde</string>
+  <string name="restore_passphrase_help">Saisissez la phrase de passe utilisée lors de la création de ce fichier de sauvegarde.</string>
+  <string name="backup_export_success">Sauvegarde enregistrée avec succès.</string>
+  <string name="backup_export_failed">Échec de l\'exportation de la sauvegarde : %1$s</string>
+  <string name="backup_restore_success">Restauration terminée (%1$d profils, %2$d identifiants, %3$d clés SSH restaurés).</string>
+  <string name="backup_restore_failed">Échec de la restauration : %1$s</string>
+  <string name="backup_invalid_passphrase">Phrase de passe incorrecte ou fichier de sauvegarde corrompu.</string>
+  <string name="storage_permission_needed_backup">L\'accès au stockage est nécessaire pour enregistrer ou charger des fichiers de sauvegarde. Veuillez accorder les autorisations de stockage.</string>
+  <string name="grant_permission">Accorder l\'autorisation</string>
 </resources>

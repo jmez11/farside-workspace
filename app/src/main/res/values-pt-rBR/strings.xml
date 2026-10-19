@@ -610,4 +610,24 @@
   <string name="window_manager">Gerenciador de janelas</string>
   <string name="find_local_macs">Clique aqui para localizar Macs locais</string>
   <string name="finding_local_macs">Localizando Macs locais...</string>
+  <string name="backup_restore">Backup e restauração</string>
+  <string name="backup_settings_title">Configurações de backup e restauração</string>
+  <string name="backup_settings_help">Exporte todas as conexões, credenciais, chaves SSH e o PIN para um arquivo criptografado, ou restaure a partir de um backup.</string>
+  <string name="export_backup">Exportar backup criptografado</string>
+  <string name="restore_backup">Restaurar a partir de um backup</string>
+  <string name="backup_passphrase_title">Frase de segurança do backup criptografado</string>
+  <string name="backup_passphrase_help">Digite uma frase de segurança forte para criptografar seu backup. Essa frase de segurança é necessária para restaurar suas configurações e segredos em qualquer dispositivo.</string>
+  <string name="backup_passphrase_label">Frase de segurança do backup</string>
+  <string name="backup_passphrase_confirm_label">Confirmar frase de segurança</string>
+  <string name="backup_passphrase_mismatch">As frases de segurança não coincidem.</string>
+  <string name="backup_passphrase_empty">Digite uma frase de segurança.</string>
+  <string name="restore_passphrase_title">Digitar frase de segurança do backup</string>
+  <string name="restore_passphrase_help">Digite a frase de segurança usada ao criar este arquivo de backup.</string>
+  <string name="backup_export_success">Backup salvo com sucesso.</string>
+  <string name="backup_export_failed">Falha ao exportar o backup: %1$s</string>
+  <string name="backup_restore_success">Restauração concluída (%1$d perfis, %2$d credenciais, %3$d chaves SSH restaurados).</string>
+  <string name="backup_restore_failed">Falha na restauração: %1$s</string>
+  <string name="backup_invalid_passphrase">Frase de segurança incorreta ou arquivo de backup corrompido.</string>
+  <string name="storage_permission_needed_backup">É necessário acesso ao armazenamento para salvar ou carregar arquivos de backup. Conceda as permissões de armazenamento.</string>
+  <string name="grant_permission">Conceder permissão</string>
 </resources>

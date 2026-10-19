@@ -612,4 +612,24 @@
   <string name="find_local_macs">ここをクリックしてローカルMacを検索</string>
   <!-- UNCERTAIN: "used 'Mac' not 'Macs'; Japanese does not mark plurals" -->
   <string name="finding_local_macs">ローカルのMacを検索中…</string>
+  <string name="backup_restore">バックアップと復元</string>
+  <string name="backup_settings_title">バックアップと復元の設定</string>
+  <string name="backup_settings_help">すべての接続、認証情報、SSHキー、PINを暗号化ファイルにエクスポート、またはバックアップから復元します。</string>
+  <string name="export_backup">暗号化バックアップをエクスポート</string>
+  <string name="restore_backup">バックアップから復元</string>
+  <string name="backup_passphrase_title">暗号化バックアップのパスフレーズ</string>
+  <string name="backup_passphrase_help">バックアップを暗号化するための強力なパスフレーズを入力してください。このパスフレーズは、どのデバイスでも設定とシークレットを復元するために必要です。</string>
+  <string name="backup_passphrase_label">バックアップのパスフレーズ</string>
+  <string name="backup_passphrase_confirm_label">パスフレーズの確認</string>
+  <string name="backup_passphrase_mismatch">パスフレーズが一致しません。</string>
+  <string name="backup_passphrase_empty">パスフレーズを入力してください。</string>
+  <string name="restore_passphrase_title">バックアップのパスフレーズを入力</string>
+  <string name="restore_passphrase_help">このバックアップファイルの作成時に使用したパスフレーズを入力してください。</string>
+  <string name="backup_export_success">バックアップを保存しました。</string>
+  <string name="backup_export_failed">バックアップのエクスポートに失敗しました: %1$s</string>
+  <string name="backup_restore_success">復元が完了しました（%1$d件のプロファイル、%2$d件の認証情報、%3$d件のSSHキーを復元）。</string>
+  <string name="backup_restore_failed">復元に失敗しました: %1$s</string>
+  <string name="backup_invalid_passphrase">パスフレーズが正しくないか、バックアップファイルが破損しています。</string>
+  <string name="storage_permission_needed_backup">バックアップファイルの保存または読み込みにはストレージへのアクセスが必要です。ストレージの権限を許可してください。</string>
+  <string name="grant_permission">権限を許可</string>
 </resources>

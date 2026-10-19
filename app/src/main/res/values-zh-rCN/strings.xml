@@ -612,4 +612,24 @@
   <string name="find_local_macs">点击此处查找本地Mac</string>
   <!-- UNCERTAIN: "used 'Mac' not 'Macs'; Chinese does not mark plurals" -->
   <string name="finding_local_macs">正在查找本地Mac…</string>
+  <string name="backup_restore">备份与恢复</string>
+  <string name="backup_settings_title">备份与恢复设置</string>
+  <string name="backup_settings_help">将所有连接、凭据、SSH 密钥和 PIN 导出到加密文件，或从备份恢复。</string>
+  <string name="export_backup">导出加密备份</string>
+  <string name="restore_backup">从备份恢复</string>
+  <string name="backup_passphrase_title">加密备份口令</string>
+  <string name="backup_passphrase_help">输入高强度口令以加密备份。在任何设备上恢复设置和密钥都需要此口令。</string>
+  <string name="backup_passphrase_label">备份口令</string>
+  <string name="backup_passphrase_confirm_label">确认口令</string>
+  <string name="backup_passphrase_mismatch">两次输入的口令不一致。</string>
+  <string name="backup_passphrase_empty">请输入口令。</string>
+  <string name="restore_passphrase_title">输入备份口令</string>
+  <string name="restore_passphrase_help">输入创建此备份文件时使用的口令。</string>
+  <string name="backup_export_success">备份已保存。</string>
+  <string name="backup_export_failed">备份导出失败：%1$s</string>
+  <string name="backup_restore_success">恢复完成（已恢复 %1$d 个配置文件、%2$d 个凭据、%3$d 个 SSH 密钥）。</string>
+  <string name="backup_restore_failed">恢复失败：%1$s</string>
+  <string name="backup_invalid_passphrase">口令不正确或备份文件已损坏。</string>
+  <string name="storage_permission_needed_backup">保存或加载备份文件需要存储访问权限。请授予存储权限。</string>
+  <string name="grant_permission">授予权限</string>
 </resources>
