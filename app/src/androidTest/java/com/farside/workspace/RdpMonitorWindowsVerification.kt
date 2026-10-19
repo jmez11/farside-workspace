@@ -337,7 +337,7 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
             }
             fun verifyUiPointer(monitor: RdpMonitor, label: String) {
                 await("$label layout and fade settled") {
-                    !session.transition.active && !session.busy && session.inputReady && node(context.getString(R.string.rdp_adjusting)) == null
+                    !session.transition.active && !session.busy && session.inputReady && node(context.getString(R.string.loading)) == null
                 }
                 val activity = checkNotNull(monitor.host.get())
                 var before: Bitmap? = null
@@ -562,7 +562,7 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
                 check(session.transition.active && !first.hasButtons && !session.drag.active)
             }
             report.put("adjustmentReleasesHeldButtonBeforeMask",true)
-            await("Adjusting mask") { node(context.getString(R.string.rdp_adjusting)) != null }
+            await("animated loading mask") { node(context.getString(R.string.loading)) != null }
             Thread.sleep(250)
             val adjustmentShot = Bitmap.createBitmap(firstActivity.window.decorView.width,firstActivity.window.decorView.height,Bitmap.Config.ARGB_8888)
             val copyDone = java.util.concurrent.CountDownLatch(1)
@@ -574,9 +574,13 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
             report.put("resizeShowsAdjustingMask",true)
             await("secondary resize") { var ready = false; main { ready = !session.busy && second.rect.width == 1024 && second.rect.height == 768 }; ready }
             settled(2)
-            check(node(context.getString(R.string.rdp_adjusting)) == null)
+            check(node(context.getString(R.string.loading)) == null)
             report.put("adjustmentMaskClearsAfterConfirmedDraw",true)
             record("secondary-resized")
+            if (test.arguments?.getString("rdpTransitionOnly") == "true") {
+                report.put("result","PASS")
+                return "Loading indicator shown during resize and removed after stable drawing; two desktops, carry and input remain functional."
+            }
             // Shared media values change immediately in both windows without another native connection.
             click(context.getString(R.string.mute_speakers))
             await("session mute state") { session.speakerMuted.value }
@@ -700,7 +704,7 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
             await("pending invalid placement keeps confirmed windows interactive") {
                 session.layoutSubmissions > beforeFailure && session.busy && session.inputReady
             }
-            await("pending layout has Adjusting mask") { node(context.getString(R.string.rdp_adjusting)) != null }
+            await("pending layout has loading mask") { node(context.getString(R.string.loading)) != null }
             val masked = session.monitors.last { it.visible && it.surface != null }
             val maskedActivity = checkNotNull(masked.host.get())
             var maskedDeliveries = 0

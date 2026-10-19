@@ -630,7 +630,6 @@
     <string name="backup_invalid_passphrase">Incorrect passphrase or corrupted backup file.</string>
     <string name="storage_permission_needed_backup">Storage access is needed to save or load backup files. Please grant storage permissions.</string>
     <string name="grant_permission">Grant Permission</string>
-    <string name="rdp_adjusting">Adjusting</string>
     <string name="rdp_add_desktop">Add desktop</string>
     <string name="rdp_carry_content">Pick up content, then drop in another desktop</string>
     <string name="rdp_cancel_carry">Cancel content move</string>

@@ -6,7 +6,7 @@ James confirms the layout/carry build works well on Quest 3S, including the hand
 
 - [ ] With controllers and hand tracking, add, move, resize and close desktop windows; minimize/restore through Home and confirm the shared session survives.
 - [ ] Repeat opening four desktops, wall-place the fourth and restore the automatically minimized panel. Confirm all views/input remain independent and layout recovers automatically; Add stays an Add button.
-- [ ] Check the frozen, dimmed ?Adjusting? view during resize, layout and desktop add/remove, including rapid successive changes; confirm one smooth fade back to usable desktops.
+- [ ] Check the frozen, dimmed loading-spinner view during resize, layout and desktop add/remove, including rapid successive changes; confirm one smooth fade back to usable desktops.
 - [ ] Move panels left/right/above/below, including primary and mixed sizes, and confirm the host follows after settling. Automated host-reset/crop/surface fixtures do not establish physical wall placement or Home gestures.
 - [ ] Cross-gap controller/hand content dragging: wearer reports it did not work (2026-10-19); native handoff now starts 64px from an edge and reaches both windows in automation, but physical gap traversal needs retesting. Separate hand-icon pick-up/drop received positive wearer feedback; keep ordinary in-panel dragging functional.
 - [ ] Use zoom and keyboard input across monitors; check focus changes and held modifiers.

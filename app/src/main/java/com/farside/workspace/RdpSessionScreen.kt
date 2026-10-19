@@ -728,8 +728,10 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                         })
                 }
                 Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = adjustmentDim)))
-                Text(stringResource(R.string.rdp_adjusting), color = Color.White,
-                    style = MaterialTheme.typography.titleMedium, modifier = Modifier.alpha(adjustmentDim / .48f))
+                val loadingDescription = stringResource(R.string.loading)
+                CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp,
+                    modifier = Modifier.size(28.dp).alpha(adjustmentDim / .48f)
+                        .semantics { contentDescription = loadingDescription })
             }
         }
 
