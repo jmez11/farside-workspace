@@ -76,6 +76,8 @@ internal object RdpMonitorLayouts {
 
 internal class RdpMonitor(val session: RdpMonitorSession, val id: Long) : DesktopSessionConnection {
     var rect by mutableStateOf(RdpMonitorRect(id, 0, 0, 1920, 1080))
+    // Captures the currently displayed buffer before a coordinated topology change.
+    var freezeFrame: (() -> Unit)? = null
     var requestedWidth = 1920
     var requestedHeight = 1080
     private val heldKeys = mutableSetOf<Int>()
@@ -190,6 +192,16 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
         private set
     var inputReady = true
         private set
+    val transition = RdpLayoutTransition()
+    private fun beginAdjustment() {
+        transition.begin {
+            monitors.forEach { it.freezeFrame?.invoke() }
+            // The new mask may own the next UP. Never leave a held button preventing
+            // the layout request (which waits for button release) from starting.
+            drag.cancel()
+            monitors.forEach { it.releaseInput(mouseOnly = true) }
+        }
+    }
     val drag = RdpSessionDrag(this)
     private var panelPoints: Map<Long, RdpPanelPoint> = emptyMap()
     private var nextPoseRead = 0L
@@ -213,6 +225,7 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
     /** Re-read physical placement and reconcile both the remote topology and local outputs. */
     fun followPanelLayout() {
         if (closed || instance.value == 0L || busy || drag.active) return
+        beginAdjustment()
         nextPoseRead = 0; poseCandidate = null
         observePanels(SystemClock.elapsedRealtime(), immediate = true)
         retryBlocked = false; automaticRetries = 0; forceSync = true
@@ -255,7 +268,13 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
             posePoints[id]?.let { kotlin.math.hypot(p.x-it.x,p.y-it.y) > .025f } != false }) {
             poseCandidate = target; posePoints = points; poseSince = now; return
         }
-        if (now - poseSince >= 750 && points != panelPoints) { panelPoints = points; resizeAt = now + 300 }
+        if (now - poseSince >= 750 && points != panelPoints) {
+            if (!sameGeometry(target,committed) && !sameGeometry(target,rejectedTarget)) {
+                beginAdjustment()
+                if (retryBlocked) { retryBlocked = false; automaticRetries = 0; rejectedTarget = null }
+            }
+            panelPoints = points; resizeAt = now + 300
+        }
     }
     private var nextId = 1L
     private val main = Handler(Looper.getMainLooper())
@@ -300,6 +319,7 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
         val certificates = RdpCertificateVerifier(context, profile.host, profile.port, { certificateRequest.value = it })
         connection = RdpSessionConnection(context, profile, bridge, certificates, monitorMode = true,
             onDisconnected = { reason, established ->
+                transition.cancel()
                 canAdd = false; supportsAdditionalMonitors = false; inputReady = false
                 if (established || hasConnected.value) disconnectedReason.value = reason else failureReason.value = reason
             }, onStatus = { tunnelStatus.value = it }, onConnected = { handle ->
@@ -338,11 +358,14 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
     fun resize(monitor: RdpMonitor, width: Int, height: Int) {
         val w = width.coerceIn(200, 8192) and -2; val h = height.coerceIn(200, 8192)
         if (w == monitor.requestedWidth && h == monitor.requestedHeight) return
+        beginAdjustment()
+        if (retryBlocked) { retryBlocked = false; automaticRetries = 0; rejectedTarget = null }
         monitor.requestedWidth = w; monitor.requestedHeight = h
         resizeAt = SystemClock.elapsedRealtime() + 300
     }
     fun addWindow(activity: Activity) {
         if (!canAdd || closed || drag.active) return
+        beginAdjustment()
         val monitor = RdpMonitor(this, nextId++).also {
             it.requestedWidth = 1280; it.requestedHeight = 800
             it.launchDeadline = SystemClock.elapsedRealtime() + 10_000
@@ -365,6 +388,7 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
     }
     fun remove(monitor: RdpMonitor) {
         if (monitor !in monitors) return
+        beginAdjustment()
         drag.cancel()
         WindowLaunchMonitor.complete(monitor.launchRequest)
         monitor.launchSlot?.let { SessionWindowSlots.release(profile.id, it) }
@@ -452,6 +476,7 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
                 bridge.updateDisplay(handle, first().requestedWidth, first().requestedHeight, 1f)
                 resizeAt = now + 1500
             }
+            transition.settle(now, raw[4] == first().requestedWidth.toLong() && raw[5] == first().requestedHeight.toLong())
             return
         }
         if (committed.isEmpty() && count == 1) {
@@ -481,6 +506,7 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
         // carry the wrong crop while the host still reports the expected topology.
         if (inFlight == null && !forceSync && !retryBlocked && committed.isNotEmpty() && raw[0] == 1L &&
             (!RdpMonitorLayouts.matches(raw, committed) || revision != raw[7] || !painted || !outputsMatch(committed, revision))) {
+            beginAdjustment()
             drag.cancel(); monitors.forEach { it.releaseInput(mouseOnly = true) }
             inputReady = false; canAdd = false; busy = true
             if (RdpMonitorLayouts.matches(raw, committed)) {
@@ -502,6 +528,7 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
                 (recoveringLayout || !sameGeometry(target,rejectedTarget))) {
                 if (!recoveringLayout) rejectedTarget = null
                 fallbackTarget = null
+                beginAdjustment()
                 drag.cancel(); monitors.forEach { it.releaseInput(mouseOnly = true) }
                 inputReady = false; canAdd = false
                 if (forceSync) {
@@ -522,14 +549,20 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
         }
         // A pending/rejected placement does not invalidate the host's old layout.
         // Keep those confirmed crops interactive during the acknowledgement timeout.
-        // Freeze only while the actual atlas/crops disagree, including a GFX transition.
+        // Bridge input stays available on confirmed crops; the visual transition masks
+        // desktop touches until the final redraw has settled.
         inputReady = RdpMonitorLayouts.matches(raw, committed) && painted && outputsMatch(committed, revision)
+        val desired = targetLayout(readyMonitors())
+        val posesSettled = !visiblePoses.isSettling(now) && (poseCandidate == null || now - poseSince >= 750)
+        transition.settle(now, (!busy && inputReady && posesSettled &&
+            (sameGeometry(desired,committed) || sameGeometry(desired,rejectedTarget))) || retryBlocked)
         canAdd = profile.remoteApp.isNullOrBlank() && !layoutNeedsRetry && !busy && !drag.active && inputReady &&
             monitors.all { it.presented } && raw[0] == 1L && raw[8] == 1L &&
             monitors.size < minOf(raw[1], 16L) && RdpMonitorLayouts.valid(
                 RdpSpatialLayout.arrange(committed + RdpMonitorRect(-1, 0, 0, 1280, 800), panelPoints), raw[1].toInt(), raw[2], raw[3])
     }
     fun reconnect() {
+        transition.cancel()
         drag.cancel()
         monitors.forEach { it.releaseInput() }; keyboardOwner.value = null
         instance.value = 0L; canAdd = false; supportsAdditionalMonitors = false; inputReady = false; reconnecting = true
@@ -571,6 +604,7 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
     }
     private fun message(resource: Int) = Toast.makeText(context, resource, Toast.LENGTH_LONG).show()
     private fun close() {
+        transition.cancel()
         drag.cancel()
         closed = true; instance.value = 0L; canAdd = false
         main.removeCallbacks(poll); clipboard?.removePrimaryClipChangedListener(clipboardListener)

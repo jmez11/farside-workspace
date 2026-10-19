@@ -71,6 +71,29 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
     }
     fun geometryOnly(): String { geometryTests(); return "Monitor bounds, connectivity, stable wire IDs, unordered host matching, hidden-pose tracking and gesture ownership." }
     private fun geometryTests() {
+        val transition = RdpLayoutTransition()
+        var freezes = 0
+        transition.begin { freezes++ }
+        transition.settle(100,true); transition.settle(1500,true)
+        check(transition.active && freezes == 1)
+        transition.settle(1550,false); transition.settle(1600,true)
+        transition.begin { freezes++ } // a second resize/retry preserves the original frame
+        transition.settle(1700,true); transition.settle(3199,true)
+        check(transition.active && freezes == 1)
+        transition.settle(3200,true)
+        check(!transition.active)
+        transition.begin { freezes++ }; transition.cancel()
+        check(!transition.active && freezes == 2)
+        report.put("adjustmentCoalescesChangesAndWaitsForStableDraw",true)
+        val settlingTracker = RdpPanelPoseTracker()
+        val settlingPose = RdpPanelPose(0f,0f,0f,0f,0f,0f,1f,null)
+        settlingTracker.update(1,settlingPose,true,100)
+        check(settlingTracker.isSettling(849) && !settlingTracker.isSettling(850))
+        settlingTracker.update(1,settlingPose.copy(x=1f),true,900)
+        check(settlingTracker.isSettling(1000))
+        settlingTracker.update(1,null,false,1001)
+        check(!settlingTracker.isSettling(1001))
+
         val row = RdpMonitorLayouts.row(listOf(RdpMonitorRect(10, 0, 0, 1281, 800), RdpMonitorRect(11, 0, 0, 1024, 768)))
         check(row[0].width == 1280 && row[1].x == 1280)
         check(RdpMonitorLayouts.pointer(row[1], -40, 900) == (1280 to 767))
@@ -302,7 +325,7 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
                         val raw = native.getMonitorLayoutState(handle)
                         val surfaces = native.getMonitorSurfaceState(handle).toList().chunked(8)
                         val attached = session.monitors.filter { it.surface != null && it.visible }
-                        ready = session.instance.value == handle && session.bridge === native && !session.busy && (allowRetry || !session.layoutNeedsRetry) && session.inputReady &&
+                        ready = session.instance.value == handle && session.bridge === native && !session.busy && !session.transition.active && (allowRetry || !session.layoutNeedsRetry) && session.inputReady &&
                             session.monitors.size == count && raw.getOrNull(9) == count.toLong() && surfaces.size == attached.size &&
                             RdpMonitorLayouts.matches(RdpMonitorLayouts.normalized(raw),session.confirmedLayout) &&
                             attached.all { m -> surfaces.any { it[0] == m.id && it[1] == m.rect.x.toLong() && it[2] == m.rect.y.toLong() &&
@@ -310,8 +333,12 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
                     }
                     ready
                 }
+                Thread.sleep(400)
             }
             fun verifyUiPointer(monitor: RdpMonitor, label: String) {
+                await("$label layout and fade settled") {
+                    !session.transition.active && !session.busy && session.inputReady && node(context.getString(R.string.rdp_adjusting)) == null
+                }
                 val activity = checkNotNull(monitor.host.get())
                 var before: Bitmap? = null
                 var delivered = 0
@@ -409,12 +436,10 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
             val second = session.monitors.last()
             report.put("ordinaryPanelPoses", JSONArray(session.monitors.map { RdpPanelPose.read(checkNotNull(it.host.get()))?.toString() ?: "unavailable" }))
             fun followPlacement() {
-                session.monitors.forEach { m -> main { m.host.get()?.onWindowFocusChanged(true) } }
+                // Internal diagnostic hook; production follows settled poses automatically.
                 val before = session.layoutSubmissions
-                val action = context.getString(R.string.rdp_layout_auto)
-                await("follow panel placement toolbar") { node(action) != null }
-                click(action)
-                await("toolbar re-reads and resubmits layout") { var ready = false; main { ready = session.layoutSubmissions > before && !session.busy && !session.layoutNeedsRetry }; ready }
+                main { session.followPanelLayout() }
+                await("internal layout resubmission") { session.layoutSubmissions > before }
                 settled(session.monitors.size)
             }
             followPlacement()
@@ -507,7 +532,9 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
                 main { session.drag.cancel();if(runOpened){first.bridge.sendKeyEvent(handle,1,true);first.bridge.sendKeyEvent(handle,1,false)} }
                 beforeRun.values.forEach { it.recycle() }
             }
-            report.put("followPlacementToolbarWithoutDialog",true)
+            check(node(context.getString(R.string.rdp_layout_auto)) == null)
+            check(node(context.getString(R.string.rdp_retry_layout)) == null)
+            report.put("manualLayoutButtonsRemoved",true)
             await("automatic layout from ordinary actual panel poses") {
                 var ready = false
                 main {
@@ -528,8 +555,27 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
             val outputs = native.getMonitorSurfaceState(handle).toList().chunked(8)
             check(outputs.single { it[0] == second.id }[1] == first.rect.width.toLong())
             check(RdpMonitorLayouts.pointer(second.rect, 0, 0).first == first.rect.width)
-            main { session.resize(second, 1024, 768) }
+            main {
+                first.bridge.sendMouseEvent(handle,1000,500,FreeRDPBridge.PTR_FLAGS_BUTTON1 or FreeRDPBridge.PTR_FLAGS_DOWN)
+                check(first.hasButtons)
+                session.resize(second, 1024, 768)
+                check(session.transition.active && !first.hasButtons && !session.drag.active)
+            }
+            report.put("adjustmentReleasesHeldButtonBeforeMask",true)
+            await("Adjusting mask") { node(context.getString(R.string.rdp_adjusting)) != null }
+            Thread.sleep(250)
+            val adjustmentShot = Bitmap.createBitmap(firstActivity.window.decorView.width,firstActivity.window.decorView.height,Bitmap.Config.ARGB_8888)
+            val copyDone = java.util.concurrent.CountDownLatch(1)
+            var copyResult = -1
+            main { android.view.PixelCopy.request(firstActivity.window,adjustmentShot,{ result -> copyResult=result;copyDone.countDown() },android.os.Handler(android.os.Looper.getMainLooper())) }
+            check(copyDone.await(5,java.util.concurrent.TimeUnit.SECONDS) && copyResult == android.view.PixelCopy.SUCCESS)
+            File(directory,"adjusting-resize.png").outputStream().use { adjustmentShot.compress(Bitmap.CompressFormat.PNG,100,it) }
+            adjustmentShot.recycle()
+            report.put("resizeShowsAdjustingMask",true)
             await("secondary resize") { var ready = false; main { ready = !session.busy && second.rect.width == 1024 && second.rect.height == 768 }; ready }
+            settled(2)
+            check(node(context.getString(R.string.rdp_adjusting)) == null)
+            report.put("adjustmentMaskClearsAfterConfirmedDraw",true)
             record("secondary-resized")
             // Shared media values change immediately in both windows without another native connection.
             click(context.getString(R.string.mute_speakers))
@@ -654,7 +700,20 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
             await("pending invalid placement keeps confirmed windows interactive") {
                 session.layoutSubmissions > beforeFailure && session.busy && session.inputReady
             }
-            verifyUiPointer(session.monitors.last { it.visible && it.surface != null },"uiPointerDuringPendingLayout")
+            await("pending layout has Adjusting mask") { node(context.getString(R.string.rdp_adjusting)) != null }
+            val masked = session.monitors.last { it.visible && it.surface != null }
+            val maskedActivity = checkNotNull(masked.host.get())
+            var maskedDeliveries = 0
+            main {
+                maskedActivity.onTouchDebug = { _,_,_,_ -> maskedDeliveries++ }
+                val view=maskedActivity.window.decorView; val now=android.os.SystemClock.uptimeMillis()
+                val down=android.view.MotionEvent.obtain(now,now,android.view.MotionEvent.ACTION_DOWN,view.width/2f,view.height/2f,0)
+                val up=android.view.MotionEvent.obtain(now,now+100,android.view.MotionEvent.ACTION_UP,view.width/2f,view.height/2f,0)
+                try { maskedActivity.dispatchTouchEvent(down);maskedActivity.dispatchTouchEvent(up) }
+                finally { down.recycle();up.recycle();maskedActivity.onTouchDebug=null }
+                check(maskedDeliveries == 0 && !masked.hasButtons) { "Frozen desktop accepted a hidden click" }
+            }
+            report.put("adjustmentMaskBlocksStaleDesktopTouches",true)
             await("automatic retry then actionable layout error") {
                 var ready = false
                 main { ready = !session.layoutNeedsRetry && !session.busy && session.inputReady && session.canAdd &&
@@ -662,6 +721,7 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
                 ready
             }
             settled(4,allowRetry = true)
+            verifyUiPointer(masked,"uiPointerAfterAdjustmentRecovery")
             val recoveredSubmissions = session.layoutSubmissions
             Thread.sleep(1500)
             check(session.inputReady && session.layoutSubmissions == recoveredSubmissions)
@@ -679,39 +739,12 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
             }
             settled(4,allowRetry = true)
             report.put("missingHostMonitorsRecoveredWithSimpleRow",true)
-            // Send actual remote input through a recovered secondary's bridge and
-            // require new host pixels in its cropped outputs, not only ready flags.
+            // Exercise the visible recovered crop directly. Win+R can reopen on a
+            // Home-minimized monitor because Windows remembers its last location.
             val inputMonitor = session.monitors.last { it.visible && it.surface != null }
-            val beforeInput = mutableMapOf<Long,Bitmap>()
-            main { session.monitors.filter { it.visible && it.surface != null }.forEach { m ->
-                texture(checkNotNull(m.host.get()).window.decorView)?.bitmap?.let { beforeInput[m.id] = it }
-            } }
-            try {
-                main { inputMonitor.bridge.sendKeyEvent(handle,0x15b,true)
-                    inputMonitor.bridge.sendKeyEvent(handle,0x13,true)
-                    inputMonitor.bridge.sendKeyEvent(handle,0x13,false)
-                    inputMonitor.bridge.sendKeyEvent(handle,0x15b,false) }
-                await("recovered secondary input changes remote desktop pixels",10_000) {
-                    var changed = 0
-                    main { beforeInput.forEach { (id,before) ->
-                        val m = session.monitors.first { it.id == id }
-                        texture(checkNotNull(m.host.get()).window.decorView)?.bitmap?.let { after ->
-                            if (after.width == before.width && after.height == before.height) {
-                                for (y in 0 until before.height step 10) for (x in 0 until before.width step 10)
-                                    if (before.getPixel(x,y) != after.getPixel(x,y)) changed++
-                            }
-                            after.recycle()
-                        }
-                    } }
-                    changed > 200
-                }
-                report.put("recoveredSecondaryRemoteInputChangesPixels",true)
-            } finally {
-                main { inputMonitor.bridge.sendKeyEvent(handle,1,true); inputMonitor.bridge.sendKeyEvent(handle,1,false) }
-                beforeInput.values.forEach { it.recycle() }
-            }
-            // Returning to the already confirmed placement clears Retry without a
-            // redundant host request. Then re-enter failure for the actual toolbar check.
+            verifyUiPointer(inputMonitor,"recoveredSecondaryRemoteInputChangesPixels")
+            // Returning to the confirmed placement restores Add without a redundant request.
+            // Recovery remains automatic with no manual layout controls.
             val beforeReturn = session.layoutSubmissions
             main { pointsField.set(session,session.monitors.associate { m ->
                     m.id to RdpPanelPoint(m.rect.x / 1280f,-m.rect.y / 800f) })
@@ -723,14 +756,16 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
             main { session.resize(fourth,8192,8192) }
             await("recovered Add after second invalid request") { !session.busy && !session.layoutNeedsRetry && session.inputReady && session.layoutSubmissions > beforeReturn }
             session.monitors.forEach { m -> main { m.host.get()?.onWindowFocusChanged(true) } }
-            val retryLabel = context.getString(R.string.rdp_layout_auto)
-            await("retry layout toolbar action") { node(retryLabel) != null }
-            click(retryLabel)
+            check(node(context.getString(R.string.rdp_layout_auto)) == null)
+            check(node(context.getString(R.string.rdp_retry_layout)) == null)
             main { session.resize(fourth,originalWidth,originalHeight) }
             settled(4)
             check(!session.layoutNeedsRetry && session.canAdd && session.monitors.map { it.id } == ids)
-            report.put("automaticRetryAndToolbarRecovery",true)
+            report.put("automaticRecoveryWithoutLayoutButtons",true)
             record("four-recovered",allowMinimized = true)
+            // Revealing a toolbar is separate from layout recovery; the removed
+            // Follow action previously did this as a side effect before the capture.
+            session.monitors.forEach { m -> main { m.host.get()?.onWindowFocusChanged(true) } }
             await("Add remains available after recovery") { node(context.getString(R.string.rdp_add_desktop)) != null }
             click(context.getString(R.string.rdp_add_desktop))
             settled(5)
@@ -852,7 +887,7 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
             await("last monitor tears down session") { session.instance.value == 0L && session.monitors.isEmpty() }
             check(capture.isClosed)
             report.put("lastWindowClosed", true).put("result", "PASS")
-            return "Four same-session desktops; follow-placement toolbar, automatic host/crop recovery, bounded retry and retry toolbar, surface restore, resize, reconnect, shared ownership and teardown."
+            return "Five same-session desktops; automatic placement/recovery, frozen Adjusting transitions, content carry, surface restore, resize, reconnect, shared ownership and teardown."
         } catch (error: Throwable) {
             runtime?.let { session -> main {
                 val handle = session.instance.value

@@ -120,5 +120,6 @@ internal class RdpPanelPoseTracker {
         if (changed) candidates[id] = Candidate(pose,now)
         if (!changed && now-checkNotNull(previous).since >= 750) settled[id] = pose
     }
+    fun isSettling(now: Long) = candidates.values.any { now - it.since < 750 }
     fun poses(ids: List<Long>): List<RdpPanelPose>? = ids.map { settled[it] ?: return null }
 }

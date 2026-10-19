@@ -5,6 +5,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.pluralStringResource
 import android.os.Bundle
 import android.util.Log
+import android.graphics.Bitmap
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import android.graphics.SurfaceTexture
 import android.view.TextureView
 import android.view.Surface
@@ -108,6 +112,27 @@ internal fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Lo
 internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Unit, onClose: () -> Unit,
     windowInteraction: Long = 0L, onBridgeCreated: ((DesktopSessionBridge) -> Unit)? = null, monitor: RdpMonitor? = null) {
     val runtime = monitor?.session
+    var desktopTexture by remember { mutableStateOf<TextureView?>(null) }
+    var frozenDesktop by remember { mutableStateOf<Bitmap?>(null) }
+    val adjusting = runtime?.transition?.active == true
+    // The frozen image covers live buffers immediately; only its dimming fades in.
+    val adjustmentFade = remember { androidx.compose.animation.core.Animatable(0f) }
+    val adjustmentDim by animateFloatAsState(if (adjusting) .48f else 0f, tween(240), label = "Adjustment dim")
+    LaunchedEffect(adjusting) {
+        if (adjusting) adjustmentFade.snapTo(1f)
+        else { adjustmentFade.animateTo(0f,tween(320)); frozenDesktop = null }
+    }
+    DisposableEffect(monitor) {
+        monitor?.freezeFrame = {
+            if (frozenDesktop == null) desktopTexture?.takeIf { it.isAvailable }?.let { view ->
+                // Bound the retained GPU readback while keeping the window aspect ratio.
+                val scale = minOf(1f,1600f / view.width.coerceAtLeast(1),1000f / view.height.coerceAtLeast(1))
+                frozenDesktop = runCatching { view.getBitmap((view.width*scale).toInt().coerceAtLeast(1),
+                    (view.height*scale).toInt().coerceAtLeast(1)) }.getOrNull()
+            }
+        }
+        onDispose { monitor?.freezeFrame = null; desktopTexture = null; frozenDesktop = null }
+    }
     val isVnc = session.type == ConnectionType.VNC
     val protocolName = stringResource(if (isVnc) R.string.protocol_vnc else R.string.protocol_rdp)
     val sharedProfile = runtime?.configuredProfile
@@ -467,13 +492,13 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
     // TextureView fills immediately; ask the server for matching resolution once resizing settles.
     LaunchedEffect(rdpInstance, currentWidth, currentHeight) {
         if (!isVnc && rdpInstance != 0L && currentWidth > 0 && currentHeight > 0) {
-            delay(300)
             val targetWidth = currentWidth.coerceIn(200, 8192) and -2
             val targetHeight = currentHeight.coerceIn(200, 8192)
             if (monitor != null) {
                 rdpBridge.updateDisplay(rdpInstance, targetWidth, targetHeight, 1f)
                 return@LaunchedEffect
             }
+            delay(300)
             // Windows can ignore a layout while its initial GFX reset is in flight.
             // Stop after acknowledgement; a new window size cancels this whole effect.
             repeat(4) {
@@ -540,6 +565,8 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
             }
         )
     }
+
+    LaunchedEffect(adjusting) { if (adjusting) input.cancel() }
 
     val dragPoint by rememberUpdatedState(desktopPoint)
     DisposableEffect(monitor) {
@@ -625,6 +652,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
             },
             factory = { viewContext ->
                 TextureView(viewContext).apply {
+                    desktopTexture = this
                     layoutParams = android.view.ViewGroup.LayoutParams(
                         android.view.ViewGroup.LayoutParams.MATCH_PARENT,
                         android.view.ViewGroup.LayoutParams.MATCH_PARENT)
@@ -688,6 +716,23 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                 }
         )
         
+        if (adjusting || adjustmentFade.value > 0f) {
+            Box(Modifier.fillMaxSize().graphicsLayer { alpha = if (adjusting) 1f else adjustmentFade.value }
+                .background(Color(0xFF15191E))
+                .pointerInteropFilter { true }, contentAlignment = androidx.compose.ui.Alignment.Center) {
+                frozenDesktop?.let { bitmap ->
+                    Image(remember(bitmap) { bitmap.asImageBitmap() }, contentDescription = null,
+                        contentScale = ContentScale.FillBounds,
+                        modifier = Modifier.fillMaxSize().graphicsLayer {
+                            scaleX = zoom; scaleY = zoom; translationX = panX; translationY = panY
+                        })
+                }
+                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = adjustmentDim)))
+                Text(stringResource(R.string.rdp_adjusting), color = Color.White,
+                    style = MaterialTheme.typography.titleMedium, modifier = Modifier.alpha(adjustmentDim / .48f))
+            }
+        }
+
         holdPoint?.takeIf { holdProgress > 0f }?.let { point ->
             Canvas(Modifier.fillMaxSize()) {
                 val half = (8.dp.toPx() + 8.dp.toPx() * holdProgress)
@@ -757,21 +802,14 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                                 modifier = Modifier.size(iconSize), tint = if (selected) Color(0xFFFFC107) else Color.White)
                         }
                     }
-                    if (runtime != null && (runtime.supportsAdditionalMonitors || runtime.layoutNeedsRetry)) {
-                        val retry = runtime.layoutNeedsRetry
-                        val enabled = if (retry) runtime.canRetryLayout else runtime.canAdd
+                    if (runtime != null && runtime.supportsAdditionalMonitors) {
                         IconButton(onClick = {
-                            if (retry) runtime.followPanelLayout() else (context as? android.app.Activity)?.let { runtime.addWindow(it) }
+                            (context as? android.app.Activity)?.let { runtime.addWindow(it) }
                             revealToolbar()
-                        }, enabled = enabled, modifier = Modifier.size(buttonSize)) {
-                            Icon(if (retry) Icons.Default.Refresh else Icons.Default.AddToQueue,
-                                stringResource(if (retry) R.string.rdp_retry_layout else R.string.rdp_add_desktop), modifier = Modifier.size(iconSize),
-                                tint = if (enabled) Color.White else Color.Gray)
+                        }, enabled = runtime.canAdd, modifier = Modifier.size(buttonSize)) {
+                            Icon(Icons.Default.AddToQueue, stringResource(R.string.rdp_add_desktop), modifier = Modifier.size(iconSize),
+                                tint = if (runtime.canAdd) Color.White else Color.Gray)
                         }
-                    }
-                    if (monitor != null && runtime != null && runtime.monitors.size > 1) IconButton(
-                        onClick = { runtime.followPanelLayout(); revealToolbar() }, enabled = runtime.canRetryLayout, modifier = Modifier.size(buttonSize)) {
-                        Icon(Icons.Default.SwapHoriz, stringResource(R.string.rdp_layout_auto), modifier = Modifier.size(iconSize), tint = Color.White)
                     }
                     if (!isVnc) IconButton(onClick = { speakerMuted = !speakerMuted; revealToolbar() }, modifier = Modifier.size(buttonSize)) {
                         Icon(if (speakerMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
