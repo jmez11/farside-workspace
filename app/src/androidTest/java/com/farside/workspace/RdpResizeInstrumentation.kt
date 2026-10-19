@@ -118,8 +118,8 @@ class RdpResizeInstrumentation : Instrumentation() {
     override fun onStart() {
         val results = Bundle()
         try {
-            jumpArgs?.getString("rdpMonitorProbe")?.let { mode ->
-                results.putString("stream", "PASS: ${RdpMonitorProbeVerification(this).run(mode)}\n")
+            if (jumpArgs?.getString("rdpMonitorsOnly") == "true") {
+                results.putString("stream", "PASS: ${RdpMonitorWindowsVerification(this).run()}\n")
                 finish(0, results)
                 return
             }

@@ -630,4 +630,7 @@
     <string name="backup_invalid_passphrase">Incorrect passphrase or corrupted backup file.</string>
     <string name="storage_permission_needed_backup">Storage access is needed to save or load backup files. Please grant storage permissions.</string>
     <string name="grant_permission">Grant Permission</string>
+    <string name="rdp_add_desktop">Add desktop</string>
+    <string name="rdp_monitor_layout_failed">The server did not confirm the monitor change. The primary window now shows the full remote desktop. Reconnect to try again.</string>
+    <string name="rdp_monitor_limit">This monitor layout exceeds the session display limits.</string>
 </resources>

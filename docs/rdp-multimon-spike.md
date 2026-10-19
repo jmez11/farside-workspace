@@ -1,4 +1,6 @@
-# RDP dynamic monitor investigation
+# RDP dynamic monitor investigation (historical)
+
+Production implementation now supersedes this spike: see [RDP desktop windows](rdp-multi-monitor.md). The standalone probe below describes commit `705a9cd`; its temporary entry points have been retired in favor of `rdpMonitorsOnly`.
 
 ## Scope and isolation
 

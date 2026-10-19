@@ -21,12 +21,20 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** One consent decision per RDP session. Native waits on its channel thread, never the UI. */
-internal class DisplayCapturePermission(private val activity: ComponentActivity) : AutoCloseable {
+internal class DisplayCapturePermission(activity: ComponentActivity) : AutoCloseable {
+    private val context = activity.applicationContext
+    private var consentHost = java.lang.ref.WeakReference(this)
+    private var consentOwner: java.lang.ref.WeakReference<DisplayCapturePermission>? = null
+    private var consentRequest: Request? = null
+    fun useHost(host: DisplayCapturePermission) { consentHost = java.lang.ref.WeakReference(host) }
+    fun resetSession() { close(); asked = false; denied = false; closed = false }
+    fun detachHost() { launcher?.unregister(); launcher = null }
     private val main = Handler(Looper.getMainLooper())
-    private val manager by lazy { activity.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager }
+    private val manager by lazy { context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager }
     private var asked = false
     private var denied = false
     private var closed = false
+    internal val isClosed get() = closed
     private var token: Intent? = null
     private var pending: Request? = null
     private var bound = false
@@ -65,17 +73,25 @@ internal class DisplayCapturePermission(private val activity: ComponentActivity)
         }
     }
 
-    private val launcher = activity.registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+    private var launcher: androidx.activity.result.ActivityResultLauncher<Intent>? =
+        activity.registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            val owner = consentOwner?.get()
+            val request = consentRequest
+            consentRequest = null; consentOwner = null
+            if (owner != null && request != null) owner.onConsent(result.resultCode, result.data, request)
+        }
+
+    private fun onConsent(resultCode: Int, data: Intent?, expected: Request) {
         val request = pending
-        if (closed || denied || request == null || request.finished.get()) return@registerForActivityResult
-        if (result.resultCode != Activity.RESULT_OK || result.data == null) {
+        if (closed || denied || request == null || request !== expected || request.finished.get()) return
+        if (resultCode != Activity.RESULT_OK || data == null) {
             denied = true
             Log.i(TAG, "Display consent denied; no further prompts in this session")
             finish(request, false)
         } else {
-            token = result.data
+            token = data
             try {
-                bound = activity.applicationContext.bindService(Intent(activity, DisplayCaptureService::class.java), connection, Context.BIND_AUTO_CREATE)
+                bound = context.bindService(Intent(context, DisplayCaptureService::class.java), connection, Context.BIND_AUTO_CREATE)
                 if (!bound) { denied = true; finish(request, false) }
             } catch (error: Exception) {
                 Log.w(TAG, "Cannot bind projection foreground service", error)
@@ -99,7 +115,14 @@ internal class DisplayCapturePermission(private val activity: ComponentActivity)
                     asked = true
                     consentRequests++
                     Log.i(TAG, "Requesting display consent")
-                    try { launcher.launch(manager.createScreenCaptureIntent()) }
+                    try {
+                        val host = checkNotNull(consentHost.get()) { "No live desktop for display consent" }
+                        check(host.consentRequest == null) { "A previous display consent is still pending" }
+                        host.consentOwner = java.lang.ref.WeakReference(this)
+                        host.consentRequest = request
+                        try { checkNotNull(host.launcher).launch(manager.createScreenCaptureIntent()) }
+                        catch (error: Exception) { host.consentRequest = null; host.consentOwner = null; throw error }
+                    }
                     catch (error: Exception) { Log.w(TAG, "Cannot launch display consent", error); denied = true; finish(request, false) }
                 }
             }
@@ -143,7 +166,7 @@ internal class DisplayCapturePermission(private val activity: ComponentActivity)
                         }
                     }, main)
                     Hub.display = capture.createVirtualDisplay("Farside Headset Display", 1280, 720,
-                        activity.resources.displayMetrics.densityDpi, DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                        context.resources.displayMetrics.densityDpi, DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
                         next, null, main)
                     displayCreations++
                 } else Hub.display?.surface = next
@@ -185,7 +208,7 @@ internal class DisplayCapturePermission(private val activity: ComponentActivity)
         if (Hub.granted.isEmpty()) Hub.release()
         token = null
         foreground = false
-        if (bound) { bound = false; activity.applicationContext.unbindService(connection) }
+        if (bound) { bound = false; context.unbindService(connection) }
     }
 
     /** Horizon has one compositor producer. Consent decisions remain per session. */

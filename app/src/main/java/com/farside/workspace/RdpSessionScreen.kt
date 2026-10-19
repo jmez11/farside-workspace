@@ -27,6 +27,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.AddToQueue
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -94,24 +95,27 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalComposeUiApi::class)
 @Composable
-fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Unit, onClose: () -> Unit, windowInteraction: Long = 0L, onBridgeCreated: ((FreeRDPBridge) -> Unit)? = null) {
+internal fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Unit, onClose: () -> Unit, windowInteraction: Long = 0L, onBridgeCreated: ((FreeRDPBridge) -> Unit)? = null, monitor: RdpMonitor? = null) {
     DesktopSessionScreen(session, onInstanceCreated, onClose, windowInteraction,
-        { (it as? FreeRDPBridge)?.let { bridge -> onBridgeCreated?.invoke(bridge) } })
+        { onBridgeCreated?.invoke(monitor?.session?.bridge ?: (it as FreeRDPBridge)) }, monitor)
 }
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalComposeUiApi::class)
 @Composable
 internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Unit, onClose: () -> Unit,
-    windowInteraction: Long = 0L, onBridgeCreated: ((DesktopSessionBridge) -> Unit)? = null) {
+    windowInteraction: Long = 0L, onBridgeCreated: ((DesktopSessionBridge) -> Unit)? = null, monitor: RdpMonitor? = null) {
+    val runtime = monitor?.session
     val isVnc = session.type == ConnectionType.VNC
     val protocolName = stringResource(if (isVnc) R.string.protocol_vnc else R.string.protocol_rdp)
+    val sharedProfile = runtime?.configuredProfile
+    val closeConnection = { if (runtime != null) runtime.closeWindows() else onClose() }
     val permissionContext = LocalContext.current
     val windowManagerAvailable = remember(permissionContext) { QuestWindowManager.isAvailable(permissionContext) }
     var microphoneReady by remember(session.id) {
-        mutableStateOf(!session.redirectMicrophone || hasMicrophonePermission(permissionContext))
+        mutableStateOf(sharedProfile != null || !session.redirectMicrophone || hasMicrophonePermission(permissionContext))
     }
     var microphoneAllowed by remember(session.id) {
-        mutableStateOf(session.redirectMicrophone && hasMicrophonePermission(permissionContext))
+        mutableStateOf((sharedProfile ?: session).redirectMicrophone && hasMicrophonePermission(permissionContext))
     }
     val microphonePermission = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
@@ -124,10 +128,10 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
     }
 
     var cameraReady by remember(session.id) {
-        mutableStateOf(!session.enableCamera || hasCameraPermission(permissionContext))
+        mutableStateOf(sharedProfile != null || !session.enableCamera || hasCameraPermission(permissionContext))
     }
     var cameraAllowed by remember(session.id) {
-        mutableStateOf(session.enableCamera && hasCameraPermission(permissionContext))
+        mutableStateOf((sharedProfile ?: session).enableCamera && hasCameraPermission(permissionContext))
     }
     val cameraPermission = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
@@ -140,10 +144,10 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
     }
 
     var storageReady by remember(session.id) {
-        mutableStateOf(!session.redirectStorage || hasStoragePermission(permissionContext))
+        mutableStateOf(sharedProfile != null || !session.redirectStorage || hasStoragePermission(permissionContext))
     }
     var storageAllowed by remember(session.id) {
-        mutableStateOf(session.redirectStorage && hasStoragePermission(permissionContext))
+        mutableStateOf((sharedProfile ?: session).redirectStorage && hasStoragePermission(permissionContext))
     }
     val storagePermission = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
@@ -174,10 +178,10 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
         )
     }
     var reconnectAttempt by remember { mutableIntStateOf(0) }
-    val rdpBridge: DesktopSessionBridge = remember(session.id, reconnectAttempt) {
-        (if (isVnc) VncBridge() else FreeRDPBridge()).also { onBridgeCreated?.invoke(it) }
+    val rdpBridge: DesktopSessionBridge = remember(session.id, reconnectAttempt, runtime?.bridge) {
+        (monitor?.bridge ?: if (isVnc) VncBridge() else FreeRDPBridge()).also { onBridgeCreated?.invoke(it) }
     }
-    var rdpInstance by remember { mutableStateOf(0L) }
+    var rdpInstance by (runtime?.instance ?: remember { mutableStateOf<Long>(0L) })
     val context = LocalContext.current
     val rdpClipboardLabel = stringResource(R.string.rdp_clipboard_label)
     val pairedSshId = remember(session.sftpPairProfileId) {
@@ -185,15 +189,15 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
             .firstOrNull { it.id == session.sftpPairProfileId && it.type == ConnectionType.SSH }?.id else null
     }
     var showVncFiles by remember { mutableStateOf(false) }
-    var certificateRequest by remember { mutableStateOf<RdpCertificateRequest?>(null) }
-    var connectionFailed by remember { mutableStateOf(false) }
-    var connectFailureReason by remember { mutableStateOf("") }
-    var disconnectedReason by remember { mutableStateOf<String?>(null) }
-    var hasConnected by remember(session.id) { mutableStateOf(false) }
-    var autoReconnect by remember(session.id) { mutableStateOf(session.reconnectAutomatically) }
-    var tunnelStatus by remember { mutableStateOf("") }
+    var certificateRequest by (runtime?.certificateRequest ?: remember { mutableStateOf<RdpCertificateRequest?>(null) })
+    var connectionFailed by (runtime?.connectionFailed ?: remember { mutableStateOf<Boolean>(false) })
+    var connectFailureReason by (runtime?.failureReason ?: remember { mutableStateOf<String>("") })
+    var disconnectedReason by (runtime?.disconnectedReason ?: remember { mutableStateOf<String?>(null) })
+    var hasConnected by (runtime?.hasConnected ?: remember(session.id) { mutableStateOf<Boolean>(false) })
+    var autoReconnect by (runtime?.autoReconnect ?: remember(session.id) { mutableStateOf<Boolean>(session.reconnectAutomatically) })
+    var tunnelStatus by (runtime?.tunnelStatus ?: remember { mutableStateOf<String>("") })
     val certificates = remember(session.id, reconnectAttempt) {
-        RdpCertificateVerifier(context, session.host, session.port, { certificateRequest = it })
+        if (runtime == null) RdpCertificateVerifier(context, session.host, session.port, { certificateRequest = it }) else null
     }
     val connection: DesktopSessionConnection = remember(session.id, reconnectAttempt) {
         val ended: (String, Boolean) -> Unit = { reason, established ->
@@ -209,12 +213,13 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
             connectionFailed = it == 0L && !hasConnected
             onInstanceCreated(it)
         }
-        if (isVnc) VncSessionConnection(context, effectiveSession, rdpBridge as VncBridge, ended, status, connected)
-        else RdpSessionConnection(context, effectiveSession, rdpBridge as FreeRDPBridge, certificates, ended, status, connected)
+        if (monitor != null) { runtime!!.configure(effectiveSession); monitor.windowConnection() }
+        else if (isVnc) VncSessionConnection(context, effectiveSession, rdpBridge as VncBridge, ended, status, connected)
+        else RdpSessionConnection(context, effectiveSession, rdpBridge as FreeRDPBridge, certificates!!, onDisconnected = ended, onStatus = status, onConnected = connected)
     }
     DisposableEffect(connection) {
         onDispose {
-            rdpInstance = 0L
+            if (runtime == null) rdpInstance = 0L
             connection.close()
         }
     }
@@ -229,8 +234,10 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
         }
     }
 
+    LaunchedEffect(rdpInstance, runtime?.bridge) { if (runtime != null) onInstanceCreated(rdpInstance) }
+
     // Bidirectional RDP Clipboard Synchronization
-    if (session.redirectClipboard) {
+    if (session.redirectClipboard && runtime == null) {
         DisposableEffect(context, rdpInstance) {
             val clipboardManager = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
             var lastSentClipText: String? = null
@@ -286,18 +293,19 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
             }
         }
     }
+    if (monitor == null || runtime!!.isOwner(monitor)) {
     certificateRequest?.let { RdpCertificateDialog(it) }
     if (tunnelStatus.isNotEmpty() && !connectionFailed && disconnectedReason == null) AlertDialog(
         onDismissRequest = {},
         title = { Text(stringResource(R.string.cloudflared)) },
         text = { Text(tunnelStatus) },
-        confirmButton = { TextButton(onClick = onClose) { Text(stringResource(R.string.cancel)) } },
+        confirmButton = { TextButton(onClick = closeConnection) { Text(stringResource(R.string.cancel)) } },
     )
     if (connectionFailed) AlertDialog(
-        onDismissRequest = { (context as? android.app.Activity)?.finish() },
+        onDismissRequest = closeConnection,
         title = { Text(stringResource(R.string.connection_failed)) },
         text = { Text(connectFailureReason.ifBlank { stringResource(R.string.protocol_connection_failed, protocolName) }) },
-        confirmButton = { TextButton(onClick = { (context as? android.app.Activity)?.finish() }) { Text(stringResource(R.string.close)) } },
+        confirmButton = { TextButton(onClick = closeConnection) { Text(stringResource(R.string.close)) } },
     )
     disconnectedReason?.let { reason ->
         ReconnectDialog(
@@ -309,13 +317,20 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                 ProfileManager(context).getProfiles().firstOrNull { it.id == session.id }
                     ?.let { ProfileManager(context).updateProfile(it.copy(reconnectAutomatically = enabled)) }
             },
-            onReconnect = { disconnectedReason = null; connectFailureReason = ""; reconnectAttempt++ },
-            onCancel = { disconnectedReason = null; onClose() },
+            onReconnect = { if (runtime != null) runtime.reconnect() else { disconnectedReason = null; connectFailureReason = ""; reconnectAttempt++ } },
+            onCancel = { disconnectedReason = null; closeConnection() },
         )
+    }
     }
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     var showSoftKeyboard by remember { mutableStateOf(false) }
+    LaunchedEffect(showSoftKeyboard) {
+        if (showSoftKeyboard && monitor != null) runtime!!.keyboardOwner.value = monitor.id
+    }
+    LaunchedEffect(runtime?.keyboardOwner?.value) {
+        if (monitor != null && runtime!!.keyboardOwner.value != monitor.id) showSoftKeyboard = false
+    }
     val imeVisible = WindowInsets.isImeVisible
     var panelImeVisible by remember { mutableStateOf(false) }
     val keyboardVisible = imeVisible || panelImeVisible
@@ -354,8 +369,8 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
     val density = LocalDensity.current
     var offsetY by remember { mutableStateOf(with(density) { 16.dp.toPx() }) }
     var showZoomSlider by remember { mutableStateOf(false) }
-    var speakerMuted by remember { mutableStateOf(false) }
-    var micMuted by remember { mutableStateOf(false) }
+    var speakerMuted by (runtime?.speakerMuted ?: remember { mutableStateOf<Boolean>(false) })
+    var micMuted by (runtime?.micMuted ?: remember { mutableStateOf<Boolean>(false) })
     var micRecording by remember { mutableStateOf(false) }
     val hostCapabilities = remember(session.host) { RdpHostCapabilities(context) }
     var micHostUnsupported by remember(session.host) {
@@ -373,7 +388,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
         }
     }
 
-    var cameraMuted by remember { mutableStateOf(false) }
+    var cameraMuted by (runtime?.cameraMuted ?: remember { mutableStateOf<Boolean>(false) })
     var cameraRecording by remember { mutableStateOf(false) }
     var cameraHostUnsupported by remember(session.host) {
         mutableStateOf(hostCapabilities.cameraUnsupported(session.host))
@@ -451,6 +466,10 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
             delay(300)
             val targetWidth = currentWidth.coerceIn(200, 8192) and -2
             val targetHeight = currentHeight.coerceIn(200, 8192)
+            if (monitor != null) {
+                rdpBridge.updateDisplay(rdpInstance, targetWidth, targetHeight, 1f)
+                return@LaunchedEffect
+            }
             // Windows can ignore a layout while its initial GFX reset is in flight.
             // Stop after acknowledgement; a new window size cancels this whole effect.
             repeat(4) {
@@ -699,6 +718,12 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                         revealToolbar()
                     }, modifier = Modifier.size(buttonSize)) {
                         Icon(Icons.Default.Dashboard, stringResource(R.string.window_manager), modifier = Modifier.size(iconSize), tint = Color.White)
+                    }
+                    if (runtime != null && runtime.supportsAdditionalMonitors) IconButton(
+                        onClick = { (context as? android.app.Activity)?.let { runtime.addWindow(it) }; revealToolbar() },
+                        enabled = runtime.canAdd, modifier = Modifier.size(buttonSize)) {
+                        Icon(Icons.Default.AddToQueue, stringResource(R.string.rdp_add_desktop), modifier = Modifier.size(iconSize),
+                            tint = if (runtime.canAdd) Color.White else Color.Gray)
                     }
                     if (!isVnc) IconButton(onClick = { speakerMuted = !speakerMuted; revealToolbar() }, modifier = Modifier.size(buttonSize)) {
                         Icon(if (speakerMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,

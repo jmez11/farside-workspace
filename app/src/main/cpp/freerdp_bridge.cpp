@@ -59,19 +59,27 @@ static const char* gfx_codec_name(UINT32 codecId) {
     }
 }
 
-#ifndef NDEBUG
-// Temporary protocol investigation; no production monitor/window behavior.
-struct DisplayProbeState {
+// Session-owned display negotiation; GFX supplies authoritative topology.
+struct DisplayLayoutState {
     bool active = false;
     bool gfx = false;
     UINT32 maxMonitors = 0, areaA = 0, areaB = 0;
     UINT sendResult = CHANNEL_RC_OK;
     uint64_t revision = 0;
+    uint64_t paintedRevision = 0;
     pcRdpgfxResetGraphics originalReset = nullptr;
     std::vector<DISPLAY_CONTROL_MONITOR_LAYOUT> pending;
     std::vector<MONITOR_DEF> confirmed;
 };
-#endif
+
+struct MonitorOutput {
+    int64_t id;
+    ANativeWindow* window;
+    int x, y, width, height;
+    uint64_t revision;
+    uint64_t postedRevision = 0;
+    uint64_t postedFrames = 0;
+};
 
 struct RdpContext {
     rdpContext _p;
@@ -93,9 +101,8 @@ struct RdpContext {
     std::mutex windowMutex;
     DispClientContext* disp;
     std::mutex displayMutex;
-#ifndef NDEBUG
-    DisplayProbeState* displayProbe;
-#endif
+    DisplayLayoutState* displayLayout;
+    std::vector<MonitorOutput>* monitorOutputs;
     bool displayReady;
     std::atomic<uint64_t> pendingDisplay;
     std::atomic<int> desktopWidth, desktopHeight;
@@ -263,26 +270,25 @@ static UINT logging_surface_command(RdpgfxClientContext* context, const RDPGFX_S
     return ctx->origSurfaceCommand ? ctx->origSurfaceCommand(context, cmd) : CHANNEL_RC_OK;
 }
 
-#ifndef NDEBUG
-static UINT probe_reset_graphics(RdpgfxClientContext* context, const RDPGFX_RESET_GRAPHICS_PDU* reset) {
+static UINT monitor_reset_graphics(RdpgfxClientContext* context, const RDPGFX_RESET_GRAPHICS_PDU* reset) {
     auto* gdi = static_cast<rdpGdi*>(context->custom);
     auto* ctx = gdi ? reinterpret_cast<RdpContext*>(gdi->context) : nullptr;
-    if (!ctx || !ctx->displayProbe || !ctx->displayProbe->originalReset) return ERROR_INTERNAL_ERROR;
-    const UINT result = ctx->displayProbe->originalReset(context, reset);
+    if (!ctx || !ctx->displayLayout || !ctx->displayLayout->originalReset) return ERROR_INTERNAL_ERROR;
+    const UINT result = ctx->displayLayout->originalReset(context, reset);
     if (result == CHANNEL_RC_OK && reset->monitorCount <= 16 &&
         (reset->monitorCount == 0 || reset->monitorDefArray)) {
         std::lock_guard<std::mutex> lock(ctx->displayMutex);
-        auto* probe = ctx->displayProbe;
+        auto* probe = ctx->displayLayout;
         probe->confirmed.clear();
         if (reset->monitorCount) probe->confirmed.assign(reset->monitorDefArray, reset->monitorDefArray + reset->monitorCount);
         probe->gfx = true;
         ++probe->revision;
-        LOGI("RDP_MONITOR_PROBE: confirmed revision=%llu monitors=%u framebuffer=%ux%u",
+        LOGI("RDP_MONITORS: confirmed revision=%llu monitors=%u framebuffer=%ux%u",
              static_cast<unsigned long long>(probe->revision), reset->monitorCount, reset->width, reset->height);
     }
     return result;
 }
-#endif
+
 
 
 #include <freerdp/addin.h>
@@ -422,7 +428,11 @@ static BOOL client_end_paint(rdpContext* context) {
     auto* gdi = context->gdi;
     if (gdi && gdi->primary && gdi->primary->hdc && gdi->primary->hdc->hwnd) {
         auto* hwnd = gdi->primary->hdc->hwnd;
-        if (hwnd->ninvalid > 0 || !hwnd->invalid->null) ctx->dirty = true;
+        if (hwnd->ninvalid > 0 || !hwnd->invalid->null) {
+            std::lock_guard<std::mutex> lock(ctx->displayMutex);
+            ctx->displayLayout->paintedRevision = ctx->displayLayout->revision;
+            ctx->dirty = true;
+        }
         hwnd->invalid->null = TRUE;
         hwnd->ninvalid = 0;
     }
@@ -496,47 +506,63 @@ static BOOL client_post_connect(freerdp* instance) {
             for (int y = 0; y < height; ++y)
                 memcpy(pixels.data() + static_cast<size_t>(y) * width * 4,
                        gdi->primary_buffer + static_cast<size_t>(y) * gdi->stride, width * 4);
+            uint64_t revision, paintedRevision;
+            {
+                std::lock_guard<std::mutex> lock(ctx->displayMutex);
+                revision = ctx->displayLayout->revision;
+                paintedRevision = ctx->displayLayout->paintedRevision;
+            }
             ctx->dirty = false;
             rdp_update_unlock(instance->context->update);
 
 
+            std::vector<MonitorOutput> outputs;
             {
                 std::lock_guard<std::mutex> lock(ctx->windowMutex);
-                for (auto* window : ctx->windows) {
-                    if (!window) continue;
-                    // getWidth/getHeight report the consumer's default, which can change
-                    // before the producer buffer size. Track our actual geometry requests.
-                    auto& configured = bufferSizes[window];
-                    if (configured.first != width || configured.second != height) {
-                        if (ANativeWindow_setBuffersGeometry(window, width, height, WINDOW_FORMAT_RGBA_8888) != 0)
-                            continue;
-                        configured = {width, height};
-                        LOGI("RDP_BUFFER: configured %dx%d", width, height);
-                    }
-                    ANativeWindow_Buffer buffer;
-                    if (ANativeWindow_lock(window, &buffer, nullptr) != 0) continue;
-                    // A consumer resize can race the producer geometry update. Fill the
-                    // whole destination even for that transitional buffer.
-                    if (buffer.width == width && buffer.height == height) {
-                        for (int y = 0; y < height; ++y)
-                            memcpy(static_cast<uint8_t*>(buffer.bits) + static_cast<size_t>(y) * buffer.stride * 4,
-                                   pixels.data() + static_cast<size_t>(y) * width * 4, width * 4);
-                    } else {
-                        configured = {0, 0};
-                        // Our FreeRDP build has no swscale/Cairo scaler. Fill a rare
-                        // transitional buffer directly, then reapply geometry next frame.
-                        for (int y = 0; y < buffer.height; ++y) {
-                            const int srcY = static_cast<int>(static_cast<int64_t>(y) * height / buffer.height);
-                            auto* dst = static_cast<uint8_t*>(buffer.bits) + static_cast<size_t>(y) * buffer.stride * 4;
-                            for (int x = 0; x < buffer.width; ++x) {
-                                const int srcX = static_cast<int>(static_cast<int64_t>(x) * width / buffer.width);
-                                memcpy(dst + x * 4, pixels.data() + (static_cast<size_t>(srcY) * width + srcX) * 4, 4);
-                            }
-                        }
-                        ctx->dirty = true;
-                    }
-                    ANativeWindow_unlockAndPost(window);
+                for (auto* window : ctx->windows) if (window)
+                    outputs.push_back({0, window, 0, 0, width, height, 0});
+                for (auto output : *ctx->monitorOutputs) {
+                    if (output.revision && (output.revision != revision || paintedRevision != revision)) continue;
+                    if (output.x < 0 || output.y < 0 || output.width <= 0 || output.height <= 0 ||
+                        output.x + output.width > width || output.y + output.height > height) continue;
+                    outputs.push_back(output);
                 }
+                for (auto& output : outputs) ANativeWindow_acquire(output.window);
+            }
+            // Retained references allow a window to detach without blocking the session lock
+            // while Home waits for a producer buffer.
+            for (auto& output : outputs) {
+                auto* window = output.window;
+                const int w = output.width, h = output.height;
+                auto& configured = bufferSizes[window];
+                if (configured != std::make_pair(w, h)) {
+                    if (ANativeWindow_setBuffersGeometry(window, w, h, WINDOW_FORMAT_RGBA_8888) != 0) {
+                        ANativeWindow_release(window); continue;
+                    }
+                    configured = {w, h};
+                }
+                ANativeWindow_Buffer buffer;
+                if (ANativeWindow_lock(window, &buffer, nullptr) == 0) {
+                    for (int y = 0; y < buffer.height; ++y) {
+                        const int srcY = output.y + static_cast<int>(static_cast<int64_t>(y) * h / buffer.height);
+                        auto* dst = static_cast<uint8_t*>(buffer.bits) + static_cast<size_t>(y) * buffer.stride * 4;
+                        const auto* src = pixels.data() + (static_cast<size_t>(srcY) * width + output.x) * 4;
+                        if (buffer.width == w) memcpy(dst, src, w * 4);
+                        else for (int x = 0; x < buffer.width; ++x)
+                            memcpy(dst + x * 4, src + static_cast<size_t>(static_cast<int64_t>(x) * w / buffer.width) * 4, 4);
+                    }
+                    if (ANativeWindow_unlockAndPost(window) == 0 && output.id != 0) {
+                        std::lock_guard<std::mutex> lock(ctx->windowMutex);
+                        for (auto& live : *ctx->monitorOutputs) if (live.id == output.id && live.window == window && live.revision == output.revision) {
+                            live.postedRevision = revision; ++live.postedFrames;
+                        }
+                    }
+                }
+                ANativeWindow_release(window);
+            }
+            for (auto it = bufferSizes.begin(); it != bufferSizes.end();) {
+                if (std::none_of(outputs.begin(), outputs.end(), [&](const MonitorOutput& o) { return o.window == it->first; })) it = bufferSizes.erase(it);
+                else ++it;
             }
             const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
             totalMs += ms;
@@ -575,9 +601,10 @@ static void destroy_client(freerdp* instance, bool connected) {
     ctx->storagePath.~basic_string();
     ctx->windows.~vector();
     ctx->windowMutex.~mutex();
-#ifndef NDEBUG
-    delete ctx->displayProbe;
-#endif
+    for (auto& output : *ctx->monitorOutputs) if (output.window) ANativeWindow_release(output.window);
+    delete ctx->monitorOutputs;
+    delete ctx->displayLayout;
+
     ctx->displayMutex.~mutex();
     ctx->pendingDisplay.~atomic();
     ctx->desktopWidth.~atomic();
@@ -691,9 +718,9 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
     new (&ctx->network_thread) std::thread();
     new (&ctx->network_running) std::atomic<bool>(false);
     new (&ctx->displayMutex) std::mutex();
-#ifndef NDEBUG
-    ctx->displayProbe = new DisplayProbeState();
-#endif
+    ctx->displayLayout = new DisplayLayoutState();
+    ctx->monitorOutputs = new std::vector<MonitorOutput>();
+
     new (&ctx->pendingDisplay) std::atomic<uint64_t>(0);
     new (&ctx->desktopWidth) std::atomic<int>(1920);
     new (&ctx->desktopHeight) std::atomic<int>(1080);
@@ -716,8 +743,10 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
         // Display 0 window: ANativeWindow_fromSurface acquires a reference now owned by
         // ctx->windows. Released in destroy_client() or when setSurface() replaces it.
         ANativeWindow* win = ANativeWindow_fromSurface(env, surface);
-        ANativeWindow_setBuffersGeometry(win, 1920, 1080, WINDOW_FORMAT_RGBA_8888);
-        ctx->windows.push_back(win);
+        if (win) {
+            ANativeWindow_setBuffersGeometry(win, 1920, 1080, WINDOW_FORMAT_RGBA_8888);
+            ctx->windows.push_back(win);
+        }
     }
     
     LOGI("Getting strings");
@@ -824,12 +853,11 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
                 auto* ctx = static_cast<RdpContext*>(disp->custom);
                 std::lock_guard<std::mutex> lock(ctx->displayMutex);
                 ctx->displayReady = true;
-#ifndef NDEBUG
-                ctx->displayProbe->maxMonitors = count;
-                ctx->displayProbe->areaA = areaA;
-                ctx->displayProbe->areaB = areaB;
-                LOGI("RDP_MONITOR_PROBE: capabilities maxMonitors=%u areaA=%u areaB=%u", count, areaA, areaB);
-#endif
+                ctx->displayLayout->maxMonitors = count;
+                ctx->displayLayout->areaA = areaA;
+                ctx->displayLayout->areaB = areaB;
+                LOGI("RDP_MONITORS: capabilities maxMonitors=%u areaA=%u areaB=%u", count, areaA, areaB);
+
                 return CHANNEL_RC_OK;
             };
         } else if (strcmp(e->name, RDPGFX_DVC_CHANNEL_NAME) == 0) {
@@ -838,10 +866,9 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
             if (gdi && gfx && gdi_graphics_pipeline_init(gdi, gfx)) {
                 ctx->origSurfaceCommand = gfx->SurfaceCommand;
                 gfx->SurfaceCommand = logging_surface_command;
-#ifndef NDEBUG
-                ctx->displayProbe->originalReset = gfx->ResetGraphics;
-                gfx->ResetGraphics = probe_reset_graphics;
-#endif
+                ctx->displayLayout->originalReset = gfx->ResetGraphics;
+                gfx->ResetGraphics = monitor_reset_graphics;
+
                 for (auto& c : ctx->codecCounts) c = 0;
                 LOGI("RDP_CODEC: GFX pipeline initialized - server will use GFX codecs");
             } else {
@@ -1106,17 +1133,16 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
             {
                 std::lock_guard<std::mutex> lock(ctx->displayMutex);
                 if (ctx->disp && ctx->displayReady) {
-#ifndef NDEBUG
-                    if (ctx->displayProbe->active) {
+                    if (ctx->displayLayout->active) {
                         ctx->pendingDisplay = 0;
-                        auto& layouts = ctx->displayProbe->pending;
+                        auto& layouts = ctx->displayLayout->pending;
                         if (!layouts.empty()) {
-                            ctx->displayProbe->sendResult = ctx->disp->SendMonitorLayout(ctx->disp, layouts.size(), layouts.data());
-                            LOGI("RDP_MONITOR_PROBE: submitted monitors=%zu result=%u", layouts.size(), ctx->displayProbe->sendResult);
+                            ctx->displayLayout->sendResult = ctx->disp->SendMonitorLayout(ctx->disp, layouts.size(), layouts.data());
+                            LOGI("RDP_MONITORS: submitted monitors=%zu result=%u", layouts.size(), ctx->displayLayout->sendResult);
                             layouts.clear();
                         }
                     } else
-#endif
+
                     {
                     const uint64_t pending = ctx->pendingDisplay.exchange(0);
                     if (pending) {
@@ -1250,10 +1276,9 @@ Java_com_farside_workspace_FreeRDPBridge_updateDisplay(
     
     freerdp* instance = (freerdp*)instance_ptr;
     auto* ctx = (RdpContext*)instance->context;
-#ifndef NDEBUG
     std::lock_guard<std::mutex> lock(ctx->displayMutex);
-    if (ctx->displayProbe->active) return;
-#endif
+    if (ctx->displayLayout->active) return;
+
     
     // Debounced by Compose. The network thread sends after display capabilities arrive.
     const uint32_t w = std::clamp(static_cast<int>(width), 200, 8192) & ~1;
@@ -1263,44 +1288,38 @@ Java_com_farside_workspace_FreeRDPBridge_updateDisplay(
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_com_farside_workspace_FreeRDPBridge_setDisplayProbeActive(JNIEnv*, jobject, jlong handle, jboolean active) {
-#ifndef NDEBUG
+Java_com_farside_workspace_FreeRDPBridge_setMonitorLayoutActive(JNIEnv*, jobject, jlong handle, jboolean active) {
     if (!handle) return JNI_FALSE;
     auto* ctx = reinterpret_cast<RdpContext*>(reinterpret_cast<freerdp*>(handle)->context);
     std::lock_guard<std::mutex> lock(ctx->displayMutex);
-    ctx->displayProbe->active = active == JNI_TRUE;
-    ctx->displayProbe->pending.clear();
+    ctx->displayLayout->active = active == JNI_TRUE;
+    ctx->displayLayout->pending.clear();
     ctx->pendingDisplay = 0;
     return JNI_TRUE;
-#else
-    return JNI_FALSE;
-#endif
 }
 
 extern "C" JNIEXPORT jlongArray JNICALL
-Java_com_farside_workspace_FreeRDPBridge_getDisplayProbeState(JNIEnv* env, jobject, jlong handle) {
+Java_com_farside_workspace_FreeRDPBridge_getMonitorLayoutState(JNIEnv* env, jobject, jlong handle) {
     std::vector<jlong> values;
-#ifndef NDEBUG
     if (handle) {
         auto* ctx = reinterpret_cast<RdpContext*>(reinterpret_cast<freerdp*>(handle)->context);
         std::lock_guard<std::mutex> lock(ctx->displayMutex);
-        auto* p = ctx->displayProbe;
+        auto* p = ctx->displayLayout;
         values = {ctx->displayReady, p->maxMonitors, p->areaA, p->areaB,
                   ctx->desktopWidth.load(), ctx->desktopHeight.load(), p->sendResult,
                   static_cast<jlong>(p->revision), p->gfx, static_cast<jlong>(p->confirmed.size())};
         for (const auto& monitor : p->confirmed) {
             values.insert(values.end(), {monitor.left, monitor.top, monitor.right, monitor.bottom, monitor.flags});
         }
+        values.push_back(p->paintedRevision);
     }
-#endif
     auto result = env->NewLongArray(values.size());
     if (result && !values.empty()) env->SetLongArrayRegion(result, 0, values.size(), values.data());
     return result;
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_com_farside_workspace_FreeRDPBridge_requestDisplayProbeLayout(JNIEnv* env, jobject, jlong handle, jintArray input) {
-#ifndef NDEBUG
+Java_com_farside_workspace_FreeRDPBridge_requestMonitorLayout(JNIEnv* env, jobject, jlong handle, jintArray input) {
     if (!handle || !input) return JNI_FALSE;
     const jsize length = env->GetArrayLength(input);
     if (length < 5 || length % 5 || length > 16 * 5) return JNI_FALSE;
@@ -1309,7 +1328,7 @@ Java_com_farside_workspace_FreeRDPBridge_requestDisplayProbeLayout(JNIEnv* env, 
     if (env->ExceptionCheck()) return JNI_FALSE;
     auto* ctx = reinterpret_cast<RdpContext*>(reinterpret_cast<freerdp*>(handle)->context);
     std::lock_guard<std::mutex> lock(ctx->displayMutex);
-    auto* p = ctx->displayProbe;
+    auto* p = ctx->displayLayout;
     if (!p->active || !ctx->displayReady || length / 5 > p->maxMonitors || !p->areaA || !p->areaB) return JNI_FALSE;
     uint64_t budget = p->maxMonitors;
     if (budget > UINT64_MAX / p->areaA) return JNI_FALSE;
@@ -1321,11 +1340,11 @@ Java_com_farside_workspace_FreeRDPBridge_requestDisplayProbeLayout(JNIEnv* env, 
     int nextLeft = 0;
     for (jsize i = 0; i < length; i += 5) {
         const int left = raw[i], top = raw[i + 1], width = raw[i + 2], height = raw[i + 3], primary = raw[i + 4];
-        // The diagnostic intentionally supports only a contiguous top-aligned row.
+        // Stable client IDs are mapped to a contiguous top-aligned wire layout.
         if (left != nextLeft || top != 0 || width < 200 || width > 8192 || width % 2 ||
             height < 200 || height > 8192 || primary != (i == 0 ? 1 : 0) || left > 32766 - width) return JNI_FALSE;
         area += static_cast<uint64_t>(width) * height;
-        if (area > budget) return JNI_FALSE;
+        if (area > budget || area > 32ULL * 1024 * 1024) return JNI_FALSE;
         DISPLAY_CONTROL_MONITOR_LAYOUT layout = {};
         layout.Left = left; layout.Top = top; layout.Width = width; layout.Height = height;
         layout.Flags = primary ? DISPLAY_CONTROL_MONITOR_PRIMARY : 0;
@@ -1335,9 +1354,38 @@ Java_com_farside_workspace_FreeRDPBridge_requestDisplayProbeLayout(JNIEnv* env, 
     }
     p->pending = std::move(layouts);
     return JNI_TRUE;
-#else
-    return JNI_FALSE;
-#endif
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_farside_workspace_FreeRDPBridge_setMonitorSurface(JNIEnv* env, jobject, jlong handle, jlong id,
+        jobject surface, jint x, jint y, jint width, jint height, jlong revision) {
+    if (!handle) return;
+    auto* ctx = reinterpret_cast<RdpContext*>(reinterpret_cast<freerdp*>(handle)->context);
+    ANativeWindow* next = surface ? ANativeWindow_fromSurface(env, surface) : nullptr;
+    std::lock_guard<std::mutex> lock(ctx->windowMutex);
+    if (next && width > 0 && height > 0) ANativeWindow_setBuffersGeometry(next, width, height, WINDOW_FORMAT_RGBA_8888);
+    auto& outputs = *ctx->monitorOutputs;
+    for (auto it = outputs.begin(); it != outputs.end(); ++it) if (it->id == id) {
+        if (it->window) ANativeWindow_release(it->window);
+        outputs.erase(it);
+        break;
+    }
+    if (next) outputs.push_back({id, next, x, y, width, height, static_cast<uint64_t>(revision)});
+    ctx->dirty = true;
+}
+
+extern "C" JNIEXPORT jlongArray JNICALL
+Java_com_farside_workspace_FreeRDPBridge_getMonitorSurfaceState(JNIEnv* env, jobject, jlong handle) {
+    std::vector<jlong> values;
+    if (handle) {
+        auto* ctx = reinterpret_cast<RdpContext*>(reinterpret_cast<freerdp*>(handle)->context);
+        std::lock_guard<std::mutex> lock(ctx->windowMutex);
+        for (const auto& o : *ctx->monitorOutputs)
+            values.insert(values.end(), {o.id, o.x, o.y, o.width, o.height, static_cast<jlong>(o.revision), static_cast<jlong>(o.postedRevision), static_cast<jlong>(o.postedFrames)});
+    }
+    auto result = env->NewLongArray(values.size());
+    if (result && !values.empty()) env->SetLongArrayRegion(result, 0, values.size(), values.data());
+    return result;
 }
 
 extern "C" JNIEXPORT void JNICALL
