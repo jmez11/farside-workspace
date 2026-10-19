@@ -11,6 +11,34 @@ import android.view.accessibility.AccessibilityNodeInfo
 class CredentialUiVerification(private val instrumentation: Instrumentation) {
     private val automation get() = instrumentation.uiAutomation
 
+    fun verifyCameraResolutionColors(): String {
+        val context = instrumentation.targetContext
+        automation.serviceInfo = automation.serviceInfo.apply {
+            flags = flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+        }
+        val activity = instrumentation.startActivitySync(Intent(context, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
+        try {
+            val selected = androidx.compose.runtime.mutableStateOf(com.farside.workspace.data.CameraResolution.HD_720)
+            instrumentation.runOnMainSync {
+                activity.setContent {
+                    androidx.compose.material3.MaterialTheme(colorScheme = androidx.compose.material3.darkColorScheme()) {
+                        com.farside.workspace.ui.CameraResolutionSelector(selected.value, true) { selected.value = it }
+                    }
+                }
+            }
+            Thread.sleep(600)
+            for (resolution in com.farside.workspace.data.CameraResolution.entries) {
+                click(context.getString(resolution.labelResId))
+                instrumentation.runOnMainSync { check(selected.value == resolution) }
+                capture(activity, "camera-resolution-${resolution.name}.png")
+            }
+            return "PASS: all three enabled camera resolution choices update selection; selected-state PNGs captured."
+        } finally {
+            instrumentation.runOnMainSync { activity.finish() }
+        }
+    }
+
     fun verifyGeneralSettings(): String {
         automation.serviceInfo = automation.serviceInfo.apply {
             flags = flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS

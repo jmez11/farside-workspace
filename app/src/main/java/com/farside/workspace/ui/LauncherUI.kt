@@ -1454,8 +1454,8 @@ fun CameraResolutionSelector(
                     enabled = enabled,
                     label = { Text(stringResource(res.labelResId)) },
                     colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = Color.White,
-                        selectedLabelColor = Color.White,
+                        selectedContainerColor = MaterialTheme.colorScheme.primary,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
                         containerColor = Color(0xFF2C2C2E),
                         labelColor = Color.LightGray,
                         disabledContainerColor = Color(0xFF2C2C2E).copy(alpha = 0.35f),
