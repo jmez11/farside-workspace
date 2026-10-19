@@ -631,4 +631,13 @@
   <string name="storage_permission_needed_backup">Se necesita acceso al almacenamiento para guardar o cargar archivos de copia de seguridad. Conceda los permisos de almacenamiento.</string>
   <string name="grant_permission">Conceder permiso</string>
     <string name="connect_to_console">Conectar a la consola</string>
+  <string name="rdp_add_desktop">Añadir escritorio</string>
+  <string name="rdp_carry_content">Recoge el contenido y suéltalo en otro escritorio</string>
+  <string name="rdp_cancel_carry">Cancelar el movimiento del contenido</string>
+  <string name="rdp_monitor_placement_failed">Ventanas del escritorio recuperadas, pero el host no aceptó la colocación de los paneles.</string>
+  <string name="rdp_monitor_layout_failed">No se pudieron sincronizar las ventanas del escritorio. Usa «Reintentar diseño del escritorio».</string>
+  <string name="rdp_monitor_limit">Este diseño de monitores supera los límites de visualización de la sesión.</string>
+  <string name="rdp_desktop_number">Escritorio %1$d</string>
+  <string name="rdp_layout_auto">Seguir la colocación de los paneles</string>
+  <string name="rdp_retry_layout">Reintentar diseño del escritorio</string>
 </resources>

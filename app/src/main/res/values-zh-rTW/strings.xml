@@ -633,4 +633,13 @@
   <string name="storage_permission_needed_backup">儲存或載入備份檔案需要儲存存取權限。請授予儲存權限。</string>
   <string name="grant_permission">授予權限</string>
     <string name="connect_to_console">連線至主控台</string>
+  <string name="rdp_add_desktop">新增桌面</string>
+  <string name="rdp_carry_content">拿起內容，然後放到另一個桌面</string>
+  <string name="rdp_cancel_carry">取消移動內容</string>
+  <string name="rdp_monitor_placement_failed">桌面視窗已復原，但主機未接受面板放置。</string>
+  <string name="rdp_monitor_layout_failed">無法同步桌面視窗。請使用「重試桌面版面配置」。</string>
+  <string name="rdp_monitor_limit">此顯示器版面配置超出工作階段顯示限制。</string>
+  <string name="rdp_desktop_number">桌面 %1$d</string>
+  <string name="rdp_layout_auto">跟隨面板放置</string>
+  <string name="rdp_retry_layout">重試桌面版面配置</string>
 </resources>

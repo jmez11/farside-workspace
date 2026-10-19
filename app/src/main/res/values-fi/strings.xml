@@ -631,4 +631,13 @@
   <string name="storage_permission_needed_backup">Tallennustilan käyttöoikeus tarvitaan varmuuskopiotiedostojen tallentamiseen tai lataamiseen. Myönnä tallennustilan käyttöoikeudet.</string>
   <string name="grant_permission">Myönnä käyttöoikeus</string>
     <string name="connect_to_console">Yhdistä konsoliin</string>
+  <string name="rdp_add_desktop">Lisää työpöytä</string>
+  <string name="rdp_carry_content">Nosta sisältö ja pudota se toiselle työpöydälle</string>
+  <string name="rdp_cancel_carry">Peruuta sisällön siirto</string>
+  <string name="rdp_monitor_placement_failed">Työpöydän ikkunat palautettiin, mutta isäntä ei hyväksynyt paneelien sijoittelua.</string>
+  <string name="rdp_monitor_layout_failed">Työpöydän ikkunoita ei voitu synkronoida. Käytä toimintoa ”Yritä työpöydän asettelua uudelleen”.</string>
+  <string name="rdp_monitor_limit">Tämä näyttöasettelu ylittää istunnon näyttörajat.</string>
+  <string name="rdp_desktop_number">Työpöytä %1$d</string>
+  <string name="rdp_layout_auto">Seuraa paneelien sijoittelua</string>
+  <string name="rdp_retry_layout">Yritä työpöydän asettelua uudelleen</string>
 </resources>

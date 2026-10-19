@@ -631,4 +631,13 @@
   <string name="storage_permission_needed_backup">L\'accès au stockage est nécessaire pour enregistrer ou charger des fichiers de sauvegarde. Veuillez accorder les autorisations de stockage.</string>
   <string name="grant_permission">Accorder l\'autorisation</string>
     <string name="connect_to_console">Se connecter à la console</string>
+  <string name="rdp_add_desktop">Ajouter un bureau</string>
+  <string name="rdp_carry_content">Prenez le contenu, puis déposez-le dans un autre bureau</string>
+  <string name="rdp_cancel_carry">Annuler le déplacement du contenu</string>
+  <string name="rdp_monitor_placement_failed">Fenêtres du bureau récupérées, mais l\'hôte n\'a pas accepté le placement des panneaux.</string>
+  <string name="rdp_monitor_layout_failed">Impossible de synchroniser les fenêtres du bureau. Utilisez « Réessayer la disposition du bureau ».</string>
+  <string name="rdp_monitor_limit">Cette disposition des écrans dépasse les limites d\'affichage de la session.</string>
+  <string name="rdp_desktop_number">Bureau %1$d</string>
+  <string name="rdp_layout_auto">Suivre le placement des panneaux</string>
+  <string name="rdp_retry_layout">Réessayer la disposition du bureau</string>
 </resources>

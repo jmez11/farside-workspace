@@ -631,4 +631,13 @@
   <string name="storage_permission_needed_backup">É necessário acesso ao armazenamento para salvar ou carregar arquivos de backup. Conceda as permissões de armazenamento.</string>
   <string name="grant_permission">Conceder permissão</string>
     <string name="connect_to_console">Conectar ao console</string>
+  <string name="rdp_add_desktop">Adicionar área de trabalho</string>
+  <string name="rdp_carry_content">Pegue o conteúdo e solte em outra área de trabalho</string>
+  <string name="rdp_cancel_carry">Cancelar a movimentação do conteúdo</string>
+  <string name="rdp_monitor_placement_failed">Janelas da área de trabalho recuperadas, mas o host não aceitou o posicionamento dos painéis.</string>
+  <string name="rdp_monitor_layout_failed">Não foi possível sincronizar as janelas da área de trabalho. Use «Tentar layout da área de trabalho novamente».</string>
+  <string name="rdp_monitor_limit">Este layout de monitores excede os limites de exibição da sessão.</string>
+  <string name="rdp_desktop_number">Área de trabalho %1$d</string>
+  <string name="rdp_layout_auto">Seguir o posicionamento dos painéis</string>
+  <string name="rdp_retry_layout">Tentar layout da área de trabalho novamente</string>
 </resources>

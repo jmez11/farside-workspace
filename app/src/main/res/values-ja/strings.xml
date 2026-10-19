@@ -633,4 +633,13 @@
   <string name="storage_permission_needed_backup">バックアップファイルの保存または読み込みにはストレージへのアクセスが必要です。ストレージの権限を許可してください。</string>
   <string name="grant_permission">権限を許可</string>
     <string name="connect_to_console">コンソールに接続</string>
+  <string name="rdp_add_desktop">デスクトップを追加</string>
+  <string name="rdp_carry_content">コンテンツを持ち上げて、別のデスクトップにドロップ</string>
+  <string name="rdp_cancel_carry">コンテンツの移動をキャンセル</string>
+  <string name="rdp_monitor_placement_failed">デスクトップウィンドウは復旧しましたが、ホストがパネルの配置を受け入れませんでした。</string>
+  <string name="rdp_monitor_layout_failed">デスクトップウィンドウを同期できませんでした。「デスクトップレイアウトを再試行」を使用してください。</string>
+  <string name="rdp_monitor_limit">このモニターレイアウトはセッションの表示制限を超えています。</string>
+  <string name="rdp_desktop_number">デスクトップ %1$d</string>
+  <string name="rdp_layout_auto">パネルの配置に従う</string>
+  <string name="rdp_retry_layout">デスクトップレイアウトを再試行</string>
 </resources>

@@ -632,4 +632,13 @@
   <string name="storage_permission_needed_backup">Απαιτείται πρόσβαση στον αποθηκευτικό χώρο για την αποθήκευση ή τη φόρτωση αρχείων αντιγράφων. Παραχωρήστε δικαιώματα αποθηκευτικού χώρου.</string>
   <string name="grant_permission">Παραχώρηση δικαιώματος</string>
     <string name="connect_to_console">Σύνδεση στην κονσόλα</string>
+  <string name="rdp_add_desktop">Προσθήκη επιφάνειας εργασίας</string>
+  <string name="rdp_carry_content">Πιάστε το περιεχόμενο και αποθέστε το σε άλλη επιφάνεια εργασίας</string>
+  <string name="rdp_cancel_carry">Ακύρωση μετακίνησης περιεχομένου</string>
+  <string name="rdp_monitor_placement_failed">Τα παράθυρα της επιφάνειας εργασίας ανακτήθηκαν, αλλά ο κεντρικός υπολογιστής δεν αποδέχθηκε την τοποθέτηση των πλαισίων.</string>
+  <string name="rdp_monitor_layout_failed">Δεν ήταν δυνατός ο συγχρονισμός των παραθύρων της επιφάνειας εργασίας. Χρησιμοποιήστε «Επανάληψη διάταξης επιφάνειας εργασίας».</string>
+  <string name="rdp_monitor_limit">Αυτή η διάταξη οθονών υπερβαίνει τα όρια εμφάνισης της περιόδου λειτουργίας.</string>
+  <string name="rdp_desktop_number">Επιφάνεια εργασίας %1$d</string>
+  <string name="rdp_layout_auto">Ακολούθηση τοποθέτησης πλαισίων</string>
+  <string name="rdp_retry_layout">Επανάληψη διάταξης επιφάνειας εργασίας</string>
 </resources>

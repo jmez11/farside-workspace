@@ -646,4 +646,13 @@
   <string name="storage_permission_needed_backup">Dostęp do pamięci jest wymagany, aby zapisywać lub wczytywać pliki kopii. Przyznaj uprawnienia pamięci.</string>
   <string name="grant_permission">Przyznaj uprawnienie</string>
     <string name="connect_to_console">Połącz z konsolą</string>
+  <string name="rdp_add_desktop">Dodaj pulpit</string>
+  <string name="rdp_carry_content">Podnieś zawartość i upuść ją na innym pulpicie</string>
+  <string name="rdp_cancel_carry">Anuluj przenoszenie zawartości</string>
+  <string name="rdp_monitor_placement_failed">Przywrócono okna pulpitu, ale host nie zaakceptował rozmieszczenia paneli.</string>
+  <string name="rdp_monitor_layout_failed">Nie można zsynchronizować okien pulpitu. Użyj opcji „Ponów układ pulpitu”.</string>
+  <string name="rdp_monitor_limit">Ten układ monitorów przekracza limity wyświetlania sesji.</string>
+  <string name="rdp_desktop_number">Pulpit %1$d</string>
+  <string name="rdp_layout_auto">Podążaj za rozmieszczeniem paneli</string>
+  <string name="rdp_retry_layout">Ponów układ pulpitu</string>
 </resources>

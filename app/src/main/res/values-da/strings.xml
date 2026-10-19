@@ -631,4 +631,13 @@
   <string name="storage_permission_needed_backup">Lageradgang er nødvendig for at gemme eller indlæse sikkerhedskopifiler. Giv lagertilladelser.</string>
   <string name="grant_permission">Giv tilladelse</string>
     <string name="connect_to_console">Opret forbindelse til konsollen</string>
+  <string name="rdp_add_desktop">Tilføj skrivebord</string>
+  <string name="rdp_carry_content">Tag fat i indholdet, og slip det på et andet skrivebord</string>
+  <string name="rdp_cancel_carry">Annuller flytning af indhold</string>
+  <string name="rdp_monitor_placement_failed">Skrivebordsvinduer gendannet, men værten accepterede ikke panelplaceringen.</string>
+  <string name="rdp_monitor_layout_failed">Kunne ikke synkronisere skrivebordsvinduerne. Brug «Prøv skrivebordslayout igen».</string>
+  <string name="rdp_monitor_limit">Dette skærmlayout overskrider sessionens visningsgrænser.</string>
+  <string name="rdp_desktop_number">Skrivebord %1$d</string>
+  <string name="rdp_layout_auto">Følg panelplacering</string>
+  <string name="rdp_retry_layout">Prøv skrivebordslayout igen</string>
 </resources>

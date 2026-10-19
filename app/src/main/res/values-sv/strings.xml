@@ -631,4 +631,13 @@
   <string name="storage_permission_needed_backup">Lagringsåtkomst krävs för att spara eller läsa in säkerhetskopior. Bevilja lagringsbehörighet.</string>
   <string name="grant_permission">Bevilja behörighet</string>
     <string name="connect_to_console">Anslut till konsolen</string>
+  <string name="rdp_add_desktop">Lägg till skrivbord</string>
+  <string name="rdp_carry_content">Lyft upp innehållet och släpp det på ett annat skrivbord</string>
+  <string name="rdp_cancel_carry">Avbryt flytt av innehåll</string>
+  <string name="rdp_monitor_placement_failed">Skrivbordsfönster återställda, men värden accepterade inte panelplaceringen.</string>
+  <string name="rdp_monitor_layout_failed">Det gick inte att synkronisera skrivbordsfönstren. Använd «Försök skrivbordslayout igen».</string>
+  <string name="rdp_monitor_limit">Denna skärmlayout överskrider sessionens visningsgränser.</string>
+  <string name="rdp_desktop_number">Skrivbord %1$d</string>
+  <string name="rdp_layout_auto">Följ panelplacering</string>
+  <string name="rdp_retry_layout">Försök skrivbordslayout igen</string>
 </resources>

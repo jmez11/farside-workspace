@@ -632,4 +632,13 @@
   <string name="storage_permission_needed_backup">Yedekleme dosyalarını kaydetmek veya yüklemek için depolama erişimi gereklidir. Depolama izinlerini verin.</string>
   <string name="grant_permission">İzin ver</string>
     <string name="connect_to_console">Konsola bağlan</string>
+  <string name="rdp_add_desktop">Masaüstü ekle</string>
+  <string name="rdp_carry_content">İçeriği alın ve başka bir masaüstüne bırakın</string>
+  <string name="rdp_cancel_carry">İçerik taşımayı iptal et</string>
+  <string name="rdp_monitor_placement_failed">Masaüstü pencereleri kurtarıldı, ancak ana bilgisayar panel yerleşimini kabul etmedi.</string>
+  <string name="rdp_monitor_layout_failed">Masaüstü pencereleri eşitlenemedi. “Masaüstü düzenini yeniden dene” seçeneğini kullanın.</string>
+  <string name="rdp_monitor_limit">Bu monitör düzeni, oturumun görüntüleme sınırlarını aşıyor.</string>
+  <string name="rdp_desktop_number">Masaüstü %1$d</string>
+  <string name="rdp_layout_auto">Panel yerleşimini izle</string>
+  <string name="rdp_retry_layout">Masaüstü düzenini yeniden dene</string>
 </resources>

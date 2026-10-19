@@ -631,4 +631,13 @@
   <string name="storage_permission_needed_backup">Opslagtoegang is nodig om back-upbestanden op te slaan of te laden. Verleen de opslagmachtigingen.</string>
   <string name="grant_permission">Machtiging verlenen</string>
     <string name="connect_to_console">Verbinding maken met console</string>
+  <string name="rdp_add_desktop">Bureaublad toevoegen</string>
+  <string name="rdp_carry_content">Pak de inhoud op en zet deze neer op een ander bureaublad</string>
+  <string name="rdp_cancel_carry">Verplaatsen van inhoud annuleren</string>
+  <string name="rdp_monitor_placement_failed">Bureaubladvensters hersteld, maar de host heeft de paneelplaatsing niet geaccepteerd.</string>
+  <string name="rdp_monitor_layout_failed">De bureaubladvensters konden niet worden gesynchroniseerd. Gebruik «Bureaubladindeling opnieuw proberen».</string>
+  <string name="rdp_monitor_limit">Deze monitorindeling overschrijdt de weergavelimieten van de sessie.</string>
+  <string name="rdp_desktop_number">Bureaublad %1$d</string>
+  <string name="rdp_layout_auto">Paneelplaatsing volgen</string>
+  <string name="rdp_retry_layout">Bureaubladindeling opnieuw proberen</string>
 </resources>

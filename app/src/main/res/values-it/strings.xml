@@ -631,4 +631,13 @@
   <string name="storage_permission_needed_backup">È necessario l\'accesso allo spazio di archiviazione per salvare o caricare i file di backup. Concedi le autorizzazioni di archiviazione.</string>
   <string name="grant_permission">Concedi autorizzazione</string>
     <string name="connect_to_console">Connetti alla console</string>
+  <string name="rdp_add_desktop">Aggiungi desktop</string>
+  <string name="rdp_carry_content">Prendi il contenuto e rilascialo in un altro desktop</string>
+  <string name="rdp_cancel_carry">Annulla lo spostamento del contenuto</string>
+  <string name="rdp_monitor_placement_failed">Finestre del desktop ripristinate, ma l\'host non ha accettato il posizionamento dei pannelli.</string>
+  <string name="rdp_monitor_layout_failed">Impossibile sincronizzare le finestre del desktop. Usa «Riprova layout desktop».</string>
+  <string name="rdp_monitor_limit">Questo layout dei monitor supera i limiti di visualizzazione della sessione.</string>
+  <string name="rdp_desktop_number">Desktop %1$d</string>
+  <string name="rdp_layout_auto">Segui il posizionamento dei pannelli</string>
+  <string name="rdp_retry_layout">Riprova layout desktop</string>
 </resources>

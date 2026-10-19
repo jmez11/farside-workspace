@@ -631,4 +631,13 @@
   <string name="storage_permission_needed_backup">Lagringstilgang er nødvendig for å lagre eller laste inn sikkerhetskopifiler. Gi lagringstillatelser.</string>
   <string name="grant_permission">Gi tillatelse</string>
     <string name="connect_to_console">Koble til konsollen</string>
+  <string name="rdp_add_desktop">Legg til skrivebord</string>
+  <string name="rdp_carry_content">Løft opp innholdet og slipp det på et annet skrivebord</string>
+  <string name="rdp_cancel_carry">Avbryt flytting av innhold</string>
+  <string name="rdp_monitor_placement_failed">Skrivebordsvinduer gjenopprettet, men verten godtok ikke panelplasseringen.</string>
+  <string name="rdp_monitor_layout_failed">Kunne ikke synkronisere skrivebordsvinduene. Bruk «Prøv skrivebordslayout på nytt».</string>
+  <string name="rdp_monitor_limit">Dette skjermoppsettet overskrider øktens visningsgrenser.</string>
+  <string name="rdp_desktop_number">Skrivebord %1$d</string>
+  <string name="rdp_layout_auto">Følg panelplassering</string>
+  <string name="rdp_retry_layout">Prøv skrivebordslayout på nytt</string>
 </resources>

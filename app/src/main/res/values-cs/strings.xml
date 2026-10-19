@@ -648,4 +648,13 @@
   <string name="storage_permission_needed_backup">K ukládání nebo načítání souborů záloh je nutný přístup k úložišti. Udělte oprávnění k úložišti.</string>
   <string name="grant_permission">Udělit oprávnění</string>
     <string name="connect_to_console">Připojit ke konzoli</string>
+  <string name="rdp_add_desktop">Přidat plochu</string>
+  <string name="rdp_carry_content">Zvedněte obsah a pusťte jej na jiné ploše</string>
+  <string name="rdp_cancel_carry">Zrušit přesun obsahu</string>
+  <string name="rdp_monitor_placement_failed">Okna plochy byla obnovena, ale hostitel nepřijal umístění panelů.</string>
+  <string name="rdp_monitor_layout_failed">Okna plochy se nepodařilo synchronizovat. Použijte možnost „Zkusit rozložení plochy znovu“.</string>
+  <string name="rdp_monitor_limit">Toto rozložení monitorů překračuje limity zobrazení relace.</string>
+  <string name="rdp_desktop_number">Plocha %1$d</string>
+  <string name="rdp_layout_auto">Řídit se umístěním panelů</string>
+  <string name="rdp_retry_layout">Zkusit rozložení plochy znovu</string>
 </resources>

@@ -503,3 +503,9 @@ Preserve positional placeholders, XML/Android escaping, brand names, protocol id
 - `backup_export_success` / `backup_export_failed` / `backup_restore_success` / `backup_restore_failed`: Result toasts; `%1$s` is the error detail. `backup_restore_success` counts restored connection profiles, credentials and SSH keys; placeholders stay in order.
 - `backup_invalid_passphrase`: Shown when restore decryption fails.
 - `storage_permission_needed_backup` / `grant_permission`: Android storage permission prompt for reading/writing backup files.
+- `rdp_add_desktop`: Button adding another RDP desktop (monitor) to a multi-desktop session.
+- `rdp_carry_content` / `rdp_cancel_carry`: "carry" = pick up window content and drop it into another desktop; accessibility label toggling the carry mode.
+- `rdp_desktop_number`: Numbered RDP desktop label ("%1$d" = 1-based monitor index).
+- `rdp_layout_auto`: Layout mode where the RDP monitor arrangement follows the user's spatial panel placement.
+- `rdp_retry_layout`: Button retrying the RDP-side monitor layout sync; quoted inside `rdp_monitor_layout_failed`.
+- `rdp_monitor_placement_failed` / `rdp_monitor_layout_failed` / `rdp_monitor_limit`: Multi-desktop sync status messages; "panel" = spatial window panel, "host" = RDP server.

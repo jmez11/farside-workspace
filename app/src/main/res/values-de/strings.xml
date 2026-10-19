@@ -631,4 +631,13 @@
   <string name="storage_permission_needed_backup">Zum Speichern oder Laden von Sicherungsdateien ist Speicherzugriff erforderlich. Bitte erteilen Sie die Speicherberechtigungen.</string>
   <string name="grant_permission">Berechtigung erteilen</string>
     <string name="connect_to_console">Mit Konsole verbinden</string>
+  <string name="rdp_add_desktop">Desktop hinzufügen</string>
+  <string name="rdp_carry_content">Inhalt aufnehmen und in einem anderen Desktop ablegen</string>
+  <string name="rdp_cancel_carry">Verschieben des Inhalts abbrechen</string>
+  <string name="rdp_monitor_placement_failed">Desktop-Fenster wiederhergestellt, aber der Host hat die Panelplatzierung nicht akzeptiert.</string>
+  <string name="rdp_monitor_layout_failed">Die Desktop-Fenster konnten nicht synchronisiert werden. Verwenden Sie „Desktop-Layout wiederholen“.</string>
+  <string name="rdp_monitor_limit">Dieses Monitorlayout überschreitet die Anzeigegrenzen der Sitzung.</string>
+  <string name="rdp_desktop_number">Desktop %1$d</string>
+  <string name="rdp_layout_auto">Panelplatzierung folgen</string>
+  <string name="rdp_retry_layout">Desktop-Layout wiederholen</string>
 </resources>

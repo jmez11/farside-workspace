@@ -643,4 +643,13 @@
   <string name="storage_permission_needed_backup">Este necesar accesul la stocare pentru a salva sau încărca fișiere de rezervă. Acordați permisiunile de stocare.</string>
   <string name="grant_permission">Acordați permisiunea</string>
     <string name="connect_to_console">Conectare la consolă</string>
+  <string name="rdp_add_desktop">Adaugă desktop</string>
+  <string name="rdp_carry_content">Ridicați conținutul și plasați-l pe alt desktop</string>
+  <string name="rdp_cancel_carry">Anulați mutarea conținutului</string>
+  <string name="rdp_monitor_placement_failed">Ferestrele desktop au fost recuperate, dar gazda nu a acceptat plasarea panourilor.</string>
+  <string name="rdp_monitor_layout_failed">Ferestrele desktop nu au putut fi sincronizate. Folosiți „Reîncercare aspect desktop”.</string>
+  <string name="rdp_monitor_limit">Acest aspect al monitoarelor depășește limitele de afișare ale sesiunii.</string>
+  <string name="rdp_desktop_number">Desktop %1$d</string>
+  <string name="rdp_layout_auto">Urmăriți plasarea panourilor</string>
+  <string name="rdp_retry_layout">Reîncercare aspect desktop</string>
 </resources>

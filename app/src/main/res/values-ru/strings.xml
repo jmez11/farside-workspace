@@ -648,4 +648,13 @@
   <string name="storage_permission_needed_backup">Для сохранения или загрузки файлов копий нужен доступ к хранилищу. Предоставьте разрешения на доступ к хранилищу.</string>
   <string name="grant_permission">Предоставить разрешение</string>
     <string name="connect_to_console">Подключиться к консоли</string>
+  <string name="rdp_add_desktop">Добавить рабочий стол</string>
+  <string name="rdp_carry_content">Возьмите содержимое и перетащите его на другой рабочий стол</string>
+  <string name="rdp_cancel_carry">Отменить перемещение содержимого</string>
+  <string name="rdp_monitor_placement_failed">Окна рабочих столов восстановлены, но узел не принял размещение панелей.</string>
+  <string name="rdp_monitor_layout_failed">Не удалось синхронизировать окна рабочих столов. Используйте «Повторить раскладку рабочих столов».</string>
+  <string name="rdp_monitor_limit">Эта раскладка мониторов превышает ограничения отображения сеанса.</string>
+  <string name="rdp_desktop_number">Рабочий стол %1$d</string>
+  <string name="rdp_layout_auto">Следовать размещению панелей</string>
+  <string name="rdp_retry_layout">Повторить раскладку рабочих столов</string>
 </resources>
