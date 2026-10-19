@@ -34,23 +34,44 @@ object BackupManager {
         val credentials: List<SavedCredential>,
         val sshKeys: List<SavedSshKey>,
         val appPinVerifier: String?,
-        val systemPinEnabled: Boolean
+        val systemPinEnabled: Boolean,
+        val desktopImages: Map<String, String> = emptyMap() // filename -> base64
     )
 
     data class ImportResult(
         val profilesRestored: Int,
         val credentialsRestored: Int,
         val sshKeysRestored: Int,
-        val pinRestored: Boolean
+        val pinRestored: Boolean,
+        val desktopImagesRestored: Int = 0
     )
 
-    fun createPayload(profileManager: ProfileManager): ExportPayload {
+    fun createPayload(context: Context, profileManager: ProfileManager): ExportPayload {
+        val profiles = profileManager.getProfiles()
+        val imagesDir = java.io.File(context.filesDir, "card-backgrounds")
+        val desktopImages = mutableMapOf<String, String>()
+
+        if (imagesDir.exists() && imagesDir.isDirectory) {
+            profiles.mapNotNull { it.cardBackground }.distinct().forEach { bgName ->
+                val imageFile = java.io.File(imagesDir, bgName)
+                if (imageFile.exists() && imageFile.isFile) {
+                    runCatching {
+                        val bytes = imageFile.readBytes()
+                        if (bytes.isNotEmpty()) {
+                            desktopImages[bgName] = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                        }
+                    }
+                }
+            }
+        }
+
         return ExportPayload(
-            profiles = profileManager.getProfiles(),
+            profiles = profiles,
             credentials = profileManager.getCredentials(),
             sshKeys = profileManager.getSshKeys(),
             appPinVerifier = profileManager.getAppPinVerifier(),
-            systemPinEnabled = profileManager.usesSystemPin()
+            systemPinEnabled = profileManager.usesSystemPin(),
+            desktopImages = desktopImages
         )
     }
 
@@ -75,6 +96,10 @@ object BackupManager {
             root.put("app_pinVerifier", payload.appPinVerifier)
         }
         root.put("system_pin_enabled", payload.systemPinEnabled)
+
+        val imagesObj = JSONObject()
+        payload.desktopImages.forEach { (name, b64) -> imagesObj.put(name, b64) }
+        root.put("desktop_images", imagesObj)
 
         return root
     }
@@ -104,12 +129,23 @@ object BackupManager {
 
         val sysPin = json.optBoolean("system_pin_enabled", false)
 
+        val desktopImages = mutableMapOf<String, String>()
+        val imagesObj = json.optJSONObject("desktop_images")
+        if (imagesObj != null) {
+            val keys = imagesObj.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                desktopImages[key] = imagesObj.getString(key)
+            }
+        }
+
         return ExportPayload(
             profiles = profilesList,
             credentials = credsList,
             sshKeys = keysList,
             appPinVerifier = pinVerifier,
-            systemPinEnabled = sysPin
+            systemPinEnabled = sysPin,
+            desktopImages = desktopImages
         )
     }
 
@@ -196,7 +232,7 @@ object BackupManager {
     }
 
     fun exportToUri(context: Context, profileManager: ProfileManager, uri: Uri, passphrase: CharArray) {
-        val payload = createPayload(profileManager)
+        val payload = createPayload(context, profileManager)
         val json = payloadToJson(payload)
         val encryptedData = encryptPayload(json.toString(), passphrase)
 
@@ -215,10 +251,25 @@ object BackupManager {
         val json = JSONObject(decryptedJson)
         val payload = jsonToPayload(json)
 
-        return restorePayload(profileManager, payload)
+        return restorePayload(context, profileManager, payload)
     }
 
-    fun restorePayload(profileManager: ProfileManager, payload: ExportPayload): ImportResult {
+    fun restorePayload(context: Context, profileManager: ProfileManager, payload: ExportPayload): ImportResult {
+        // Restore desktop card background images
+        var imagesRestored = 0
+        if (payload.desktopImages.isNotEmpty()) {
+            val imagesDir = java.io.File(context.filesDir, "card-backgrounds").apply { mkdirs() }
+            payload.desktopImages.forEach { (filename, b64) ->
+                runCatching {
+                    val bytes = android.util.Base64.decode(b64, android.util.Base64.NO_WRAP)
+                    if (bytes.isNotEmpty()) {
+                        java.io.File(imagesDir, filename).writeBytes(bytes)
+                        imagesRestored++
+                    }
+                }
+            }
+        }
+
         // Restore credentials (re-encrypted with local Keystore in profileManager)
         payload.credentials.forEach { cred ->
             profileManager.addCredential(cred)
@@ -244,7 +295,8 @@ object BackupManager {
             profilesRestored = payload.profiles.size,
             credentialsRestored = payload.credentials.size,
             sshKeysRestored = payload.sshKeys.size,
-            pinRestored = pinRestored
+            pinRestored = pinRestored,
+            desktopImagesRestored = imagesRestored
         )
     }
 }

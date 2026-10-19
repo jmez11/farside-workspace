@@ -64,8 +64,18 @@ class BackupRestoreVerification(private val instrumentation: Instrumentation) {
             val testPinVerifier = CredentialPin.create("987654")
             pm.setAppPinVerifier(testPinVerifier)
 
+            // Setup mock card background image
+            val mockBgName = "${UUID.randomUUID()}.jpg"
+            val mockImageFile = File(File(context.filesDir, "card-backgrounds").apply { mkdirs() }, mockBgName)
+            val mockImageBytes = byteArrayOf(0xff.toByte(), 0xd8.toByte(), 0xff.toByte(), 0xe0.toByte(), 1, 2, 3, 4, 5, 0xff.toByte(), 0xd9.toByte())
+            mockImageFile.writeBytes(mockImageBytes)
+
+            val profileWithBg = testProfile.copy(cardBackground = mockBgName)
+            pm.updateProfile(profileWithBg)
+
             // Test 1: Round-trip payload serialization and authenticated encryption
-            val payload = BackupManager.createPayload(pm)
+            val payload = BackupManager.createPayload(context, pm)
+            check(payload.desktopImages.containsKey(mockBgName)) { "Desktop image was not included in payload" }
             val json = BackupManager.payloadToJson(payload)
             val passphrase = "SuperStrongPassphrase#2026".toCharArray()
             val encryptedBytes = BackupManager.encryptPayload(json.toString(), passphrase)
@@ -90,12 +100,18 @@ class BackupRestoreVerification(private val instrumentation: Instrumentation) {
 
             val restoredProf = restoredPayload.profiles.find { it.id == testProfileId }
             check(restoredProf != null) { "Restored payload missing profile" }
+            check(restoredProf.cardBackground == mockBgName) { "Restored cardBackground mismatch" }
             check(restoredProf.cloudflaredParameters == "--service-token-id test-token --service-token-secret test-secret") {
                 "Decrypted cloudflaredParameters mismatch"
             }
             check(restoredProf.proxyPass == "proxypassword789") { "Decrypted proxyPass mismatch" }
 
             check(restoredPayload.appPinVerifier == testPinVerifier) { "Restored PIN verifier mismatch" }
+            check(restoredPayload.desktopImages.containsKey(mockBgName)) { "Restored payload missing desktop image" }
+
+            // Delete local file to verify restoration from payload
+            mockImageFile.delete()
+            check(!mockImageFile.exists()) { "Mock image file should be deleted before restore" }
 
             // Test 3: Tamper / wrong passphrase rejection
             val wrongPass = "WrongPassphrase".toCharArray()
@@ -117,12 +133,17 @@ class BackupRestoreVerification(private val instrumentation: Instrumentation) {
             check(fileDecrypted.isNotEmpty()) { "Decrypted file payload should not be empty" }
             backupFile.delete()
 
-            // Test 5: Re-encryption into ProfileManager
-            val importResult = BackupManager.restorePayload(pm, restoredPayload)
+            // Test 5: Re-encryption into ProfileManager & file restoration
+            val importResult = BackupManager.restorePayload(context, pm, restoredPayload)
             check(importResult.credentialsRestored >= 1) { "Import result must indicate credentials restored" }
             check(importResult.sshKeysRestored >= 1) { "Import result must indicate ssh keys restored" }
             check(importResult.profilesRestored >= 1) { "Import result must indicate profiles restored" }
+            check(importResult.desktopImagesRestored >= 1) { "Import result must indicate desktop images restored" }
             check(importResult.pinRestored) { "Import result must indicate pin restored" }
+
+            check(mockImageFile.exists()) { "Desktop image file was not recreated on restore" }
+            check(mockImageFile.readBytes().contentEquals(mockImageBytes)) { "Restored desktop image bytes do not match" }
+            mockImageFile.delete()
 
             // Verify live ProfileManager re-encrypted data
             val liveCred = pm.getCredentials().first { it.id == testCredId }
@@ -136,7 +157,7 @@ class BackupRestoreVerification(private val instrumentation: Instrumentation) {
                 "Re-encrypted cloudflaredParameters could not be read"
             }
 
-            return "PASS: authenticated encrypted backup/restore, AEAD rejection, Keystore re-encryption verified."
+            return "PASS: authenticated encrypted backup/restore (including desktop images), AEAD rejection, Keystore re-encryption verified."
         } finally {
             // Restore original state cleanly
             pm.saveProfiles(origProfiles)
