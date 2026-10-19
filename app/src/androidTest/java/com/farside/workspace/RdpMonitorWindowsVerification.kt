@@ -252,14 +252,14 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
                 ready
             }
             var native = session.bridge
-            fun settled(count: Int) {
+            fun settled(count: Int, allowRetry: Boolean = false) {
                 await("$count committed monitors and posted surfaces") {
                     var ready = false
                     main {
                         val raw = native.getMonitorLayoutState(handle)
                         val surfaces = native.getMonitorSurfaceState(handle).toList().chunked(8)
                         val attached = session.monitors.filter { it.surface != null && it.visible }
-                        ready = session.instance.value == handle && session.bridge === native && !session.busy && !session.layoutNeedsRetry && session.inputReady &&
+                        ready = session.instance.value == handle && session.bridge === native && !session.busy && (allowRetry || !session.layoutNeedsRetry) && session.inputReady &&
                             session.monitors.size == count && raw.getOrNull(9) == count.toLong() && surfaces.size == attached.size &&
                             RdpMonitorLayouts.matches(RdpMonitorLayouts.normalized(raw),session.monitors.map { it.rect }) &&
                             attached.all { m -> surfaces.any { it[0] == m.id && it[1] == m.rect.x.toLong() && it[2] == m.rect.y.toLong() &&
@@ -410,6 +410,36 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
             Thread.sleep(500)
             check(session.layoutSubmissions == beforeCropRepair)
             report.put("staleLocalCropRepairedWithoutResetLoop",true)
+            // Replay the exact shape logged during the wearer's failure: primary at
+            // the right of a three-monitor lower row, with the fourth above the left.
+            // Reflection freezes only the room-pose fixture; the real host, recovery
+            // state machine, crops and input gates are production paths.
+            val pointsField = session.javaClass.getDeclaredField("panelPoints").apply { isAccessible = true }
+            val poseReadField = session.javaClass.getDeclaredField("nextPoseRead").apply { isAccessible = true }
+            val oldPoints = pointsField.get(session)
+            val oldWidth = second.requestedWidth; val oldHeight = second.requestedHeight
+            val failurePoints = ids.zip(listOf(RdpPanelPoint(2f,0f),RdpPanelPoint(1f,0f),
+                RdpPanelPoint(0f,0f),RdpPanelPoint(0f,1f))).toMap()
+            val beforeShape = session.layoutSubmissions
+            main { session.resize(second,1280,800); session.followPanelLayout()
+                pointsField.set(session,failurePoints); poseReadField.setLong(session,Long.MAX_VALUE) }
+            await("wearer layout accepted or recovered with functional windows",60_000) {
+                var ready = false
+                main { pointsField.set(session,failurePoints); poseReadField.setLong(session,Long.MAX_VALUE)
+                    ready = session.layoutSubmissions > beforeShape && !session.busy && session.inputReady }
+                ready
+            }
+            settled(4,allowRetry = true)
+            report.put("wearerRejectedShapeFunctionalRecovery",true).put("wearerShapeNeededFallback",session.layoutNeedsRetry)
+            val submissionsAfterRecovery = session.layoutSubmissions
+            Thread.sleep(1500)
+            check(session.inputReady && session.layoutSubmissions == submissionsAfterRecovery) { "Rejected placement retried in a loop" }
+            // The pending spatial layout must not stop local surface restoration.
+            main { native.setMonitorSurface(handle,restored.id,restored.surface,0,0,1,1,0) }
+            settled(4,allowRetry = true)
+            main { pointsField.set(session,oldPoints); poseReadField.setLong(session,0)
+                session.resize(second,oldWidth,oldHeight); session.followPanelLayout() }
+            settled(4)
             // An oversized request exercises both failed attempts and the actual retry icon
             // without disconnecting or deleting any of the four desktop windows.
             val originalWidth = fourth.requestedWidth; val originalHeight = fourth.requestedHeight
@@ -417,11 +447,71 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
             main { session.resize(fourth,8192,8192) }
             await("automatic retry then actionable layout error") {
                 var ready = false
-                main { ready = session.layoutNeedsRetry && !session.busy && !session.inputReady && session.canRetryLayout &&
+                main { ready = session.layoutNeedsRetry && !session.busy && session.inputReady && session.canRetryLayout &&
                     session.layoutSubmissions >= beforeFailure + 2 }
                 ready
             }
+            settled(4,allowRetry = true)
+            val recoveredSubmissions = session.layoutSubmissions
+            Thread.sleep(1500)
+            check(session.inputReady && session.layoutSubmissions == recoveredSubmissions)
             check(session.monitors.map { it.id } == ids)
+            report.put("rejectedLayoutRestoresConfirmedInputWithoutLoop",true)
+            // Also exercise recovery when the host lost monitors, so adopting the
+            // previous geometry is impossible and a fresh simple-row request is needed.
+            main { check(native.requestMonitorLayout(handle,intArrayOf(0,0,1280,800,1))) }
+            await("rejected placement recovers all monitors through simple row",30_000) {
+                var ready = false
+                main { ready = session.inputReady && !session.busy && session.layoutNeedsRetry &&
+                    native.getMonitorLayoutState(handle).getOrNull(9) == 4L &&
+                    session.layoutSubmissions > recoveredSubmissions }
+                ready
+            }
+            settled(4,allowRetry = true)
+            report.put("missingHostMonitorsRecoveredWithSimpleRow",true)
+            // Send actual remote input through a recovered secondary's bridge and
+            // require new host pixels in its cropped outputs, not only ready flags.
+            val inputMonitor = session.monitors.last { it.visible && it.surface != null }
+            val beforeInput = mutableMapOf<Long,Bitmap>()
+            main { session.monitors.filter { it.visible && it.surface != null }.forEach { m ->
+                texture(checkNotNull(m.host.get()).window.decorView)?.bitmap?.let { beforeInput[m.id] = it }
+            } }
+            try {
+                main { inputMonitor.bridge.sendKeyEvent(handle,0x15b,true)
+                    inputMonitor.bridge.sendKeyEvent(handle,0x13,true)
+                    inputMonitor.bridge.sendKeyEvent(handle,0x13,false)
+                    inputMonitor.bridge.sendKeyEvent(handle,0x15b,false) }
+                await("recovered secondary input changes remote desktop pixels",10_000) {
+                    var changed = 0
+                    main { beforeInput.forEach { (id,before) ->
+                        val m = session.monitors.first { it.id == id }
+                        texture(checkNotNull(m.host.get()).window.decorView)?.bitmap?.let { after ->
+                            if (after.width == before.width && after.height == before.height) {
+                                for (y in 0 until before.height step 10) for (x in 0 until before.width step 10)
+                                    if (before.getPixel(x,y) != after.getPixel(x,y)) changed++
+                            }
+                            after.recycle()
+                        }
+                    } }
+                    changed > 200
+                }
+                report.put("recoveredSecondaryRemoteInputChangesPixels",true)
+            } finally {
+                main { inputMonitor.bridge.sendKeyEvent(handle,1,true); inputMonitor.bridge.sendKeyEvent(handle,1,false) }
+                beforeInput.values.forEach { it.recycle() }
+            }
+            // Returning to the already confirmed placement clears Retry without a
+            // redundant host request. Then re-enter failure for the actual toolbar check.
+            val beforeReturn = session.layoutSubmissions
+            main { pointsField.set(session,session.monitors.associate { m ->
+                    m.id to RdpPanelPoint(m.rect.x / 1280f,-m.rect.y / 800f) })
+                poseReadField.setLong(session,Long.MAX_VALUE)
+                session.resize(fourth,originalWidth,originalHeight) }
+            settled(4)
+            check(session.canAdd && session.layoutSubmissions == beforeReturn)
+            report.put("returnToConfirmedPlacementRestoresAdd",true)
+            main { session.resize(fourth,8192,8192) }
+            await("retry state after second invalid request") { !session.busy && session.layoutNeedsRetry && session.inputReady }
             session.monitors.forEach { m -> main { m.host.get()?.onWindowFocusChanged(true) } }
             val retryLabel = context.getString(R.string.rdp_retry_layout)
             await("retry layout toolbar action") { node(retryLabel) != null }

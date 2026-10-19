@@ -199,6 +199,9 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
     private var forceSync = false
     private var retryBlocked = false
     private var automaticRetries = 0
+    private var rejectedTarget: List<RdpMonitorRect>? = null
+    private var fallbackTarget: List<RdpMonitorRect>? = null
+    private var recoveringLayout = false
     internal var layoutSubmissions = 0
         private set
     fun acceptsInput(monitor: RdpMonitor) = inputReady && monitor.visible &&
@@ -209,6 +212,7 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
         nextPoseRead = 0; poseCandidate = null
         observePanels(SystemClock.elapsedRealtime(), immediate = true)
         retryBlocked = false; automaticRetries = 0; forceSync = true
+        rejectedTarget = null; fallbackTarget = null; recoveringLayout = false
         busy = true; canAdd = false; inputReady = false
         monitors.forEach { it.releaseInput(mouseOnly = true) }
         resizeAt = SystemClock.elapsedRealtime() + 300
@@ -368,6 +372,9 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
         updateMediaHost()
     }
     private fun readyMonitors() = monitors.filter { it.presented && it.hadSurface || committed.any { r -> r.id == it.id } }
+    private fun recoveryRow() = RdpMonitorLayouts.row(readyMonitors().map { m ->
+        committed.find { it.id == m.id } ?: RdpMonitorRect(m.id,0,0,1280,800)
+    })
     private fun nativeOutputs() = bridge.getMonitorSurfaceState(instance.value).toList().chunked(8).filter { it.size == 8 }.associateBy { it[0] }
     private fun outputGeometry(output: List<Long>?, rect: RdpMonitorRect, version: Long): Boolean = output != null &&
         output[1] == rect.x.toLong() && output[2] == rect.y.toLong() && output[3] == rect.width.toLong() &&
@@ -389,15 +396,31 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
             if (monitor.surface != null && monitor.visible && !outputGeometry(outputs[monitor.id], rect, version)) applySurface(monitor)
         }
     }
-    private fun layoutFailed(now: Long) {
-        android.util.Log.w("RdpLayout", "Layout sync failed, automatic retries=$automaticRetries")
+    private fun layoutFailed(now: Long, raw: LongArray) {
+        android.util.Log.w("RdpLayout", "Layout sync failed, automatic retries=$automaticRetries recovery=$recoveringLayout")
+        val failed = inFlight ?: targetLayout(readyMonitors())
         inFlight = null; inputReady = false; canAdd = false; layoutNeedsRetry = true
-        if (automaticRetries < 1) {
+        if (recoveringLayout) {
+            recoveringLayout = false; retryBlocked = true; forceSync = false; busy = false
+            message(R.string.rdp_monitor_layout_failed)
+        } else if (automaticRetries < 1) {
             automaticRetries++; forceSync = true; busy = true; resizeAt = now + 1000
             observePanels(now, immediate = true)
         } else {
-            retryBlocked = true; forceSync = false; busy = false
-            message(R.string.rdp_monitor_layout_failed)
+            // Display Control has no rejection acknowledgement. A successful send does
+            // not mean Windows accepted this shape. Stop resending it, and restore a
+            // confirmed topology (or request a simple row if a new monitor is missing).
+            rejectedTarget = failed; recoveringLayout = true; forceSync = false; busy = true
+            val ready = readyMonitors()
+            if (committed.map { it.id } == ready.map { it.id } && RdpMonitorLayouts.matches(raw, committed)) {
+                inFlight = committed; sentAt = now; revision = raw[7]
+                bindOutputs(committed, revision)
+                android.util.Log.i("RdpLayout", "Recovering last confirmed layout monitors=${committed.size}")
+            } else {
+                fallbackTarget = recoveryRow()
+                resizeAt = now
+                android.util.Log.i("RdpLayout", "Recovering with a simple monitor row")
+            }
         }
     }
     private fun tick() {
@@ -438,12 +461,13 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
                 monitors.forEach { m -> if (target.any { it.id == m.id }) m.launchDeadline = 0 }
                 bindOutputs(target, revision)
                 if (painted && outputsMatch(target, revision)) {
-                    inFlight = null; busy = false; inputReady = true; layoutNeedsRetry = false
+                    inFlight = null; busy = false; inputReady = true; layoutNeedsRetry = rejectedTarget != null
+                    recoveringLayout = false
                     automaticRetries = 0; retryBlocked = false
                     android.util.Log.i("RdpLayout", "Synced monitors=${target.size} revision=$revision")
                 }
             }
-            if (inFlight != null && (now - sentAt > 15_000 || raw[6] != 0L)) layoutFailed(now)
+            if (inFlight != null && (now - sentAt > 15_000 || raw[6] != 0L)) layoutFailed(now, raw)
         }
         // A revision is not the only source of drift: restored/replaced surfaces can also
         // carry the wrong crop while the host still reports the expected topology.
@@ -458,13 +482,18 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
                 bindOutputs(committed, revision)
             } else {
                 layoutNeedsRetry = true; forceSync = true; automaticRetries = 0; resizeAt = now + 300
-                observePanels(now, immediate = true)
+                if (rejectedTarget != null) {
+                    recoveringLayout = true; fallbackTarget = recoveryRow()
+                } else observePanels(now, immediate = true)
             }
         }
         if (inFlight == null && !retryBlocked && raw[0] == 1L && raw[8] == 1L && now >= resizeAt &&
             !drag.active && monitors.none { it.hasButtons }) {
-            val target = targetLayout(readyMonitors())
-            if (target.isNotEmpty() && (forceSync || target != committed)) {
+            val target = fallbackTarget ?: targetLayout(readyMonitors())
+            if (target.isNotEmpty() && (forceSync || recoveringLayout || target != committed) &&
+                (recoveringLayout || target != rejectedTarget)) {
+                if (!recoveringLayout) rejectedTarget = null
+                fallbackTarget = null
                 drag.cancel(); monitors.forEach { it.releaseInput(mouseOnly = true) }
                 inputReady = false; canAdd = false
                 if (forceSync) {
@@ -476,8 +505,12 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
                 if (RdpMonitorLayouts.valid(target, raw[1].toInt(), raw[2], raw[3]) &&
                     bridge.requestMonitorLayout(handle, RdpMonitorLayouts.wire(target))) {
                     inFlight = target; sentAt = now; busy = true; forceSync = false
-                } else layoutFailed(now)
+                } else layoutFailed(now, raw)
             }
+        }
+        if (!busy && inputReady && rejectedTarget != null && targetLayout(readyMonitors()) == committed &&
+            RdpMonitorLayouts.matches(raw, committed)) {
+            rejectedTarget = null; layoutNeedsRetry = false
         }
         canAdd = profile.remoteApp.isNullOrBlank() && !layoutNeedsRetry && !busy && !drag.active && inputReady &&
             monitors.all { it.presented } && raw[0] == 1L && raw[8] == 1L &&
@@ -493,6 +526,7 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
         certificateRequest.value = null; disconnectedReason.value = null; failureReason.value = ""; connectionFailed.value = false
         committed = emptyList(); inFlight = null; revision = 0; busy = false; inputReady = true
         layoutNeedsRetry = false; forceSync = false; retryBlocked = false; automaticRetries = 0
+        rejectedTarget = null; fallbackTarget = null; recoveringLayout = false
         fun restart() {
             if (closed) return
             reconnecting = false
