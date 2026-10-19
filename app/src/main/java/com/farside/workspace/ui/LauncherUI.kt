@@ -1185,7 +1185,7 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                                         Text(cred.user, color = Color.Gray, fontSize = 12.sp)
                                         if (cred.requirePin) Text(stringResource(R.string.pin_required), color = Color.Gray, fontSize = 12.sp)
                                     }
-                                    Row {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                                         OutlinedButton(enabled = !savingCredential, onClick = {
                                             credentialAction(cred, "edit")
                                         }) { Text(stringResource(R.string.edit)) }
