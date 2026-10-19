@@ -494,3 +494,12 @@ Preserve positional placeholders, XML/Android escaping, brand names, protocol id
 - `profile_rdp_credential_required` / `profile_credential_username_missing` / `profile_selected_credential_no_password`: "credential" = the app's saved login credential; phrasing mirrors `vnc_mac_credential_required` per locale.
 - `profile_mac_credential_required` / `profile_mac_username_missing` / `profile_mac_password_required`: "macOS user" = the macOS account used for VNC/Screen Sharing auth; "macOS"/"Mac" kept untranslated.
 - `profile_proxy_type_invalid` / `profile_proxy_host_required`: Proxy types are None/Cloudflared/SOCKS5/HTTP (see `select_none_cloudflared_socks5_or_http`); `profile_proxy_host_required` mirrors each locale's `proxy_hostname_or_ip` phrasing.
+- `backup_restore`: Encrypted backup file export/import feature; "Backup" = noun.
+- `backup_settings_title` / `backup_settings_help`: "credentials" = saved username/password records; "SSH keys" = saved private keys; "PIN" = app PIN, kept untranslated.
+- `export_backup` / `restore_backup`: Verb-first action labels.
+- `backup_passphrase_title` / `backup_passphrase_label` / `restore_passphrase_title`: "passphrase" encrypts the backup file; distinct from server login password and SSH key passphrase.
+- `backup_passphrase_help` / `restore_passphrase_help`: "secrets" = credentials, keys and PIN being backed up.
+- `backup_passphrase_mismatch` / `backup_passphrase_empty`: Inline validation on the passphrase entry form.
+- `backup_export_success` / `backup_export_failed` / `backup_restore_success` / `backup_restore_failed`: Result toasts; `%1$s` is the error detail. `backup_restore_success` counts restored connection profiles, credentials and SSH keys; placeholders stay in order.
+- `backup_invalid_passphrase`: Shown when restore decryption fails.
+- `storage_permission_needed_backup` / `grant_permission`: Android storage permission prompt for reading/writing backup files.
