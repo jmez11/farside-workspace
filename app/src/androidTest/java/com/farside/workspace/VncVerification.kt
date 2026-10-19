@@ -370,6 +370,39 @@ internal class VncVerification(private val test: Instrumentation) {
                         }
                     }
                 }
+            } else if (mode == "macHevcLive") {
+                val pm = ProfileManager(test.targetContext)
+                val profile = pm.getProfiles().firstOrNull {
+                    it.type == ConnectionType.VNC && (profileId == null || it.id == profileId.trim() || it.name.trim() == profileId.trim())
+                } ?: pm.getProfiles().first { it.type == ConnectionType.VNC && it.name.contains("WARP HEVC") }
+                val credential = pm.getCredentials().single { it.id == profile.credentialId }
+                val texture = android.graphics.SurfaceTexture(0)
+                val surface = android.view.Surface(texture)
+                try {
+                    withVncEndpoint(profile) { host, port ->
+                        val bridge = VncBridge()
+                        val instance = bridge.connect(host, port, credential.pass, surface, credential.user, profile.vncAuthMode, profile)
+                        check(instance != 0L) { "VncBridge.connect failed for ${profile.name}" }
+                        record("Connected to ${profile.name} (instance=0x${java.lang.Long.toHexString(instance)})")
+
+                        val start = SystemClock.uptimeMillis()
+                        val end = start + 12000
+                        var lastDesc = ""
+                        while (SystemClock.uptimeMillis() < end) {
+                            Thread.sleep(1000)
+                            lastDesc = bridge.getDecoderDescription(instance)
+                            record("T+${(SystemClock.uptimeMillis() - start) / 1000}s: $lastDesc")
+                            if (lastDesc.contains("frames") && !lastDesc.contains("0 frames decoded")) {
+                                break
+                            }
+                        }
+                        bridge.disconnect(instance)
+                        record("PASS: Mac HEVC Live Stream completed: $lastDesc")
+                    }
+                } finally {
+                    surface.release()
+                    texture.release()
+                }
             } else if (mode == "danglingPair") {
                 val pm = ProfileManager(test.targetContext)
                 val original = pm.getProfiles().single { it.name == "Test MacBook Pro" && it.type == ConnectionType.VNC }

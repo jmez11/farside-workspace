@@ -72,6 +72,10 @@ class MacHevcSession(
         private set
     var height: Int = 0
         private set
+    var isAltSession: Boolean = false
+        private set
+    var cachedHandshakeRecords: List<ByteArray> = emptyList()
+        private set
 
     var recordIn: DataInputStream? = null
         private set
@@ -91,6 +95,8 @@ class MacHevcSession(
     var videoPipeline: MacHevcVideoPipeline? = null
         private set
     var negotiationKeys: MacHevcNegotiationKeys? = null
+        private set
+    var currentOffers: MacHevcOffersBundle? = null
         private set
 
     fun setSurface(surface: Surface?) {
@@ -354,6 +360,7 @@ class MacHevcSession(
                 System.arraycopy(srcP, 0, pBytes, 0, minOf(srcP.size, 63))
 
                 cmd = if (shareConsole) 0 else if ((sessionState and 4) != 0) 2 else if ((sessionState and 2) != 0) 1 else 0
+                isAltSession = (cmd == 2)
 
                 if (cmd == 2) {
                     // Apple Screen Sharing two-TCP convention for cmd=2 (alt-session):
@@ -495,50 +502,21 @@ class MacHevcSession(
             layer.writeRecord(output, encodings)
             log("S8: Sent encrypted SetEncodings (0x02)")
 
-            // 2. Build and send encrypted 0x1c MediaStreamOptions offer with tilesPerFrame = 1
+            // 2. Build 0x1c MediaStreamOptions offer with tilesPerFrame = 1
             val keys = MacHevcNegotiationKeys.random()
             negotiationKeys = keys
-            val (videoOffer, audioOffer) = MacHevcOffers.createOffers(tilesPerFrame = 1, audioEnabled = false)
-            val msg1c = MacHevcOffers.build0x1cMessage(audioOffer, videoOffer, keys, altSession = (cmd == 2))
-            layer.writeRecord(output, msg1c)
-            log("S8: Sent encrypted 0x1c MediaStreamOptions offer (${msg1c.size} bytes, tilesPerFrame=1)")
+            val offers = MacHevcOffers.createOffers(tilesPerFrame = 1, audioEnabled = false)
+            currentOffers = offers
+            val msg1c = MacHevcOffers.build0x1cMessage(offers.audioOffer, offers.videoOffer, keys, altSession = (cmd == 2))
 
-            // 3. Send encrypted FramebufferUpdateRequest (0x03)
-            val fbur = buildFramebufferUpdateRequest(width, height)
-            layer.writeRecord(output, fbur)
-            log("S8: Sent encrypted 0x03 FBU request")
-
-            // Decrypt records from server until we find canvas dimensions / 0x1c answer
-            var firstRecord: ByteArray? = null
-            var dims: Triple<Int, Int, Int>? = null
-            for (attempt in 0 until 10) {
-                val rec = layer.readRecord(input)
-                val recType = rec[0].toInt() and 0xff
-                log("S8: Decrypted record $attempt (type=0x${Integer.toHexString(recType)}, len=${rec.size})")
-                if (firstRecord == null) firstRecord = rec
-                val d = MacHevcOffers.extractCanvasDims(rec)
-                if (d != null) {
-                    dims = d
-                    firstRecord = rec
-                    break
-                }
-            }
-            val record = firstRecord ?: ByteArray(0)
-            log("S8 GATE PASS: Processed encrypted handshake records (len=${record.size})")
-
-            // Check if record contains canvas dimensions
-            if (dims != null) {
-                log("S8: Extracted canvas dimensions: ${dims.first}x${dims.second} (tiles=${dims.third})")
-                width = dims.first
-                height = dims.second
-                onResolutionChanged?.invoke(width, height)
-            }
-
-            // Initialize UDP SRTP receiver and hardware MediaCodec decoder pipeline
+            // Initialize UDP SRTP receiver, pinhole puncher, and hardware MediaCodec decoder BEFORE 0x1c
             val pipeline = MacHevcVideoPipeline(
                 host = host,
                 videoPort = 5901,
+                ctrlPort = 5900,
                 videoKeyBlob = keys.videoKeyS,
+                videoKeyBlobV = keys.videoKeyV,
+                ourVideoSsrc = offers.ourVideoSsrc,
                 surface = currentSurface,
                 width = width,
                 height = height,
@@ -549,7 +527,38 @@ class MacHevcSession(
             )
             videoPipeline = pipeline
             pipeline.start()
-            log("S8: Launched MacHevcVideoPipeline on UDP 5901 with MediaCodec hardware HEVC decoding")
+            log("S8: Launched MacHevcVideoPipeline on UDP 5901/5900 with active pinhole punches and MediaCodec HEVC decoding")
+
+            // 3. Write encrypted 0x1c MediaStreamOptions offer
+            layer.writeRecord(output, msg1c)
+            log("S8: Sent encrypted 0x1c MediaStreamOptions offer (${msg1c.size} bytes, tilesPerFrame=1)")
+
+            // Decrypt records from server until we find canvas dimensions / 0x1c answer
+            val records = mutableListOf<ByteArray>()
+            var dims: Triple<Int, Int, Int>? = null
+            for (attempt in 0 until 10) {
+                val rec = layer.readRecord(input)
+                val recType = rec[0].toInt() and 0xff
+                log("S8: Decrypted record $attempt (type=0x${Integer.toHexString(recType)}, len=${rec.size})")
+                records.add(rec)
+                val d = MacHevcOffers.extractCanvasDims(rec)
+                if (d != null) {
+                    dims = d
+                    break
+                }
+            }
+            cachedHandshakeRecords = records
+            val record = records.firstOrNull() ?: ByteArray(0)
+            log("S8 GATE PASS: Processed encrypted handshake records (len=${record.size}, count=${records.size})")
+
+            // Check if record contains canvas dimensions
+            if (dims != null) {
+                log("S8: Extracted canvas dimensions: ${dims.first}x${dims.second} (tiles=${dims.third})")
+                width = dims.first
+                height = dims.second
+                pipeline.updateDimensions(width, height)
+                onResolutionChanged?.invoke(width, height)
+            }
 
             return record
         } catch (e: Exception) {
@@ -713,8 +722,15 @@ class MacHevcSession(
         val rIn = checkNotNull(rawInput) { "Input stream not established" }
         val rOut = checkNotNull(rawOutput) { "Output stream not established" }
 
+        val queue = java.util.ArrayDeque<ByteArray>()
+        if (cachedHandshakeRecords.isNotEmpty()) {
+            queue.addAll(cachedHandshakeRecords)
+        } else if (firstRecord != null && firstRecord.isNotEmpty()) {
+            queue.add(firstRecord)
+        }
+
         val inStream = object : InputStream() {
-            private var currentRecord: ByteArray? = firstRecord
+            private var currentRecord: ByteArray? = null
             private var recordPos = 0
 
             override fun read(): Int {
@@ -734,14 +750,19 @@ class MacHevcSession(
 
             private fun ensureData(): Boolean {
                 while (currentRecord == null || recordPos >= currentRecord!!.size) {
-                    val rec = try {
-                        layer.readRecord(rIn)
-                    } catch (e: java.io.EOFException) {
-                        return false
+                    val rec = if (queue.isNotEmpty()) {
+                        queue.pollFirst()
+                    } else {
+                        try {
+                            layer.readRecord(rIn)
+                        } catch (e: java.io.EOFException) {
+                            return false
+                        }
                     }
                     currentRecord = rec
                     recordPos = 0
-                    if (rec.isNotEmpty()) return true
+                    if (rec != null && rec.isNotEmpty()) return true
+                    if (rec == null) return false
                 }
                 return true
             }
@@ -814,42 +835,14 @@ class MacHevcSession(
                                 framePixels = null
                                 frameBitmap?.recycle()
                                 frameBitmap = null
+                                videoPipeline?.updateDimensions(newW, newH)
                                 onResolutionChanged?.invoke(newW, newH)
                             } else {
-                                log("S9: AppleDisplayLayout (${data.size} bytes), re-arming with 0x09 and 0x03")
+                                log("S9: AppleDisplayLayout (${data.size} bytes)")
                             }
-                            if (stage != "CLOSED" && !writerExecutor.isShutdown) {
-                                try {
-                                    writerExecutor.execute {
-                                        try {
-                                            recordOut?.write(buildAutoFrameBufferUpdate(width, height))
-                                            recordOut?.write(buildFramebufferUpdateRequest(width, height))
-                                            recordOut?.flush()
-                                        } catch (e: Exception) {
-                                            log("Error sending FBU re-arm: ${e.message}")
-                                        }
-                                    }
-                                } catch (ignored: RejectedExecutionException) {}
-                            }
+                            reofferMediaStream()
                         }
-                        0x453 -> { // VendorKeysymEncoding
-                            val data = ByteArray(22)
-                            stream.readFully(data)
-                            log("S9: VendorKeysymEncoding (22 bytes)")
-                        }
-                        0x455 -> { // KeyboardInputSource
-                            val prefixLen = stream.readUnsignedShort()
-                            val data = ByteArray(prefixLen)
-                            stream.readFully(data)
-                            log("S9: KeyboardInputSource ($prefixLen bytes)")
-                        }
-                        0x456 -> { // DeviceInfo
-                            val msgSize = stream.readUnsignedShort()
-                            val data = ByteArray(msgSize)
-                            stream.readFully(data)
-                            log("S9: DeviceInfo ($msgSize bytes)")
-                        }
-                        0x450 -> { // CursorImage
+                        1104, 0x450 -> { // CursorImage
                             val cacheId = stream.readInt()
                             val compLen = stream.readInt()
                             if (compLen > 0) {
@@ -860,11 +853,21 @@ class MacHevcSession(
                                 log("S9: CursorImage SELECT cacheId=0x${Integer.toHexString(cacheId)}")
                             }
                         }
-                        0x3f2 -> { // RFBMediaStreamMessage1
+                        1010, 1011, 1107, 1109, 1110, 0x3ea, 0x3f2, 0x3f3, 0x453, 0x455, 0x456 -> {
                             val payloadLen = stream.readUnsignedShort()
                             val data = ByteArray(payloadLen)
                             stream.readFully(data)
-                            log("S9: RFBMediaStreamMessage1 ($payloadLen bytes)")
+                            log("S9: Apple pseudo-encoding 0x${Integer.toHexString(enc)} ($enc, $payloadLen bytes)")
+                            if (enc == 1010 || enc == 0x3f2) {
+                                val dims = MacHevcOffers.extractCanvasDims(data)
+                                if (dims != null && (dims.first != width || dims.second != height)) {
+                                    log("S9: 1010/0x3f2 updated canvas dimensions: ${dims.first}x${dims.second} (tiles=${dims.third})")
+                                    width = dims.first
+                                    height = dims.second
+                                    videoPipeline?.updateDimensions(dims.first, dims.second)
+                                    onResolutionChanged?.invoke(width, height)
+                                }
+                            }
                         }
                         0 -> { // Raw
                             val rawLen = rw * rh * 4
@@ -987,6 +990,25 @@ class MacHevcSession(
         } catch (ignored: RejectedExecutionException) {}
     }
 
+    fun reofferMediaStream() {
+        val keys = negotiationKeys ?: return
+        val offers = currentOffers ?: return
+        if (stage == "CLOSED" || writerExecutor.isShutdown) return
+        try {
+            writerExecutor.execute {
+                try {
+                    val out = recordOut ?: return@execute
+                    val msg1c = MacHevcOffers.build0x1cMessage(offers.audioOffer, offers.videoOffer, keys, altSession = isAltSession)
+                    out.write(msg1c)
+                    out.flush()
+                    log("S9: Sent encrypted 0x1c media re-offer (${msg1c.size} bytes)")
+                } catch (e: Exception) {
+                    log("reofferMediaStream error: ${e.message}")
+                }
+            }
+        } catch (ignored: RejectedExecutionException) {}
+    }
+
     fun sendMediaStreamOffer(tilesPerFrame: Int = 1, audioEnabled: Boolean = false): ByteArray {
         val out = checkNotNull(recordOut) { "Record stream not initialized" }
         val layer = checkNotNull(recordLayer) { "Record layer not established" }
@@ -1005,7 +1027,6 @@ class MacHevcSession(
         val h = targetHeight.coerceIn(200, 8192)
         log("S9: updateDisplay requested: ${w}x${h} (displayType=$displayType)")
         sendDisplayConfiguration(w, h, displayType)
-        requestUpdate(incremental = false)
     }
 
     fun sendMouseEvent(x: Int, y: Int, flags: Int) {

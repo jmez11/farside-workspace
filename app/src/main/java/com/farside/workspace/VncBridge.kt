@@ -27,45 +27,54 @@ internal class VncAuthenticationException : Exception()
 class VncBridge : DesktopSessionBridge {
     @Volatile override var clipboardListener: ((String) -> Unit)? = null
     @Volatile internal var disconnectListener: ((Int, Boolean) -> Unit)? = null
-    private var active = 0L
-    private var macHevcSession: MacHevcSession? = null
+    @Volatile private var active = 0L
+    @Volatile private var macHevcSession: MacHevcSession? = null
+    private val stateLock = Any()
     private val callbacks = android.os.Handler(android.os.Looper.getMainLooper())
     private val heldPrintable = mutableMapOf<Int, Int>()
 
-    @Synchronized fun connect(host: String, port: Int, password: String, surface: Surface,
+    fun connect(host: String, port: Int, password: String, surface: Surface,
         username: String = "", authMode: VncAuthMode = VncAuthMode.VNC_PASSWORD,
         httpProxy: ConnectionProfile? = null): Long {
-        check(active == 0L)
+        synchronized(stateLock) {
+            check(active == 0L)
+        }
         require(port in 1..65535)
         if (httpProxy?.expMacHevc == true) {
             val session = MacHevcSession(host.removeSurrounding("[", "]"), port, username, password,
                 shareConsole = httpProxy.expMacShareConsole) { line ->
                 Log.i("MacHevcBridge", line)
             }
-            val firstRecord = session.start()
-            session.initStreamingLayer(firstRecord)
             session.setSurface(surface)
             session.onResolutionChanged = { w, h ->
                 Log.i("MacHevcBridge", "Resolution changed to ${w}x${h}")
             }
+            val firstRecord = session.start()
+            session.initStreamingLayer(firstRecord)
             session.startStreaming(surface) { error ->
                 callbacks.post { disconnectListener?.invoke(R.string.vnc_server_disconnected, true) }
             }
-            macHevcSession = session
-            active = 0xCAFE0001L
-            return active
+            synchronized(stateLock) {
+                macHevcSession = session
+                active = 0xCAFE0001L
+            }
+            return 0xCAFE0001L
         }
+        val instanceId: Long
         if (authMode == VncAuthMode.VNC_PASSWORD) {
             if (!(password.isNotEmpty() && password.toByteArray(Charsets.ISO_8859_1).size <= 8 && password.all { it.code in 1..255 }))
                 throw LocalizableException(R.string.vnc_password_latin1)
             val fd = if (httpProxy?.proxyType in listOf(ProxyType.HTTP, ProxyType.SOCKS5)) detachSocket(openSocket(host, port, httpProxy)) else -1
-            active = nativeConnect(host.removeSurrounding("[", "]"), port, password.toByteArray(Charsets.ISO_8859_1), surface, fd)
+            instanceId = nativeConnect(host.removeSurrounding("[", "]"), port, password.toByteArray(Charsets.ISO_8859_1), surface, fd)
         } else {
             require(username.isNotBlank() && password.isNotEmpty())
             val fd = authenticateApple(host.removeSurrounding("[", "]"), port, username, password, httpProxy)
-            active = nativeConnectAuthenticated(host.removeSurrounding("[", "]"), port, fd, surface)
+            instanceId = nativeConnectAuthenticated(host.removeSurrounding("[", "]"), port, fd, surface)
         }
-        return active
+        synchronized(stateLock) {
+            active = instanceId
+        }
+        return instanceId
     }
     private fun openSocket(host: String, port: Int, httpProxy: ConnectionProfile?): Socket {
         if (httpProxy == null || httpProxy.proxyType !in listOf(ProxyType.HTTP, ProxyType.SOCKS5))
@@ -139,71 +148,95 @@ class VncBridge : DesktopSessionBridge {
             throw error
         }
     }
-    @Synchronized fun disconnect(instance: Long) {
-        if (instance == 0L || instance != active) return
-        if (macHevcSession != null) {
-            macHevcSession?.close()
+    fun disconnect(instance: Long) {
+        val sessionToClose: MacHevcSession?
+        val nativeInstanceToClose: Long
+        synchronized(stateLock) {
+            if (instance == 0L || instance != active) return
+            sessionToClose = macHevcSession
             macHevcSession = null
-        } else {
-            nativeDisconnect(instance)
+            nativeInstanceToClose = if (sessionToClose == null) active else 0L
+            active = 0L
         }
-        active = 0L
-        heldPrintable.clear()
+        synchronized(heldPrintable) {
+            heldPrintable.clear()
+        }
+        if (sessionToClose != null) {
+            sessionToClose.close()
+        } else if (nativeInstanceToClose != 0L) {
+            nativeDisconnect(nativeInstanceToClose)
+        }
     }
-    @Synchronized fun setSurface(instance: Long, surface: Surface?) {
+    fun setSurface(instance: Long, surface: Surface?) {
+        val mac = macHevcSession
         if (instance != 0L && instance == active) {
-            if (macHevcSession != null) macHevcSession?.setSurface(surface)
+            if (mac != null) mac.setSurface(surface)
             else nativeSetSurface(instance, surface)
         }
     }
-    @Synchronized fun sendPointerEvent(instance: Long, x: Int, y: Int, buttonMask: Int) {
+    fun sendPointerEvent(instance: Long, x: Int, y: Int, buttonMask: Int) {
+        val mac = macHevcSession
         if (instance != 0L && instance == active) {
-            if (macHevcSession != null) macHevcSession?.sendPointer(x, y, buttonMask)
+            if (mac != null) mac.sendPointer(x, y, buttonMask)
             else nativePointer(instance, x, y, buttonMask)
         }
     }
-    @Synchronized override fun sendMouseEvent(instance: Long, x: Int, y: Int, flags: Int) {
+    override fun sendMouseEvent(instance: Long, x: Int, y: Int, flags: Int) {
+        val mac = macHevcSession
         if (instance != 0L && instance == active) {
-            if (macHevcSession != null) macHevcSession?.sendMouseEvent(x, y, flags)
+            if (mac != null) mac.sendMouseEvent(x, y, flags)
             else nativeMouse(instance, x, y, flags)
         }
     }
     /** XT scancodes from the shared strip map to X11 keysyms, including Command/Super. */
-    @Synchronized override fun sendKeyEvent(instance: Long, scancode: Int, isDown: Boolean) {
+    override fun sendKeyEvent(instance: Long, scancode: Int, isDown: Boolean) {
         if (instance == 0L || instance != active) return
         val keysym = xtKeysym(scancode) ?: return
-        if (macHevcSession != null) macHevcSession?.sendKeyEvent(keysym, isDown)
+        val mac = macHevcSession
+        if (mac != null) mac.sendKeyEvent(keysym, isDown)
         else nativeKey(instance, keysym, isDown)
     }
     /** Unicode is one X11 keysym, including supplementary code points. */
-    @Synchronized override fun sendUnicodeKeyEvent(instance: Long, unicodeChar: Int, isDown: Boolean) {
+    override fun sendUnicodeKeyEvent(instance: Long, unicodeChar: Int, isDown: Boolean) {
         if (instance == 0L || instance != active || !Character.isValidCodePoint(unicodeChar)) return
         val keysym = when (unicodeChar) { 8 -> 0xff08; 9 -> 0xff09; 10, 13 -> 0xff0d; 27 -> 0xff1b
             else -> if (unicodeChar <= 255) unicodeChar else 0x01000000 or unicodeChar }
-        if (macHevcSession != null) macHevcSession?.sendKeyEvent(keysym, isDown)
+        val mac = macHevcSession
+        if (mac != null) mac.sendKeyEvent(keysym, isDown)
         else nativeKey(instance, keysym, isDown)
     }
     // Key release retains its down keysym if Shift/Ctrl changed in between.
-    @Synchronized internal fun sendPhysicalKey(instance: Long, event: android.view.KeyEvent, down: Boolean) {
+    internal fun sendPhysicalKey(instance: Long, event: android.view.KeyEvent, down: Boolean) {
         if (instance == 0L || instance != active) return
         val key = event.keyCode
         val unicode = event.unicodeChar
-        val symbol = if (!down) heldPrintable.remove(key) else null
+        val symbol = synchronized(heldPrintable) { if (!down) heldPrintable.remove(key) else null }
         val chosen = symbol ?: if (unicode != 0 && !event.isCtrlPressed && !event.isAltPressed && !event.isMetaPressed) {
             if (unicode <= 255) unicode else 0x01000000 or unicode
         } else androidKeysym(key) ?: return
-        if (down) heldPrintable[key] = chosen
-        if (macHevcSession != null) macHevcSession?.sendKeyEvent(chosen, down)
+        if (down) synchronized(heldPrintable) { heldPrintable[key] = chosen }
+        val mac = macHevcSession
+        if (mac != null) mac.sendKeyEvent(chosen, down)
         else nativeKey(instance, chosen, down)
     }
-    @Synchronized override fun sendClipboardText(instance: Long, text: String): Boolean =
-        instance != 0L && instance == active && (macHevcSession != null || nativeClipboard(instance, text.toByteArray(Charsets.UTF_8), text.toByteArray(Charsets.ISO_8859_1)))
-    @Synchronized override fun getDesktopWidth(instance: Long): Int = if (instance != 0L && instance == active) {
-        if (macHevcSession != null) macHevcSession!!.width else nativeSize(instance, true)
-    } else 0
-    @Synchronized override fun getDesktopHeight(instance: Long): Int = if (instance != 0L && instance == active) {
-        if (macHevcSession != null) macHevcSession!!.height else nativeSize(instance, false)
-    } else 0
+    override fun sendClipboardText(instance: Long, text: String): Boolean {
+        if (instance == 0L || instance != active) return false
+        val mac = macHevcSession
+        return if (mac != null) true
+        else nativeClipboard(instance, text.toByteArray(Charsets.UTF_8), text.toByteArray(Charsets.ISO_8859_1))
+    }
+    override fun getDesktopWidth(instance: Long): Int {
+        val mac = macHevcSession
+        return if (instance != 0L && instance == active) {
+            if (mac != null) mac.width else nativeSize(instance, true)
+        } else 0
+    }
+    override fun getDesktopHeight(instance: Long): Int {
+        val mac = macHevcSession
+        return if (instance != 0L && instance == active) {
+            if (mac != null) mac.height else nativeSize(instance, false)
+        } else 0
+    }
     override fun updateDisplay(instance: Long, width: Int, height: Int, zoom: Float) {
         if (instance != 0L && instance == active && macHevcSession != null) {
             macHevcSession?.updateDisplay(width, height)
@@ -211,7 +244,7 @@ class VncBridge : DesktopSessionBridge {
     }
     val isMacHevc: Boolean get() = macHevcSession != null
     val macHevcStage: String? get() = macHevcSession?.stage
-    @Synchronized override fun getDecoderDescription(instance: Long): String {
+    override fun getDecoderDescription(instance: Long): String {
         val mac = macHevcSession
         return when {
             mac != null -> mac.getDecoderDescription()

@@ -5,6 +5,7 @@ import java.nio.ByteOrder
 import java.security.MessageDigest
 import javax.crypto.Cipher
 import javax.crypto.Mac
+import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
 class MacHevcSrtpException(message: String) : Exception(message)
@@ -211,3 +212,120 @@ data class DecryptedRtpPacket(
     val ssrc: Long,
     val payload: ByteArray
 )
+
+/**
+ * RFC 3711 SRTCP Sender for Apple High-Performance Media Transport.
+ * Encrypts RTCP compound feedback packets (RR, PLI, FIR) sent to UDP port 5900.
+ */
+class MacHevcSrtcpEncryptor(
+    masterKey: ByteArray,
+    masterSalt: ByteArray
+) {
+    init {
+        require(masterKey.size == 32) { "Master key must be 32 bytes (AES-256), got ${masterKey.size}" }
+        require(masterSalt.size == 14) { "Master salt must be 14 bytes, got ${masterSalt.size}" }
+    }
+
+    private val cipherKey = MacHevcSrtp.deriveKey(masterKey, masterSalt, label = 3, length = 32)
+    private val authKey = MacHevcSrtp.deriveKey(masterKey, masterSalt, label = 4, length = 20)
+    private val salt = MacHevcSrtp.deriveKey(masterKey, masterSalt, label = 5, length = 14)
+    private var index = 0
+    private val lock = Any()
+
+    fun protect(rtcpPkt: ByteArray): ByteArray {
+        require(rtcpPkt.size >= 8) { "RTCP packet too short: ${rtcpPkt.size}" }
+        val currentIndex: Int
+        synchronized(lock) {
+            currentIndex = index
+            index++
+        }
+
+        val hdr = rtcpPkt.copyOfRange(0, 8)
+        val ssrc = ((hdr[4].toLong() and 0xff) shl 24) or
+                   ((hdr[5].toLong() and 0xff) shl 16) or
+                   ((hdr[6].toLong() and 0xff) shl 8) or
+                   (hdr[7].toLong() and 0xff)
+
+        val iv = ByteArray(16)
+        System.arraycopy(salt, 0, iv, 0, 14)
+        iv[4] = (iv[4].toInt() xor ((ssrc ushr 24).toInt() and 0xff)).toByte()
+        iv[5] = (iv[5].toInt() xor ((ssrc ushr 16).toInt() and 0xff)).toByte()
+        iv[6] = (iv[6].toInt() xor ((ssrc ushr 8).toInt() and 0xff)).toByte()
+        iv[7] = (iv[7].toInt() xor (ssrc.toInt() and 0xff)).toByte()
+
+        iv[10] = (iv[10].toInt() xor ((currentIndex ushr 24) and 0xff)).toByte()
+        iv[11] = (iv[11].toInt() xor ((currentIndex ushr 16) and 0xff)).toByte()
+        iv[12] = (iv[12].toInt() xor ((currentIndex ushr 8) and 0xff)).toByte()
+        iv[13] = (iv[13].toInt() xor (currentIndex and 0xff)).toByte()
+
+        val cipher = Cipher.getInstance("AES/CTR/NoPadding").apply {
+            init(Cipher.ENCRYPT_MODE, SecretKeySpec(cipherKey, "AES"), IvParameterSpec(iv))
+        }
+        val ciphertext = if (rtcpPkt.size > 8) {
+            cipher.doFinal(rtcpPkt, 8, rtcpPkt.size - 8)
+        } else {
+            ByteArray(0)
+        }
+
+        val eIndex = ByteBuffer.allocate(4).order(ByteOrder.BIG_ENDIAN)
+            .putInt((0x80000000L or (currentIndex.toLong() and 0x7fffffffL)).toInt()).array()
+
+        val body = ByteArray(8 + ciphertext.size + 4)
+        System.arraycopy(hdr, 0, body, 0, 8)
+        System.arraycopy(ciphertext, 0, body, 8, ciphertext.size)
+        System.arraycopy(eIndex, 0, body, 8 + ciphertext.size, 4)
+
+        val mac = Mac.getInstance("HmacSHA1").apply {
+            init(SecretKeySpec(authKey, "HmacSHA1"))
+        }
+        val fullTag = mac.doFinal(body)
+        val tag = fullTag.copyOfRange(0, 10)
+
+        val protected = ByteArray(body.size + 10)
+        System.arraycopy(body, 0, protected, 0, body.size)
+        System.arraycopy(tag, 0, protected, body.size, 10)
+        return protected
+    }
+}
+
+/**
+ * RTCP Feedback Packet Builder (RFC 3550, RFC 4585, RFC 2032).
+ */
+object MacHevcRtcp {
+    /** Receiver Report (RFC 3550 §6.4.2, PT=201). 8 bytes: header + sender SSRC. */
+    fun buildRr(senderSsrc: Long): ByteArray {
+        val buf = ByteBuffer.allocate(8).order(ByteOrder.BIG_ENDIAN)
+        buf.put(0x80.toByte()) // V=2, P=0, RC=0
+        buf.put(201.toByte())  // PT=201 (RR)
+        buf.putShort(1.toShort()) // length = 1 (1 32-bit word after header)
+        buf.putInt(senderSsrc.toInt())
+        return buf.array()
+    }
+
+    /** Picture Loss Indication (RFC 4585 §6.3.1, PT=206, FMT=1). 12 bytes. */
+    fun buildPli(senderSsrc: Long, mediaSsrc: Long): ByteArray {
+        val buf = ByteBuffer.allocate(12).order(ByteOrder.BIG_ENDIAN)
+        buf.put((0x80 or 1).toByte()) // V=2, P=0, FMT=1 (PLI)
+        buf.put(206.toByte())        // PT=206 (PSFB)
+        buf.putShort(2.toShort())    // length = 2 words after header
+        buf.putInt(senderSsrc.toInt())
+        buf.putInt(mediaSsrc.toInt())
+        return buf.array()
+    }
+
+    /** Legacy Full-INTRA-frame Request (RFC 2032 §5.2.1, PT=192). 8 bytes. */
+    fun buildFirLegacy(targetSsrc: Long): ByteArray {
+        val buf = ByteBuffer.allocate(8).order(ByteOrder.BIG_ENDIAN)
+        buf.put(0x80.toByte()) // V=2, P=0
+        buf.put(192.toByte())  // PT=192 (Legacy FIR)
+        buf.putShort(1.toShort()) // length = 1
+        buf.putInt(targetSsrc.toInt())
+        return buf.array()
+    }
+
+    /** Compound RTCP packet: RR + PLI + Legacy FIR. */
+    fun buildCompoundFir(senderSsrc: Long, targetSsrc: Long): ByteArray {
+        return buildRr(senderSsrc) + buildPli(senderSsrc, targetSsrc) + buildFirLegacy(targetSsrc)
+    }
+}
+
