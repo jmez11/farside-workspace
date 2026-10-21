@@ -10,6 +10,26 @@ import javax.crypto.spec.SecretKeySpec
 
 class MacHevcSrtpException(message: String) : Exception(message)
 
+/** RFC3711 sender with an independent monotonically increasing 48-bit packet index. */
+class MacHevcSrtpSender(blob: ByteArray, private val ssrc: Long) {
+    private val keys=MacHevcSrtp(blob.copyOfRange(0,32),blob.copyOfRange(32,46))
+    private var index=0L
+    @Synchronized fun protect(payload: ByteArray, payloadType: Int, timestamp: Long): ByteArray {
+        check(index<0xffffffffffffL) { "SRTP sender index exhausted" }
+        val header=ByteBuffer.allocate(12).put(0x80.toByte()).put(payloadType.toByte()).putShort(index.toShort())
+            .putInt(timestamp.toInt()).putInt(ssrc.toInt()).array()
+        val iv=ByteArray(16);keys.salt.copyInto(iv)
+        for(i in 0..3) iv[4+i]=(iv[4+i].toInt() xor (ssrc ushr (24-i*8)).toInt()).toByte()
+        for(i in 0..5) iv[8+i]=(iv[8+i].toInt() xor (index ushr (40-i*8)).toInt()).toByte()
+        val cipher=Cipher.getInstance("AES/CTR/NoPadding").apply { init(Cipher.ENCRYPT_MODE,SecretKeySpec(keys.cipherKey,"AES"),IvParameterSpec(iv)) }
+        val encrypted=header+cipher.doFinal(payload)
+        val mac=Mac.getInstance("HmacSHA1").apply { init(SecretKeySpec(keys.authKey,"HmacSHA1")) }
+        mac.update(encrypted);mac.update(ByteBuffer.allocate(4).putInt((index ushr 16).toInt()).array())
+        index++
+        return encrypted+mac.doFinal().copyOf(10)
+    }
+}
+
 /**
  * RFC 3711 SRTP Decryption Engine for Apple High-Performance Media Transport.
  *

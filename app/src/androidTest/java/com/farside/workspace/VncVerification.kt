@@ -25,7 +25,7 @@ import kotlinx.coroutines.runBlocking
 
 /** Actual LibVNCClient/JNI/surface on Quest. Fixture protocol is test-only, never a client. */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
-internal class VncVerification(private val test: Instrumentation) {
+internal class VncVerification(private val test: Instrumentation,private val liveFrameTimeoutMs:Long=15000) {
     private val results = File(test.targetContext.cacheDir, "vnc-results.txt")
     private fun record(text: String) { results.appendText("$text\n") }
     // macOS short username for the Mac VNC/SSH tests: setup-specific, never hardcoded.
@@ -33,8 +33,8 @@ internal class VncVerification(private val test: Instrumentation) {
         "Missing instrumentation arg: pass -e macSshUser <macOS short username>"
     }
     private fun main(block: () -> Unit) = test.runOnMainSync(block)
-    private fun await(reason: String, check: () -> Boolean) {
-        val end = SystemClock.uptimeMillis() + 15000
+    private fun await(reason: String, timeoutMs:Long=15000, check: () -> Boolean) {
+        val end = SystemClock.uptimeMillis() + timeoutMs
         while (!check()) { check(SystemClock.uptimeMillis() < end) { reason }; Thread.sleep(50) }
     }
     private fun texture(v: View): TextureView? = if (v is TextureView) v else (v as? ViewGroup)?.let { group ->
@@ -68,7 +68,15 @@ internal class VncVerification(private val test: Instrumentation) {
         val clipboard = test.targetContext.getSystemService(android.content.ClipboardManager::class.java)
         val originalClip = clipboard.primaryClip
         try {
-            if (mode == "proxyLive") {
+            if(mode=="macLocalSshSetup") {
+                results.appendText(MacLocalVerification(test).setupSsh(requireNotNull(profileId)))
+            } else if(mode=="macLocalRelay") {
+                results.appendText(MacHevcReevaluation(test).run(requireNotNull(profileId),relayMedia=true,preferAvc=true,flicker=true))
+            } else if(mode in listOf("localCopyPrepare","localCopyExport","localCopyImport")) {
+                results.appendText(MacLocalVerification(test).transfer(mode,profileId))
+            } else if(mode in listOf("macLocalDirect","macLocalBaseline","macLocalProduction")) {
+                results.appendText(MacLocalVerification(test).direct(requireNotNull(profileId),baselineOnly=mode=="macLocalBaseline",production=mode=="macLocalProduction"))
+            } else if (mode == "proxyLive") {
                 proxyLiveMac()
             } else if (mode == "proxy") {
                 proxyFixture()
@@ -255,11 +263,43 @@ internal class VncVerification(private val test: Instrumentation) {
                     bridge.disconnect(handle)
                     record("PASS: Apple VNC accepted the Mac SSH short username with the saved password")
                 } finally { surface.release(); texture.release() }
+            } else if (mode == "macMediaSettings") {
+                record(MacMediaSettingsFixture(test).run(requireNotNull(profileId)))
+            } else if (mode == "macInteractiveUiFixture") {
+                val info=test.uiAutomation.serviceInfo
+                info.flags=info.flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+                test.uiAutomation.serviceInfo=info
+                val fixtureManager=ProfileManager(test.targetContext)
+                val fixtureCredential=SavedCredential(name="Owned local media UI fixture",user="",pass="testpass")
+                fixtureManager.addCredential(fixtureCredential)
+                try { Fixture(0).use { server ->
+                    val local=ConnectionProfile("mac-media-ui-fixture","Local media UI",ConnectionType.VNC,
+                        "127.0.0.1",server.port,"","",credentialId=fixtureCredential.id)
+                    MacMediaSurface(test,local).use { displayed ->
+                        check(displayed.awaitConnection()) { "Local UI connection failed" }
+                        Thread.sleep(800)
+                        click(test.targetContext.getString(R.string.keyboard))
+                        Thread.sleep(1500)
+                        check(nodes().any { it.contentDescription?.toString()==test.targetContext.getString(R.string.remote_keyboard_input) || it.text?.toString()==test.targetContext.getString(R.string.remote_keyboard_input) }) { "Remote keyboard editor missing" }
+                        check(checkNotNull(displayed.bridge).getDesktopWidth(displayed.handle)==64)
+                        record("PASS local VNC session UI opens Spatial Scene keyboard without crash; no Mac authentication")
+                    }
+                    check(server.disconnected.await(10,java.util.concurrent.TimeUnit.SECONDS))
+                } } finally { fixtureManager.deleteCredential(fixtureCredential.id) }
+            } else if (mode == "macAvcSourceFixture") {
+                record(MacAvcSourceFixture(test).run())
+            } else if (mode == "macAudioFixture") {
+                record(MacAudioFixture(test).run())
+            } else if (mode == "macCodecReplay") {
+                record(MacHevcCodecReplay(test).run())
+            } else if (mode == "macFlickerSelectIndex" || mode == "macConsoleInfo" || mode == "macFlickerSelectDisplay" || mode == "macFlickerHevc" || mode == "macFlickerFullName" || mode == "macFlickerCleanAgent" || mode == "macFlickerNoPoll" || mode == "macFlicker" || mode == "macBaseline" || mode == "macSrpAvcGuiAudio" || mode == "macSrpAvcRelay" || mode == "macReevaluate" || mode == "macUdpRoute" || mode == "macSshRelay" || mode == "macAudioRelay" || mode == "macAvcAudioRelay" || mode == "macProductionMedia" || mode == "macProductionGuiAudio" || mode == "macInteractiveAudio" || mode == "macHostAudioDiagnostics" || mode == "macGuiAudioRouting" || mode=="macStability" || mode=="macAutoGuiAudioRouting") {
+                record(MacHevcReevaluation(test).run(requireNotNull(profileId) { "Explicit VNC profile ID required" },
+                    transportOnly = mode == "macUdpRoute", relayMedia = mode in listOf("macFlickerHevc","macSshRelay","macAudioRelay","macAvcAudioRelay","macSrpAvcRelay","macSrpAvcGuiAudio","macFlicker","macFlickerNoPoll","macFlickerCleanAgent","macFlickerFullName","macFlickerSelectDisplay","macFlickerSelectIndex"), audioTest = mode in listOf("macAudioRelay","macAvcAudioRelay","macSrpAvcRelay","macSrpAvcGuiAudio"), preferAvc = mode in listOf("macAvcAudioRelay","macSrpAvcRelay","macSrpAvcGuiAudio","macFlicker","macFlickerNoPoll","macFlickerCleanAgent","macFlickerFullName","macFlickerSelectDisplay","macFlickerSelectIndex"),production=mode in listOf("macProductionMedia","macProductionGuiAudio","macInteractiveAudio","macGuiAudioRouting","macStability","macAutoGuiAudioRouting"),guiAudio=mode in listOf("macProductionGuiAudio","macInteractiveAudio"),interactive=mode in listOf("macInteractiveAudio","macGuiAudioRouting","macStability","macAutoGuiAudioRouting"),hostAudioDiagnostics=mode=="macHostAudioDiagnostics",guiRouting=mode in listOf("macGuiAudioRouting","macAutoGuiAudioRouting"),stability=mode=="macStability",autoUnlock=mode in listOf("macAutoGuiAudioRouting","macSrpAvcGuiAudio"),srp=mode in listOf("macFlickerHevc","macSrpAvcRelay","macSrpAvcGuiAudio","macFlicker","macFlickerNoPoll","macFlickerCleanAgent","macFlickerFullName","macFlickerSelectDisplay","macFlickerSelectIndex"),baselineOnly=mode=="macBaseline",flicker=mode in listOf("macFlickerHevc","macFlicker","macFlickerNoPoll","macFlickerCleanAgent","macFlickerFullName","macFlickerSelectDisplay","macFlickerSelectIndex"),noControlPoll=mode=="macFlickerNoPoll",cleanAgent=mode=="macFlickerCleanAgent",fullSessionAlias=mode=="macFlickerFullName",hevcCapture=mode=="macFlickerHevc",selectDisplay=mode in listOf("macFlickerSelectDisplay","macFlickerSelectIndex"),consoleInfo=mode=="macConsoleInfo",selectIndex=mode=="macFlickerSelectIndex"))
             } else if (mode == "macHevcPhase1") {
                 val pm = ProfileManager(test.targetContext)
                 val profile = pm.getProfiles().firstOrNull {
                     it.type == ConnectionType.VNC && (profileId == null || it.id == profileId.trim() || it.name.trim() == profileId.trim())
-                } ?: pm.getProfiles().first { it.type == ConnectionType.VNC }
+                } ?: error("Requested VNC profile not found")
                 val credential = pm.getCredentials().single { it.id == profile.credentialId }
                 withVncEndpoint(profile) { host, port ->
                     MacHevcSession(host, port, credential.user, credential.pass) { logLine ->
@@ -291,7 +331,7 @@ internal class VncVerification(private val test: Instrumentation) {
                 val pm = ProfileManager(test.targetContext)
                 val profile = pm.getProfiles().firstOrNull {
                     it.type == ConnectionType.VNC && (profileId == null || it.id == profileId.trim() || it.name.trim() == profileId.trim())
-                } ?: pm.getProfiles().first { it.type == ConnectionType.VNC }
+                } ?: error("Requested VNC profile not found")
                 val credential = pm.getCredentials().single { it.id == profile.credentialId }
                 withVncEndpoint(profile) { host, port ->
                     MacHevcSession(host, port, credential.user, credential.pass) { logLine ->
@@ -326,7 +366,7 @@ internal class VncVerification(private val test: Instrumentation) {
                 val pm = ProfileManager(test.targetContext)
                 val profile = pm.getProfiles().firstOrNull {
                     it.type == ConnectionType.VNC && (profileId == null || it.id == profileId.trim() || it.name.trim() == profileId.trim())
-                } ?: pm.getProfiles().first { it.type == ConnectionType.VNC }
+                } ?: error("Requested VNC profile not found")
                 val credential = pm.getCredentials().single { it.id == profile.credentialId }
                 withVncEndpoint(profile) { host, port ->
                     MacHevcSession(host, port, credential.user, credential.pass) { logLine ->
@@ -374,7 +414,7 @@ internal class VncVerification(private val test: Instrumentation) {
                 val pm = ProfileManager(test.targetContext)
                 val profile = pm.getProfiles().firstOrNull {
                     it.type == ConnectionType.VNC && (profileId == null || it.id == profileId.trim() || it.name.trim() == profileId.trim())
-                } ?: pm.getProfiles().first { it.type == ConnectionType.VNC && it.name.contains("WARP HEVC") }
+                } ?: error("Requested VNC profile not found")
                 val credential = pm.getCredentials().single { it.id == profile.credentialId }
                 val texture = android.graphics.SurfaceTexture(0)
                 val surface = android.view.Surface(texture)
@@ -397,7 +437,8 @@ internal class VncVerification(private val test: Instrumentation) {
                             }
                         }
                         bridge.disconnect(instance)
-                        record("PASS: Mac HEVC Live Stream completed: $lastDesc")
+                        check(Regex("[1-9][0-9]* frames").containsMatchIn(lastDesc)) { "No decoded HEVC frames: $lastDesc" }
+                        record("PASS: Mac HEVC Live Stream decoded frames: $lastDesc")
                     }
                 } finally {
                     surface.release()
@@ -465,7 +506,8 @@ internal class VncVerification(private val test: Instrumentation) {
                         try { session(profile, server) } finally { pm.deleteProfile(profile.id) }
                     }
                     if (mode != "picker") authenticationFailures()
-                    discoveryFixture(credential.id)
+                    // A transport-only subset keeps VPN media validation independent of LAN picker UI.
+                    if (mode != "transportFixture") discoveryFixture(credential.id)
                     record("PASS: VNC profile uses credential link only; Keystore credential ciphertext; normal API enforcement.")
                 } finally {
                     pm.deleteProfile("vnc-verification-profile"); pm.deleteCredential(credential.id)
@@ -519,7 +561,7 @@ internal class VncVerification(private val test: Instrumentation) {
                 if (server?.disconnected?.count == 0L && activity.vncInstance == 0L) error("Fixture disconnected: ${server.stage}")
                 instance = activity.vncInstance; bridge = activity.vncBridge; instance != 0L }
             Thread.sleep(800)
-            await("No nonblank framebuffer") {
+            await("No nonblank framebuffer",if(server==null) liveFrameTimeoutMs else 15000) {
                 runCatching {
                     var pixel = 0
                     main { texture(activity.window.decorView)?.bitmap?.let { image ->
@@ -653,6 +695,8 @@ internal class VncVerification(private val test: Instrumentation) {
             if (server != null) check(server.encodings.take(3) == listOf(16, 7, 8)) { "Wrong encoding preference: ${server.encodings}" }
             // Actual shared unscaled overlay receives a drag at local screen coordinates.
             val decor = activity.window.decorView
+            // Earlier cursor checks also send released pointers; do not mistake one for this drag.
+            server?.pointers?.clear()
             val start = SystemClock.uptimeMillis()
             main {
                 listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE, MotionEvent.ACTION_UP).forEachIndexed { i, action ->
@@ -846,12 +890,15 @@ internal class VncVerification(private val test: Instrumentation) {
         for (i in 0 until windows.size()) windows.valueAt(i).forEach { it.root?.let(::walk) }
         return out
     }
-    private fun click(label: String) {
+    private fun click(label: String, outsideEditable: Boolean = false) {
         var target: android.view.accessibility.AccessibilityNodeInfo? = null
         var lastScroll = 0L
         try { await("Missing UI control $label") {
             val visible = nodes()
-            target = visible.firstOrNull { it.text?.toString() == label || it.contentDescription?.toString() == label }
+            target = visible.firstOrNull {
+                (it.text?.toString() == label || it.contentDescription?.toString() == label) &&
+                    (!outsideEditable || generateSequence(it) { node -> node.parent }.none { node -> node.isEditable })
+            }
             if (target == null && visible.none { it.text?.startsWith("Finding local") == true } && SystemClock.uptimeMillis() - lastScroll > 500) {
                 visible.firstOrNull { it.isScrollable }?.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
                 lastScroll = SystemClock.uptimeMillis()
@@ -874,7 +921,7 @@ internal class VncVerification(private val test: Instrumentation) {
         val accessibility = test.uiAutomation.serviceInfo
         accessibility.flags = accessibility.flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
         test.uiAutomation.serviceInfo = accessibility
-        val launcher = test.startActivitySync(Intent(test.targetContext, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
+        val launcher = test.startActivitySync(Intent(test.targetContext, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)) as MainActivity
         val saved = java.util.concurrent.atomic.AtomicReference<ConnectionProfile?>()
         try {
             main { launcher.setContent {
@@ -888,9 +935,11 @@ internal class VncVerification(private val test: Instrumentation) {
             click("Click here to find local Macs")
             await("Mac scan progress did not say Macs") { nodes().any { it.text?.toString() == "Finding local Macs..." } }
             click("Select Screen Sharing server")
-            click(serviceName)
-            click("VNC password")
+            // The existing profile name can equal the service label: choose the menu, not its name field.
+            click(serviceName,outsideEditable=true)
+            if(initial.vncAuthMode==VncAuthMode.VNC_PASSWORD) click("VNC password")
             click("SAVE")
+            await("Picker did not save the selected resolved endpoint") { saved.get()!=null }
             val profile = checkNotNull(saved.get())
             check(profile.type == ConnectionType.VNC && profile.credentialId == initial.credentialId)
             check(profile.pass.isEmpty() && profile.user.isEmpty())

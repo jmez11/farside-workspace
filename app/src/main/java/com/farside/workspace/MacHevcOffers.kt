@@ -245,7 +245,7 @@ object MacHevcOffers {
     private val HEVC_PARAMS_LTR = "FLS;MS:-1;LF:-1;LTR;CABAC;POS:0;EOD:1;HTS:2;RR:3;AR:16/9,5/8;XR:16/9,5/8;".toByteArray(Charsets.US_ASCII)
     private val AVC_PARAMS = "FLS;LF:-1;POS:5;EOD:1;HTS:2;RR:3;POSE:4;AR:16/9,5/8;XR:16/9,5/8;".toByteArray(Charsets.US_ASCII)
 
-    fun buildMediaBlob(mode: Int, sessionId: Int, timestamp: Long, tilesPerFrame: Int = 1, audioEnabled: Boolean = false): ByteArray {
+    fun buildMediaBlob(mode: Int, sessionId: Int, timestamp: Long, tilesPerFrame: Int = 1, audioEnabled: Boolean = false, preferAvc: Boolean = false): ByteArray {
         val out = ByteArrayOutputStream()
         out.write(fieldVarint(1, 1))
         out.write(fieldVarint(2, 1))
@@ -258,7 +258,7 @@ object MacHevcOffers {
             val hevcBank = fieldVarint(1, 123) +
                     fieldBytes(2, resEntry) + fieldBytes(2, resEntryAlt) +
                     fieldBytes(2, resEntry) + fieldBytes(2, resEntryAlt) +
-                    fieldBytes(3, HEVC_PARAMS_LTR) +
+                    fieldBytes(3, if(preferAvc) HEVC_PARAMS_LTR.toString(Charsets.US_ASCII).replace("LTR;", "").toByteArray(Charsets.US_ASCII) else HEVC_PARAMS_LTR) +
                     fieldVarint(4, 1)
 
             val avcBank = fieldVarint(1, 100) +
@@ -267,13 +267,14 @@ object MacHevcOffers {
                     fieldVarint(4, 14)
 
             // Both banks advertised: 123 then 100 per Apple reference
-            val codecBanks = fieldBytes(3, hevcBank) + fieldBytes(3, avcBank)
+            // Apple's observed bank-to-output mapping is inverted: bank 123 yields H.264.
+            val codecBanks = if(preferAvc) fieldBytes(3, hevcBank) else fieldBytes(3, hevcBank) + fieldBytes(3, avcBank)
 
             val desc = fieldVarint(1, sessionId.toLong() and 0xffffffffL) +
-                    fieldVarint(2, 1) + // LTR on
+                    fieldVarint(2, if(preferAvc) 0 else 1) +
                     codecBanks +
                     fieldVarint(6, tilesPerFrame.toLong()) +
-                    fieldVarint(7, 1) + // LTR on
+                    fieldVarint(7, if(preferAvc) 0 else 1) +
                     fieldVarint(8, 63) +
                     fieldVarint(9, 1) +
                     fieldVarint(12, 1)
@@ -316,14 +317,14 @@ object MacHevcOffers {
         return out.toByteArray()
     }
 
-    fun createOffers(tilesPerFrame: Int = 1, audioEnabled: Boolean = false): MacHevcOffersBundle {
+    fun createOffers(tilesPerFrame: Int = 1, audioEnabled: Boolean = false, preferAvc: Boolean = false): MacHevcOffersBundle {
         val rand = SecureRandom()
         val videoSessionId = rand.nextInt()
         val audioSessionId = rand.nextInt()
 
         fun plist(mode: Int, sessionId: Int): ByteArray {
             val timestamp = System.currentTimeMillis() * 1_000_000L
-            val blob = buildMediaBlob(mode, sessionId, timestamp, tilesPerFrame, audioEnabled)
+            val blob = buildMediaBlob(mode, sessionId, timestamp, tilesPerFrame, audioEnabled, preferAvc)
             val dict = mapOf(
                 "avcMediaStreamOptionRemoteEndpointInfo" to REMOTE_ENDPOINT_INFO,
                 "avcMediaStreamNegotiatorMode" to mode,

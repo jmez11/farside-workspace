@@ -35,25 +35,33 @@ class VncBridge : DesktopSessionBridge {
 
     fun connect(host: String, port: Int, password: String, surface: Surface,
         username: String = "", authMode: VncAuthMode = VncAuthMode.VNC_PASSWORD,
-        httpProxy: ConnectionProfile? = null): Long {
+        httpProxy: ConnectionProfile? = null, macSessionUsername: String = username,
+        macDatagramSender: ((Int, ByteArray) -> Unit)? = null,
+        macAuthenticationGate: (() -> Unit)? = null): Long {
         synchronized(stateLock) {
             check(active == 0L)
         }
         require(port in 1..65535)
         if (httpProxy?.expMacHevc == true) {
+            check(macStreamSlot.compareAndSet(false,true)) { "Only one Apple streaming session can use the media ports at a time" }
             val session = MacHevcSession(host.removeSurrounding("[", "]"), port, username, password,
-                shareConsole = httpProxy.expMacShareConsole) { line ->
+                shareConsole = httpProxy.expMacShareConsole, sessionUsername = macSessionUsername,
+                authenticationSpacingMs = 5_000, mediaDatagramSender = macDatagramSender,
+                preferAvc = httpProxy.macPreferAvc, audioEnabled = httpProxy.macAudioEnabled,
+                authenticationGate = macAuthenticationGate) { line ->
                 Log.i("MacHevcBridge", line)
             }
             session.setSurface(surface)
             session.onResolutionChanged = { w, h ->
                 Log.i("MacHevcBridge", "Resolution changed to ${w}x${h}")
             }
-            val firstRecord = session.start()
-            session.initStreamingLayer(firstRecord)
-            session.startStreaming(surface) { error ->
-                callbacks.post { disconnectListener?.invoke(R.string.vnc_server_disconnected, true) }
-            }
+            try {
+                val firstRecord = session.start()
+                session.initStreamingLayer(firstRecord)
+                session.startStreaming(surface) { error ->
+                    callbacks.post { disconnectListener?.invoke(R.string.vnc_server_disconnected, true) }
+                }
+            } catch(e: Exception) { try { session.close() } finally { macStreamSlot.set(false) }; throw e }
             synchronized(stateLock) {
                 macHevcSession = session
                 active = 0xCAFE0001L
@@ -162,7 +170,7 @@ class VncBridge : DesktopSessionBridge {
             heldPrintable.clear()
         }
         if (sessionToClose != null) {
-            sessionToClose.close()
+            try { sessionToClose.close() } finally { macStreamSlot.set(false) }
         } else if (nativeInstanceToClose != 0L) {
             nativeDisconnect(nativeInstanceToClose)
         }
@@ -244,6 +252,11 @@ class VncBridge : DesktopSessionBridge {
     }
     val isMacHevc: Boolean get() = macHevcSession != null
     val macHevcStage: String? get() = macHevcSession?.stage
+    internal val macMediaPipeline: MacHevcVideoPipeline? get() = macHevcSession?.videoPipeline
+    override fun setAudioMuted(instance: Long, speakerMuted: Boolean, micMuted: Boolean) {
+        macHevcSession?.videoPipeline?.audio?.muted=speakerMuted
+    }
+
     override fun getDecoderDescription(instance: Long): String {
         val mac = macHevcSession
         return when {
@@ -267,6 +280,7 @@ class VncBridge : DesktopSessionBridge {
     private external fun nativeClipboard(instance: Long, utf8: ByteArray, latin1: ByteArray): Boolean
     private external fun nativeSize(instance: Long, width: Boolean): Int
     companion object {
+        private val macStreamSlot=java.util.concurrent.atomic.AtomicBoolean(false)
         init { System.loadLibrary("vnc-jni") }
         internal fun xtKeysym(code: Int): Int? = when (code) {
             0x01 -> 0xff1b; 0x0e -> 0xff08; 0x0f -> 0xff09; 0x1c, 0x11c -> 0xff0d

@@ -29,11 +29,22 @@ internal class VncSessionConnection(
     // Accessed only on worker.
     private var instance = 0L
     private var surface: Surface? = null
+    private var mediaRelay: MacHevcSshRelay? = null
+    private var mediaLease: com.farside.workspace.ssh.SshConnectionManager.Lease? = null
+    private fun closeMediaRelay() {
+        runCatching { mediaRelay?.close() }; mediaRelay=null
+        mediaLease?.close(); mediaLease=null
+    }
     private val tunnel = if (profile.useCloudflare || profile.proxyType == ProxyType.CLOUDFLARED) CloudflaredTunnel(this.context) else null
 
     init {
         bridge.disconnectListener = { reason, established ->
             tunnel?.close()
+            if(profile.expMacHevc) runCatching { worker.execute {
+                if(instance!=0L) bridge.disconnect(instance)
+                instance=0L
+                closeMediaRelay()
+            } }
             if (ended.compareAndSet(false, true)) main.post { if (!closed.get()) onDisconnected(context.getString(reason), established) }
         }
     }
@@ -108,7 +119,31 @@ internal class VncSessionConnection(
                 }
                 var failure: String? = null
                 val isMacAuth = profile.vncAuthMode == VncAuthMode.MAC_USER || profile.expMacHevc
-                instance = try { bridge.connect(host, port, credential.pass, next, credential.user, profile.vncAuthMode, profile) }
+                instance = try {
+                    var shortName=credential.user
+                    val gate=if(profile.expMacHevc) MacAuthenticationGate(context,profile.host) { closed.get() } else null
+                    if(profile.expMacHevc && profile.macSshRelayProfileId!=null) {
+                        val manager=com.farside.workspace.data.ProfileManager(context)
+                        val ssh=manager.getProfiles().singleOrNull { it.id==profile.macSshRelayProfileId && it.type==com.farside.workspace.data.ConnectionType.SSH }
+                            ?: throw IllegalArgumentException(context.getString(R.string.mac_media_ssh_required))
+                        require(ssh.host==profile.host) { context.getString(R.string.mac_media_same_host) }
+                        shortName=manager.getCredentials().singleOrNull { it.id==ssh.credentialId }?.user
+                            ?: throw IllegalArgumentException(context.getString(R.string.mac_media_ssh_required))
+                        require(shortName.isNotBlank() && shortName.none { it.isWhitespace() })
+                        val lease=com.farside.workspace.ssh.SshConnectionManager.acquire(context,"mac-media-${profile.id}")
+                        mediaLease=lease
+                        gate?.await()
+                        val client=lease.connect(ssh.copy(reconnectAutomatically=false))
+                        mediaRelay=MacHevcSshRelay(context,client,profile.host, { android.util.Log.i("MacMediaRelay",it) },profile.port)
+                        host="127.0.0.1"; port=mediaRelay!!.port
+                    }
+                    if(profile.expMacHevc) require(shortName.isNotBlank() && shortName.none { it.isWhitespace() }) {
+                        context.getString(R.string.mac_media_ssh_required)
+                    }
+                    bridge.connect(host,port,credential.pass,next,credential.user,profile.vncAuthMode,profile,
+                        macSessionUsername=shortName,macDatagramSender=mediaRelay?.let { relay -> { p,b -> relay.send(p,b) } },
+                        macAuthenticationGate=gate?.let { { it.await() } })
+                }
                     catch (error: VncAuthenticationException) { failure = context.getString(R.string.vnc_mac_auth_failed); 0L }
                     catch (error: IllegalArgumentException) {
                         failure = error.localizedMessage(context) ?: error.message?.takeIf { it.isNotBlank() } ?: context.getString(
@@ -123,6 +158,7 @@ internal class VncSessionConnection(
                         0L
                     }
                 if (instance == 0L) {
+                    closeMediaRelay()
                     ended.set(true)
                     val fallback = if (isMacAuth) {
                         context.getString(R.string.vnc_mac_user_hint)
@@ -159,6 +195,7 @@ internal class VncSessionConnection(
         tunnel?.close() // Cancel browser authentication immediately, before worker teardown.
         worker.execute {
             if (instance != 0L) bridge.disconnect(instance)
+            closeMediaRelay()
             instance = 0L
             surface?.release()
             surface = null

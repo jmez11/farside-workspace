@@ -40,8 +40,23 @@ class MacHevcRecordLayer(
     }
 
     private val random = SecureRandom()
+    private val pointerCipher=Cipher.getInstance("AES/ECB/NoPadding").apply {
+        init(Cipher.ENCRYPT_MODE,SecretKeySpec(contentKey,"AES"))
+    }
     var sendSeq: Long = 0L
     var recvSeq: Long = 0L
+
+    /** Apple HP msg 0x10 wraps pointer events under the post-toggle content key. */
+    @Synchronized
+    fun pointerEvent(x:Int,y:Int,rfbButtons:Int,width:Int,height:Int):ByteArray {
+        val appleButtons=(rfbButtons and 0xf9) or ((rfbButtons and 2) shl 1) or ((rfbButtons and 4) ushr 1)
+        val plain=java.nio.ByteBuffer.allocate(16).apply {
+            position(10);put(0xff.toByte());put(appleButtons.toByte())
+            putShort(x.coerceIn(0,(width-1).coerceIn(0,65535)).toShort())
+            putShort(y.coerceIn(0,(height-1).coerceIn(0,65535)).toShort())
+        }.array()
+        return byteArrayOf(0x10,0)+pointerCipher.doFinal(plain)
+    }
 
     /**
      * Encrypt a message body into an outer record (u16 ciphertext_len || ciphertext).

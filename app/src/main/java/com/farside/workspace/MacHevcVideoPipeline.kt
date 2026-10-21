@@ -38,6 +38,14 @@ class MacHevcVideoPipeline(
     private var width: Int = 1920,
     private var height: Int = 1080,
     private val context: Context? = null,
+    private val datagramSender: ((Int, ByteArray) -> Unit)? = null,
+    private val parameterSetObserver: ((Int, ByteArray) -> Unit)? = null,
+    private val audioKeyBlob: ByteArray? = null,
+    audioKeyBlobV: ByteArray? = null,
+    ourAudioSsrc: Long = 0,
+    private val audioObserver: ((ByteArray) -> Unit)? = null,
+    private val preferAvc: Boolean = false,
+    private val encodedVideoObserver:((Long,ByteArray)->Unit)?=null,
     private val onFrameDecoded: () -> Unit = {},
     private val logCallback: (String) -> Unit = {}
 ) : Closeable {
@@ -81,7 +89,30 @@ class MacHevcVideoPipeline(
     private val isRunning = AtomicBoolean(false)
     val framesDecoded = AtomicLong(0)
     val packetsReceived = AtomicLong(0)
+    val authenticatedPackets = AtomicLong(0)
+    val nalUnits = AtomicLong(0)
     val serverVideoSsrc = AtomicLong(0L)
+    private val videoStreams=java.util.concurrent.ConcurrentHashMap<Long,AtomicLong>()
+    val videoStreamSummary: String get()=videoStreams.entries.sortedBy { it.key }.joinToString { "${it.key.toString(16)}:${it.value.get()}" }
+    var audio: MacScreenAudio? = null
+        private set
+    private val needsRecovery=AtomicBoolean(false)
+    private val avc = if(preferAvc) MacAvcStream(::log) { framesDecoded.incrementAndGet(); onFrameDecoded() }.also { stream ->
+        stream.onRecovery={ needsRecovery.set(true) }
+        if(encodedVideoObserver!=null) stream.accessUnitObserver={ bytes -> encodedVideoObserver.invoke(stream.activeSsrc ?: 0,bytes) }
+    } else null
+    val decoderDescription: String get() = avc?.description ?: "HEVC MediaCodec"
+    val avcConfiguration:ByteArray? get()=avc?.configurationSnapshot()
+    var avcAccessUnitObserver:((ByteArray)->Unit)?
+        get()=avc?.accessUnitObserver
+        set(value) { avc?.accessUnitObserver=value }
+    val avcInputDrops:Long get()=avc?.inputDrops?.get() ?: 0L
+    val avcAssemblyDiagnostics:String get()=avc?.assemblyDiagnostics() ?: "not AVC"
+    internal fun requestKeyframe() { needsRecovery.set(true) }
+    var avcPacketObserver:((ByteArray,Int,Long,Boolean,Long)->Unit)?
+        get()=avc?.packetObserver
+        set(value) { avc?.packetObserver=value }
+    private val audioSender=audioKeyBlobV?.let { MacHevcSrtpSender(it,ourAudioSsrc) }
 
     private var udpSocket: DatagramSocket? = null
     private var udpCtrlSocket: DatagramSocket? = null
@@ -97,6 +128,7 @@ class MacHevcVideoPipeline(
 
     fun start() {
         if (isRunning.getAndSet(true)) return
+        audio = audioKeyBlob?.let { MacScreenAudio(it, ::log, audioObserver) }
 
         val s = surface
         if (s != null && s.isValid) {
@@ -195,6 +227,7 @@ class MacHevcVideoPipeline(
     }
 
     private fun initCodec(targetSurface: Surface) {
+        if(preferAvc) { avc?.setSurface(targetSurface); return }
         try {
             val w = if (width in 200..8192) width else 1920
             val h = if (height in 200..8192) height else 1080
@@ -218,6 +251,7 @@ class MacHevcVideoPipeline(
 
     fun updateSurface(newSurface: Surface?) {
         surface = newSurface
+        if(preferAvc) { avc?.setSurface(newSurface); return }
         val codec = mediaCodec
         if (codec != null && newSurface != null && newSurface.isValid) {
             try {
@@ -237,6 +271,7 @@ class MacHevcVideoPipeline(
     }
 
     fun updateDimensions(newW: Int, newH: Int) {
+        if(preferAvc) return // Actual dimensions come from the validated avc1 sample entry.
         if (newW in 200..8192 && newH in 200..8192 && (newW != width || newH != height)) {
             width = newW
             height = newH
@@ -270,25 +305,30 @@ class MacHevcVideoPipeline(
                 if (vSock != null && !vSock.isClosed) {
                     punchPacket.address = targetAddr
                     punchPacket.port = videoPort
-                    vSock.send(punchPacket)
+                    if (datagramSender != null) datagramSender.invoke(videoPort, byteArrayOf(0)) else vSock.send(punchPacket)
                 }
 
                 val cSock = udpCtrlSocket
                 if (cSock != null && !cSock.isClosed) {
                     punchPacket.address = targetAddr
                     punchPacket.port = ctrlPort
-                    cSock.send(punchPacket)
+                    if (datagramSender != null) datagramSender.invoke(ctrlPort, byteArrayOf(0)) else cSock.send(punchPacket)
+                    if(tick%5==0 && audioSender!=null) {
+                        val heartbeat=audioSender.protect(byteArrayOf(0,0x68,0x34,0),101,tick.toLong()*4800)
+                        if(datagramSender!=null) datagramSender.invoke(ctrlPort,heartbeat)
+                        else cSock.send(DatagramPacket(heartbeat,heartbeat.size,targetAddr,ctrlPort))
+                    }
                 }
 
                 // Send keyframe request if server SSRC is known and no frames decoded or every ~2s (20 ticks)
                 val ssrc = serverVideoSsrc.get()
-                val needFir = ssrc != 0L && ((framesDecoded.get() == 0L && tick % 5 == 0) || (tick % 20 == 0))
+                val needFir = ssrc != 0L && ((framesDecoded.get() == 0L && tick % 5 == 0) || (tick % 20 == 0 && needsRecovery.getAndSet(false)))
                 if (needFir && cSock != null && !cSock.isClosed && srtcpEncryptor != null) {
                     try {
                         val firPkt = MacHevcRtcp.buildCompoundFir(ourVideoSsrc, targetSsrc = ssrc)
                         val protected = srtcpEncryptor.protect(firPkt)
                         val rtcpDatagram = DatagramPacket(protected, protected.size, targetAddr, ctrlPort)
-                        cSock.send(rtcpDatagram)
+                        if (datagramSender != null) datagramSender.invoke(ctrlPort, protected) else cSock.send(rtcpDatagram)
                         if (tick % 20 == 0) {
                             log("Sent SRTCP Compound FIR keyframe trigger for SSRC 0x${java.lang.Long.toHexString(ssrc)} to $host:$ctrlPort (seq=$tick)")
                         }
@@ -315,9 +355,9 @@ class MacHevcVideoPipeline(
         val packet = DatagramPacket(buffer, buffer.size)
         while (isRunning.get()) {
             try {
+                packet.length = buffer.size
                 sock.receive(packet)
-                log("UDP control socket received packet from ${packet.address}:${packet.port} (len=${packet.length})")
-                // Drain control/RTCP datagrams so the buffer does not overflow
+                audio?.receive(packet.data, packet.offset, packet.length)
             } catch (e: java.net.SocketTimeoutException) {
                 // Timeout expected
             } catch (e: Exception) {
@@ -335,6 +375,7 @@ class MacHevcVideoPipeline(
 
         while (isRunning.get()) {
             try {
+                packet.length = buffer.size
                 sock.receive(packet)
                 val count = packetsReceived.incrementAndGet()
                 if (count == 1L) {
@@ -358,10 +399,34 @@ class MacHevcVideoPipeline(
                     serverVideoSsrc.set(decrypted.ssrc)
                     log("First decrypted SRTP packet: ssrc=0x${java.lang.Long.toHexString(decrypted.ssrc)}, payload=${decrypted.payload.size}B")
                 }
+                val authenticated = authenticatedPackets.incrementAndGet()
+                if(videoStreams.containsKey(decrypted.ssrc) || videoStreams.size<8)
+                    videoStreams.getOrPut(decrypted.ssrc) { AtomicLong() }.incrementAndGet()
+                if(preferAvc) {
+                    avc?.accept(decrypted.payload,decrypted.sequenceNumber,decrypted.timestamp,decrypted.marker,decrypted.ssrc)
+                    avc?.activeSsrc?.let(serverVideoSsrc::set)
+                    continue
+                }
+                if (authenticated <= 3) {
+                    log("Authenticated RTP pt=${decrypted.payloadType} seq=${decrypted.sequenceNumber} payload=${decrypted.payload.size} header=${decrypted.payload.take(4).joinToString("") { "%02x".format(it.toInt() and 255) }}")
+                }
+                // Apple's AVC configuration is a small out-of-band avcC packet, not an HEVC NAL.
+                if (decrypted.payload.firstOrNull() == 0x92.toByte() && decrypted.payload.size <= 4096) {
+                    parameterSetObserver?.invoke(0x92, decrypted.payload)
+                }
 
                 // Parse Apple RFC 7798 HEVC NAL units with 2-byte DONL stripping
                 val nals = rtpParser.parseRtpPayload(decrypted.payload, decrypted.ssrc)
                 if (nals.isEmpty()) continue
+                if (authenticated <= 3) log("Validated HEVC RTP aggregation: DONL=${rtpParser.usesDonl(decrypted.ssrc)}, NALs=${nals.size}")
+                nalUnits.addAndGet(nals.size.toLong())
+                for (nal in nals) {
+                    encodedVideoObserver?.invoke(decrypted.ssrc,nal)
+                    if (nal.size > 5) {
+                        val type = (nal[4].toInt() and 0x7e) ushr 1
+                        if (type in 32..34 || (type in 16..21 && nal.size <= 4 * 1024 * 1024)) parameterSetObserver?.invoke(type, nal)
+                    }
+                }
 
                 // Check if codec is initialized
                 var codec = mediaCodec
@@ -381,6 +446,7 @@ class MacHevcVideoPipeline(
 
             } catch (e: java.net.SocketTimeoutException) {
                 // Read timeout, continue loop
+                avc?.drain()
             } catch (e: Exception) {
                 if (isRunning.get()) {
                     log("UDP receive error: ${e.message}")
@@ -455,6 +521,9 @@ class MacHevcVideoPipeline(
             ctrlReceiverThread?.join(500)
         } catch (ignored: Exception) {}
         ctrlReceiverThread = null
+        runCatching { audio?.close() }.onFailure { log("AAC teardown failed: ${it.message}") }
+        audio = null
+        avc?.close()
 
         try {
             mediaCodec?.stop()

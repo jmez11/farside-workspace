@@ -817,7 +817,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                                 tint = if (runtime.canAdd) Color.White else Color.Gray)
                         }
                     }
-                    if (!isVnc) IconButton(onClick = { speakerMuted = !speakerMuted; revealToolbar() }, modifier = Modifier.size(buttonSize)) {
+                    if (!isVnc || (effectiveSession.expMacHevc && effectiveSession.macAudioEnabled)) IconButton(onClick = { speakerMuted = !speakerMuted; revealToolbar() }, modifier = Modifier.size(buttonSize)) {
                         Icon(if (speakerMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
                             if (speakerMuted) stringResource(R.string.unmute_speakers) else stringResource(R.string.mute_speakers), modifier = Modifier.size(iconSize), tint = Color.White)
                     }
@@ -1023,7 +1023,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                     ConnectionInfoRow("Scale / Zoom", "${scaleFactor}x (${scalePct}%)")
                     if (isVnc) {
                         ConnectionInfoRow("Mac Auth", "${effectiveSession.vncAuthMode}")
-                        ConnectionInfoRow("HEVC Enabled", "${effectiveSession.expMacHevc}")
+                        ConnectionInfoRow("Apple streaming", "${effectiveSession.expMacHevc}")
                         if (effectiveSession.expMacHevc) {
                             ConnectionInfoRow("Share Console", "${effectiveSession.expMacShareConsole}")
                         }

@@ -640,4 +640,13 @@
     <string name="rdp_layout_auto">Follow panel placement</string>
     <string name="rdp_retry_layout">Retry desktop layout</string>
     <string name="connect_to_console">Connect to console</string>
+    <string name="mac_media_title">Apple Screen Sharing streaming (experimental)</string>
+    <string name="mac_media_enable">Stream video and audio</string>
+    <string name="mac_media_avc">Use hardware H.264 (recommended on Quest)</string>
+    <string name="mac_media_audio">Play Mac audio</string>
+    <string name="mac_media_ssh">SSH connection for media relay</string>
+    <string name="mac_media_direct">Direct media (requires return routing)</string>
+    <string name="mac_media_ssh_required">Select a saved SSH connection with the Mac account’s short username.</string>
+    <string name="mac_media_same_host">The SSH media connection must use the same Mac address.</string>
+    <string name="mac_media_note">Uses the Mac’s built-in Screen Sharing. H.264 supports Quest hardware decoding; experimental HEVC 4:4:4 may not decode. An SSH relay carries media across translated VPN routes without installing software. Connecting pauses between authentications.</string>
 </resources>

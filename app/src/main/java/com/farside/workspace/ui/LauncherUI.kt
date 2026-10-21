@@ -1616,6 +1616,11 @@ fun AddProfileForm(
     var vncAuthMode by rememberSaveable { mutableStateOf(initialProfile?.vncAuthMode ?: com.farside.workspace.data.VncAuthMode.MAC_USER) }
     var sftpPairProfileId by rememberSaveable { mutableStateOf(initialProfile?.sftpPairProfileId ?: "") }
 
+    var macStreaming by rememberSaveable { mutableStateOf(initialProfile?.expMacHevc ?: false) }
+    var macPreferAvc by rememberSaveable { mutableStateOf(initialProfile?.macPreferAvc ?: true) }
+    var macAudioEnabled by rememberSaveable { mutableStateOf(initialProfile?.macAudioEnabled ?: false) }
+    var macRelayId by rememberSaveable { mutableStateOf(initialProfile?.macSshRelayProfileId ?: "") }
+    
     var remoteApp by rememberSaveable { mutableStateOf(initialProfile?.remoteApp ?: "") }
 
     var discoveredHosts by remember { mutableStateOf<List<com.farside.workspace.utils.DiscoveredHost>>(emptyList()) }
@@ -1774,7 +1779,12 @@ fun AddProfileForm(
                         terminalOpacity = initialProfile?.terminalOpacity ?: 1f,
                         connectToConsole = connectToConsole,
                         adminMode = adminMode,
-                        reconnectAutomatically = reconnectAutomatically
+                        reconnectAutomatically = reconnectAutomatically,
+                        expMacHevc = type == ConnectionType.VNC && vncAuthMode == com.farside.workspace.data.VncAuthMode.MAC_USER && macStreaming,
+                        expMacShareConsole = initialProfile?.expMacShareConsole ?: false,
+                        macPreferAvc = macPreferAvc,
+                        macAudioEnabled = macAudioEnabled,
+                        macSshRelayProfileId = macRelayId.takeIf { type == ConnectionType.VNC && macStreaming && it.isNotBlank() }
                     )
                 )
             }) {
@@ -1956,6 +1966,29 @@ fun AddProfileForm(
                                 onClick = { sftpPairProfileId = ""; expandedPair = false })
                             sshProfiles.forEach { ssh -> DropdownMenuItem(text = { Text(ssh.name) },
                                 onClick = { sftpPairProfileId = ssh.id; expandedPair = false }) }
+                        }
+                    }
+                }
+                if(type == ConnectionType.VNC && vncAuthMode == com.farside.workspace.data.VncAuthMode.MAC_USER) {
+                    SettingsHeader(stringResource(R.string.mac_media_title))
+                    SettingsSwitchRow(stringResource(R.string.mac_media_enable),macStreaming) { macStreaming=it }
+                    if(macStreaming) {
+                        Text(stringResource(R.string.mac_media_note),modifier=Modifier.padding(16.dp))
+                        SettingsSwitchRow(stringResource(R.string.mac_media_avc),macPreferAvc) { macPreferAvc=it }
+                        SettingsSwitchRow(stringResource(R.string.mac_media_audio),macAudioEnabled) { macAudioEnabled=it }
+                        var relayExpanded by rememberSaveable { mutableStateOf(false) }
+                        val candidates=savedProfiles.filter { it.type==ConnectionType.SSH && it.host==host }
+                        val relayLabel=stringResource(R.string.mac_media_ssh)
+                        ExposedDropdownMenuBox(expanded=relayExpanded,onExpandedChange={ relayExpanded=!relayExpanded },
+                            modifier=Modifier.fillMaxWidth().padding(16.dp)) {
+                            TextField(value=candidates.find { it.id==macRelayId }?.name ?: stringResource(R.string.mac_media_direct),
+                                onValueChange={},readOnly=true,label={ Text(relayLabel) },
+                                modifier=Modifier.menuAnchor().fillMaxWidth().semantics { contentDescription=relayLabel },
+                                trailingIcon={ ExposedDropdownMenuDefaults.TrailingIcon(expanded=relayExpanded) })
+                            ExposedDropdownMenu(expanded=relayExpanded,onDismissRequest={ relayExpanded=false }) {
+                                DropdownMenuItem(text={ Text(stringResource(R.string.mac_media_direct)) },onClick={ macRelayId="";relayExpanded=false })
+                                candidates.forEach { ssh -> DropdownMenuItem(text={ Text(ssh.name) },onClick={ macRelayId=ssh.id;relayExpanded=false }) }
+                            }
                         }
                     }
                 }

@@ -90,7 +90,10 @@ data class ConnectionProfile(
     val cardBackground: String? = null,
     val connectToConsole: Boolean = false,
     val expMacHevc: Boolean = false,
-    val expMacShareConsole: Boolean = false
+    val expMacShareConsole: Boolean = false,
+    val macPreferAvc: Boolean = true,
+    val macAudioEnabled: Boolean = false,
+    val macSshRelayProfileId: String? = null
 ) {
     fun toJson(): JSONObject {
         val json = JSONObject()
@@ -149,6 +152,9 @@ data class ConnectionProfile(
         json.put("connectToConsole", connectToConsole)
         json.put("expMacHevc", expMacHevc)
         json.put("expMacShareConsole", expMacShareConsole)
+        json.put("macPreferAvc", macPreferAvc)
+        json.put("macAudioEnabled", macAudioEnabled)
+        json.put("macSshRelayProfileId", macSshRelayProfileId)
         return json
     }
 
@@ -212,7 +218,10 @@ data class ConnectionProfile(
                 connectToConsole = json.optBoolean("connectToConsole", false),
                 adminMode = json.optBoolean("adminMode", false),
                 expMacHevc = json.optBoolean("expMacHevc", false),
-                expMacShareConsole = json.optBoolean("expMacShareConsole", false)
+                expMacShareConsole = json.optBoolean("expMacShareConsole", false),
+                macPreferAvc = json.optBoolean("macPreferAvc", true),
+                macAudioEnabled = json.optBoolean("macAudioEnabled", false),
+                macSshRelayProfileId = json.optString("macSshRelayProfileId").takeIf { it.isNotBlank() && it != "null" }
             )
         }
     }

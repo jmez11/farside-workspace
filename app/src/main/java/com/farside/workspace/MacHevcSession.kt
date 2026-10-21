@@ -56,6 +56,20 @@ class MacHevcSession(
     private val username: String,
     private val password: String,
     private val shareConsole: Boolean = false,
+    private val sessionUsername: String = username,
+    private val authenticationSpacingMs: Long = 5_000,
+    private val mediaDatagramSender: ((Int, ByteArray) -> Unit)? = null,
+    private val parameterSetObserver: ((Int, ByteArray) -> Unit)? = null,
+    private val audioEnabled: Boolean = false,
+    private val audioObserver: ((ByteArray) -> Unit)? = null,
+    private val preferAvc: Boolean = false,
+    private val authenticationGate: (() -> Unit)? = null,
+    private val preferRsaAuthentication: Boolean = true,
+    private val preferSrpAuthentication: Boolean = false,
+    private val sessionLoginUsername:String=sessionUsername,
+    private val encodedVideoObserver:((Long,ByteArray)->Unit)?=null,
+    private val selectVirtualDisplay:Boolean=false,
+    private val selectVirtualDisplayByIndex:Boolean=false,
     private val logCallback: (String) -> Unit = {}
 ) : Closeable {
 
@@ -68,6 +82,9 @@ class MacHevcSession(
         private set
     var stage: String = "S0"
         private set
+    @Volatile internal var controlUpdatesEnabled=true
+    internal var sessionSelectReply:ByteArray?=null; private set
+    @Volatile internal var selectedVirtualDisplay:MacDisplaySelection?=null; private set
     var width: Int = 0
         private set
     var height: Int = 0
@@ -98,6 +115,7 @@ class MacHevcSession(
         private set
     var currentOffers: MacHevcOffersBundle? = null
         private set
+    private var mediaLayoutEstablished=false
 
     fun setSurface(surface: Surface?) {
         currentSurface = surface
@@ -112,11 +130,11 @@ class MacHevcSession(
         val decoded = pipeline?.framesDecoded?.get() ?: 0L
         val pkts = pipeline?.packetsReceived?.get() ?: 0L
         return if (decoded > 0L) {
-            "Hardware HEVC (MediaCodec, UDP 5901, $decoded frames)"
+            "${pipeline?.decoderDescription} ($decoded frames)"
         } else if (pkts > 0L) {
-            "Hardware HEVC (MediaCodec, UDP 5901, $pkts pkts buffering)"
+            "${pipeline?.decoderDescription}; $pkts packets, no decoded frames"
         } else {
-            "CPU Software ZLIB (MacHevcSession stage $stage)"
+            "Apple streaming ($stage; waiting for video)"
         }
     }
 
@@ -202,6 +220,7 @@ class MacHevcSession(
     )
 
     private fun doAuthAndClientInit(sock: Socket): AuthInitResult {
+        authenticationGate?.invoke()
         stage = "S0"
         sock.connect(InetSocketAddress(host, port), 10000)
         sock.soTimeout = 60000
@@ -226,73 +245,84 @@ class MacHevcSession(
         val types = ByteArray(count).also { input.readFully(it) }
         val typeList = types.map { it.toInt() and 0xff }
         log("S2: Security types offered: $typeList")
-        if (!typeList.contains(30)) {
+        if (!typeList.contains(30) && !(preferRsaAuthentication && typeList.contains(33))) {
             log("S2: Server did not offer Apple DH type 30 (offered: $typeList)")
             throw VncAuthenticationException()
         }
 
-        // S3: Select Type 30
-        stage = "S3"
-        output.writeByte(30)
-        output.flush()
-        log("S3: Selected security type 30 (DH)")
+        val wrapKey: ByteArray
+        if(preferRsaAuthentication && typeList.contains(33)) {
+            stage="S4"
+            log("S3: Selected advertised RSA1 security type 33; no retry on rejection")
+            wrapKey=if(preferSrpAuthentication) MacSrpAuthentication.authenticate(input,output,sessionUsername,password)
+                else MacRsaAuthentication.authenticate(input,output,username,password)
+            stage="S5"
+            log("S5: RSA1 ${if(preferSrpAuthentication) "SRP mutual proof" else "non-SRP"} SecurityResult = 0 (Authentication Success)")
+        } else {
+            // S3: Select Type 30
+            stage = "S3"
+            output.writeByte(30)
+            output.flush()
+            log("S3: Selected security type 30 (DH)")
 
-        // S4: Authentication (DH Key Agreement + Credential Encrypt)
-        stage = "S4"
-        val generator = input.readUnsignedShort()
-        val keyLength = input.readUnsignedShort()
-        check(generator > 1 && keyLength in 128..512) { "Invalid DH parameters: g=$generator, len=$keyLength" }
-        val primeBytes = ByteArray(keyLength).also { input.readFully(it) }
-        val serverBytes = ByteArray(keyLength).also { input.readFully(it) }
-        val prime = BigInteger(1, primeBytes)
-        val serverPublic = BigInteger(1, serverBytes)
+            // S4: Authentication (DH Key Agreement + Credential Encrypt)
+            stage = "S4"
+            val generator = input.readUnsignedShort()
+            val keyLength = input.readUnsignedShort()
+            check(generator > 1 && keyLength in 128..512) { "Invalid DH parameters: g=$generator, len=$keyLength" }
+            val primeBytes = ByteArray(keyLength).also { input.readFully(it) }
+            val serverBytes = ByteArray(keyLength).also { input.readFully(it) }
+            val prime = BigInteger(1, primeBytes)
+            val serverPublic = BigInteger(1, serverBytes)
 
-        val dhSpec = DHParameterSpec(prime, BigInteger.valueOf(generator.toLong()))
-        val keyPair = KeyPairGenerator.getInstance("DH").apply { initialize(dhSpec) }.generateKeyPair()
-        val peerKey = KeyFactory.getInstance("DH").generatePublic(DHPublicKeySpec(serverPublic, dhSpec.p, dhSpec.g))
-        val agreement = KeyAgreement.getInstance("DH").apply { init(keyPair.private); doPhase(peerKey, true) }
-        val rawShared = agreement.generateSecret()
-        val shared = if (rawShared.size == keyLength) rawShared else ByteArray(keyLength).also { dest ->
-            check(rawShared.size <= keyLength)
-            rawShared.copyInto(dest, keyLength - rawShared.size)
+            val dhSpec = DHParameterSpec(prime, BigInteger.valueOf(generator.toLong()))
+            val keyPair = KeyPairGenerator.getInstance("DH").apply { initialize(dhSpec) }.generateKeyPair()
+            val peerKey = KeyFactory.getInstance("DH").generatePublic(DHPublicKeySpec(serverPublic, dhSpec.p, dhSpec.g))
+            val agreement = KeyAgreement.getInstance("DH").apply { init(keyPair.private); doPhase(peerKey, true) }
+            val rawShared = agreement.generateSecret()
+            val shared = if (rawShared.size == keyLength) rawShared else ByteArray(keyLength).also { dest ->
+                check(rawShared.size <= keyLength)
+                rawShared.copyInto(dest, keyLength - rawShared.size)
+            }
+
+            // Wrap key for type 30 is MD5(shared)[0:16]
+            wrapKey = MessageDigest.getInstance("MD5").digest(shared)
+
+            // Credential blob: 128 bytes AES-ECB encrypted with wrapKey
+            val plain = ByteArray(128).also { SecureRandom().nextBytes(it) }
+            fun putCredential(value: String, offset: Int) {
+                val b = value.toByteArray(Charsets.UTF_8)
+                val len = minOf(b.size, 63)
+                b.copyInto(plain, offset, 0, len)
+                plain[offset + len] = 0
+            }
+            putCredential(username, 0)
+            putCredential(password, 64)
+
+            val creds = Cipher.getInstance("AES/ECB/NoPadding").apply {
+                init(Cipher.ENCRYPT_MODE, SecretKeySpec(wrapKey, "AES"))
+            }.doFinal(plain)
+            plain.fill(0)
+            shared.fill(0)
+
+            output.write(creds)
+            val pub = (keyPair.public as javax.crypto.interfaces.DHPublicKey).y.toByteArray()
+            val pubPadded = if (pub.size > keyLength) pub.copyOfRange(pub.size - keyLength, pub.size) else pub
+            output.write(ByteArray(keyLength - pubPadded.size))
+            output.write(pubPadded)
+            output.flush()
+            log("S4: DH credentials and public key sent")
+
+            // S5: SecurityResult
+            stage = "S5"
+            val secResult = input.readInt()
+            if (secResult != 0) {
+                log("S5: SecurityResult failed ($secResult)")
+                throw VncAuthenticationException()
+            }
+            log("S5: SecurityResult = 0 (Authentication Success)")
+
         }
-
-        // Wrap key for type 30 is MD5(shared)[0:16]
-        val wrapKey = MessageDigest.getInstance("MD5").digest(shared)
-
-        // Credential blob: 128 bytes AES-ECB encrypted with wrapKey
-        val plain = ByteArray(128).also { SecureRandom().nextBytes(it) }
-        fun putCredential(value: String, offset: Int) {
-            val b = value.toByteArray(Charsets.UTF_8)
-            val len = minOf(b.size, 63)
-            b.copyInto(plain, offset, 0, len)
-            plain[offset + len] = 0
-        }
-        putCredential(username, 0)
-        putCredential(password, 64)
-
-        val creds = Cipher.getInstance("AES/ECB/NoPadding").apply {
-            init(Cipher.ENCRYPT_MODE, SecretKeySpec(wrapKey, "AES"))
-        }.doFinal(plain)
-        plain.fill(0)
-        shared.fill(0)
-
-        output.write(creds)
-        val pub = (keyPair.public as javax.crypto.interfaces.DHPublicKey).y.toByteArray()
-        val pubPadded = if (pub.size > keyLength) pub.copyOfRange(pub.size - keyLength, pub.size) else pub
-        output.write(ByteArray(keyLength - pubPadded.size))
-        output.write(pubPadded)
-        output.flush()
-        log("S4: DH credentials and public key sent")
-
-        // S5: SecurityResult
-        stage = "S5"
-        val secResult = input.readInt()
-        if (secResult != 0) {
-            log("S5: SecurityResult failed ($secResult)")
-            throw VncAuthenticationException()
-        }
-        log("S5: SecurityResult = 0 (Authentication Success)")
 
         // S6: ClientInit & ServerInit
         stage = "S6"
@@ -335,8 +365,8 @@ class MacHevcSession(
             // S7: Cleartext Apple Prelude & SessionSelect check
             stage = "S7"
 
-            val first2 = ByteArray(2).also { input.readFully(it) }
-            val firstLen = ((first2[0].toInt() and 0xff) shl 8) or (first2[1].toInt() and 0xff)
+            val first2 = MacSessionPrelude.optionalHeader(input,s1.soTimeout) { s1.soTimeout=it }
+            val firstLen = first2?.let { ((it[0].toInt() and 0xff) shl 8) or (it[1].toInt() and 0xff) }
 
             var cmd = 0
             if (firstLen == 74) {
@@ -350,14 +380,8 @@ class MacHevcSession(
                 val activeUser = String(userBytes).trimEnd { it == '\u0000' }
                 log("S7: Received SessionSelect_SessionInfo: activeUser='$activeUser', state=$sessionState, flags=$sessionFlags")
 
-                val shortUser = if (username.equals("James Kasyan", ignoreCase = true)) "jameskasyan" else username.lowercase().replace(" ", "")
-                val uBytes = ByteArray(64)
-                val srcU = shortUser.toByteArray(Charsets.UTF_8)
-                System.arraycopy(srcU, 0, uBytes, 0, minOf(srcU.size, 63))
-
-                val pBytes = ByteArray(64)
-                val srcP = password.toByteArray(Charsets.UTF_8)
-                System.arraycopy(srcP, 0, pBytes, 0, minOf(srcP.size, 63))
+                // Authentication and GUI-session identity need not use the same saved alias.
+                val loginUser=sessionLoginUsername
 
                 cmd = if (shareConsole) 0 else if ((sessionState and 4) != 0) 2 else if ((sessionState and 2) != 0) 1 else 0
                 isAltSession = (cmd == 2)
@@ -367,6 +391,8 @@ class MacHevcSession(
                     // Close conn1, open fresh conn2, redo auth and clientInit, then send cmd=2
                     log("S7: alt-session cmd=2: performing two-TCP reset (closing conn1, opening conn2)")
                     try { s1.close() } catch (ignored: Exception) {}
+                    log("S7: spacing the second authentication by ${authenticationSpacingMs}ms")
+                    Thread.sleep(authenticationSpacingMs)
                     val s2 = Socket()
                     socket = s2
                     auth = doAuthAndClientInit(s2)
@@ -382,40 +408,13 @@ class MacHevcSession(
                     val reissuedBuf = ByteArray(74).also { input.readFully(it) }
                     log("S7: conn2 re-read SessionSelect prompt (74 bytes)")
 
-                    val cipher = Cipher.getInstance("AES/ECB/NoPadding")
-                    cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(wrapKey, "AES"))
-                    val encUser = cipher.doFinal(uBytes)
-                    val encPass = cipher.doFinal(pBytes)
-
-                    // 200-byte body layout (202 bytes on wire) matching renegadelink/iShareScreen
-                    val resp = ByteBuffer.allocate(202).order(ByteOrder.BIG_ENDIAN)
-                    resp.putShort(200.toShort()) // size = 200
-                    resp.putShort(2.toShort())   // version = 2
-                    resp.putShort(0.toShort())   // reserved = 0
-                    resp.putShort(0.toShort())   // reserved = 0
-                    resp.put(2.toByte())         // cmd = 2
-                    resp.put(0.toByte())         // pad = 0
-                    resp.put(ByteArray(64))      // 64 bytes ZEROES (offsets 8..71)
-                    resp.put(encUser)            // 64 bytes encrypted username (offsets 72..135)
-                    resp.put(encPass)            // 64 bytes encrypted password (offsets 136..199)
-
-                    output.write(resp.array())
+                    output.write(MacSessionSelect.virtualLogin(loginUser,password,wrapKey))
                     output.flush()
-                    log("S7: Sent SessionSelect Virtual Multi-Session (cmd=2, user='$shortUser', 202 bytes)")
+                    log("S7: Sent SessionSelect Virtual Multi-Session (cmd=2, user='$loginUser', 202 bytes)")
                 } else {
-                    // cmd = 0 (share console) or 1
-                    val resp = ByteBuffer.allocate(74).order(ByteOrder.BIG_ENDIAN)
-                    resp.putShort(72.toShort()) // size = 72
-                    resp.putShort(2.toShort())  // version = 2
-                    resp.putShort(0.toShort())  // reserved = 0
-                    resp.putShort(0.toShort())  // reserved = 0
-                    resp.put(cmd.toByte())      // cmd = 0 or 1
-                    resp.put(0.toByte())        // pad = 0
-                    resp.put(uBytes)            // username (64 bytes)
-
-                    output.write(resp.array())
+                    output.write(MacSessionSelect.consoleLogin(cmd,loginUser))
                     output.flush()
-                    log("S7: Sent SessionSelect console response (cmd=$cmd, user='$username', 74 bytes)")
+                    log("S7: Sent SessionSelect console response (cmd=$cmd, user='$loginUser', 74 bytes)")
                 }
 
                 // Read server response (ack)
@@ -423,12 +422,13 @@ class MacHevcSession(
                     input.readUnsignedShort()
                 } catch (e: java.net.SocketTimeoutException) {
                     if (cmd == 2) {
-                        throw java.io.IOException("SessionSelect multi-session login timed out awaiting macOS off-console agent. Verify Fast User Switching is enabled in macOS System Settings.", e)
+                        throw java.io.IOException("SessionSelect multi-session reply timed out; off-console agent, permissions and transport remain unverified.", e)
                     } else {
                         throw java.io.IOException("Timed out waiting for Mac user to accept screen sharing request. Check the Mac screen and click 'Share Display'.", e)
                     }
                 }
                 val replyBytes = ByteArray(replySize).also { input.readFully(it) }
+                sessionSelectReply=replyBytes.copyOf()
                 val replyStatus = if (replySize >= 3) (replyBytes[2].toInt() and 0xff) else -1
                 log("S7: Received SessionSelect reply ($replySize bytes, status=$replyStatus)")
                 if (replyStatus != 0) {
@@ -469,6 +469,20 @@ class MacHevcSession(
                 val layer = readUntilEnc1103(input, wrapKey)
                 recordLayer = layer
                 log("S7: Rekey unwrap success (generation=${layer.generation})")
+            } else if(first2==null) {
+                // Same-account servers wait for the viewer prelude rather than sending SessionSelect.
+                val viewer=ByteBuffer.allocate(66).order(ByteOrder.BIG_ENDIAN)
+                viewer.put(0x21.toByte());viewer.put(0.toByte());viewer.putShort(62.toShort())
+                viewer.putShort(1.toShort());viewer.putInt(2)
+                viewer.putInt(6);viewer.putInt(1);viewer.putInt(0)
+                viewer.putInt(15);viewer.putInt(3);viewer.putInt(0)
+                viewer.put(APPLE_VIEWER_COMMAND_MASK)
+                output.write(viewer.array());output.write(APPLE_0X12_FOLLOWUP);output.flush()
+                Thread.sleep(100)
+                if(!shareConsole) output.write(buildDisplayConfiguration(1920,1080,displayType=4))
+                output.write(buildSetEncodings(HP_ENCODINGS_FULL));output.flush()
+                recordLayer=readUntilEnc1103(input,wrapKey)
+                log("S7: No SessionSelect prompt; standard viewer/display prelude and rekey succeeded")
             } else {
                 // Direct rekey path
                 val msgType = first2[0].toInt() and 0xff
@@ -505,7 +519,7 @@ class MacHevcSession(
             // 2. Build 0x1c MediaStreamOptions offer with tilesPerFrame = 1
             val keys = MacHevcNegotiationKeys.random()
             negotiationKeys = keys
-            val offers = MacHevcOffers.createOffers(tilesPerFrame = 1, audioEnabled = false)
+            val offers = MacHevcOffers.createOffers(tilesPerFrame = 1, audioEnabled = audioEnabled, preferAvc = preferAvc)
             currentOffers = offers
             val msg1c = MacHevcOffers.build0x1cMessage(offers.audioOffer, offers.videoOffer, keys, altSession = (cmd == 2))
 
@@ -520,6 +534,14 @@ class MacHevcSession(
                 surface = currentSurface,
                 width = width,
                 height = height,
+                datagramSender = mediaDatagramSender,
+                parameterSetObserver = parameterSetObserver,
+                audioKeyBlob = if (audioEnabled) keys.audioKeyS else null,
+                audioKeyBlobV = if (audioEnabled) keys.audioKeyV else null,
+                ourAudioSsrc = offers.ourAudioSsrc,
+                audioObserver = audioObserver,
+                preferAvc = preferAvc,
+                encodedVideoObserver=encodedVideoObserver,
                 onFrameDecoded = {
                     // Decoded hardware frame rendered directly to Surface
                 },
@@ -553,6 +575,7 @@ class MacHevcSession(
 
             // Check if record contains canvas dimensions
             if (dims != null) {
+                mediaLayoutEstablished=true
                 log("S8: Extracted canvas dimensions: ${dims.first}x${dims.second} (tiles=${dims.third})")
                 width = dims.first
                 height = dims.second
@@ -693,30 +716,6 @@ class MacHevcSession(
         return buf.array()
     }
 
-    private fun buildFramebufferUpdateRequest(w: Int, h: Int): ByteArray {
-        val buf = ByteBuffer.allocate(10).order(ByteOrder.BIG_ENDIAN)
-        buf.put(3.toByte()) // FramebufferUpdateRequest
-        buf.put(0.toByte()) // incremental = 0
-        buf.putShort(0)     // x
-        buf.putShort(0)     // y
-        buf.putShort(w.toShort())
-        buf.putShort(h.toShort())
-        return buf.array()
-    }
-
-    private fun buildAutoFrameBufferUpdate(w: Int, h: Int): ByteArray {
-        val buf = ByteBuffer.allocate(16).order(ByteOrder.BIG_ENDIAN)
-        buf.put(9.toByte()) // AutoFrameBufferUpdate
-        buf.put(0.toByte()) // reserved
-        buf.putShort(1.toShort()) // version = 1
-        buf.putInt(-1)      // selected_screen = 0xffffffff (all/main)
-        buf.putShort(0)     // x
-        buf.putShort(0)     // y
-        buf.putShort(w.toShort())
-        buf.putShort(h.toShort())
-        return buf.array()
-    }
-
     fun initStreamingLayer(firstRecord: ByteArray? = null) {
         val layer = checkNotNull(recordLayer) { "Record layer not established" }
         val rIn = checkNotNull(rawInput) { "Input stream not established" }
@@ -771,6 +770,7 @@ class MacHevcSession(
         recordIn = DataInputStream(inStream)
         recordOut = DataOutputStream(layer.createOutputStream(rOut))
         stage = "S9"
+        requestUpdate(incremental=false)
         log("S9: Reached steady-state (S9) on the control path with record layer active")
     }
 
@@ -825,6 +825,10 @@ class MacHevcSession(
                             val data = ByteArray(payloadLen)
                             stream.readFully(data)
                             val resolved = parseAppleDisplayLayout(data)
+                            if(selectVirtualDisplay && isAltSession) selectNegotiatedDisplay(data)
+                            val hadLayout=mediaLayoutEstablished
+                            val changed=resolved!=null && (resolved.first!=width || resolved.second!=height)
+                            if(resolved!=null) mediaLayoutEstablished=true
                             if (resolved != null && (resolved.first != width || resolved.second != height)) {
                                 val (newW, newH) = resolved
                                 log("S9: AppleDisplayLayout resized display: ${width}x${height} -> ${newW}x${newH}")
@@ -840,7 +844,7 @@ class MacHevcSession(
                             } else {
                                 log("S9: AppleDisplayLayout (${data.size} bytes)")
                             }
-                            reofferMediaStream()
+                            if(hadLayout && changed) reofferMediaStream()
                         }
                         1104, 0x450 -> { // CursorImage
                             val cacheId = stream.readInt()
@@ -932,12 +936,8 @@ class MacHevcSession(
             writerExecutor.execute {
                 try {
                     val out = recordOut ?: return@execute
-                    val buf = ByteBuffer.allocate(6).order(ByteOrder.BIG_ENDIAN)
-                    buf.put(5.toByte()) // PointerEvent
-                    buf.put(buttonMask.toByte())
-                    buf.putShort(x.toShort())
-                    buf.putShort(y.toShort())
-                    out.write(buf.array())
+                    val event=checkNotNull(recordLayer).pointerEvent(x,y,buttonMask,width,height)
+                    out.write(event)
                     out.flush()
                     log("S9: Sent PointerEvent(x=$x, y=$y, mask=$buttonMask)")
                 } catch (e: Exception) {
@@ -947,25 +947,31 @@ class MacHevcSession(
         } catch (ignored: RejectedExecutionException) {}
     }
 
+    private fun selectNegotiatedDisplay(data:ByteArray) {
+        val selection=MacDisplaySelection.parse(data) ?: return
+        if(selection==selectedVirtualDisplay) return
+        selectedVirtualDisplay=selection
+        writerExecutor.execute {
+            val out=recordOut ?: return@execute
+            out.write(buildControlUpdateRequest(false))
+            out.write(selection.request(selectVirtualDisplayByIndex))
+            out.flush()
+            videoPipeline?.requestKeyframe()
+            log("S9: Requested sole negotiated display ${selection.id} using ${if(selectVirtualDisplayByIndex) "first index" else "display ID"}, ${selection.width}x${selection.height}; server-driven control, no further polling")
+        }
+    }
+
     fun requestUpdate(incremental: Boolean = true) {
-        if (stage == "CLOSED" || writerExecutor.isShutdown) return
+        if (!controlUpdatesEnabled || selectedVirtualDisplay!=null || stage == "CLOSED" || writerExecutor.isShutdown) return
         try {
             writerExecutor.execute {
                 try {
+                    if(!controlUpdatesEnabled || selectedVirtualDisplay!=null) return@execute
                     val out = recordOut ?: return@execute
-                    val fbur = if (incremental) {
-                        val buf = ByteBuffer.allocate(10).order(ByteOrder.BIG_ENDIAN)
-                        buf.put(3.toByte())
-                        buf.put(1.toByte()) // incremental = 1
-                        buf.putShort(0); buf.putShort(0)
-                        buf.putShort(width.toShort()); buf.putShort(height.toShort())
-                        buf.array()
-                    } else {
-                        buildFramebufferUpdateRequest(width, height)
-                    }
+                    val fbur = buildControlUpdateRequest(incremental)
                     out.write(fbur)
                     out.flush()
-                    log("S9: Requested FramebufferUpdate (incremental=$incremental)")
+                    log("S9: Requested 1x1 control FramebufferUpdate (incremental=$incremental)")
                 } catch (e: Exception) {
                     log("requestUpdate error: ${e.message}")
                 }
@@ -979,7 +985,7 @@ class MacHevcSession(
             writerExecutor.execute {
                 try {
                     val out = recordOut ?: return@execute
-                    val config = buildDisplayConfiguration(w, h, displayType)
+                    val config = buildDisplayConfiguration(w, h, displayType, hidpiScale=1f)
                     log("S9: Sending SetDisplayConfiguration (0x1d, ${config.size} bytes: ${w}x${h}, displayType=$displayType)")
                     out.write(config)
                     out.flush()
@@ -1052,7 +1058,6 @@ class MacHevcSession(
                     buf.putInt(keysym)
                     out.write(buf.array())
                     out.flush()
-                    log("S9: Sent KeyEvent(keysym=0x${Integer.toHexString(keysym)}, down=$isDown)")
                 } catch (e: Exception) {
                     log("sendKeyEvent error: ${e.message}")
                 }
@@ -1091,6 +1096,13 @@ class MacHevcSession(
     }
 
     companion object {
+        /** Streaming pixels use RTP. Full-screen TCP polls disturb Apple's capture path. */
+        internal fun buildControlUpdateRequest(incremental:Boolean):ByteArray =
+            ByteBuffer.allocate(10).order(ByteOrder.BIG_ENDIAN).apply {
+                put(3.toByte());put(if(incremental) 1.toByte() else 0.toByte())
+                putShort(0);putShort(0);putShort(1);putShort(1)
+            }.array()
+
         val APPLE_VIEWER_COMMAND_MASK = ByteArray(32).apply {
             this[0] = 0xb0.toByte()
             this[2] = 0x0c.toByte()
