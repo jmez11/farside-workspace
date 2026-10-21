@@ -70,9 +70,12 @@ mockup:
   stop and report.
 - **Stage by path, never `git add -A`.** Commit locally after each phase.
   **Never push.** James says "push" explicitly or it doesn't happen.
-- **Presentation only.** Do not change the data model: `data/ConnectionProfile.kt`,
-  `data/ProfileManager.kt`, credential/key stores, `JumpChains`, `CloudflaredOptions`
-  are read-only. Reuse `profileCredentialErrorRes` validation rules.
+- **Presentation only, with one approved exception.** Do not change the data model
+  except: `SavedCredential` gains an optional `userShort: String?` (JSON key
+  `"userShort"`, read-tolerant when absent) to support Mac logins (see section 6).
+  Everything else — `ConnectionProfile`, `ProfileManager`, credential/key stores,
+  `JumpChains`, `CloudflaredOptions` — is read-only. Reuse
+  `profileCredentialErrorRes` validation rules.
 - **New code goes in new files** under
   `app/src/main/java/com/farside/workspace/ui/setup/` (e.g.
   `ConnectionSetupFlow.kt`, `SetupStepSignIn.kt`, `CredentialSheets.kt`,
@@ -103,7 +106,8 @@ like `setup-revamp: phase 2 sign-in step`.
   one VNC profile; discovery lists only matching types; blank name/host/port
   blocks Continue with red text.
 - **Phase 2 — Sign-in step + sheets.** All five combo variants, saved pickers,
-  inline sheets (credential create, VNC password with counter, key import),
+  inline sheets (credential create, Mac-login variant with full/short names,
+  VNC password with counter, key import),
   step-3 validation incl. the 8-char Latin-1 rule and the SSH-never-blocks rule.
   On-device: for each combo, create a sign-in/key inline without leaving the
   flow; verify RDP/VNC block without sign-in and SSH does not; verify the
@@ -133,8 +137,31 @@ like `setup-revamp: phase 2 sign-in step`.
   flows for microphone/camera/storage.
 - VNC file pairing (`sftpPairProfileId`) lists SSH profiles with SFTP enabled.
 
-## 5. Done criteria
+## 5. Mac logins (full name + short name)
 
+macOS accounts have two names: Screen Sharing (VNC username+password) authenticates
+with the full/long name, SSH uses the short name. The mockup resolves this by
+saving both once in a single "Mac login":
+
+- **Sheet**: the login sheet (opened from VNC username+password or SSH sign-in)
+  has a "macOS account" toggle with helper text explaining the two names. OFF:
+  single Username field (generic login, today's behavior). ON: title becomes
+  "New Mac login" with "Full name — used for Screen Sharing" and
+  "Short name — used for SSH" fields, then password + require-PIN toggle.
+- **Model**: `SavedCredential.userShort: String?` (JSON `"userShort"`, absent on
+  old entries → null). This is the one approved data-model change; keep JSON
+  read-tolerant and never drop the field on round-trip.
+- **Resolution**: VNC `MAC_USER` auth uses `user` (full name); SSH username
+  resolution uses `userShort ?: user`. Pickers show both names with a "Mac" badge
+  and a resolved line ("Signs in to Screen Sharing as '…'",
+  "Connects as '…' (short name)"); the review summary shows the resolved name.
+  Mac logins appear in both the VNC and SSH username pickers. The vault shows
+  the full name with "Short name …" beneath; editing prefills both name fields,
+  password stays replace-only.
+- **Validation**: when the macOS toggle is on, both name fields are required
+  (red inline text + blocked Continue, same pattern as the other required fields).
+
+## 6. Done criteria
 All four phases green, on-device checklists pass, no `git add -A`, no push,
 commits carry the exact identity above, new strings English-only, old form code
 removed, and `docs/connection-setup-revamp/mockup.html` still matches what you

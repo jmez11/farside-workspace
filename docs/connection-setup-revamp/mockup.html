@@ -333,6 +333,7 @@
           <li><strong>Private keys are replace-only, never displayed</strong>Editing an SSH key shows an empty box, exactly like a password field: paste a new key to replace the saved one, or leave it blank to keep it. The saved key is never rendered anywhere — only the public key can be viewed or copied, which is safe to share.</li>
           <li><strong>Required fields block the flow, in red</strong>A blank connection name, host or port on step 2 — the port must also be a number from 1 to 65535 — or a missing sign-in where the protocol demands one (RDP, both VNC modes) — shows red error text under the field and dims Continue until it's fixed, validated live as you type. SSH is the exception: its credentials are genuinely optional, so its step 3 never blocks. The same rules gate “Save changes” in edit mode.</li>
           <li><strong>VNC file pairing lists plain connection names</strong>The File access card pairs a VNC connection with an existing SSH connection, and the dropdown shows just connection names — None, Mac mini, homelab — no protocol jargon or suffixes.</li>
+          <li><strong>Mac logins save both names, once</strong>A Mac account has a full name and a short name, and the two protocols want different ones: Screen Sharing signs in with the full name, SSH connects with the short name. A Mac login stores both in a single sign-in, so each connection resolves the right name automatically — no per-connection ambiguity. (Implementation note: this is the one approved data-model change: SavedCredential gains an optional shortName; VNC auth uses user, SSH uses shortName ?: user.)</li>
         </ul>
       </section>
     </div>
@@ -350,6 +351,7 @@
       var signins = [
         { id: "si-work",  name: "Work account",     user: "user",  kind: "RDP", pin: false, usedBy: 2 },
         { id: "si-mac",   name: "Mac mini",         user: "user",  kind: "Login", pin: true,  usedBy: 1 },
+        { id: "si-macmini", name: "Mac mini login", user: "Jordan Lee", shortName: "jordan", mac: true, kind: "Login", pin: true, usedBy: 1 },
         { id: "si-vnc",   name: "Media server VNC", user: "",       kind: "VNC", pin: false, usedBy: 1 },
         { id: "si-ssh",   name: "Server login",     user: "ubuntu", kind: "SSH", pin: false, usedBy: 3 }
       ];
@@ -400,7 +402,7 @@
         /* step 3 */
         rdp:  { mode: "saved", savedId: "si-work", onceUser: "", oncePass: "" },
         vncp: { mode: "saved", savedId: "si-vnc", typePass: "" },
-        vncm: { mode: "saved", savedId: "si-mac", onceUser: "", oncePass: "" },
+        vncm: { mode: "saved", savedId: "si-macmini", onceUser: "", oncePass: "" },
         ssh:  { userMode: "saved", savedUserId: "si-ssh", typedUser: "",
                 auth: "password",
                 pwMode: "saved", savedPwId: "si-ssh", oncePass: "",
@@ -456,10 +458,12 @@
         return '<button type="button" class="switch' + (on ? " on" : "") + '" data-switch="' + id + '" role="switch" aria-checked="' + on + '" aria-label="Toggle"></button>';
       }
       function credCard(si, selected, group) {
-        var sub = si.kind === "VNC" ? "Saved VNC password" : (si.user ? "Username · " + si.user : "");
+        var sub = si.kind === "VNC" ? "Saved VNC password"
+          : si.mac ? si.user + " · " + si.shortName
+          : (si.user ? "Username · " + si.user : "");
         return '<button type="button" class="pick-card' + (selected ? " selected" : "") + '" data-pick="' + group + '" data-id="' + si.id + '">' +
           '<span class="avatar">' + (si.kind === "VNC" ? ICONS.lock : ICONS.user) + "</span>" +
-          '<span class="pc-main"><span class="pc-name">' + esc(si.name) + pinBadge(si.pin) + "</span>" +
+          '<span class="pc-main"><span class="pc-name">' + esc(si.name) + (si.mac ? ' <span class="badge kind">Mac</span>' : "") + pinBadge(si.pin) + "</span>" +
           '<span class="pc-sub">' + esc(sub) + "</span></span>" +
           '<span class="radio"></span></button>';
       }
@@ -666,8 +670,14 @@
         signins.filter(function (s) { return s.kind === "Login"; }).forEach(function (si) {
           h += credCard(si, st.mode === "saved" && st.savedId === si.id, "vncmSaved");
         });
-        h += newCard("vncm", "New login") + "</div>" +
-          '<button type="button" class="expand-toggle" id="vncmOnceToggle" style="margin-top:16px;">' +
+        h += newCard("vncm", "New login") + "</div>";
+        if (st.mode === "saved") {
+          var sv = signinById(st.savedId);
+          if (sv) h += '<p class="hint" style="margin-top:10px;">' + (sv.mac
+            ? "Signs in to Screen Sharing as '" + esc(sv.user) + "'."
+            : "Signs in as '" + esc(sv.user) + "'.") + "</p>";
+        }
+        h += '<button type="button" class="expand-toggle" id="vncmOnceToggle" style="margin-top:16px;">' +
           (st.mode === "once" ? "▾" : "▸") + " Type just this once</button>";
         if (st.mode === "once") {
           h += '<div class="expand-body">' +
@@ -689,10 +699,14 @@
             st.userMode === "saved" ? "Saved" : st.userMode === "type" ? "Type" : "Ask at connect");
         if (st.userMode === "saved") {
           h += '<div class="pick-list" style="margin-top:12px;">';
-          signins.filter(function (s) { return s.kind === "SSH"; }).forEach(function (si) {
+          signins.filter(function (s) { return s.kind === "SSH" || s.mac; }).forEach(function (si) {
             h += credCard(si, st.savedUserId === si.id, "sshUser");
           });
           h += "</div>";
+          var su2 = signinById(st.savedUserId);
+          if (su2) h += '<p class="hint" style="margin-top:10px;">' + (su2.mac
+            ? "Connects as '" + esc(su2.shortName) + "' (short name)."
+            : "Connects as '" + esc(su2.user) + "'.") + "</p>";
         } else if (st.userMode === "type") {
           h += '<div class="field-group" style="margin-top:12px;"><label for="sshTypedUser">Username</label>' +
             '<input class="input" id="sshTypedUser" type="text" value="' + esc(st.typedUser) + '" placeholder="e.g. ubuntu" /></div>';
@@ -742,7 +756,7 @@
           return S.vncp.typePass ? "using a typed VNC password" : "no password chosen";
         }
         if (S.combo === "vnc-mac") {
-          if (S.vncm.mode === "saved") { var c = signinById(S.vncm.savedId); return c ? "signed in as " + c.name + " (" + c.user + ")" : "no login chosen"; }
+          if (S.vncm.mode === "saved") { var c = signinById(S.vncm.savedId); return c ? (c.mac ? "signed in as " + c.user : "signed in as " + c.name + " (" + c.user + ")") : "no login chosen"; }
           return S.vncm.onceUser ? "signing in as " + S.vncm.onceUser + " (typed once)" : "no login chosen";
         }
         var st = S.ssh;
@@ -752,7 +766,7 @@
         if (st.userMode === "type")
           return "signed in as " + (st.typedUser ? st.typedUser + " (typed username)" : "typed username") + " · " + how;
         var su = signinById(st.savedUserId);
-        return "signed in as " + (su ? su.name + " (" + su.user + ")" : "—") + " · " + how;
+        return "signed in as " + (su ? (su.mac ? su.shortName : su.name + " (" + su.user + ")") : "—") + " · " + how;
       }
 
       function optRow(name, sub, control, extra) {
@@ -970,7 +984,12 @@
         });
         bindSeg("sshPwMode", function (v) { S.ssh.pwMode = v === "Saved sign-in" ? "saved" : "type"; renderStep(); });
         bindPick("sshPw", function (id) { S.ssh.savedPwId = id; renderStep(); });
-        bindNew("sshPw", function () { openSheet("signin", { kind: "SSH", select: function (id) { S.ssh.savedPwId = id; S.ssh.savedUserId = id; renderStep(); } }); });
+        bindNew("sshPw", function () { openSheet("signin", { kind: "SSH", select: function (id) {
+          var nsi = signinById(id);
+          if (nsi && nsi.mac) { S.ssh.userMode = "saved"; S.ssh.savedUserId = id; }
+          else { S.ssh.savedPwId = id; S.ssh.savedUserId = id; }
+          renderStep();
+        } }); });
         bindText("sshOncePass", function (v) { S.ssh.oncePass = v; });
         bindPick("sshKey", function (id) { S.ssh.keyId = id; renderStep(); });
         bindNew("sshKey", function () { openSheet("key", { select: function (id) { S.ssh.keyId = id; renderStep(); } }); });
@@ -1110,7 +1129,7 @@
           opt: { rdpSound: "Headset", mic: true, camera: true, cameraRes: "720p", clipboard: true, proxy: "Direct", reconnect: true } },
         { id: "ex-macmini", label: "Mac mini — VNC · username+password", combo: "vnc-mac",
           name: "Mac mini", host: "192.0.2.20", port: 5900,
-          cred: { vncm: { mode: "saved", savedId: "si-mac" } },
+          cred: { vncm: { mode: "saved", savedId: "si-macmini" } },
           opt: { vncPair: "homelab", proxy: "Direct", reconnect: true } },
         { id: "ex-homelab", label: "homelab — SSH · user+key", combo: "ssh-key",
           name: "homelab", host: "192.0.2.250", port: 22,
@@ -1193,12 +1212,14 @@
         var h = '<div class="group-label">Sign-ins</div><div class="pick-list">';
         var anyS = false;
         signins.forEach(function (si) {
-          if (!match(si.name + " " + si.user + " " + si.kind)) return;
+          if (!match(si.name + " " + si.user + " " + (si.shortName || "") + " " + si.kind)) return;
           anyS = true;
-          var sub = si.kind === "VNC" ? "VNC password" : "Username · " + si.user;
+          var sub = si.kind === "VNC" ? "VNC password"
+            : si.mac ? si.user + " · Short name " + si.shortName
+            : "Username · " + si.user;
           h += '<div class="pick-card" style="cursor:default;">' +
             '<span class="avatar">' + (si.kind === "VNC" ? ICONS.lock : ICONS.user) + "</span>" +
-            '<span class="pc-main"><span class="pc-name">' + esc(si.name) + " " + kindBadge(si.kind) + pinBadge(si.pin) + "</span>" +
+            '<span class="pc-main"><span class="pc-name">' + esc(si.name) + " " + kindBadge(si.kind) + (si.mac ? ' <span class="badge kind">Mac</span>' : "") + pinBadge(si.pin) + "</span>" +
             '<span class="pc-sub">' + esc(sub) + " · Used by " + si.usedBy + " connection" + (si.usedBy === 1 ? "" : "s") + "</span></span>" +
             '<button type="button" class="btn small" data-edit-signin="' + si.id + '">Edit</button></div>';
         });
@@ -1250,16 +1271,36 @@
 
       function openSheet(type, opts) {
         opts = opts || {};
-        sheetCtx = { type: type, kind: opts.kind || "RDP", edit: opts.edit || null, select: opts.select || null, pin: opts.edit ? !!opts.edit.pin : false };
+        sheetCtx = { type: type, kind: opts.kind || "RDP", edit: opts.edit || null, select: opts.select || null,
+          pin: opts._pin != null ? opts._pin : (opts.edit ? !!opts.edit.pin : false),
+          mac: opts._mac != null ? opts._mac : (opts.edit ? !!opts.edit.mac : false),
+          draft: opts._draft || null };
         var box = el("sheetBox");
         var h = '<div class="grab"></div>';
         if (type === "signin") {
           var ed = sheetCtx.edit;
-          h += "<h3>" + (ed ? "Edit sign-in" : "New sign-in") + "</h3>" +
+          var dr = sheetCtx.draft || {};
+          var nmV = dr.name != null ? dr.name : (ed ? ed.name : "");
+          var usV = dr.user != null ? dr.user : (ed && !ed.mac ? ed.user : "");
+          var fuV = dr.full != null ? dr.full : (ed && ed.mac ? ed.user : "");
+          var shV = dr.short != null ? dr.short : (ed ? (ed.shortName || "") : "");
+          var pwV = dr.pass || "";
+          var macTgl = sheetCtx.kind === "Login" || sheetCtx.kind === "SSH" || !!(ed && ed.mac);
+          h += "<h3>" + (sheetCtx.mac ? (ed ? "Edit Mac login" : "New Mac login") : (ed ? "Edit sign-in" : "New sign-in")) + "</h3>" +
             '<p class="sheet-sub">' + esc(sheetCtx.kind) + ' sign-in · stored encrypted in the on-device vault.</p>' +
-            '<div class="field-group"><label for="shName">Name</label><input class="input" id="shName" type="text" value="' + esc(ed ? ed.name : "") + '" placeholder="e.g. Work account" /></div>' +
-            '<div class="field-group"><label for="shUser">Username</label><input class="input" id="shUser" type="text" value="' + esc(ed ? ed.user : "") + '" placeholder="e.g. user" /></div>' +
-            '<div class="field-group"><label for="shPass">Password</label><input class="input" id="shPass" type="password" placeholder="' + (ed ? "Leave blank to keep current" : "") + '" /></div>' +
+            '<div class="field-group"><label for="shName">Name</label><input class="input" id="shName" type="text" value="' + esc(nmV) + '" placeholder="e.g. Work account" /></div>';
+          if (macTgl) {
+            h += '<div class="opt-row" style="padding-top:2px;"><div class="or-main"><div class="or-name">macOS account</div>' +
+              '<div class="or-sub">Mac accounts have two names — Screen Sharing signs in with the full name, SSH with the short name. Save both once and each connection uses the right one.</div></div>' +
+              switchHTML("shMac", sheetCtx.mac) + "</div>";
+          }
+          if (sheetCtx.mac) {
+            h += '<div class="field-group"><label for="shFull">Full name — used for Screen Sharing</label><input class="input" id="shFull" type="text" value="' + esc(fuV) + '" placeholder="e.g. Jordan Lee" /></div>' +
+              '<div class="field-group"><label for="shShort">Short name — used for SSH</label><input class="input" id="shShort" type="text" value="' + esc(shV) + '" placeholder="e.g. jordan" /></div>';
+          } else {
+            h += '<div class="field-group"><label for="shUser">Username</label><input class="input" id="shUser" type="text" value="' + esc(usV) + '" placeholder="e.g. user" /></div>';
+          }
+          h += '<div class="field-group"><label for="shPass">Password</label><input class="input" id="shPass" type="password" value="' + esc(pwV) + '" placeholder="' + (ed ? "Leave blank to keep current" : "") + '" /></div>' +
             '<div class="opt-row" style="padding-top:2px;"><div class="or-main"><div class="or-name">Require headset PIN to use</div><div class="or-sub">Ask for your PIN before this sign-in is used</div></div>' + switchHTML("shPin", sheetCtx.pin) + "</div>" +
             '<p class="hint">Stored encrypted in the on-device vault — never leaves the headset.</p>';
         } else if (type === "vnc") {
@@ -1287,6 +1328,18 @@
         el("sheetOverlay").classList.add("open");
 
         bindSwitch("shPin", function () { sheetCtx.pin = !sheetCtx.pin; openSheetRefreshPin(); });
+        bindSwitch("shMac", function () {
+          var d = {};
+          if (el("shName")) d.name = el("shName").value;
+          if (el("shUser")) d.user = el("shUser").value;
+          if (el("shFull")) d.full = el("shFull").value;
+          if (el("shShort")) d.short = el("shShort").value;
+          if (el("shPass")) d.pass = el("shPass").value;
+          var c = sheetCtx;
+          if (!c.mac && d.user && !d.full) d.full = d.user;
+          if (c.mac && d.full && !d.user) d.user = d.full;
+          openSheet(c.type, { kind: c.kind, edit: c.edit, select: c.select, _mac: !c.mac, _pin: c.pin, _draft: d });
+        });
         el("shCancel").addEventListener("click", closeSheet);
         el("shSave").addEventListener("click", saveSheet);
         bindVncCounter("shVncPass", function () {});
@@ -1296,6 +1349,12 @@
             if (!nameInp.dataset.touched && userInp.value.trim()) nameInp.value = userInp.value.trim() + " account";
           });
           nameInp.addEventListener("input", function () { nameInp.dataset.touched = "1"; });
+        }
+        var fullInp = el("shFull");
+        if (nameInp && fullInp) {
+          fullInp.addEventListener("input", function () {
+            if (!nameInp.dataset.touched && fullInp.value.trim()) nameInp.value = fullInp.value.trim() + " login";
+          });
         }
         var first = el("shName");
         if (first) first.focus();
@@ -1330,15 +1389,23 @@
             signins.push({ id: id, name: name || "VNC password", user: "", kind: "VNC", pin: sheetCtx.pin, usedBy: 0 });
           }
         } else {
-          var user = el("shUser") ? el("shUser").value.trim() : "";
+          var isMac = !!sheetCtx.mac;
+          var user = isMac ? (el("shFull") ? el("shFull").value.trim() : "")
+                           : (el("shUser") ? el("shUser").value.trim() : "");
+          var short = isMac && el("shShort") ? el("shShort").value.trim() : "";
           if (sheetCtx.edit) {
             sheetCtx.edit.name = name || sheetCtx.edit.name;
             if (user) sheetCtx.edit.user = user;
+            sheetCtx.edit.mac = isMac;
+            sheetCtx.edit.shortName = isMac ? short : undefined;
+            if (isMac) sheetCtx.edit.kind = "Login";
             sheetCtx.edit.pin = sheetCtx.pin;
             id = sheetCtx.edit.id;
           } else {
             id = "si-" + Date.now();
-            signins.push({ id: id, name: name || (user ? user + " account" : "Untitled sign-in"), user: user, kind: sheetCtx.kind, pin: sheetCtx.pin, usedBy: 0 });
+            signins.push({ id: id, name: name || (user ? user + " account" : "Untitled sign-in"), user: user,
+              shortName: isMac ? short : undefined, mac: isMac, kind: isMac ? "Login" : sheetCtx.kind,
+              pin: sheetCtx.pin, usedBy: 0 });
           }
         }
         var cb = sheetCtx.select;
