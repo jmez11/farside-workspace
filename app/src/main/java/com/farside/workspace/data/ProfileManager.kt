@@ -11,7 +11,8 @@ class ProfileManager(private val context: Context) {
         com.farside.workspace.DeviceCredentialAuth.initialize(context)
         // Encrypt legacy plaintext in both arrays in one durable preference transaction.
         val editor = prefs.edit()
-        var changed = false
+        var changed = prefs.contains("mac_relay_warning_shown")
+        if (changed) editor.remove("mac_relay_warning_shown")
         for (key in listOf("credentials", "profiles")) {
             val array = JSONArray(prefs.getString(key, "[]"))
             var arrayChanged = false
@@ -105,6 +106,13 @@ class ProfileManager(private val context: Context) {
         }
     }
     
+    fun removeCardBackground(id: String) {
+        val profile = getProfiles().firstOrNull { it.id == id } ?: return
+        val name = profile.cardBackground ?: return
+        updateProfile(profile.copy(cardBackground = null))
+        java.io.File(context.filesDir, "card-backgrounds/$name").delete()
+    }
+
     fun deleteProfile(id: String) {
         val profiles = getProfiles().toMutableList()
         profiles.firstOrNull { it.id == id }?.cardBackground?.let {

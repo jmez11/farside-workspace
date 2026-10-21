@@ -640,4 +640,5 @@
   <string name="rdp_desktop_number">Bureau %1$d</string>
   <string name="rdp_layout_auto">Suivre le placement des panneaux</string>
   <string name="rdp_retry_layout">Réessayer la disposition du bureau</string>
+    <string name="remove_connection_photo">Supprimer la photo de %1$s</string>
 </resources>

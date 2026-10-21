@@ -22,6 +22,8 @@ internal object RdpMonitorSessions {
     fun create(context: Context, profile: ConnectionProfile): RdpMonitor =
         RdpMonitorSession(context.applicationContext, profile).also { sessions[it.id] = it }.first()
     fun find(session: String, monitor: Long): RdpMonitor? = sessions[session]?.monitors?.firstOrNull { it.id == monitor }
+    fun joinAvailable(profile: String): RdpMonitor? =
+        sessions.values.firstOrNull { it.profile.id == profile && it.canAdd }?.addMonitor()
     fun remove(session: RdpMonitorSession) { sessions.remove(session.id) }
 }
 
@@ -363,14 +365,18 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
         monitor.requestedWidth = w; monitor.requestedHeight = h
         resizeAt = SystemClock.elapsedRealtime() + 300
     }
-    fun addWindow(activity: Activity) {
-        if (!canAdd || closed || drag.active) return
+    fun addMonitor(): RdpMonitor? {
+        if (!canAdd || closed || drag.active) return null
         beginAdjustment()
         val monitor = RdpMonitor(this, nextId++).also {
             it.requestedWidth = 1280; it.requestedHeight = 800
             it.launchDeadline = SystemClock.elapsedRealtime() + 10_000
         }
         monitors += monitor; busy = true; canAdd = false
+        return monitor
+    }
+    fun addWindow(activity: Activity) {
+        val monitor = addMonitor() ?: return
         val slot = SessionWindowSlots.reserve(activity, profile.id)
         monitor.launchSlot = slot
         val request = WindowLaunchMonitor.prepare(activity.applicationContext) {

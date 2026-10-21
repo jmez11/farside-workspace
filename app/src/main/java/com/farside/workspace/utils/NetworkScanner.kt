@@ -17,8 +17,8 @@ import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
 
 data class DiscoveredHost(val ip: String, val name: String, val port: Int = 3389, val hostname: String? = null) {
-    fun savedRdpHost(): String = hostname ?: ip
-    fun savedVncHost(): String = name
+    fun savedRdpHost(): String = ip
+    fun savedVncHost(): String = ip
 }
 
 object NetworkScanner {

@@ -138,8 +138,18 @@ class RdpResizeInstrumentation : Instrumentation() {
                 finish(0, results)
                 return
             }
-            if (jumpArgs?.getString("rdpMonitorsOnly") == "true") {
-                results.putString("stream", "PASS: ${RdpMonitorWindowsVerification(this).run()}\n")
+            if (jumpArgs?.getString("rdpLauncherFixtureCleanup") == "true") {
+                results.putString("stream", RdpMonitorWindowsVerification(this).cleanupLauncherFixtures() + "\n")
+                finish(0, results)
+                return
+            }
+            if (jumpArgs?.getString("rdpLauncherReuseFixture") == "true") {
+                results.putString("stream", RdpMonitorWindowsVerification(this).launcherReuseFixture() + "\n")
+                finish(0, results)
+                return
+            }
+            if (jumpArgs?.getString("rdpMonitorsOnly") == "true" || jumpArgs?.getString("rdpLauncherReuseOnly") == "true") {
+                results.putString("stream", "PASS: ${RdpMonitorWindowsVerification(this).run(jumpArgs?.getString("rdpLauncherReuseOnly") == "true")}\n")
                 finish(0, results)
                 return
             }
@@ -270,6 +280,12 @@ class RdpResizeInstrumentation : Instrumentation() {
             }
             if (rdpSocksLive) {
                 results.putString("stream", ProxyVerification(this).runLiveRdp(socks5 = true) + "\n")
+                finish(0, results)
+                return
+            }
+            if (jumpArgs?.getString("sshForwardingOnly") == "true") {
+                SshFeaturesVerification(this, forwardingOnly = true).run()
+                results.putString("stream", "PASS: SSH forwarding transport, profile persistence and actual add/edit/remove UI.\n")
                 finish(0, results)
                 return
             }

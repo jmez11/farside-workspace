@@ -652,4 +652,5 @@
   <string name="rdp_desktop_number">Desktop %1$d</string>
   <string name="rdp_layout_auto">Urmăriți plasarea panourilor</string>
   <string name="rdp_retry_layout">Reîncercare aspect desktop</string>
+    <string name="remove_connection_photo">Elimină fotografia pentru %1$s</string>
 </resources>

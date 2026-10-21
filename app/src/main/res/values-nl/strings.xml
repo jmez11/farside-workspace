@@ -640,4 +640,5 @@
   <string name="rdp_desktop_number">Bureaublad %1$d</string>
   <string name="rdp_layout_auto">Paneelplaatsing volgen</string>
   <string name="rdp_retry_layout">Bureaubladindeling opnieuw proberen</string>
+    <string name="remove_connection_photo">Foto voor %1$s verwijderen</string>
 </resources>

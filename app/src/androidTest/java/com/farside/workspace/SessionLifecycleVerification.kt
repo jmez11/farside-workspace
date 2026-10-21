@@ -168,6 +168,23 @@ internal class SessionLifecycleVerification(private val test: Instrumentation) {
                 if (saved != null) break
                 Thread.sleep(100)
             }
+            val removeLabel = context.getString(R.string.remove_connection_photo, profile.name)
+            val captureLabel = context.getString(R.string.capture_connection, profile.name)
+            await(removeLabel)
+            check(find(captureLabel) == null) { "Camera action still shown with a saved photo" }
+            fun captureLauncher(name: String) {
+                lateinit var image: Bitmap
+                val ready = CountDownLatch(1)
+                var result = -1
+                test.runOnMainSync {
+                    image = Bitmap.createBitmap(launcher.window.decorView.width, launcher.window.decorView.height, Bitmap.Config.ARGB_8888)
+                    android.view.PixelCopy.request(launcher.window, image, { result = it; ready.countDown() }, Handler(Looper.getMainLooper()))
+                }
+                check(ready.await(5, TimeUnit.SECONDS) && result == android.view.PixelCopy.SUCCESS)
+                File(context.cacheDir, name).outputStream().use { image.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                image.recycle()
+            }
+            captureLauncher("card-remove-photo.png")
             val name = checkNotNull(saved) { "Card screenshot was not saved" }
             picture = File(context.filesDir, "card-backgrounds/$name")
             check(picture.exists() && picture.length() > 1000L) { "Card background file is missing or empty" }
@@ -176,6 +193,15 @@ internal class SessionLifecycleVerification(private val test: Instrumentation) {
             if (synthetic) check(bitmap.getPixel(bitmap.width / 2, bitmap.height / 2) and 0x00ffffff != 0)
             bitmap.recycle()
             if (synthetic) {
+                test.runOnMainSync { SessionCardActions.connectedCounts[profile.id] = 0 }
+                await(removeLabel)
+                click(removeLabel)
+                check(ProfileManager(context).getProfiles().single { it.id == profile.id }.cardBackground == null)
+                check(!picture.exists()) { "Removed photo file still exists" }
+                check(find(removeLabel) == null && find(captureLabel) == null) { "Disconnected card retained photo controls after removal" }
+                test.runOnMainSync { SessionCardActions.connected(selected, true) }
+                await(captureLabel)
+                captureLauncher("card-take-photo.png")
                 test.runOnMainSync {
                     selected.sshCaptureView = object : View(context) {
                         override fun onDraw(canvas: android.graphics.Canvas) {
@@ -199,12 +225,14 @@ internal class SessionLifecycleVerification(private val test: Instrumentation) {
                 check(android.graphics.Color.green(center) > android.graphics.Color.red(center) + 80 &&
                     android.graphics.Color.green(center) > android.graphics.Color.blue(center) + 40)
                 terminalImage.recycle()
+                await(removeLabel)
+                check(find(captureLabel) == null)
             }
             check(!selected.isDestroyed && selected.cardConnected)
             check(SessionCardActions.selectedTask(profile.id) == selected.taskId)
             if (synthetic) checkNotNull(picture).copyTo(File(context.cacheDir, "card-synthetic.jpg"), overwrite = true)
             File(context.cacheDir, "card-actions-results.json").writeText(JSONObject()
-                .put("captured", true).put("width", session.window.decorView.width)
+                .put("captured", true).put("removedAndRecaptured", synthetic).put("width", session.window.decorView.width)
                 .put("task", selected.taskId).put("syntheticConnection", synthetic).toString(2))
             test.runOnMainSync { launcher.finish() }
         } finally {

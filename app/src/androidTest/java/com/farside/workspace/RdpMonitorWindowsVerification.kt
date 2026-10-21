@@ -292,7 +292,57 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
         }
         syntheticDrag(first,second)
     }
-    fun run(): String {
+    fun cleanupLauncherFixtures(): String {
+        val pm = ProfileManager(context)
+        val owned = pm.getProfiles().filter { it.name == "Launcher reuse fixture" }
+        check(owned.all { it.type == ConnectionType.RDP && it.host == "127.0.0.1" && it.port == 9 && it.user == "fixture" && it.credentialId == null })
+        owned.forEach { pm.deleteProfile(it.id) }
+        check(context.getSharedPreferences("farside_profiles", 0).edit().commit())
+        return "PASS: removed ${owned.size} owned loopback launcher fixtures only."
+    }
+    fun launcherReuseFixture(): String {
+        val pm = ProfileManager(context)
+        val profile = com.farside.workspace.data.ConnectionProfile(
+            java.util.UUID.randomUUID().toString(), "Launcher reuse fixture", ConnectionType.RDP,
+            "127.0.0.1", port = 9, user = "fixture", pass = "")
+        pm.addProfile(profile)
+        var runtime: RdpMonitorSession? = null
+        try {
+            val activity = test.startActivitySync(SessionWindowLauncher.intent(context, profile.id,
+                SessionWindowSlots.reserve(context, profile.id)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as SessionActivity
+            val session = checkNotNull(activity.rdpMonitor).session
+            runtime = session
+            await("fixture refused-loopback connect finishes") { session.connectionFailed.value }
+            @Suppress("UNCHECKED_CAST")
+            val eligibility = RdpMonitorSession::class.java.getDeclaredField("canAdd\$delegate").apply { isAccessible = true }
+                .get(session) as androidx.compose.runtime.MutableState<Boolean>
+            // No live server: inject only the eligibility flag, then exercise real document launches.
+            main {
+                eligibility.value = true
+                SessionWindowLauncher.launch(activity, profile.id)
+            }
+            await("click joins fixture session") { session.monitors.size == 2 && session.monitors.all { it.host.get() != null } }
+            check(session.monitors.all { it.host.get()?.rdpMonitor?.session === session })
+            main {
+                eligibility.value = true
+                val (_, pending) = ConnectionSpatialDrag.payload(activity.window.decorView, profile)
+                pending.send()
+            }
+            await("drop joins fixture session") { session.monitors.size == 3 && session.monitors.all { it.host.get() != null } }
+            check(session.monitors.all { it.host.get()?.rdpMonitor?.session === session })
+            main {
+                eligibility.value = false
+                check(RdpMonitorSessions.joinAvailable(profile.id) == null)
+                check(RdpMonitorSessions.joinAvailable("missing-profile") == null)
+            }
+            return "PASS: actual click-entry and synthetic drop document launches reuse the eligible session; ineligible and unrelated sessions are excluded. Eligibility was injected; no live RDP claim."
+        } finally {
+            runtime?.monitors?.toList()?.forEach { m -> main { m.host.get()?.finishAndRemoveTask() ?: m.session.remove(m) } }
+            pm.deleteProfile(profile.id)
+            check(context.getSharedPreferences("farside_profiles", 0).edit().commit())
+        }
+    }
+    fun run(launcherReuseOnly: Boolean = false): String {
         val service = test.uiAutomation.serviceInfo
         service.flags = service.flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
         test.uiAutomation.serviceInfo = service
@@ -421,6 +471,24 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
                 File(directory, "results.json").writeText(report.put("stages", stages).toString(2))
             }
             settled(1); record("one")
+            if (launcherReuseOnly) {
+                main { SessionWindowLauncher.launch(firstActivity, profile.id) }
+                settled(2)
+                check(session.monitors.all { it.host.get()?.rdpMonitor?.session === session })
+                check(session.instance.value == handle)
+                record("launcher-click")
+                main {
+                    val (_, pending) = ConnectionSpatialDrag.payload(firstActivity.window.decorView, profile)
+                    pending.send()
+                }
+                settled(3)
+                check(session.monitors.all { it.host.get()?.rdpMonitor?.session === session })
+                check(session.instance.value == handle)
+                record("launcher-synthetic-drop")
+                main { check(RdpMonitorSessions.joinAvailable("missing-profile") == null) }
+                report.put("result", "PASS").put("oneNativeConnection", true)
+                return "Launcher click entry and synthetic Home drop payload add desktops to the same live RDP connection; unrelated profile is not reused."
+            }
             var isolatedMonitor: RdpMonitor? = null
             main { isolatedMonitor = RdpMonitorSessions.create(context, profile) }
             val isolated = checkNotNull(isolatedMonitor)

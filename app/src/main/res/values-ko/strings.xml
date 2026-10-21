@@ -640,4 +640,5 @@
   <string name="rdp_desktop_number">데스크톱 %1$d</string>
   <string name="rdp_layout_auto">패널 배치 따르기</string>
   <string name="rdp_retry_layout">데스크톱 레이아웃 다시 시도</string>
+    <string name="remove_connection_photo">%1$s 사진 삭제</string>
 </resources>

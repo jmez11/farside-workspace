@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
+import androidx.compose.material.icons.filled.ImageNotSupported
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.foundation.Image
 import androidx.compose.ui.graphics.asImageBitmap
@@ -328,10 +329,13 @@ fun ProfileCard(profile: ConnectionProfile, onEdit: () -> Unit, onDelete: () -> 
                             tint = if (starred) Color(0xFFFFD166) else MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-                if (connected && !reordering) {
-                    val captureLabel = stringResource(R.string.capture_connection, profile.name)
+                if ((connected || profile.cardBackground != null) && !reordering) {
+                    val hasPhoto = profile.cardBackground != null
+                    val captureLabel = stringResource(if (hasPhoto) R.string.remove_connection_photo else R.string.capture_connection, profile.name)
                     CardActionTooltip(captureLabel) {
-                        IconButton(onClick = onCapture) { Icon(Icons.Default.PhotoCamera, captureLabel) }
+                        IconButton(onClick = onCapture) {
+                            Icon(if (hasPhoto) Icons.Default.ImageNotSupported else Icons.Default.PhotoCamera, captureLabel)
+                        }
                     }
                 }
             }
@@ -1427,6 +1431,16 @@ fun SettingsSwitchRow(label: String, checked: Boolean, onCheckedChange: (Boolean
 }
 
 @Composable
+internal fun connectionChipColors() = FilterChipDefaults.filterChipColors(
+    selectedContainerColor = MaterialTheme.colorScheme.primary,
+    selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+    containerColor = Color(0xFF2C2C2E),
+    labelColor = Color.LightGray,
+    disabledContainerColor = Color(0xFF2C2C2E).copy(alpha = 0.35f),
+    disabledLabelColor = Color.Gray.copy(alpha = 0.35f)
+)
+
+@Composable
 fun CameraResolutionSelector(
     selectedResolution: com.farside.workspace.data.CameraResolution,
     enabled: Boolean,
@@ -1453,14 +1467,7 @@ fun CameraResolutionSelector(
                     onClick = { if (enabled) onResolutionSelected(res) },
                     enabled = enabled,
                     label = { Text(stringResource(res.labelResId)) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primary,
-                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-                        containerColor = Color(0xFF2C2C2E),
-                        labelColor = Color.LightGray,
-                        disabledContainerColor = Color(0xFF2C2C2E).copy(alpha = 0.35f),
-                        disabledLabelColor = Color.Gray.copy(alpha = 0.35f)
-                    )
+                    colors = connectionChipColors()
                 )
             }
         }
@@ -1598,7 +1605,6 @@ fun AddProfileForm(
     credentialRevision: Int = 0
 ) {
     var name by rememberSaveable { mutableStateOf(initialProfile?.name ?: "") }
-    var nameAutoFilled by rememberSaveable { mutableStateOf(false) }
     var type by rememberSaveable { mutableStateOf(initialProfile?.type ?: ConnectionType.RDP) }
     var host by rememberSaveable { mutableStateOf(initialProfile?.host ?: "") }
     var port by rememberSaveable { mutableStateOf(initialProfile?.port?.toString() ?: "3389") }
@@ -1802,7 +1808,7 @@ fun AddProfileForm(
                     .padding(bottom = 32.dp)
             ) {
                 SettingsHeader(stringResource(R.string.connection_name))
-                SettingsTextField(name, { name = it; nameAutoFilled = false }, stringResource(R.string.enter_display_name),
+                SettingsTextField(name, { name = it }, stringResource(R.string.enter_display_name),
                     errorMessage = if (showValidationErrors && name.isBlank()) stringResource(R.string.profile_name_required) else null)
 
                 if (type == ConnectionType.VNC) {
@@ -1867,11 +1873,7 @@ fun AddProfileForm(
                                         text = { Text(foundHost.name) },
                                         onClick = {
                                             focusManager.clearFocus()
-                                            if (name.isBlank() || name == "New Profile" || name == host || nameAutoFilled ||
-                                                discoveredHosts.any { it.name == name || it.savedRdpHost() == name || it.savedVncHost() == name || it.ip == name }) {
-                                                name = foundHost.name
-                                                nameAutoFilled = true
-                                            }
+                                            name = foundHost.name
                                             host = if (type == ConnectionType.RDP) foundHost.savedRdpHost() else foundHost.savedVncHost()
                                             cloudflaredHostError = null
                                             port = foundHost.port.toString()
@@ -1969,8 +1971,7 @@ fun AddProfileForm(
                         }
                     }
                     if (sftpPairProfileId.isNotBlank()) {
-                        val relayPrefs = context.getSharedPreferences("farside_profiles", android.content.Context.MODE_PRIVATE)
-                        val hasSeenWarning = relayPrefs.getBoolean("mac_relay_warning_shown", false)
+                        val hasSeenWarning = savedProfiles.any { it.enableMacSshRelay }
                         SettingsSwitchRow(stringResource(R.string.mac_ssh_relay_toggle), enableMacSshRelay) { enabled ->
                             if (enabled && !hasSeenWarning) {
                                 showMacRelayConfirm = true
@@ -1985,7 +1986,6 @@ fun AddProfileForm(
                                 text = { Text(stringResource(R.string.mac_ssh_relay_dialog_desc)) },
                                 confirmButton = {
                                     TextButton(onClick = {
-                                        relayPrefs.edit().putBoolean("mac_relay_warning_shown", true).apply()
                                         enableMacSshRelay = true
                                         showMacRelayConfirm = false
                                     }) { Text(stringResource(R.string.enable)) }

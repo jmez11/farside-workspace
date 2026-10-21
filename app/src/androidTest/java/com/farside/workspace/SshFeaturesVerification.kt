@@ -17,7 +17,7 @@ import java.security.KeyPairGenerator
 import kotlin.concurrent.thread
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
-class SshFeaturesVerification(private val test: Instrumentation, private val imeOnly: Boolean = false, private val keyAuth: Boolean = false) {
+class SshFeaturesVerification(private val test: Instrumentation, private val imeOnly: Boolean = false, private val keyAuth: Boolean = false, private val forwardingOnly: Boolean = false) {
     private var fixtureKeyId: String? = null
     private val shellBytes = java.util.concurrent.ConcurrentLinkedQueue<Int>()
     private val evidence = java.io.File(test.targetContext.cacheDir, "ssh-features-results.txt")
@@ -244,6 +244,7 @@ class SshFeaturesVerification(private val test: Instrumentation, private val ime
             check(pm.getProfiles().single { it.id == profile.id }.terminalScrollback == 250)
             click("Port forwarding"); click("Remove tunnel"); click("Add tunnel")
             setText("Source port", "18080"); setText("Destination host", "example.test"); setText("Destination port", "443")
+            capture(activity, "ssh-forwarding-editor.png")
             click("Save tunnel"); find("Quest :18080 → example.test:443")
             click("Edit tunnel"); setText("Source port", "18081"); click("Save tunnel")
             find("Quest :18081 → example.test:443")
@@ -259,6 +260,7 @@ class SshFeaturesVerification(private val test: Instrumentation, private val ime
             click("Remove tunnel"); click("Done")
             check(pm.getProfiles().single { it.id == profile.id }.sshForwards.isEmpty())
             record("PASS: real Compose add/edit/remove dialog, font/opacity restoration, scrollback save, forwarding persistence/JSON roundtrip")
+            if (forwardingOnly) return
             main {
                 val emulator = view.mEmulator
                 emulator.setScrollbackRows(250)

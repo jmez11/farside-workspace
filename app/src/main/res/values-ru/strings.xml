@@ -657,4 +657,5 @@
   <string name="rdp_desktop_number">Рабочий стол %1$d</string>
   <string name="rdp_layout_auto">Следовать размещению панелей</string>
   <string name="rdp_retry_layout">Повторить раскладку рабочих столов</string>
+    <string name="remove_connection_photo">Удалить фото для %1$s</string>
 </resources>

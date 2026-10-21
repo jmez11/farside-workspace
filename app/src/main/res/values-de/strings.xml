@@ -640,4 +640,5 @@
   <string name="rdp_desktop_number">Desktop %1$d</string>
   <string name="rdp_layout_auto">Panelplatzierung folgen</string>
   <string name="rdp_retry_layout">Desktop-Layout wiederholen</string>
+    <string name="remove_connection_photo">Foto für %1$s entfernen</string>
 </resources>

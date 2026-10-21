@@ -17,13 +17,17 @@ import java.io.File
 internal class MacRelayToggleUiVerification(private val test: Instrumentation) {
     fun run(id: String): String {
         val pm = ProfileManager(test.targetContext)
-        val vnc = pm.getProfiles().single { it.id == id && it.type == ConnectionType.VNC }
-        val ssh = pm.getProfiles().first { it.type == ConnectionType.SSH }
-        val fixture = vnc.copy(name = "Relay Toggle Fixture", sftpPairProfileId = ssh.id, enableMacSshRelay = false)
+        val vnc = ConnectionProfile(id, "Relay", ConnectionType.VNC, "192.0.2.1", user = "", pass = "")
+        val ssh = vnc.copy(id = "ssh-fixture", type = ConnectionType.SSH)
+        val credential = com.farside.workspace.data.SavedCredential(name = "Relay warning fixture", user = "", pass = "fixture")
+        pm.addCredential(credential)
+        val fixture = vnc.copy(name = "Relay Toggle Fixture", sftpPairProfileId = ssh.id, enableMacSshRelay = false, credentialId = credential.id)
         var saved: ConnectionProfile? = null
 
         val prefs = test.targetContext.getSharedPreferences("farside_profiles", Context.MODE_PRIVATE)
-        prefs.edit().remove("mac_relay_warning_shown").commit()
+        prefs.edit().putBoolean("mac_relay_warning_shown", true).commit()
+        ProfileManager(test.targetContext)
+        check(!prefs.contains("mac_relay_warning_shown")) { "Legacy warning preference retained" }
 
         val info = test.uiAutomation.serviceInfo
         info.flags = info.flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
@@ -49,24 +53,36 @@ internal class MacRelayToggleUiVerification(private val test: Instrumentation) {
             click(toggleLabel)
             check(nodes().any { it.text?.toString() == dialogTitle }) { "Dialog did not appear on first toggle" }
 
-            // 2. Click Enable button in dialog. Dialog dismisses, preference persisted.
+            // Approval belongs to the profile only when saved.
             click(enableBtn)
-            check(prefs.getBoolean("mac_relay_warning_shown", false)) { "Preference mac_relay_warning_shown not saved" }
+            check(!prefs.contains("mac_relay_warning_shown")) { "Legacy preference written" }
 
             // 3. Toggle off.
             click(toggleLabel)
 
-            // 4. Toggle on second time. Dialog MUST NOT appear (hasSeenWarning is true).
+            // Without a saved enabled profile, another enable still requires the warning.
             click(toggleLabel)
-            check(nodes().none { it.text?.toString() == dialogTitle }) { "Dialog appeared on second toggle despite preference" }
+            check(nodes().any { it.text?.toString() == dialogTitle }) { "Unsaved approval suppressed warning" }
+            click(enableBtn)
 
             // Click save
             click(test.targetContext.getString(R.string.save_uppercase))
             val result = checkNotNull(saved) { "Profile was not saved" }
             check(result.enableMacSshRelay) { "enableMacSshRelay was not true in saved profile" }
 
-            return "PASS relay toggle dialog verified and one-time preference confirmed"
+            test.runOnMainSync {
+                activity.setContent {
+                    MaterialTheme {
+                        AddProfileForm(initialProfile = fixture, onSave = { saved = it }, onCancel = {}, profileManager = pm,
+                            savedProfiles = listOf(fixture, ssh, result.copy(id = "accepted-fixture")))
+                    }
+                }
+            }
+            click(toggleLabel)
+            check(nodes().none { it.text?.toString() == dialogTitle }) { "Saved enabled profile did not suppress warning" }
+            return "PASS warning repeats without saved opt-in; saved enabled profile suppresses it; no acceptance preference written"
         } finally {
+            pm.deleteCredential(credential.id)
             test.removeMonitor(monitor)
             test.runOnMainSync { activity?.finish() }
         }

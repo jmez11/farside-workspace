@@ -640,4 +640,5 @@
   <string name="rdp_desktop_number">Skrivebord %1$d</string>
   <string name="rdp_layout_auto">Følg panelplacering</string>
   <string name="rdp_retry_layout">Prøv skrivebordslayout igen</string>
+    <string name="remove_connection_photo">Fjern foto for %1$s</string>
 </resources>

@@ -642,4 +642,5 @@
   <string name="rdp_desktop_number">デスクトップ %1$d</string>
   <string name="rdp_layout_auto">パネルの配置に従う</string>
   <string name="rdp_retry_layout">デスクトップレイアウトを再試行</string>
+    <string name="remove_connection_photo">%1$s の写真を削除</string>
 </resources>

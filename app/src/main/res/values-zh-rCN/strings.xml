@@ -642,4 +642,5 @@
   <string name="rdp_desktop_number">桌面 %1$d</string>
   <string name="rdp_layout_auto">跟随面板放置</string>
   <string name="rdp_retry_layout">重试桌面布局</string>
+    <string name="remove_connection_photo">移除 %1$s 的照片</string>
 </resources>

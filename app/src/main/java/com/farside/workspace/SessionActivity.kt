@@ -197,7 +197,8 @@ class SessionActivity : ComponentActivity() {
         if (profile.type == ConnectionType.RDP) {
             val group = intent.getStringExtra(RdpMonitorSessions.EXTRA_SESSION)
             val monitorId = intent.getLongExtra(RdpMonitorSessions.EXTRA_MONITOR, 0L)
-            rdpMonitor = if (group != null) RdpMonitorSessions.find(group, monitorId) else RdpMonitorSessions.create(this, profile)
+            rdpMonitor = if (group != null) RdpMonitorSessions.find(group, monitorId)
+                else RdpMonitorSessions.joinAvailable(profile.id) ?: RdpMonitorSessions.create(this, profile)
             if (rdpMonitor == null || rdpMonitor?.session?.profile?.id != profile.id) { finishAndRemoveTask(); return }
             val monitor = rdpMonitor!!
             intent.putExtra(RdpMonitorSessions.EXTRA_SESSION, monitor.session.id)

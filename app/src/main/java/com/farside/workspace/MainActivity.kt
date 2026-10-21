@@ -133,10 +133,15 @@ class MainActivity : ComponentActivity() {
                         starredIds = arrangement.starred,
                         onToggleStar = { arrangement = arrangementStore.toggleStar(it) },
                         onMoveProfile = { profile, target -> arrangement = arrangementStore.move(profiles, profile, target) },
-                        onCaptureProfile = { id -> SessionCardActions.capture(id) { saved ->
-                            if (saved) refreshProfiles()
-                            else android.widget.Toast.makeText(this@MainActivity, R.string.card_capture_failed, android.widget.Toast.LENGTH_SHORT).show()
-                        } }
+                        onCaptureProfile = { id ->
+                            if (profileManager.getProfiles().firstOrNull { it.id == id }?.cardBackground != null) {
+                                profileManager.removeCardBackground(id)
+                                refreshProfiles()
+                            } else SessionCardActions.capture(id) { saved ->
+                                if (saved) refreshProfiles()
+                                else android.widget.Toast.makeText(this@MainActivity, R.string.card_capture_failed, android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        }
                     )
                 }
             }

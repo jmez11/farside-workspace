@@ -77,7 +77,7 @@ private fun ForwardEditor(original: SshForward, onCancel: () -> Unit, onSave: (S
     AlertDialog(onDismissRequest = onCancel, title = { Text(stringResource(R.string.configure_tunnel)) }, text = {
         Column(Modifier.width(560.dp).heightIn(max = 400.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ForwardKind.entries.forEach { FilterChip(kind == it, onClick = { kind = it }, label = { Text(stringResource(it.labelResId)) }) }
+                ForwardKind.entries.forEach { FilterChip(kind == it, onClick = { kind = it }, label = { Text(stringResource(it.labelResId)) }, colors = connectionChipColors()) }
             }
             Text(when (kind) {
                 ForwardKind.LOCAL -> stringResource(R.string.local_forward_help)
@@ -91,7 +91,7 @@ private fun ForwardEditor(original: SshForward, onCancel: () -> Unit, onSave: (S
             }
             Text(stringResource(R.string.listener_address_family), style = MaterialTheme.typography.labelLarge)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ForwardFamily.entries.forEach { FilterChip(family == it, onClick = { family = it }, label = { Text(stringResource(it.labelResId)) }) }
+                ForwardFamily.entries.forEach { FilterChip(family == it, onClick = { family = it }, label = { Text(stringResource(it.labelResId)) }, colors = connectionChipColors()) }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.allow_connections_from_other_hosts), Modifier.weight(1f))

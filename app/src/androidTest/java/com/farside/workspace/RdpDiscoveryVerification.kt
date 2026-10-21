@@ -28,7 +28,12 @@ class RdpDiscoveryVerification(private val instrumentation: Instrumentation) {
         try {
             val deadline = SystemClock.uptimeMillis() + 20000
             while (activity.rdpInstance == 0L && SystemClock.uptimeMillis() < deadline) Thread.sleep(200)
-            check(activity.rdpInstance != 0L) { "Saved RDP session did not connect: $profileName" }
+            val session = activity.rdpMonitor?.session
+            check(activity.rdpInstance != 0L) {
+                "Saved RDP session did not connect: $profileName; native=${session?.instance?.value}; " +
+                    "failure=${session?.failureReason?.value}; disconnected=${session?.disconnectedReason?.value}; " +
+                    "certificatePending=${session?.certificateRequest?.value != null}; surface=${activity.rdpMonitor?.hadSurface}"
+            }
             return "PASS: saved RDP session connected: $profileName"
         } finally {
             instrumentation.runOnMainSync { activity.finish() }
@@ -129,16 +134,17 @@ class RdpDiscoveryVerification(private val instrumentation: Instrumentation) {
         hosts.sortedBy { it.ip }.forEach { report.append("Discovered ${it.ip}: ${it.name}\n") }
         val found = hosts.singleOrNull { it.ip == "172.16.0.54" }
         check(found?.name == laptop.name) { "Live laptop discovery: $found" }
-        check(found.savedRdpHost() == laptop.name)
+        check(found.savedRdpHost() == found.ip)
+        check(found.savedVncHost() == found.ip)
         val profile = ConnectionProfile("discovery-fixture", "Discovered laptop", ConnectionType.RDP,
             found.savedRdpHost(), user = "", pass = "")
-        check(ConnectionProfile.fromJson(profile.toJson()).host == laptop.name)
-        val netbiosEndpoint = NetworkScanner.resolveNetBiosName(profile.host)
+        check(ConnectionProfile.fromJson(profile.toJson()).host == found.ip)
+        val netbiosEndpoint = NetworkScanner.resolveNetBiosName(laptop.name)
         check(netbiosEndpoint == found.ip) { "Targeted NetBIOS query resolved to $netbiosEndpoint, expected ${found.ip}" }
         val endpoint = NetworkScanner.resolveRdpHost(profile.host)
-        check(endpoint == found.ip) { "Saved hostname resolved to $endpoint, expected ${found.ip}" }
+        check(endpoint == found.ip) { "Saved IP resolved to $endpoint, expected ${found.ip}" }
         Socket().use { it.connect(InetSocketAddress(endpoint, 3389), 1000) }
-        report.append("PASS: targeted NetBIOS name query and saved hostname resolve to the live RDP endpoint; TCP/3389 accepts connections.\n")
+        report.append("PASS: targeted NetBIOS name query and saved IP resolve to the live RDP endpoint; TCP/3389 accepts connections.\n")
         instrumentation.targetContext.cacheDir.resolve("rdp-discovery-results.txt").writeText(report.toString())
         report.toString()
     }

@@ -157,7 +157,7 @@ internal class LauncherArrangementVerification(private val test: Instrumentation
                 check(nodes().any { it.text?.toString() == tooltipLabel }) { "Hover tooltip missing for $tooltipLabel" }
             }
             hover("Star Fixture A", "Favorite")
-            hover("Use screenshot of Fixture A as card background")
+            hover("Remove photo for Fixture A")
             if (QuestWindowManager.isAvailable(context)) hover("Window Manager")
             hover("Files", "SFTP Browser")
             hover("Settings")
@@ -251,8 +251,12 @@ internal class LauncherArrangementVerification(private val test: Instrumentation
             }
             check((0 until 20).any {
                 Thread.sleep(100)
-                nodes().count { node -> node.text?.toString() == discoveredName && node.isEditable } >= 2
-            }) { "RDP discovery selection did not fill both display name and host; visible=" +
+                val fields = nodes().filter { node -> node.isEditable }.mapNotNull { node -> node.text?.toString() }
+                discoveredName in fields && fields.any { value ->
+                    val octets = value.split('.')
+                    octets.size == 4 && octets.all { it.toIntOrNull() in 0..255 }
+                }
+            }) { "RDP discovery selection did not fill the display name and IP host; visible=" +
                 nodes().mapNotNull { it.text?.toString()?.let { value -> "$value(editable=${it.isEditable})" } } }
             fun scrollTo(label: String, direction: Int) {
                 repeat(16) {
@@ -331,11 +335,12 @@ internal class LauncherArrangementVerification(private val test: Instrumentation
                 "Card background did not cover the bottom edge (pixel=$edge, card=$card)"
             }
             actionsImage.recycle()
-            click("Use screenshot of Fixture A as card background")
+            click("Remove photo for Fixture A")
             check(captures.toList() == listOf("A") && opens.isEmpty())
             test.runOnMainSync { SessionCardActions.connectedCounts["A"] = 0 }
             Thread.sleep(200)
             check(nodes().none { it.contentDescription?.toString() == "Use screenshot of Fixture A as card background" })
+            check(nodes().any { it.contentDescription?.toString() == "Remove photo for Fixture A" })
             check(nodes().none { it.text?.toString() in listOf("Click to open", "Drag to place") })
             click("Star Fixture C")
             click("Star Fixture E")

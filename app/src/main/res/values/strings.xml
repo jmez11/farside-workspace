@@ -663,4 +663,5 @@
     <string name="mac_ssh_relay_toggle">SSH media relay (experimental)</string>
     <string name="mac_ssh_relay_dialog_title">Experimental!</string>
     <string name="mac_ssh_relay_dialog_desc">Remote video may be blocked by your network. This option runs a small Perl script on the Mac, over your SSH login, to relay video. It lasts only for the session and installs nothing. Enable?</string>
+    <string name="remove_connection_photo">Remove photo for %1$s</string>
 </resources>

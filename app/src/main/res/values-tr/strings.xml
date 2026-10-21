@@ -641,4 +641,5 @@
   <string name="rdp_desktop_number">Masaüstü %1$d</string>
   <string name="rdp_layout_auto">Panel yerleşimini izle</string>
   <string name="rdp_retry_layout">Masaüstü düzenini yeniden dene</string>
+    <string name="remove_connection_photo">%1$s için fotoğrafı kaldır</string>
 </resources>

@@ -641,4 +641,5 @@
   <string name="rdp_desktop_number">Επιφάνεια εργασίας %1$d</string>
   <string name="rdp_layout_auto">Ακολούθηση τοποθέτησης πλαισίων</string>
   <string name="rdp_retry_layout">Επανάληψη διάταξης επιφάνειας εργασίας</string>
+    <string name="remove_connection_photo">Κατάργηση φωτογραφίας για %1$s</string>
 </resources>

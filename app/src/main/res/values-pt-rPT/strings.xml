@@ -640,4 +640,5 @@
   <string name="rdp_desktop_number">Ambiente de trabalho %1$d</string>
   <string name="rdp_layout_auto">Seguir a colocação dos painéis</string>
   <string name="rdp_retry_layout">Tentar novamente o esquema do ambiente de trabalho</string>
+    <string name="remove_connection_photo">Remover fotografia de %1$s</string>
 </resources>
