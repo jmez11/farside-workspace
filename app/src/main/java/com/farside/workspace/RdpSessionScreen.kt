@@ -664,7 +664,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                             currentWidth = width
                             currentHeight = height
                             Log.i("RdpSession", "Texture available ${width}x${height}")
-                            connection.attach(Surface(texture))
+                            if (isVnc) connection.attach(Surface(texture))
                         }
 
                         override fun onSurfaceTextureSizeChanged(texture: SurfaceTexture, width: Int, height: Int) {

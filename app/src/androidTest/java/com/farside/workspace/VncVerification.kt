@@ -478,9 +478,15 @@ internal class VncVerification(private val test: Instrumentation,private val liv
                 } ?: error("Save a VNC Mac profile and pass -e vncProfile <name/id>.")
                 if (mode == "macPicker") {
                     val found = runBlocking { NetworkScanner.scanLocalNetworkForVnc(test.targetContext) }
-                    val host = found.single { it.ip == profile.host && it.port == profile.port }
-                    profile = chooseService(profile.copy(host = "", port = 5900), host.name)
-                    check(profile.host == host.name && profile.port == host.port)
+                    val host = found.single { (it.ip == profile.host || it.name == profile.host) && it.port == profile.port }
+                    val original=profile
+                    try {
+                        profile = chooseService(profile.copy(host = "", port = 5900), host.name)
+                        check(profile.host == host.name && profile.port == host.port)
+                    } finally {
+                        ProfileManager(test.targetContext).updateProfile(original)
+                        check(test.targetContext.getSharedPreferences("farside_profiles",0).edit().commit())
+                    }
                     record("PASS: real Mac ${host.name} selected in actual VNC picker; Bonjour name/port saved with existing encrypted credential link")
                 }
                 val loginPassword = if (mode == "macLogin") ProfileManager(test.targetContext).getCredentials()
@@ -893,6 +899,7 @@ internal class VncVerification(private val test: Instrumentation,private val liv
     private fun click(label: String, outsideEditable: Boolean = false) {
         var target: android.view.accessibility.AccessibilityNodeInfo? = null
         var lastScroll = 0L
+        var scrollForward = true
         try { await("Missing UI control $label") {
             val visible = nodes()
             target = visible.firstOrNull {
@@ -900,7 +907,15 @@ internal class VncVerification(private val test: Instrumentation,private val liv
                     (!outsideEditable || generateSequence(it) { node -> node.parent }.none { node -> node.isEditable })
             }
             if (target == null && visible.none { it.text?.startsWith("Finding local") == true } && SystemClock.uptimeMillis() - lastScroll > 500) {
-                visible.firstOrNull { it.isScrollable }?.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+                visible.firstOrNull { it.isScrollable }?.let { scroll ->
+                    val action=if(scrollForward) android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_FORWARD
+                        else android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
+                    if(!scroll.performAction(action)) {
+                        scrollForward=!scrollForward
+                        scroll.performAction(if(scrollForward) android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_FORWARD
+                            else android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
+                    }
+                }
                 lastScroll = SystemClock.uptimeMillis()
             }
             target != null

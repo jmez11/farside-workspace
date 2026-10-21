@@ -134,7 +134,7 @@ internal class VncSessionConnection(
                         mediaLease=lease
                         gate?.await()
                         val client=lease.connect(ssh.copy(reconnectAutomatically=false))
-                        mediaRelay=MacHevcSshRelay(context,client,profile.host, { android.util.Log.i("MacMediaRelay",it) },profile.port)
+                        mediaRelay=MacHevcSshRelay(context,client,host, { android.util.Log.i("MacMediaRelay",it) },profile.port)
                         host="127.0.0.1"; port=mediaRelay!!.port
                     }
                     if(profile.expMacHevc) require(shortName.isNotBlank() && shortName.none { it.isWhitespace() }) {
@@ -161,7 +161,7 @@ internal class VncSessionConnection(
                     closeMediaRelay()
                     ended.set(true)
                     val fallback = if (isMacAuth) {
-                        context.getString(R.string.vnc_mac_user_hint)
+                        context.getString(R.string.protocol_connection_failed, "VNC")
                     } else {
                         context.getString(R.string.vnc_connection_failed_help)
                     }

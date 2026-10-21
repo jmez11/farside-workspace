@@ -79,7 +79,8 @@ internal class MacLocalVerification(private val test: Instrumentation) {
         val caps=cm.getNetworkCapabilities(active)?:error("No network capabilities")
         check(!caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) { "VPN still active: direct isolation requires VPN disconnected" }
         check(caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) { "Expected local Wi-Fi" }
-        val address=InetAddress.getAllByName(p.host).first { it is java.net.Inet4Address }
+        val resolved=kotlinx.coroutines.runBlocking { com.farside.workspace.utils.NetworkScanner.resolveVncHost(context,p.host,p.port) }
+        val address=InetAddress.getAllByName(resolved).first { it is java.net.Inet4Address }
         check(address.isSiteLocalAddress) { "Local profile resolved outside private LAN" }
         file("endpoint.txt").writeText(address.hostAddress.orEmpty())
         record("PASS active Wi-Fi without VPN; local IPv4 resolved; direct TCP/UDP, no SSH relay")
