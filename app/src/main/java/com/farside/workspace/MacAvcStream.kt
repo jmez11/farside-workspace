@@ -81,8 +81,8 @@ internal class MacAvcStream(private val log: (String)->Unit, private val frame: 
     @Synchronized fun configurationSnapshot():ByteArray?=config?.copyOf()
     private var codec: MediaCodec?=null
     private var config: ByteArray?=null
-    private var width=0
-    private var height=0
+    @Volatile var width=0; private set
+    @Volatile var height=0; private set
     private var surface: Surface?=null
     var description="H.264 awaiting configuration"; private set
     @Synchronized fun setSurface(next: Surface?) {
@@ -101,6 +101,7 @@ internal class MacAvcStream(private val log: (String)->Unit, private val frame: 
         val decoder=MediaCodec.createDecoderByType("video/avc")
         try {
             check(decoder.codecInfo.isHardwareAccelerated) { "Selected AVC decoder is not hardware accelerated" }
+            if(decoder.codecInfo.getCapabilitiesForType("video/avc").isFeatureSupported(android.media.MediaCodecInfo.CodecCapabilities.FEATURE_LowLatency)) format.setInteger(MediaFormat.KEY_LOW_LATENCY,1)
             decoder.configure(format,target,null,0); decoder.start(); codec=decoder
             description="Hardware H.264 (${decoder.name})"
             log("$description configured ${width}x$height")

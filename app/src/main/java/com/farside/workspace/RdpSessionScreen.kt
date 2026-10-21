@@ -116,7 +116,9 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
     val runtime = monitor?.session
     var desktopTexture by remember { mutableStateOf<TextureView?>(null) }
     var frozenDesktop by remember { mutableStateOf<Bitmap?>(null) }
-    val adjusting = runtime?.transition?.active == true
+    val macTransition = remember(session.id) { RdpLayoutTransition() }
+    val macSurfaceUpdates = remember(session.id) { java.util.concurrent.atomic.AtomicLong() }
+    val adjusting = runtime?.transition?.active == true || macTransition.active
     // The frozen image covers live buffers immediately; only its dimming fades in.
     val adjustmentFade = remember { androidx.compose.animation.core.Animatable(0f) }
     val adjustmentDim by animateFloatAsState(if (adjusting) .48f else 0f, tween(240), label = "Adjustment dim")
@@ -124,15 +126,16 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
         if (adjusting) adjustmentFade.snapTo(1f)
         else { adjustmentFade.animateTo(0f,tween(320)); frozenDesktop = null }
     }
-    DisposableEffect(monitor) {
-        monitor?.freezeFrame = {
+    val freezeDesktop: () -> Unit = {
             if (frozenDesktop == null) desktopTexture?.takeIf { it.isAvailable }?.let { view ->
                 // Bound the retained GPU readback while keeping the window aspect ratio.
                 val scale = minOf(1f,1600f / view.width.coerceAtLeast(1),1000f / view.height.coerceAtLeast(1))
                 frozenDesktop = runCatching { view.getBitmap((view.width*scale).toInt().coerceAtLeast(1),
                     (view.height*scale).toInt().coerceAtLeast(1)) }.getOrNull()
             }
-        }
+    }
+    DisposableEffect(monitor) {
+        monitor?.freezeFrame = freezeDesktop
         onDispose { monitor?.freezeFrame = null; desktopTexture = null; frozenDesktop = null }
     }
     val isVnc = session.type == ConnectionType.VNC
@@ -216,7 +219,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
     val rdpClipboardLabel = stringResource(R.string.rdp_clipboard_label)
     val pairedSshId = remember(session.sftpPairProfileId) {
         if (isVnc) com.farside.workspace.data.ProfileManager(context).getProfiles()
-            .firstOrNull { it.id == session.sftpPairProfileId && it.type == ConnectionType.SSH }?.id else null
+            .firstOrNull { it.id == session.sftpPairProfileId && it.type == ConnectionType.SSH && it.enableSftp }?.id else null
     }
     var showVncFiles by remember { mutableStateOf(false) }
     var certificateRequest by (runtime?.certificateRequest ?: remember { mutableStateOf<RdpCertificateRequest?>(null) })
@@ -258,7 +261,8 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
         if (rdpInstance != 0L) {
             val activity = context as? SessionActivity
             while (true) {
-                activity?.checkAndBindAudioSession()
+                if (rdpBridge is VncBridge) (context as? android.app.Activity)?.let { rdpBridge.bindAudioWindow(it) }
+                else activity?.checkAndBindAudioSession()
                 delay(500)
             }
         }
@@ -442,6 +446,16 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
     var toolbarActivity by remember { mutableStateOf(0L) }
     var toolbarBounds by remember { mutableStateOf(Rect.Zero) }
     val remotePointer = remember { intArrayOf(0, 0) }
+    val macPointer=remember(rdpBridge) { mutableStateOf<Offset?>(null) }
+    var macCursor by remember(rdpBridge) { mutableStateOf<MacCursor?>(null) }
+    LaunchedEffect(rdpBridge,rdpInstance) {
+        val bridge=rdpBridge as? VncBridge ?: return@LaunchedEffect
+        while(rdpInstance!=0L) { macCursor=bridge.macCursor;delay(50) }
+    }
+    fun trackPointer(x:Int,y:Int) {
+        remotePointer[0]=x;remotePointer[1]=y
+        if((rdpBridge as? VncBridge)?.isMacHevc==true) macPointer.value=Offset(x.toFloat(),y.toFloat())
+    }
     DisposableEffect(rdpInstance, showVncFiles) {
         val activity = context as? SessionActivity
         if (showVncFiles) {
@@ -494,13 +508,41 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
 
     // TextureView fills immediately; ask the server for matching resolution once resizing settles.
     LaunchedEffect(rdpInstance, currentWidth, currentHeight) {
+        if (rdpInstance == 0L) macTransition.cancel()
         if (rdpInstance != 0L && currentWidth > 0 && currentHeight > 0) {
             val targetWidth = currentWidth.coerceIn(200, 8192) and -2
-            val targetHeight = currentHeight.coerceIn(200, 8192)
+            val targetHeight = if((rdpBridge as? VncBridge)?.isMacHevc==true) MacVideoSize.fromWindow(currentWidth,currentHeight).height
+                else currentHeight.coerceIn(200,8192)
             if (monitor != null) {
                 rdpBridge.updateDisplay(rdpInstance, targetWidth, targetHeight, 1f)
                 return@LaunchedEffect
             }
+            val mac = (rdpBridge as? VncBridge)?.takeIf { it.isMacHevc }
+            if (mac != null) {
+                delay(200)
+                val pipeline = mac.macMediaPipeline ?: return@LaunchedEffect
+                if (pipeline.decodedWidth == targetWidth && pipeline.decodedHeight == targetHeight) { macTransition.cancel();return@LaunchedEffect }
+                macTransition.begin(freezeDesktop)
+                val before = macSurfaceUpdates.get()
+                val decodedBefore = pipeline.framesDecoded.get()
+                rdpBridge.updateDisplay(rdpInstance, targetWidth, targetHeight, 1f)
+                val deadline = android.os.SystemClock.uptimeMillis() + 6000
+                var retryAt = deadline - 4000
+                while (macTransition.active && android.os.SystemClock.uptimeMillis() < deadline) {
+                    val ready = pipeline.decodedWidth == targetWidth && pipeline.decodedHeight == targetHeight &&
+                        pipeline.framesDecoded.get() > decodedBefore && macSurfaceUpdates.get() > before
+                    val now = android.os.SystemClock.uptimeMillis()
+                    if (!ready && now >= retryAt) {
+                        rdpBridge.updateDisplay(rdpInstance, targetWidth, targetHeight, 1f)
+                        retryAt = Long.MAX_VALUE
+                    }
+                    macTransition.settle(now, ready)
+                    delay(40)
+                }
+                macTransition.cancel() // Unsupported server layouts must not leave input covered.
+                return@LaunchedEffect
+            }
+            if (isVnc) return@LaunchedEffect
             delay(300)
             // Windows can ignore a layout while its initial GFX reset is in flight.
             // Stop after acknowledgement; a new window size cancels this whole effect.
@@ -536,14 +578,26 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
         )
     }
 
-    val input = remember {
+    // Native Horizon hover may bypass Compose's touch interop path.
+    val hoverMapping by rememberUpdatedState(desktopPoint)
+    val hoverBlocked by rememberUpdatedState(adjusting)
+    DisposableEffect(rdpBridge,rdpInstance) {
+        val activity=context as? SessionActivity
+        if((rdpBridge as? VncBridge)?.isMacHevc==true && rdpInstance!=0L) activity?.macHover={ x,y ->
+            val point=hoverMapping(x,y)
+            trackPointer(point.first,point.second)
+            if(!hoverBlocked) rdpBridge.sendMouseEvent(rdpInstance,point.first,point.second,FreeRDPBridge.PTR_FLAGS_MOVE)
+        }
+        onDispose { activity?.macHover=null }
+    }
+
+    val input = remember(rdpBridge) {
         RdpPointerGesture(
             touchSlop = baseTouchSlop,
             send = { x, y, flags ->
                 if (rdpInstance != 0L) {
                     val (remoteX, remoteY) = desktopPoint(x, y)
-                    remotePointer[0] = remoteX
-                    remotePointer[1] = remoteY
+                    trackPointer(remoteX,remoteY)
                     rdpBridge.sendMouseEvent(rdpInstance, remoteX, remoteY, flags)
                 }
             },
@@ -618,7 +672,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                     false
                 }
             }
-            .pointerInput(Unit) {
+            .pointerInput(rdpBridge) {
                 awaitPointerEventScope {
                     var lastRemoteHover = 0L
                     while (true) {
@@ -638,7 +692,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                                 lastRemoteHover = now
                                 val pos = event.changes.first().position
                                 val (x, y) = desktopPoint(pos.x, pos.y)
-                                remotePointer[0] = x; remotePointer[1] = y
+                                trackPointer(x,y)
                                 rdpBridge.sendMouseEvent(rdpInstance, x, y, FreeRDPBridge.PTR_FLAGS_MOVE)
                             }
                         }
@@ -680,12 +734,31 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                             return true
                         }
 
-                        override fun onSurfaceTextureUpdated(texture: SurfaceTexture) = Unit
+                        override fun onSurfaceTextureUpdated(texture: SurfaceTexture) { macSurfaceUpdates.incrementAndGet() }
                     }
                 }
             }
         ) }
 
+        if((rdpBridge as? VncBridge)?.isMacHevc==true) {
+            val image=remember(macCursor) { macCursor?.let { android.graphics.Bitmap.createBitmap(it.pixels,it.width,it.height,android.graphics.Bitmap.Config.ARGB_8888).asImageBitmap() } }
+            Canvas(Modifier.fillMaxSize().graphicsLayer { scaleX=zoom;scaleY=zoom;translationX=panX;translationY=panY }) {
+                macPointer.value?.let { point ->
+                    val sx=size.width/actualWidth.coerceAtLeast(1);val sy=size.height/actualHeight.coerceAtLeast(1)
+                    val cursor=macCursor
+                    if(image!=null && cursor!=null) {
+                        drawImage(image,dstOffset=IntOffset(((point.x-cursor.hotX)*sx).roundToInt(),((point.y-cursor.hotY)*sy).roundToInt()),
+                            dstSize=androidx.compose.ui.unit.IntSize((cursor.width*sx).roundToInt().coerceAtLeast(1),(cursor.height*sy).roundToInt().coerceAtLeast(1)))
+                    } else {
+                        val arrow=androidx.compose.ui.graphics.Path().apply {
+                            moveTo(point.x*sx,point.y*sy);relativeLineTo(0f,22f);relativeLineTo(6f,-6f)
+                            relativeLineTo(5f,10f);relativeLineTo(5f,-2f);relativeLineTo(-5f,-10f);relativeLineTo(9f,0f);close()
+                        }
+                        drawPath(arrow,Color.Black,style=Stroke(3f));drawPath(arrow,Color.White)
+                    }
+                }
+            }
+        }
         val toolbarMargin = with(density) { 48.dp.toPx() }
         var lastHoverTime by remember { mutableStateOf(0L) }
         Box(
@@ -707,8 +780,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                             lastHoverTime = now
                             val (rdpX, rdpY) = desktopPoint(event.x, event.y)
                             if (rdpInstance != 0L) {
-                                remotePointer[0] = rdpX
-                                remotePointer[1] = rdpY
+                                trackPointer(rdpX,rdpY)
                                 rdpBridge.sendMouseEvent(rdpInstance, rdpX, rdpY, FreeRDPBridge.PTR_FLAGS_MOVE)
                             }
                         }
@@ -817,7 +889,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                                 tint = if (runtime.canAdd) Color.White else Color.Gray)
                         }
                     }
-                    if (!isVnc || (effectiveSession.expMacHevc && effectiveSession.macAudioEnabled)) IconButton(onClick = { speakerMuted = !speakerMuted; revealToolbar() }, modifier = Modifier.size(buttonSize)) {
+                    if (!isVnc || (rdpBridge as? VncBridge)?.isMacHevc == true) IconButton(onClick = { speakerMuted = !speakerMuted; revealToolbar() }, modifier = Modifier.size(buttonSize)) {
                         Icon(if (speakerMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
                             if (speakerMuted) stringResource(R.string.unmute_speakers) else stringResource(R.string.mute_speakers), modifier = Modifier.size(iconSize), tint = Color.White)
                     }
@@ -849,6 +921,11 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                     IconButton(onClick = { showDebugInfo = !showDebugInfo; revealToolbar() }, modifier = Modifier.size(buttonSize)) {
                         Icon(Icons.Default.Info, stringResource(R.string.debug_actions), modifier = Modifier.size(iconSize),
                             tint = if (showDebugInfo) MaterialTheme.colorScheme.primary else Color.White)
+                    }
+                    if ((rdpBridge as? VncBridge)?.isConfirmedMac == true && rdpInstance != 0L) key(rdpBridge) {
+                        MacUnlockControl(enabled=(rdpBridge as? VncBridge)?.canSubmitSavedMacPassword(rdpInstance)==true && disconnectedReason==null,
+                            onSubmit={ (rdpBridge as? VncBridge)?.submitSavedMacPassword(rdpInstance)==true },
+                            onInteraction=revealToolbar,buttonSize=buttonSize,iconSize=iconSize)
                     }
                     IconButton(onClick = { revealToolbar(); showSoftKeyboard = !showSoftKeyboard; if (!showSoftKeyboard) { keyboardController?.hide() } }, modifier = Modifier.size(buttonSize)) {
                         Icon(Icons.Default.Keyboard, stringResource(R.string.keyboard), modifier = Modifier.size(iconSize), tint = Color.White)
@@ -916,6 +993,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
             }
         }
         fun sendRdpUnicode(code: Int, down: Boolean) {
+            if((rdpBridge as? VncBridge)?.isMacHevc==true) MacInputTrace.event("ime-unicode")
             if (rdpInstance == 0L) return
             if (!isVnc && code > 0xFFFF) {
                 val high = Character.highSurrogate(code).code
@@ -951,6 +1029,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
         RemoteExtraKeys(
             modifier = Modifier.fillMaxSize(),
             enabled = showSoftKeyboard,
+            mac = (rdpBridge as? VncBridge)?.isConfirmedMac == true,
             sendKey = { code, down ->
                 if (rdpInstance != 0L) rdpBridge.sendKeyEvent(rdpInstance, code, down)
             }
@@ -997,7 +1076,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                     Spacer(Modifier.height(8.dp))
                     val protocolLabel = when {
                         !isVnc -> "RDP (FreeRDP 3.x)"
-                        effectiveSession.expMacHevc -> "VNC (Apple High-Performance)"
+                        (rdpBridge as? VncBridge)?.isMacHevc == true -> "VNC (Apple High-Performance)"
                         else -> "VNC (Standard RFB 3.8)"
                     }
                     val transportLabel = when {
@@ -1023,8 +1102,8 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                     ConnectionInfoRow("Scale / Zoom", "${scaleFactor}x (${scalePct}%)")
                     if (isVnc) {
                         ConnectionInfoRow("Mac Auth", "${effectiveSession.vncAuthMode}")
-                        ConnectionInfoRow("Apple streaming", "${effectiveSession.expMacHevc}")
-                        if (effectiveSession.expMacHevc) {
+                        ConnectionInfoRow("Apple streaming", "${(rdpBridge as? VncBridge)?.isMacHevc == true}")
+                        if ((rdpBridge as? VncBridge)?.isMacHevc == true) {
                             ConnectionInfoRow("Share Console", "${effectiveSession.expMacShareConsole}")
                         }
                     }

@@ -68,7 +68,35 @@ internal class VncVerification(private val test: Instrumentation,private val liv
         val clipboard = test.targetContext.getSystemService(android.content.ClipboardManager::class.java)
         val originalClip = clipboard.primaryClip
         try {
-            if(mode=="macLocalSshSetup") {
+            if(mode=="vncFixtureCleanup") {
+                val pm=ProfileManager(test.targetContext)
+                val fixtures=pm.getProfiles().filter { it.id=="vnc-verification-profile" }
+                check(fixtures.all { it.host=="127.0.0.1" && it.credentialId=="vnc-verification-credential" })
+                check(pm.getCredentials().filter { it.id=="vnc-verification-credential" }.all { it.name=="VNC verification" && it.user.isEmpty() && it.pass=="testpass" })
+                pm.deleteProfile("vnc-verification-profile");pm.deleteCredential("vnc-verification-credential")
+                check(test.targetContext.getSharedPreferences("farside_profiles",0).edit().commit())
+                results.appendText("PASS removed owned interrupted VNC fixture only")
+            } else if(mode=="macInput") {
+                results.appendText(MacInputVerification(test).run(requireNotNull(profileId)))
+            } else if(mode=="macRelayToggle") {
+                results.appendText(MacRelayToggleUiVerification(test).run(requireNotNull(profileId)))
+            } else if(mode=="macUdpDiag") {
+                results.appendText(MacUdpDiag(test).run(requireNotNull(profileId)))
+            } else if(mode=="macAutomatic") {
+                results.appendText(MacAutomaticConnectionVerification(test).run(requireNotNull(profileId)))
+            } else if(mode=="macDefaults") {
+                results.appendText(MacDefaultsFixture.run())
+            } else if(mode=="macNativeBaseline") {
+                results.appendText(MacNativeBaseline(test).run(requireNotNull(profileId)))
+            } else if(mode=="macUnlockUiFixture") {
+                results.appendText(MacUnlockUiFixture(test).run())
+            } else if(mode=="macLocalSrpUnlockProbe") {
+                results.appendText(MacHevcReevaluation(test).run(requireNotNull(profileId),preferAvc=true,srp=true))
+            } else if(mode=="macLocalAvSave") {
+                results.appendText(MacLocalAvVerification(test).saveStreamingCopy(requireNotNull(profileId)))
+            } else if(mode=="macLocalAv") {
+                results.appendText(MacLocalAvVerification(test).run(requireNotNull(profileId)))
+            } else if(mode=="macLocalSshSetup") {
                 results.appendText(MacLocalVerification(test).setupSsh(requireNotNull(profileId)))
             } else if(mode=="macLocalRelay") {
                 results.appendText(MacHevcReevaluation(test).run(requireNotNull(profileId),relayMedia=true,preferAvc=true,flicker=true))
@@ -288,8 +316,8 @@ internal class VncVerification(private val test: Instrumentation,private val liv
                 } } finally { fixtureManager.deleteCredential(fixtureCredential.id) }
             } else if (mode == "macAvcSourceFixture") {
                 record(MacAvcSourceFixture(test).run())
-            } else if (mode == "macAudioFixture") {
-                record(MacAudioFixture(test).run())
+            } else if (mode in listOf("macAudioFixture","macAudioBackgroundFixture")) {
+                record(MacAudioFixture(test).run(backgroundControl=mode=="macAudioBackgroundFixture"))
             } else if (mode == "macCodecReplay") {
                 record(MacHevcCodecReplay(test).run())
             } else if (mode == "macFlickerSelectIndex" || mode == "macConsoleInfo" || mode == "macFlickerSelectDisplay" || mode == "macFlickerHevc" || mode == "macFlickerFullName" || mode == "macFlickerCleanAgent" || mode == "macFlickerNoPoll" || mode == "macFlicker" || mode == "macBaseline" || mode == "macSrpAvcGuiAudio" || mode == "macSrpAvcRelay" || mode == "macReevaluate" || mode == "macUdpRoute" || mode == "macSshRelay" || mode == "macAudioRelay" || mode == "macAvcAudioRelay" || mode == "macProductionMedia" || mode == "macProductionGuiAudio" || mode == "macInteractiveAudio" || mode == "macHostAudioDiagnostics" || mode == "macGuiAudioRouting" || mode=="macStability" || mode=="macAutoGuiAudioRouting") {
@@ -305,12 +333,12 @@ internal class VncVerification(private val test: Instrumentation,private val liv
                     MacHevcSession(host, port, credential.user, credential.pass) { logLine ->
                         record(logLine)
                     }.use { session ->
-                        val firstRecord = session.start()
+                        session.start()
                         check(session.stage == "S8") { "Did not reach S8: ${session.stage}" }
                         check(session.recordLayer != null) { "Record layer null" }
-                        check(firstRecord.isNotEmpty()) { "Empty first record" }
-                        val recType = firstRecord[0].toInt() and 0xff
-                        record("PASS: Mac HEVC Phase 1 Gate - reached S8 (record active), decrypted control record type=0x${Integer.toHexString(recType)} len=${firstRecord.size}, recvSeq=${session.recordLayer!!.recvSeq}")
+                        session.initStreamingLayer()
+                        val firstUpdate=session.readNextFramebufferUpdate()
+                        record("PASS: Mac bootstrap and encrypted control reply type=0x${Integer.toHexString(firstUpdate.messageType)}, recvSeq=${session.recordLayer!!.recvSeq}")
 
                         // Negative gate: any integrity failure MUST close session, never continue
                         val layer = session.recordLayer!!
@@ -337,11 +365,11 @@ internal class VncVerification(private val test: Instrumentation,private val liv
                     MacHevcSession(host, port, credential.user, credential.pass) { logLine ->
                         record(logLine)
                     }.use { session ->
-                        val firstRecord = session.start()
+                        session.start()
                         check(session.stage == "S8") { "Did not reach S8: ${session.stage}" }
 
                         // Initialize streaming record layer and transition to S9
-                        session.initStreamingLayer(firstRecord)
+                        session.initStreamingLayer()
                         check(session.stage == "S9") { "Did not reach S9: ${session.stage}" }
 
                         // Read first framebuffer update (AppleDisplayLayout 0x451, cursor 1104, etc.)
@@ -372,9 +400,9 @@ internal class VncVerification(private val test: Instrumentation,private val liv
                     MacHevcSession(host, port, credential.user, credential.pass) { logLine ->
                         record(logLine)
                     }.use { session ->
-                        val firstRecord = session.start()
+                        session.start()
                         check(session.stage == "S8") { "Did not reach S8: ${session.stage}" }
-                        session.initStreamingLayer(firstRecord)
+                        session.initStreamingLayer()
                         check(session.stage == "S9") { "Did not reach S9: ${session.stage}" }
 
                         val update1 = session.readNextFramebufferUpdate()

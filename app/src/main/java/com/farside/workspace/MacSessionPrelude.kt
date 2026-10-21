@@ -8,7 +8,7 @@ import java.net.SocketTimeoutException
 internal object MacSessionPrelude {
     fun optionalHeader(input:DataInputStream, normalTimeout:Int, setTimeout:(Int)->Unit):ByteArray? {
         val first=try {
-            setTimeout(2000)
+            setTimeout(500)
             try { input.read() } catch(_:SocketTimeoutException) { return null }
         } finally { setTimeout(normalTimeout) }
         if(first<0) throw EOFException("Mac closed before streaming prelude")

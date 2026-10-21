@@ -22,11 +22,10 @@ internal class MacHevcSshRelay(context: Context, client: SSHClient, host: String
     private val input = DataInputStream(command.inputStream)
     private val output = DataOutputStream(command.outputStream)
     private val loopback = InetAddress.getByName("127.0.0.1")
+    val videoDatagrams = AtomicLong()
+    private val remotePort = MacRelayStartup.port({input.readLine()},{channel.close()})
     private val listener = ServerSocket(0, 8, loopback)
     val port = listener.localPort
-    val videoDatagrams = AtomicLong()
-    private val ready = input.readLine() ?: error("Relay startup failed: ${command.errorStream.bufferedReader().readText()}")
-    private val remotePort = ready.removePrefix("READY ").toInt()
     private val forwarder = client.newLocalPortForwarder(Parameters("127.0.0.1", port, "127.0.0.1", remotePort), listener)
     private val forwardThread = Thread({ runCatching { forwarder.listen() } }, "MacRelayControl").apply { isDaemon=true; start() }
     private val receiver = Thread({
@@ -43,7 +42,7 @@ internal class MacHevcSshRelay(context: Context, client: SSHClient, host: String
             } catch (e: Exception) { log("SSH media relay reader ended: ${e.javaClass.simpleName}") }
         }
     }, "MacRelayMedia").apply { isDaemon=true; start() }
-    init { log("Owned SSH relay ready; remote UDP bound only to loopback; 600s idle expiry") }
+    init { log("Owned SSH media relay ready; target-filtered UDP; 600s idle expiry") }
     fun send(port: Int, bytes: ByteArray) = synchronized(output) {
         output.writeShort(port); output.writeShort(bytes.size); output.write(bytes); output.flush()
     }

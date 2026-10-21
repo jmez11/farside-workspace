@@ -37,6 +37,7 @@ class MacScreenAudio(key: ByteArray, private val log: (String) -> Unit,
     @Volatile var muted = false
         set(value) { field=value; runCatching { track?.setVolume(if(value) 0f else 1f) } }
     val playedFrames: Long get() = runCatching { (track?.playbackHeadPosition?.toLong() ?: 0L) and 0xffffffffL }.getOrDefault(0)
+    val playbackSessionId: Int get() = runCatching { track?.audioSessionId ?: 0 }.getOrDefault(0)
     private var previousSequence = -1
     private var currentSsrc = -1L
     @Volatile internal var accessUnitObserver: ((ByteArray)->Unit)? = observer

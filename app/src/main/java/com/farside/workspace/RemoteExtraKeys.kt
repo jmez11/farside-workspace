@@ -43,7 +43,7 @@ private val extraKeys = listOf(
 
 /** IME companion strip. Disposal releases latched keys on keyboard/session closure. */
 @Composable
-internal fun RemoteExtraKeys(modifier: Modifier = Modifier, enabled: Boolean, sendKey: (Int, Boolean) -> Unit) {
+internal fun RemoteExtraKeys(modifier: Modifier = Modifier, enabled: Boolean, mac: Boolean = false, sendKey: (Int, Boolean) -> Unit) {
     val held = remember { mutableStateMapOf<Int, Boolean>() }
     val currentSendKey by rememberUpdatedState(sendKey)
     var numbers by remember { mutableStateOf(false) }
@@ -67,8 +67,17 @@ internal fun RemoteExtraKeys(modifier: Modifier = Modifier, enabled: Boolean, se
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.4.dp)) {
                 extraKeys.forEach { key ->
                     val active = held[key.code] == true
-                    Keycap(stringResource(key.label), Modifier.weight(1f), key.toggle, active,
-                        display = if (key.code == 0x0E) stringResource(R.string.key_backspace_symbol) else stringResource(key.label)) {
+                    val label = if (mac) when (key.code) {
+                        0x15B -> stringResource(R.string.key_mac_command)
+                        0x38 -> stringResource(R.string.key_mac_option)
+                        0x138 -> stringResource(R.string.key_mac_right_option)
+                        0x1D -> stringResource(R.string.key_mac_control)
+                        0x2A -> stringResource(R.string.key_mac_shift)
+                        0x153 -> stringResource(R.string.key_mac_forward_delete)
+                        else -> stringResource(key.label)
+                    } else stringResource(key.label)
+                    Keycap(label, Modifier.weight(1f), key.toggle, active,
+                        display = if (key.code == 0x0E) stringResource(R.string.key_backspace_symbol) else label) {
                         if (!enabled) return@Keycap
                         when {
                             key.toggle -> {

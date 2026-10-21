@@ -102,6 +102,8 @@ class MacHevcVideoPipeline(
         if(encodedVideoObserver!=null) stream.accessUnitObserver={ bytes -> encodedVideoObserver.invoke(stream.activeSsrc ?: 0,bytes) }
     } else null
     val decoderDescription: String get() = avc?.description ?: "HEVC MediaCodec"
+    val decodedWidth: Int get() = avc?.width ?: width
+    val decodedHeight: Int get() = avc?.height ?: height
     val avcConfiguration:ByteArray? get()=avc?.configurationSnapshot()
     var avcAccessUnitObserver:((ByteArray)->Unit)?
         get()=avc?.accessUnitObserver
@@ -150,7 +152,7 @@ class MacHevcVideoPipeline(
             val sock = DatagramSocket(null).apply {
                 reuseAddress = true
                 receiveBufferSize = 4 * 1024 * 1024
-                soTimeout = 1000
+                soTimeout = if(preferAvc) 16 else 1000
             }
             try {
                 targetNetwork?.bindSocket(sock)
@@ -167,7 +169,7 @@ class MacHevcVideoPipeline(
                 val sock = DatagramSocket(null).apply {
                     reuseAddress = true
                     receiveBufferSize = 4 * 1024 * 1024
-                    soTimeout = 1000
+                    soTimeout = if(preferAvc) 16 else 1000
                 }
                 try { targetNetwork?.bindSocket(sock) } catch (ignored: Exception) {}
                 sock.bind(InetSocketAddress(0))
@@ -185,7 +187,7 @@ class MacHevcVideoPipeline(
             val cSock = DatagramSocket(null).apply {
                 reuseAddress = true
                 receiveBufferSize = 1024 * 1024
-                soTimeout = 1000
+                soTimeout = if(preferAvc) 16 else 1000
             }
             try {
                 targetNetwork?.bindSocket(cSock)
@@ -201,7 +203,7 @@ class MacHevcVideoPipeline(
             try {
                 val cSock = DatagramSocket(null).apply {
                     reuseAddress = true
-                    soTimeout = 1000
+                    soTimeout = if(preferAvc) 16 else 1000
                 }
                 try { targetNetwork?.bindSocket(cSock) } catch (ignored: Exception) {}
                 cSock.bind(InetSocketAddress(0))

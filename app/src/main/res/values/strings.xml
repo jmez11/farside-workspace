@@ -649,4 +649,18 @@
     <string name="mac_media_ssh_required">Select a saved SSH connection with the Mac account’s short username.</string>
     <string name="mac_media_same_host">The SSH media connection must use the same Mac address.</string>
     <string name="mac_media_note">Uses the Mac’s built-in Screen Sharing. H.264 supports Quest hardware decoding; experimental HEVC 4:4:4 may not decode. An SSH relay carries media across translated VPN routes without installing software. Connecting pauses between authentications.</string>
+    <string name="mac_unlock_saved">Unlock with saved password</string>
+    <string name="mac_unlock_confirm">Select your account on the Mac lock screen and focus its empty password field. Send the saved password and Return once to this window?</string>
+    <string name="mac_unlock_send">Send password</string>
+    <string name="companion_remote_login">Companion Remote Login</string>
+    <string name="key_mac_command">⌘ Command</string>
+    <string name="key_mac_option">⌥ Option</string>
+    <string name="key_mac_right_option">Right ⌥</string>
+    <string name="key_mac_control">⌃ Control</string>
+    <string name="key_mac_shift">⇧ Shift</string>
+    <string name="key_mac_forward_delete">⌦ Delete</string>
+    <string name="enable">Enable</string>
+    <string name="mac_ssh_relay_toggle">SSH media relay (experimental)</string>
+    <string name="mac_ssh_relay_dialog_title">Experimental!</string>
+    <string name="mac_ssh_relay_dialog_desc">Remote video may be blocked by your network. This option runs a small Perl script on the Mac, over your SSH login, to relay video. It lasts only for the session and installs nothing. Enable?</string>
 </resources>

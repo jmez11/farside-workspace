@@ -1,6 +1,6 @@
 use strict;
 use warnings;
-use Socket;
+use Socket qw(:DEFAULT IPPROTO_TCP TCP_NODELAY);
 use IO::Socket::INET;
 use IO::Select;
 use Time::HiRes qw(time);
@@ -11,13 +11,16 @@ my $host = shift @ARGV;
 my $rfb_port = shift @ARGV;
 die 'Invalid RFB port' unless defined $rfb_port && $rfb_port =~ /^\d+$/ && $rfb_port>0 && $rfb_port<65536;
 my $target = inet_aton($host) or die "Invalid owned target";
+my $route = IO::Socket::INET->new(PeerAddr=>$host, PeerPort=>$rfb_port, Proto=>'udp') or die 'No target route';
+my $same_host = $route->sockhost eq inet_ntoa($target) || inet_ntoa($target) =~ /^127\./;
+close $route;
 my $listener = IO::Socket::INET->new(LocalAddr=>'127.0.0.1', LocalPort=>0,
     Listen=>8, Proto=>'tcp') or die "Control listener: $!";
 my $select = IO::Select->new($listener, \*STDIN);
 my (%udp, %peer, %handles, %udp_port);
 for my $port (5900, 5901) {
     socket(my $socket, PF_INET, SOCK_DGRAM, 0) or die "UDP socket: $!";
-    bind($socket, sockaddr_in($port, inet_aton('127.0.0.1'))) or die "Loopback UDP port unavailable: $!";
+    bind($socket, sockaddr_in($port, inet_aton($same_host ? '127.0.0.1' : '0.0.0.0'))) or die "UDP port unavailable: $!";
     setsockopt($socket,SOL_SOCKET,SO_RCVBUF,pack('i',4*1024*1024));
     $udp{$port}=$socket;
     $udp_port{fileno($socket)}=$port;
@@ -55,9 +58,11 @@ while (1) {
         if (fileno($socket)==fileno($listener)) {
             my $incoming=$listener->accept or next;
             # Preserve a distinct loopback client identity while the server's local endpoint remains its LAN address.
-            my $outgoing=IO::Socket::INET->new(PeerAddr=>$host, PeerPort=>$rfb_port,
-                LocalAddr=>'127.0.0.1', Proto=>'tcp', Timeout=>5);
+            my %options=(PeerAddr=>$host, PeerPort=>$rfb_port, Proto=>'tcp', Timeout=>4);
+            $options{LocalAddr}='127.0.0.1' if $same_host;
+            my $outgoing=IO::Socket::INET->new(%options);
             unless ($outgoing) { close $incoming; next; }
+            setsockopt($_,IPPROTO_TCP,TCP_NODELAY,pack('i',1)) for ($incoming,$outgoing);
             $peer{fileno($incoming)}=$outgoing;
             $peer{fileno($outgoing)}=$incoming;
             $handles{fileno($incoming)}=$incoming;

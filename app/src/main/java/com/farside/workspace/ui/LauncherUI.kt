@@ -1614,12 +1614,10 @@ fun AddProfileForm(
     var savedSshKeyId by rememberSaveable { mutableStateOf(initialProfile?.sshKeyId ?: "") }
     var savedJumpHostId by rememberSaveable { mutableStateOf(initialProfile?.jumpHostProfileId ?: "") }
     var vncAuthMode by rememberSaveable { mutableStateOf(initialProfile?.vncAuthMode ?: com.farside.workspace.data.VncAuthMode.MAC_USER) }
-    var sftpPairProfileId by rememberSaveable { mutableStateOf(initialProfile?.sftpPairProfileId ?: "") }
+    var sftpPairProfileId by rememberSaveable { mutableStateOf(initialProfile?.sftpPairProfileId ?: initialProfile?.macSshRelayProfileId ?: "") }
+    var enableMacSshRelay by rememberSaveable { mutableStateOf(initialProfile?.enableMacSshRelay ?: false) }
+    var showMacRelayConfirm by rememberSaveable { mutableStateOf(false) }
 
-    var macStreaming by rememberSaveable { mutableStateOf(initialProfile?.expMacHevc ?: false) }
-    var macPreferAvc by rememberSaveable { mutableStateOf(initialProfile?.macPreferAvc ?: true) }
-    var macAudioEnabled by rememberSaveable { mutableStateOf(initialProfile?.macAudioEnabled ?: false) }
-    var macRelayId by rememberSaveable { mutableStateOf(initialProfile?.macSshRelayProfileId ?: "") }
     
     var remoteApp by rememberSaveable { mutableStateOf(initialProfile?.remoteApp ?: "") }
 
@@ -1668,7 +1666,7 @@ fun AddProfileForm(
         mutableStateOf((initialProfile?.redirectStorage ?: false) && com.farside.workspace.hasStoragePermission(context))
     }
     var enableSftp by rememberSaveable {
-        mutableStateOf((initialProfile?.enableSftp ?: false) && com.farside.workspace.hasStoragePermission(context))
+        mutableStateOf(initialProfile?.enableSftp ?: true)
     }
     val sftpPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
@@ -1762,7 +1760,7 @@ fun AddProfileForm(
                         enableSftp = type == ConnectionType.SSH && enableSftp,
                         vncAuthMode = vncAuthMode,
                         sftpPairProfileId = if (type == ConnectionType.VNC) sftpPairProfileId.takeIf { id ->
-                            savedProfiles.any { it.id == id && it.type == ConnectionType.SSH && it.enableSftp }
+                            savedProfiles.any { it.id == id && it.type == ConnectionType.SSH }
                         } else null,
                         redirectClipboard = redirectClipboard,
                         customResolution = initialProfile?.customResolution ?: false,
@@ -1780,11 +1778,12 @@ fun AddProfileForm(
                         connectToConsole = connectToConsole,
                         adminMode = adminMode,
                         reconnectAutomatically = reconnectAutomatically,
-                        expMacHevc = type == ConnectionType.VNC && vncAuthMode == com.farside.workspace.data.VncAuthMode.MAC_USER && macStreaming,
+                        expMacHevc = type == ConnectionType.VNC && vncAuthMode == com.farside.workspace.data.VncAuthMode.MAC_USER,
                         expMacShareConsole = initialProfile?.expMacShareConsole ?: false,
-                        macPreferAvc = macPreferAvc,
-                        macAudioEnabled = macAudioEnabled,
-                        macSshRelayProfileId = macRelayId.takeIf { type == ConnectionType.VNC && macStreaming && it.isNotBlank() }
+                        macPreferAvc = true,
+                        macAudioEnabled = true,
+                        macSshRelayProfileId = null,
+                        enableMacSshRelay = type == ConnectionType.VNC && sftpPairProfileId.isNotBlank() && enableMacSshRelay
                     )
                 )
             }) {
@@ -1953,13 +1952,14 @@ fun AddProfileForm(
                 }
                 }
                 if (type == ConnectionType.VNC) {
-                    val sshProfiles = savedProfiles.filter { it.type == ConnectionType.SSH && it.enableSftp }
+                    val sshProfiles = savedProfiles.filter { it.type == ConnectionType.SSH }
                     var expandedPair by rememberSaveable { mutableStateOf(false) }
-                    SettingsHeader(stringResource(R.string.vnc_sftp_pair))
+                    val companionLabel=stringResource(R.string.companion_remote_login)
+                    SettingsHeader(companionLabel)
                     ExposedDropdownMenuBox(expanded = expandedPair, onExpandedChange = { expandedPair = !expandedPair },
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
                         TextField(value = sshProfiles.find { it.id == sftpPairProfileId }?.name ?: stringResource(R.string.vnc_sftp_unpaired),
-                            onValueChange = {}, readOnly = true, modifier = Modifier.menuAnchor().fillMaxWidth(),
+                            onValueChange = {}, readOnly = true, modifier = Modifier.menuAnchor().fillMaxWidth().semantics { contentDescription=companionLabel },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedPair) })
                         ExposedDropdownMenu(expanded = expandedPair, onDismissRequest = { expandedPair = false }) {
                             DropdownMenuItem(text = { Text(stringResource(R.string.vnc_sftp_unpaired)) },
@@ -1968,27 +1968,32 @@ fun AddProfileForm(
                                 onClick = { sftpPairProfileId = ssh.id; expandedPair = false }) }
                         }
                     }
-                }
-                if(type == ConnectionType.VNC && vncAuthMode == com.farside.workspace.data.VncAuthMode.MAC_USER) {
-                    SettingsHeader(stringResource(R.string.mac_media_title))
-                    SettingsSwitchRow(stringResource(R.string.mac_media_enable),macStreaming) { macStreaming=it }
-                    if(macStreaming) {
-                        Text(stringResource(R.string.mac_media_note),modifier=Modifier.padding(16.dp))
-                        SettingsSwitchRow(stringResource(R.string.mac_media_avc),macPreferAvc) { macPreferAvc=it }
-                        SettingsSwitchRow(stringResource(R.string.mac_media_audio),macAudioEnabled) { macAudioEnabled=it }
-                        var relayExpanded by rememberSaveable { mutableStateOf(false) }
-                        val candidates=savedProfiles.filter { it.type==ConnectionType.SSH && it.host==host }
-                        val relayLabel=stringResource(R.string.mac_media_ssh)
-                        ExposedDropdownMenuBox(expanded=relayExpanded,onExpandedChange={ relayExpanded=!relayExpanded },
-                            modifier=Modifier.fillMaxWidth().padding(16.dp)) {
-                            TextField(value=candidates.find { it.id==macRelayId }?.name ?: stringResource(R.string.mac_media_direct),
-                                onValueChange={},readOnly=true,label={ Text(relayLabel) },
-                                modifier=Modifier.menuAnchor().fillMaxWidth().semantics { contentDescription=relayLabel },
-                                trailingIcon={ ExposedDropdownMenuDefaults.TrailingIcon(expanded=relayExpanded) })
-                            ExposedDropdownMenu(expanded=relayExpanded,onDismissRequest={ relayExpanded=false }) {
-                                DropdownMenuItem(text={ Text(stringResource(R.string.mac_media_direct)) },onClick={ macRelayId="";relayExpanded=false })
-                                candidates.forEach { ssh -> DropdownMenuItem(text={ Text(ssh.name) },onClick={ macRelayId=ssh.id;relayExpanded=false }) }
+                    if (sftpPairProfileId.isNotBlank()) {
+                        val relayPrefs = context.getSharedPreferences("farside_profiles", android.content.Context.MODE_PRIVATE)
+                        val hasSeenWarning = relayPrefs.getBoolean("mac_relay_warning_shown", false)
+                        SettingsSwitchRow(stringResource(R.string.mac_ssh_relay_toggle), enableMacSshRelay) { enabled ->
+                            if (enabled && !hasSeenWarning) {
+                                showMacRelayConfirm = true
+                            } else {
+                                enableMacSshRelay = enabled
                             }
+                        }
+                        if (showMacRelayConfirm) {
+                            AlertDialog(
+                                onDismissRequest = { showMacRelayConfirm = false },
+                                title = { Text(stringResource(R.string.mac_ssh_relay_dialog_title)) },
+                                text = { Text(stringResource(R.string.mac_ssh_relay_dialog_desc)) },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        relayPrefs.edit().putBoolean("mac_relay_warning_shown", true).apply()
+                                        enableMacSshRelay = true
+                                        showMacRelayConfirm = false
+                                    }) { Text(stringResource(R.string.enable)) }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showMacRelayConfirm = false }) { Text(stringResource(R.string.cancel)) }
+                                }
+                            )
                         }
                     }
                 }

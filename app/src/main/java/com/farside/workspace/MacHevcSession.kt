@@ -57,7 +57,7 @@ class MacHevcSession(
     private val password: String,
     private val shareConsole: Boolean = false,
     private val sessionUsername: String = username,
-    private val authenticationSpacingMs: Long = 5_000,
+    private val authenticationSpacingMs: Long = 0,
     private val mediaDatagramSender: ((Int, ByteArray) -> Unit)? = null,
     private val parameterSetObserver: ((Int, ByteArray) -> Unit)? = null,
     private val audioEnabled: Boolean = false,
@@ -70,6 +70,8 @@ class MacHevcSession(
     private val encodedVideoObserver:((Long,ByteArray)->Unit)?=null,
     private val selectVirtualDisplay:Boolean=false,
     private val selectVirtualDisplayByIndex:Boolean=false,
+    private val onAuthenticated:()->Unit={},
+    private val controlSocketFactory:(()->Socket)?=null,
     private val logCallback: (String) -> Unit = {}
 ) : Closeable {
 
@@ -91,13 +93,13 @@ class MacHevcSession(
         private set
     var isAltSession: Boolean = false
         private set
-    var cachedHandshakeRecords: List<ByteArray> = emptyList()
-        private set
 
     var recordIn: DataInputStream? = null
         private set
     var recordOut: DataOutputStream? = null
         private set
+    private val cursorCache=MacCursorCache()
+    @Volatile internal var cursor:MacCursor?=null;private set
     private val zlibInflater = Inflater()
     private val writerExecutor = Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "MacHevc-Writer").apply { isDaemon = true }
@@ -189,28 +191,6 @@ class MacHevcSession(
         logCallback(message)
     }
 
-    private fun warmupTcp(h: String, p: Int) {
-        try {
-            Socket().use { s ->
-                s.connect(InetSocketAddress(h, p), 5000)
-                s.soTimeout = 5000
-                val input = DataInputStream(s.getInputStream())
-                val output = DataOutputStream(s.getOutputStream())
-                val banner = ByteArray(12).also { input.readFully(it) }
-                output.write("RFB 003.889\n".toByteArray(Charsets.US_ASCII))
-                output.flush()
-                val nt = input.readUnsignedByte()
-                if (nt > 0) {
-                    ByteArray(nt).also { input.readFully(it) }
-                }
-                Thread.sleep(1400)
-            }
-            log("warmup_tcp: Pre-session probe completed successfully (dwelled 1.4s)")
-        } catch (e: Exception) {
-            log("warmup_tcp: Probe notice: ${e.message}")
-        }
-    }
-
     private data class AuthInitResult(
         val socket: Socket,
         val input: DataInputStream,
@@ -222,8 +202,9 @@ class MacHevcSession(
     private fun doAuthAndClientInit(sock: Socket): AuthInitResult {
         authenticationGate?.invoke()
         stage = "S0"
-        sock.connect(InetSocketAddress(host, port), 10000)
-        sock.soTimeout = 60000
+        if(!sock.isConnected) sock.connect(InetSocketAddress(host, port), 4000)
+        sock.tcpNoDelay=true
+        sock.soTimeout = 8000
         val input = DataInputStream(sock.getInputStream())
         val output = DataOutputStream(java.io.BufferedOutputStream(sock.getOutputStream()))
 
@@ -324,6 +305,7 @@ class MacHevcSession(
 
         }
 
+        onAuthenticated()
         // S6: ClientInit & ServerInit
         stage = "S6"
         output.writeByte(0xc1) // Apple enhanced shared flag
@@ -346,13 +328,11 @@ class MacHevcSession(
     }
 
     /**
-     * Executes the bootstrap through S8 (Record Layer Active) and reads the first encrypted record.
+     * Executes the bootstrap through S8 and sends the media offer; the streaming reader handles replies.
      * Throws an exception on any protocol or integrity failure, closing the socket immediately.
      */
-    fun start(): ByteArray {
-        warmupTcp(host, port)
-
-        val s1 = Socket()
+    fun start() {
+        val s1 = controlSocketFactory?.invoke() ?: Socket().apply { tcpNoDelay=true }
         socket = s1
         try {
             var auth = doAuthAndClientInit(s1)
@@ -391,9 +371,11 @@ class MacHevcSession(
                     // Close conn1, open fresh conn2, redo auth and clientInit, then send cmd=2
                     log("S7: alt-session cmd=2: performing two-TCP reset (closing conn1, opening conn2)")
                     try { s1.close() } catch (ignored: Exception) {}
-                    log("S7: spacing the second authentication by ${authenticationSpacingMs}ms")
-                    Thread.sleep(authenticationSpacingMs)
-                    val s2 = Socket()
+                    if (authenticationSpacingMs > 0) {
+                        log("S7: explicit probe authentication spacing ${authenticationSpacingMs}ms")
+                        Thread.sleep(authenticationSpacingMs)
+                    }
+                    val s2 = controlSocketFactory?.invoke() ?: Socket().apply { tcpNoDelay=true }
                     socket = s2
                     auth = doAuthAndClientInit(s2)
                     input = auth.input
@@ -433,7 +415,7 @@ class MacHevcSession(
                 log("S7: Received SessionSelect reply ($replySize bytes, status=$replyStatus)")
                 if (replyStatus != 0) {
                     val detail = if (replyStatus == 1) "User rejected screen sharing permission" else "SessionSelect status $replyStatus"
-                    throw java.io.IOException("Mac Screen Sharing declined connection ($detail)")
+                    throw MacSessionRejectedException("Mac Screen Sharing declined connection ($detail)")
                 }
 
                 // Send ViewerInfo (0x21) with APPLE_VIEWER_COMMAND_MASK + APPLE_0X12_FOLLOWUP
@@ -450,11 +432,10 @@ class MacHevcSession(
                 output.write(APPLE_0X12_FOLLOWUP)
                 output.flush()
                 log("S7: Sent ViewerInfo (0x21, 66 bytes) + 0x12 followup (12 bytes)")
-                Thread.sleep(100)
 
                 if (cmd == 2) {
                     // Send SetDisplayConfiguration for virtual display (displayType = 4)
-                    val vdc = buildDisplayConfiguration(1920, 1080, displayType = 4)
+                    val vdc = buildDisplayConfiguration(1920, 1080, displayType = 4, hidpiScale = 1f)
                     output.write(vdc)
                     output.flush()
                     log("S7: Sent SetDisplayConfiguration (0x1d, ${vdc.size} bytes)")
@@ -478,8 +459,7 @@ class MacHevcSession(
                 viewer.putInt(15);viewer.putInt(3);viewer.putInt(0)
                 viewer.put(APPLE_VIEWER_COMMAND_MASK)
                 output.write(viewer.array());output.write(APPLE_0X12_FOLLOWUP);output.flush()
-                Thread.sleep(100)
-                if(!shareConsole) output.write(buildDisplayConfiguration(1920,1080,displayType=4))
+                if(!shareConsole) output.write(buildDisplayConfiguration(1920,1080,displayType=4,hidpiScale=1f))
                 output.write(buildSetEncodings(HP_ENCODINGS_FULL));output.flush()
                 recordLayer=readUntilEnc1103(input,wrapKey)
                 log("S7: No SessionSelect prompt; standard viewer/display prelude and rekey succeeded")
@@ -504,7 +484,6 @@ class MacHevcSession(
             output.write(byteArrayOf(0x12, 0x00, 0x00, 0x02, 0x00, 0x01, 0x00, 0x00))
             output.flush()
             log("S7: Sent PostEncryptionToggle (0x12)")
-            Thread.sleep(200)
 
             // S8: Record Layer ACTIVE
             stage = "S8"
@@ -555,35 +534,9 @@ class MacHevcSession(
             layer.writeRecord(output, msg1c)
             log("S8: Sent encrypted 0x1c MediaStreamOptions offer (${msg1c.size} bytes, tilesPerFrame=1)")
 
-            // Decrypt records from server until we find canvas dimensions / 0x1c answer
-            val records = mutableListOf<ByteArray>()
-            var dims: Triple<Int, Int, Int>? = null
-            for (attempt in 0 until 10) {
-                val rec = layer.readRecord(input)
-                val recType = rec[0].toInt() and 0xff
-                log("S8: Decrypted record $attempt (type=0x${Integer.toHexString(recType)}, len=${rec.size})")
-                records.add(rec)
-                val d = MacHevcOffers.extractCanvasDims(rec)
-                if (d != null) {
-                    dims = d
-                    break
-                }
-            }
-            cachedHandshakeRecords = records
-            val record = records.firstOrNull() ?: ByteArray(0)
-            log("S8 GATE PASS: Processed encrypted handshake records (len=${record.size}, count=${records.size})")
-
-            // Check if record contains canvas dimensions
-            if (dims != null) {
-                mediaLayoutEstablished=true
-                log("S8: Extracted canvas dimensions: ${dims.first}x${dims.second} (tiles=${dims.third})")
-                width = dims.first
-                height = dims.second
-                pipeline.updateDimensions(width, height)
-                onResolutionChanged?.invoke(width, height)
-            }
-
-            return record
+            // Do not wait for a fixed batch of control replies. Video and metadata arrive
+            // independently; initStreamingLayer/startStreaming consume all replies in order.
+            log("S8: Media offer sent; control replies will be read while video starts")
         } catch (e: Exception) {
             close()
             throw e
@@ -716,17 +669,10 @@ class MacHevcSession(
         return buf.array()
     }
 
-    fun initStreamingLayer(firstRecord: ByteArray? = null) {
+    fun initStreamingLayer() {
         val layer = checkNotNull(recordLayer) { "Record layer not established" }
         val rIn = checkNotNull(rawInput) { "Input stream not established" }
         val rOut = checkNotNull(rawOutput) { "Output stream not established" }
-
-        val queue = java.util.ArrayDeque<ByteArray>()
-        if (cachedHandshakeRecords.isNotEmpty()) {
-            queue.addAll(cachedHandshakeRecords)
-        } else if (firstRecord != null && firstRecord.isNotEmpty()) {
-            queue.add(firstRecord)
-        }
 
         val inStream = object : InputStream() {
             private var currentRecord: ByteArray? = null
@@ -749,19 +695,11 @@ class MacHevcSession(
 
             private fun ensureData(): Boolean {
                 while (currentRecord == null || recordPos >= currentRecord!!.size) {
-                    val rec = if (queue.isNotEmpty()) {
-                        queue.pollFirst()
-                    } else {
-                        try {
-                            layer.readRecord(rIn)
-                        } catch (e: java.io.EOFException) {
-                            return false
-                        }
-                    }
+                    val rec = try { layer.readRecord(rIn) }
+                        catch (_: java.io.EOFException) { return false }
                     currentRecord = rec
                     recordPos = 0
-                    if (rec != null && rec.isNotEmpty()) return true
-                    if (rec == null) return false
+                    if (rec.isNotEmpty()) return true
                 }
                 return true
             }
@@ -849,13 +787,9 @@ class MacHevcSession(
                         1104, 0x450 -> { // CursorImage
                             val cacheId = stream.readInt()
                             val compLen = stream.readInt()
-                            if (compLen > 0) {
-                                val data = ByteArray(compLen)
-                                stream.readFully(data)
-                                log("S9: CursorImage STORE cacheId=0x${Integer.toHexString(cacheId)} len=$compLen")
-                            } else {
-                                log("S9: CursorImage SELECT cacheId=0x${Integer.toHexString(cacheId)}")
-                            }
+                            if(compLen !in 0..1024*1024) throw MacHevcProtocolException("Invalid cursor payload size")
+                            val data=ByteArray(compLen).also(stream::readFully)
+                            cursor=cursorCache.update(cacheId,rw,rh,rx,ry,data)
                         }
                         1010, 1011, 1107, 1109, 1110, 0x3ea, 0x3f2, 0x3f3, 0x453, 0x455, 0x456 -> {
                             val payloadLen = stream.readUnsignedShort()
@@ -930,22 +864,21 @@ class MacHevcSession(
         return FramebufferUpdateResult(msgType, encodingsSeen, decompressedBytes, zlibRectCount, lastW, lastH)
     }
 
-    fun sendPointer(x: Int, y: Int, buttonMask: Int = 0) {
-        if (stage == "CLOSED" || writerExecutor.isShutdown) return
+    internal val pointerEventsSent=java.util.concurrent.atomic.AtomicLong()
+    internal val keyEventsSent=java.util.concurrent.atomic.AtomicLong()
+    private val pointerQueue=MacPointerQueue({ writerExecutor.execute(it) }) { point ->
         try {
-            writerExecutor.execute {
-                try {
-                    val out = recordOut ?: return@execute
-                    val event=checkNotNull(recordLayer).pointerEvent(x,y,buttonMask,width,height)
-                    out.write(event)
-                    out.flush()
-                    log("S9: Sent PointerEvent(x=$x, y=$y, mask=$buttonMask)")
-                } catch (e: Exception) {
-                    log("sendPointer error: ${e.message}")
-                }
+            val out=recordOut
+            if(out!=null && stage!="CLOSED") {
+                out.write(checkNotNull(recordLayer).pointerEvent(point.x,point.y,point.buttons,width,height));out.flush()
+                pointerEventsSent.incrementAndGet()
             }
-        } catch (ignored: RejectedExecutionException) {}
+        } catch(_:Exception) { log("Pointer output stopped") }
     }
+    private val mouseInput=MacMouseInput { x,y,mask ->
+        if(stage!="CLOSED" && !writerExecutor.isShutdown) pointerQueue.offer(x,y,mask)
+    }
+    fun sendPointer(x:Int,y:Int,buttonMask:Int=0) = mouseInput.pointer(x,y,buttonMask)
 
     private fun selectNegotiatedDisplay(data:ByteArray) {
         val selection=MacDisplaySelection.parse(data) ?: return
@@ -1028,29 +961,22 @@ class MacHevcSession(
     }
 
     fun updateDisplay(targetWidth: Int, targetHeight: Int, displayType: Int = 4) {
+        // Console sharing must not turn into a curtained virtual session on window resize.
+        if (shareConsole) return
         if (stage != "S8" && stage != "S9") return
-        val w = targetWidth.coerceIn(200, 8192) and -2
-        val h = targetHeight.coerceIn(200, 8192)
+        val (w,h) = MacVideoSize.fromWindow(targetWidth,targetHeight)
         log("S9: updateDisplay requested: ${w}x${h} (displayType=$displayType)")
         sendDisplayConfiguration(w, h, displayType)
     }
 
-    fun sendMouseEvent(x: Int, y: Int, flags: Int) {
-        var mask = 0
-        if ((flags and 0x8000) != 0) {
-            if ((flags and 0x1000) != 0) mask = mask or 1 // left
-            if ((flags and 0x2000) != 0) mask = mask or 4 // right
-            if ((flags and 0x4000) != 0) mask = mask or 2 // middle
-        }
-        sendPointer(x, y, mask)
-    }
+    fun sendMouseEvent(x:Int,y:Int,flags:Int) = mouseInput.mouse(x,y,flags)
 
     fun sendKeyEvent(keysym: Int, isDown: Boolean) {
         if (stage == "CLOSED" || writerExecutor.isShutdown) return
         try {
-            writerExecutor.execute {
+            pointerQueue.barrier {
                 try {
-                    val out = recordOut ?: return@execute
+                    val out = recordOut ?: return@barrier
                     val buf = ByteBuffer.allocate(8).order(ByteOrder.BIG_ENDIAN)
                     buf.put(4.toByte()) // KeyEvent
                     buf.put(if (isDown) 1.toByte() else 0.toByte())
@@ -1058,6 +984,7 @@ class MacHevcSession(
                     buf.putInt(keysym)
                     out.write(buf.array())
                     out.flush()
+                    keyEventsSent.incrementAndGet()
                 } catch (e: Exception) {
                     log("sendKeyEvent error: ${e.message}")
                 }
@@ -1066,9 +993,23 @@ class MacHevcSession(
     }
 
     @Volatile private var isStreaming = false
+    private val savedPasswordInput=MacSavedPasswordInput(password)
+    internal val canSubmitSavedPassword:Boolean get()=isStreaming && !savedPasswordInput.attempted
+    internal fun submitSavedPassword():Boolean=savedPasswordInput.submit(
+        active={ isStreaming && stage!="CLOSED" && recordOut!=null && !writerExecutor.isShutdown },
+        enqueue={ pointerQueue.barrier(it) },
+        key={ symbol,down ->
+            val event=ByteBuffer.allocate(8).order(ByteOrder.BIG_ENDIAN).apply {
+                put(4);put(if(down) 1.toByte() else 0.toByte());putShort(0);putInt(symbol)
+            }.array()
+            checkNotNull(recordOut).apply { write(event);flush() }
+        },failed={ log("Saved password input stopped; no automatic retry") },
+        beforeInput={ authenticationGate?.invoke() })
 
     fun startStreaming(surface: Surface?, onFinished: (String?) -> Unit = {}) {
         setSurface(surface)
+        // Authentication has a short deadline; an idle authenticated desktop does not.
+        socket?.soTimeout = 0
         isStreaming = true
         Thread({
             var errorMsg: String? = null
@@ -1150,6 +1091,7 @@ class MacHevcSession(
     override fun close() {
         stopStreaming()
         try {
+            pointerQueue.close()
             writerExecutor.shutdownNow()
         } catch (ignored: Exception) {}
         videoPipeline?.close()

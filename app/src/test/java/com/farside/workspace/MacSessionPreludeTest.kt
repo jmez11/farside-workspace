@@ -11,7 +11,7 @@ class MacSessionPreludeTest {
         val changes=mutableListOf<Int>()
         val input=DataInputStream(object:InputStream(){ override fun read():Int=throw SocketTimeoutException() })
         assertNull(MacSessionPrelude.optionalHeader(input,60000,changes::add))
-        assertEquals(listOf(2000,60000),changes)
+        assertEquals(listOf(500,60000),changes)
     }
     @Test fun headerConsumesOnlyTwoBytes() {
         val input=DataInputStream(byteArrayOf(0,74,0,1).inputStream())

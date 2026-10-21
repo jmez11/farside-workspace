@@ -92,9 +92,9 @@ internal class MacHevcReevaluation(private val test: Instrumentation) {
             record("PASS bounded caffeinate system/display idle assertion active (maximum 900s; no permanent power settings; does not unlock Mac)")
             fun baseline(label: String) {
                 space()
-                val evidence = VncVerification(test,liveFrameTimeoutMs=45000).run("live", vnc.id)
-                check(evidence.contains("LIVE PASS"))
-                    record("PASS $label VNC: authenticated nonblank surface, unlock state unverified, synthetic pointer, clean teardown")
+                val evidence = MacNativeBaseline(test).run(vnc.id)
+                check(evidence.startsWith("PASS"))
+                record("PASS $label standard VNC rendered baseline, unlock available, no input, clean teardown")
             }
             if(baselineOnly) {
                 baseline("baseline-only")
@@ -236,15 +236,11 @@ internal class MacHevcReevaluation(private val test: Instrumentation) {
                     }).use { session ->
                     session.controlUpdatesEnabled=!noControlPoll
                     session.setSurface(surface)
-                    val first = session.start()
-                    check(session.stage == "S8" && first.isNotEmpty())
-                    record("PASS S8 encrypted control records; not a video success")
-                    session.sessionSelectReply?.let { File(test.targetContext.cacheDir,"mac-session-select-reply.bin").writeBytes(it) }
-                    session.cachedHandshakeRecords.forEachIndexed { index, bytes ->
-                        File(test.targetContext.cacheDir, "mac-hevc-record-$index.bin").writeBytes(bytes)
-                    }
+                    session.start()
+                    check(session.stage == "S8")
+                    record("PASS S8 media offer sent; ongoing control replies read alongside media")
                     diagnostic("udp", "/usr/sbin/lsof -nP -a -u \"\$(id -un)\" -iUDP 2>&1 || true")
-                    session.initStreamingLayer(first)
+                    session.initStreamingLayer()
                     check(session.stage == "S9")
                     session.startStreaming(surface)
                     if(selectDisplay) {

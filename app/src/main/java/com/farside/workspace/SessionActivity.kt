@@ -40,6 +40,7 @@ class SessionActivity : ComponentActivity() {
         }
     internal var setZoom: ((Float) -> Unit)? = null
     internal var setPan: ((Float, Float) -> Unit)? = null
+    internal var macHover:((Float,Float)->Unit)?=null
     internal var onTouchDebug: ((android.view.MotionEvent, Float, Float, Float) -> Unit)? = null
     private val controllerScroll = RdpControllerScroll { remoteScroll?.invoke(it) }
     internal var sshHistoryScroll: ((Int) -> Unit)? = null
@@ -50,7 +51,18 @@ class SessionActivity : ComponentActivity() {
     private val sshControllerScroll = SshControllerScroll { sshHistoryScroll?.invoke(it) }
     private var nextSshInputLog = 0L
 
+    override fun dispatchTouchEvent(event:android.view.MotionEvent):Boolean {
+        if(vncBridge?.isMacHevc==true) MacInputTrace.event("activity-touch")
+        return super.dispatchTouchEvent(event)
+    }
     override fun dispatchGenericMotionEvent(event: android.view.MotionEvent): Boolean {
+        if(vncBridge?.isMacHevc==true) {
+            MacInputTrace.event("activity-generic")
+            if(event.isFromSource(android.view.InputDevice.SOURCE_CLASS_POINTER) &&
+                event.actionMasked in listOf(android.view.MotionEvent.ACTION_HOVER_ENTER,android.view.MotionEvent.ACTION_HOVER_MOVE)) {
+                macHover?.invoke(event.x,event.y)
+            }
+        }
         if (sshHistoryScroll != null && sshControllerScroll.onMotion(event)) {
             val now = android.os.SystemClock.uptimeMillis()
             if (BuildConfig.DEBUG && now >= nextSshInputLog) {

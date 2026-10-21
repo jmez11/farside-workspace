@@ -22,9 +22,13 @@ import javax.crypto.spec.DHPublicKeySpec
 import javax.crypto.spec.SecretKeySpec
 
 internal class VncAuthenticationException : Exception()
+internal class MacSessionRejectedException(message:String):java.io.IOException(message)
 
 /** Per-session LibVNCClient owner. The monitor serializes native handles with teardown. */
 class VncBridge : DesktopSessionBridge {
+    @Volatile internal var isConfirmedMac=false; private set
+    private var nativePasswordInput:MacSavedPasswordInput?=null
+    private var nativePasswordGate:(()->Unit)?=null
     @Volatile override var clipboardListener: ((String) -> Unit)? = null
     @Volatile internal var disconnectListener: ((Int, Boolean) -> Unit)? = null
     @Volatile private var active = 0L
@@ -32,6 +36,22 @@ class VncBridge : DesktopSessionBridge {
     private val stateLock = Any()
     private val callbacks = android.os.Handler(android.os.Looper.getMainLooper())
     private val heldPrintable = mutableMapOf<Int, Int>()
+    private var boundAudioSession=0
+    @Volatile internal var audioSpatialBound=false; private set
+
+    @Synchronized internal fun bindAudioWindow(activity:android.app.Activity) {
+        val session=getAudioPlaybackSessionId(active)
+        if(session!=boundAudioSession) {
+            QuestSpatialAudio.forget(boundAudioSession)
+            boundAudioSession=session;audioSpatialBound=false
+        }
+        if(session>0) QuestSpatialAudio.windowSpace(activity)?.let { space ->
+            audioSpatialBound=QuestSpatialAudio.bind(session,space)
+        }
+    }
+    @Synchronized private fun clearAudioBinding() {
+        QuestSpatialAudio.forget(boundAudioSession);boundAudioSession=0;audioSpatialBound=false
+    }
 
     fun connect(host: String, port: Int, password: String, surface: Surface,
         username: String = "", authMode: VncAuthMode = VncAuthMode.VNC_PASSWORD,
@@ -40,15 +60,17 @@ class VncBridge : DesktopSessionBridge {
         macAuthenticationGate: (() -> Unit)? = null): Long {
         synchronized(stateLock) {
             check(active == 0L)
+            isConfirmedMac=false
         }
         require(port in 1..65535)
         if (httpProxy?.expMacHevc == true) {
             check(macStreamSlot.compareAndSet(false,true)) { "Only one Apple streaming session can use the media ports at a time" }
             val session = MacHevcSession(host.removeSurrounding("[", "]"), port, username, password,
                 shareConsole = httpProxy.expMacShareConsole, sessionUsername = macSessionUsername,
-                authenticationSpacingMs = 5_000, mediaDatagramSender = macDatagramSender,
+                mediaDatagramSender = macDatagramSender,
                 preferAvc = httpProxy.macPreferAvc, audioEnabled = httpProxy.macAudioEnabled,
-                authenticationGate = macAuthenticationGate) { line ->
+                authenticationGate = macAuthenticationGate,onAuthenticated={ isConfirmedMac=true },
+                controlSocketFactory=if(httpProxy.proxyType in listOf(ProxyType.HTTP,ProxyType.SOCKS5)) ({openSocket(host,port,httpProxy)}) else null) { line ->
                 Log.i("MacHevcBridge", line)
             }
             session.setSurface(surface)
@@ -56,10 +78,10 @@ class VncBridge : DesktopSessionBridge {
                 Log.i("MacHevcBridge", "Resolution changed to ${w}x${h}")
             }
             try {
-                val firstRecord = session.start()
-                session.initStreamingLayer(firstRecord)
+                session.start()
+                session.initStreamingLayer()
                 session.startStreaming(surface) { error ->
-                    callbacks.post { disconnectListener?.invoke(R.string.vnc_server_disconnected, true) }
+                    callbacks.post { if(macHevcSession===session && active!=0L) disconnectListener?.invoke(R.string.vnc_server_disconnected, true) }
                 }
             } catch(e: Exception) { try { session.close() } finally { macStreamSlot.set(false) }; throw e }
             synchronized(stateLock) {
@@ -76,7 +98,11 @@ class VncBridge : DesktopSessionBridge {
             instanceId = nativeConnect(host.removeSurrounding("[", "]"), port, password.toByteArray(Charsets.ISO_8859_1), surface, fd)
         } else {
             require(username.isNotBlank() && password.isNotEmpty())
+            macAuthenticationGate?.invoke()
             val fd = authenticateApple(host.removeSurrounding("[", "]"), port, username, password, httpProxy)
+            isConfirmedMac=true
+            nativePasswordInput=MacSavedPasswordInput(password)
+            nativePasswordGate=macAuthenticationGate
             instanceId = nativeConnectAuthenticated(host.removeSurrounding("[", "]"), port, fd, surface)
         }
         synchronized(stateLock) {
@@ -103,7 +129,7 @@ class VncBridge : DesktopSessionBridge {
                                   httpProxy: ConnectionProfile?): Int {
         val socket = openSocket(host, port, httpProxy)
         try {
-            socket.soTimeout = 10000
+            socket.soTimeout = 5000
             val input = java.io.DataInputStream(socket.getInputStream())
             val output = java.io.DataOutputStream(socket.getOutputStream())
             val version = ByteArray(12).also { input.readFully(it) }.toString(Charsets.US_ASCII)
@@ -165,10 +191,14 @@ class VncBridge : DesktopSessionBridge {
             macHevcSession = null
             nativeInstanceToClose = if (sessionToClose == null) active else 0L
             active = 0L
+            nativePasswordInput=null
+            nativePasswordGate=null
+            isConfirmedMac=false
         }
         synchronized(heldPrintable) {
             heldPrintable.clear()
         }
+        clearAudioBinding()
         if (sessionToClose != null) {
             try { sessionToClose.close() } finally { macStreamSlot.set(false) }
         } else if (nativeInstanceToClose != 0L) {
@@ -182,6 +212,8 @@ class VncBridge : DesktopSessionBridge {
             else nativeSetSurface(instance, surface)
         }
     }
+    internal val macCursor:MacCursor? get()=macHevcSession?.cursor
+    internal val macInputCounts:Pair<Long,Long> get()=(macHevcSession?.pointerEventsSent?.get() ?: 0L) to (macHevcSession?.keyEventsSent?.get() ?: 0L)
     fun sendPointerEvent(instance: Long, x: Int, y: Int, buttonMask: Int) {
         val mac = macHevcSession
         if (instance != 0L && instance == active) {
@@ -192,7 +224,7 @@ class VncBridge : DesktopSessionBridge {
     override fun sendMouseEvent(instance: Long, x: Int, y: Int, flags: Int) {
         val mac = macHevcSession
         if (instance != 0L && instance == active) {
-            if (mac != null) mac.sendMouseEvent(x, y, flags)
+            if (mac != null) { MacInputTrace.event("pointer-forwarded");mac.sendMouseEvent(x, y, flags) }
             else nativeMouse(instance, x, y, flags)
         }
     }
@@ -201,7 +233,7 @@ class VncBridge : DesktopSessionBridge {
         if (instance == 0L || instance != active) return
         val keysym = xtKeysym(scancode) ?: return
         val mac = macHevcSession
-        if (mac != null) mac.sendKeyEvent(keysym, isDown)
+        if (mac != null) { MacInputTrace.event("key-forwarded");mac.sendKeyEvent(keysym, isDown) }
         else nativeKey(instance, keysym, isDown)
     }
     /** Unicode is one X11 keysym, including supplementary code points. */
@@ -210,7 +242,7 @@ class VncBridge : DesktopSessionBridge {
         val keysym = when (unicodeChar) { 8 -> 0xff08; 9 -> 0xff09; 10, 13 -> 0xff0d; 27 -> 0xff1b
             else -> if (unicodeChar <= 255) unicodeChar else 0x01000000 or unicodeChar }
         val mac = macHevcSession
-        if (mac != null) mac.sendKeyEvent(keysym, isDown)
+        if (mac != null) { MacInputTrace.event("key-forwarded");mac.sendKeyEvent(keysym, isDown) }
         else nativeKey(instance, keysym, isDown)
     }
     // Key release retains its down keysym if Shift/Ctrl changed in between.
@@ -253,6 +285,29 @@ class VncBridge : DesktopSessionBridge {
     val isMacHevc: Boolean get() = macHevcSession != null
     val macHevcStage: String? get() = macHevcSession?.stage
     internal val macMediaPipeline: MacHevcVideoPipeline? get() = macHevcSession?.videoPipeline
+    internal fun canSubmitSavedMacPassword(instance:Long):Boolean =
+        instance!=0L && instance==active && isConfirmedMac &&
+            (macHevcSession?.canSubmitSavedPassword ?: (nativePasswordInput?.attempted==false))
+    internal fun submitSavedMacPassword(instance:Long):Boolean {
+        if(!canSubmitSavedMacPassword(instance)) return false
+        macHevcSession?.let { return it.submitSavedPassword() }
+        val input=nativePasswordInput ?: return false
+        val gate=nativePasswordGate
+        return input.submit(active={ instance==active && isConfirmedMac && nativePasswordInput===input },
+            enqueue={ Thread(it,"MacVncUnlock").apply { isDaemon=true;start() } }, key={ symbol,down ->
+                synchronized(stateLock) { if(instance==active) nativeKey(instance,symbol,down) }
+            },beforeInput={ gate?.invoke() })
+    }
+    internal fun awaitMacVideo(timeoutMs:Long=3500):Boolean {
+        val end=android.os.SystemClock.uptimeMillis()+timeoutMs
+        while(android.os.SystemClock.uptimeMillis()<end) {
+            if((macMediaPipeline?.framesDecoded?.get() ?: 0)>0) return true
+            Thread.sleep(20)
+        }
+        return false
+    }
+    override fun getAudioPlaybackSessionId(instance:Long):Int =
+        if(instance!=0L && instance==active) macHevcSession?.videoPipeline?.audio?.playbackSessionId ?: 0 else 0
     override fun setAudioMuted(instance: Long, speakerMuted: Boolean, micMuted: Boolean) {
         macHevcSession?.videoPipeline?.audio?.muted=speakerMuted
     }

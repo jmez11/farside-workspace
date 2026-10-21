@@ -88,8 +88,8 @@ internal class MacLocalVerification(private val test: Instrumentation) {
         fun space() { val prior=last.takeIf { it.exists() }?.readText()?.trim()?.toLongOrNull()?:0;val wait=5000-(System.currentTimeMillis()-prior);if(wait>0) Thread.sleep(wait);last.writeText(System.currentTimeMillis().toString()) }
         fun baseline(label:String) {
             space()
-            val result=VncVerification(test,liveFrameTimeoutMs=45000).run("live",id)
-            check(result.contains("LIVE PASS"));record("PASS $label standard VNC nonblank baseline; no unlock input")
+            val result=MacNativeBaseline(test).run(id)
+            check(result.startsWith("PASS"));record("PASS $label standard VNC rendered baseline; saved unlock available, no input")
         }
         baseline("before")
         if(baselineOnly) return output.readText()
@@ -113,7 +113,7 @@ internal class MacLocalVerification(private val test: Instrumentation) {
                         record(line.replace(Regex("(activeUser|user)='[^']*'"),"$1='<redacted>'"))
                     }).use { session ->
                     session.setSurface(display.surface)
-                    val first=session.start();session.initStreamingLayer(first);session.startStreaming(display.surface)
+                    session.start();session.initStreamingLayer();session.startStreaming(display.surface)
                     repeat(20) { Thread.sleep(1000);display.capture("mac-local-frame-$it.png") }
                     record("DIRECT MEDIA frames=${session.videoPipeline?.framesDecoded?.get()} authenticated=${session.videoPipeline?.authenticatedPackets?.get()} decoder=${session.videoPipeline?.decoderDescription}; ${session.videoPipeline?.avcAssemblyDiagnostics}")
                     check((session.videoPipeline?.framesDecoded?.get()?:0)>0) { "No hardware frames" }

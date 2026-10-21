@@ -79,7 +79,7 @@ data class ConnectionProfile(
     val credentialId: String? = null,
     val sshKeyId: String? = null,
     val jumpHostProfileId: String? = null,
-    val enableSftp: Boolean = false,
+    val enableSftp: Boolean = type == ConnectionType.SSH,
     val vncAuthMode: VncAuthMode = VncAuthMode.VNC_PASSWORD,
     val sftpPairProfileId: String? = null,
     val sshForwards: List<SshForward> = emptyList(),
@@ -93,7 +93,8 @@ data class ConnectionProfile(
     val expMacShareConsole: Boolean = false,
     val macPreferAvc: Boolean = true,
     val macAudioEnabled: Boolean = false,
-    val macSshRelayProfileId: String? = null
+    val macSshRelayProfileId: String? = null,
+    val enableMacSshRelay: Boolean = false
 ) {
     fun toJson(): JSONObject {
         val json = JSONObject()
@@ -155,6 +156,7 @@ data class ConnectionProfile(
         json.put("macPreferAvc", macPreferAvc)
         json.put("macAudioEnabled", macAudioEnabled)
         json.put("macSshRelayProfileId", macSshRelayProfileId)
+        json.put("enableMacSshRelay", enableMacSshRelay)
         return json
     }
 
@@ -179,7 +181,7 @@ data class ConnectionProfile(
                     runCatching { VncAuthMode.valueOf(json.optString("vncAuthMode", VncAuthMode.VNC_PASSWORD.name)) }.getOrDefault(VncAuthMode.VNC_PASSWORD)
                     else VncAuthMode.VNC_PASSWORD,
                 sftpPairProfileId = if (json.getString("type") == "VNC" && json.has("sftpPairProfileId") && !json.isNull("sftpPairProfileId"))
-                    json.getString("sftpPairProfileId") else null,
+                    json.getString("sftpPairProfileId") else if (json.getString("type") == "VNC") json.optString("macSshRelayProfileId").takeIf { it.isNotBlank() && it != "null" } else null,
                 remoteApp = if (json.has("remoteApp") && !json.isNull("remoteApp")) json.getString("remoteApp") else null,
                 useCloudflare = if (json.has("useCloudflare")) json.getBoolean("useCloudflare") else false,
                 enableCamera = if (json.has("enableCamera")) json.getBoolean("enableCamera") else false,
@@ -221,7 +223,8 @@ data class ConnectionProfile(
                 expMacShareConsole = json.optBoolean("expMacShareConsole", false),
                 macPreferAvc = json.optBoolean("macPreferAvc", true),
                 macAudioEnabled = json.optBoolean("macAudioEnabled", false),
-                macSshRelayProfileId = json.optString("macSshRelayProfileId").takeIf { it.isNotBlank() && it != "null" }
+                macSshRelayProfileId = json.optString("macSshRelayProfileId").takeIf { it.isNotBlank() && it != "null" },
+                enableMacSshRelay = json.optBoolean("enableMacSshRelay", false)
             )
         }
     }

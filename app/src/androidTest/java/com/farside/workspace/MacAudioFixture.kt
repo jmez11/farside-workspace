@@ -13,12 +13,16 @@ import kotlin.math.sin
 
 /** Offline ELD-SBR control; Android encoder uses a different frame length from Apple. */
 internal class MacAudioFixture(private val test:Instrumentation) {
-    fun run():String {
+    fun run(backgroundControl:Boolean=false):String {
+        if(backgroundControl) return runForeground()
         // Quest may suspend AudioTrack with no visible app window; exercise the real foreground case.
-        val activity=test.startActivitySync(android.content.Intent(test.targetContext,MainActivity::class.java)
-            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK))
-        return try { test.waitForIdleSync();runForeground() }
-        finally { test.runOnMainSync { activity.finish() } }
+        val monitor=test.addMonitor(MainActivity::class.java.name,null,false)
+        return try {
+            test.targetContext.startActivity(android.content.Intent(test.targetContext,MainActivity::class.java)
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK))
+            val activity=checkNotNull(test.waitForMonitorWithTimeout(monitor,15000)) { "Horizon did not present the audio fixture Activity" }
+            try { runForeground() } finally { test.runOnMainSync { activity.finish() } }
+        } finally { test.removeMonitor(monitor) }
     }
     private fun runForeground():String {
         val report=File(test.targetContext.cacheDir,"mac-audio-fixture.txt")

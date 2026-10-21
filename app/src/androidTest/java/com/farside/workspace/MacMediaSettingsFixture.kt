@@ -20,30 +20,34 @@ internal class MacMediaSettingsFixture(private val test:Instrumentation) {
         val pm=ProfileManager(test.targetContext)
         val before=pm.getProfiles().map { it.toJson().toString() }
         val vnc=pm.getProfiles().single { it.id==id && it.type==ConnectionType.VNC }
-        val ssh=pm.getProfiles().single { it.host==vnc.host && it.type==ConnectionType.SSH }.copy(name="Fixture SSH media relay")
+        val ssh=pm.getProfiles().single { it.host==vnc.host && it.type==ConnectionType.SSH }.copy(name="Fixture Companion",host="fixture.invalid",enableSftp=false)
         val fixture=vnc.copy(name="Media settings fixture",expMacHevc=true,macPreferAvc=false,macAudioEnabled=false,macSshRelayProfileId=null)
         var saved:ConnectionProfile?=null
         val info=test.uiAutomation.serviceInfo
         info.flags=info.flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
         test.uiAutomation.serviceInfo=info
-        val activity=test.startActivitySync(Intent(test.targetContext,MainActivity::class.java)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)) as MainActivity
+        val monitor=test.addMonitor(MainActivity::class.java.name,null,false)
+        var activity:MainActivity?=null
         try {
+            test.targetContext.startActivity(Intent(test.targetContext,MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
+            activity=checkNotNull(test.waitForMonitorWithTimeout(monitor,15000)) { "Horizon did not open companion editor fixture" } as MainActivity
             test.runOnMainSync { activity.setContent { MaterialTheme {
                 AddProfileForm(initialProfile=fixture,onSave={ saved=it },onCancel={},profileManager=pm,savedProfiles=listOf(fixture,ssh))
             } } }
-            click(test.targetContext.getString(R.string.mac_media_avc))
-            click(test.targetContext.getString(R.string.mac_media_audio))
-            click(test.targetContext.getString(R.string.mac_media_ssh))
+            val forbidden=listOf(R.string.mac_media_avc,R.string.mac_media_audio,R.string.mac_media_ssh)
+                .map(test.targetContext::getString)
+            check(nodes().none { it.text?.toString() in forbidden })
+            click(test.targetContext.getString(R.string.companion_remote_login))
             click(ssh.name)
             click(test.targetContext.getString(R.string.save_uppercase))
             val result=checkNotNull(saved) { "Form did not produce a profile" }
-            check(result.expMacHevc && result.macPreferAvc && result.macAudioEnabled && result.macSshRelayProfileId==ssh.id)
+            check(result.expMacHevc && result.macPreferAvc && result.macAudioEnabled && result.sftpPairProfileId==ssh.id && result.macSshRelayProfileId==null && !result.enableMacSshRelay)
             val restored=ConnectionProfile.fromJson(result.toJson())
-            check(restored.macPreferAvc && restored.macAudioEnabled && restored.macSshRelayProfileId==ssh.id && restored.expMacHevc)
+            check(restored.macPreferAvc && restored.macAudioEnabled && restored.sftpPairProfileId==ssh.id && restored.macSshRelayProfileId==null && restored.expMacHevc && !restored.enableMacSshRelay)
             check(pm.getProfiles().map { it.toJson().toString() }==before) { "Fixture changed saved connections" }
-            return "PASS actual streaming/H.264/audio/SSH relay form selection, JSON persistence and unchanged saved profiles"
-        } finally { test.runOnMainSync { activity.finish() } }
+            return "PASS automatic H.264/audio, one Companion selector accepting different-host SSH with SFTP off, JSON persistence and unchanged profiles"
+        } finally { test.removeMonitor(monitor);test.runOnMainSync { activity?.finish() } }
     }
     private fun nodes():List<AccessibilityNodeInfo> {
         test.uiAutomation.clearCache()
