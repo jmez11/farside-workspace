@@ -275,12 +275,23 @@
       .rationale li { background: var(--panel); border: 1px solid var(--border); border-radius: 13px; padding: 14px 16px; font-size: 14px; color: var(--muted); }
       .rationale li strong { color: var(--text); display: block; margin-bottom: 3px; font-size: 14.5px; }
 
-      /* ---------- mode bar / edit existing ---------- */
-      .mode-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 16px 24px 0; }
-      .mode-bar select.input { width: auto; max-width: 100%; padding: 8px 12px; font-size: 14px; }
-      @media (max-width: 640px) {
-        .mode-bar { padding-left: 16px; padding-right: 16px; }
-      }
+      /* ---------- entry-point switcher (guidance only) ---------- */
+      .entry-switcher { background: var(--panel); border: 1px dashed var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 18px; }
+      .entry-switcher-title { font-weight: 700; color: var(--text); font-size: 14.5px; margin: 0 0 4px; }
+      .entry-switcher-text { color: var(--muted); font-size: 13.5px; margin: 0 0 12px; }
+      .entry-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      .entry-option { text-align: left; background: var(--card); border: 1.5px solid var(--border); border-radius: 12px; padding: 12px 14px; color: var(--text); }
+      .entry-option:hover { background: var(--card-hover); }
+      .entry-option.active { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent); }
+      .entry-option .eo-title { font-weight: 700; font-size: 14.5px; display: block; }
+      .entry-option .eo-sub { color: var(--muted); font-size: 12.5px; display: block; margin-top: 2px; }
+      .entry-picker { margin-top: 12px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+      .entry-picker label { font-size: 13px; font-weight: 600; color: var(--muted); }
+      .entry-picker select.input { width: auto; max-width: 100%; padding: 8px 12px; font-size: 14px; }
+      @media (max-width: 640px) { .entry-options { grid-template-columns: 1fr; } }
+      .panel-nav-btn { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--border); background: var(--card); color: var(--text); font-size: 19px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; flex: none; padding: 0 0 2px; }
+      .panel-nav-btn:hover { background: var(--card-hover); }
+      .panel-head-left { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
 
       .hidden { display: none !important; }
 
@@ -320,18 +331,37 @@
         <div class="guidance-label">Guidance — preview a connection type</div>
         <div class="combo-row" id="comboRow" aria-label="Connection type"></div>
 
+        <div class="guidance-label">Guidance — preview entry point</div>
+        <div class="entry-switcher" id="entrySwitcher">
+          <p class="entry-switcher-title">Preview entry point — mockup navigation only (not app UI)</p>
+          <p class="entry-switcher-text">In the real app these are two separate entry points: the New button at the top of the launcher opens a blank flow, and Edit on a saved connection opens the same flow prefilled. The user never switches between them.</p>
+          <div class="entry-options" role="group" aria-label="Preview entry point">
+            <button type="button" class="entry-option active" id="entryNewBtn"><span class="eo-title">＋ New connection</span><span class="eo-sub">from the launcher's New button</span></button>
+            <button type="button" class="entry-option" id="entryEditBtn"><span class="eo-title">✎ Edit saved connection</span><span class="eo-sub">from Edit on a connection card</span></button>
+          </div>
+          <div class="entry-picker hidden" id="entryEditPicker">
+            <label for="entryEditSelect">Connection being edited</label>
+            <select class="input" id="entryEditSelect" aria-label="Choose a connection to edit">
+              <option value="ex-office">Office PC</option>
+              <option value="ex-macmini">Mac mini</option>
+              <option value="ex-homelab">homelab</option>
+            </select>
+          </div>
+        </div>
+
         <div class="panel-wrap">
         <div class="ui-tag">QUEST APP UI — interactive mockup</div>
         <div class="panel">
           <div class="panel-head">
-            <div>
-              <div class="panel-title" id="panelTitle">New connection</div>
-              <div class="panel-sub" id="panelSub">RDP · Windows Remote Desktop</div>
+            <div class="panel-head-left">
+              <button type="button" class="panel-nav-btn" id="panelNavBtn" aria-label="Close">×</button>
+              <div>
+                <div class="panel-title" id="panelTitle">New connection</div>
+                <div class="panel-sub" id="panelSub">RDP · Windows Remote Desktop</div>
+              </div>
             </div>
             <div class="panel-sub" id="panelStepLabel">Step 1 of 4</div>
           </div>
-
-          <div class="mode-bar" id="modeBar"></div>
 
           <div class="stepper" id="stepper"></div>
           <div class="step-body" id="stepBody"></div>
@@ -390,7 +420,7 @@
           <li><strong>The vault knows what things are</strong>Sign-ins and SSH keys are grouped separately, with kind and PIN badges and a “used by N connections” line, so it's obvious what breaks if you delete one.</li>
           <li><strong>Discovery only shows what you picked</strong>An SSH server can't be found by scanning the local network, so step 2 has no finder for SSH — just name, host and port, no explanation needed. Where the finder does appear, it only lists servers of the type you selected: RDP finds RDP PCs, VNC finds VNC servers, and switching protocol swaps the list.</li>
           <li><strong>VNC is a general protocol, not Mac-only</strong>VNC wording no longer assumes the target is a Mac — it runs on Windows, Linux and media boxes too. Mac Screen Sharing appears exactly once, as the example for username + password sign-in, and the password flow just says “VNC password”.</li>
-          <li><strong>Editing looks like creating, prefilled</strong>The New | Edit toggle at the top of the panel loads a saved connection with every step already filled in — protocol, server, sign-in, options — and the stepper stays fully visitable. The footer just switches to “Save changes” — there's no delete here, since removing a connection already lives on the main launcher.</li>
+          <li><strong>Two entry points, no toggle</strong>The flow is reached two separate ways, and the user never switches between them: the New button at the top of the main launcher opens it blank (header “New connection”, close ×, footer “Save connection”), and Edit on a saved connection in the launcher opens the same flow prefilled — protocol, server, sign-in, options — with the stepper fully visitable (header “Edit connection”, back ←, footer “Save changes”). There's no delete in edit mode, since removing a connection already lives on the main launcher. The switcher above the panel is mockup navigation only, for previewing both entry points — it is not app UI.</li>
           <li><strong>Private keys are replace-only, never displayed</strong>Editing an SSH key shows an empty box, exactly like a password field: paste a new key to replace the saved one, or leave it blank to keep it. The saved key is never rendered anywhere — only the public key can be viewed or copied, which is safe to share.</li>
           <li><strong>Required fields block the flow, in red</strong>A blank connection name, host or port on step 2 — the port must also be a number from 1 to 65535 — or a missing sign-in where the protocol demands one (RDP, both VNC modes) — shows red error text under the field and dims Continue until it's fixed, validated live as you type. SSH is the exception: its credentials are genuinely optional, so its step 3 never blocks. The same rules gate “Save changes” in edit mode.</li>
           <li><strong>VNC file pairing lists plain connection names</strong>The File access card pairs a VNC connection with an existing SSH connection, and the dropdown shows just connection names — None, Mac mini, homelab — no protocol jargon or suffixes.</li>
@@ -577,6 +607,11 @@
           : (S.combo === "vnc-mac" ? "VNC · Username + password" : "VNC · VNC password");
         el("panelSub").textContent = sub;
         el("panelTitle").textContent = S.mode === "edit" ? "Edit connection" : "New connection";
+        var navBtn = el("panelNavBtn");
+        if (navBtn) {
+          navBtn.textContent = S.mode === "edit" ? "←" : "×";
+          navBtn.setAttribute("aria-label", S.mode === "edit" ? "Back" : "Close");
+        }
         var cn = el("comboNoteText");
         if (cn) cn.textContent = c.proto === "RDP"
           ? "RDP always needs a username and password — in the flow above, step 3 is where you pick a saved sign-in or type one just for this connection. On step 4, Play sound is a plain on/off toggle and the camera resolution is the three-way picker (SD 480p / HD 720p / Native)."
@@ -612,15 +647,14 @@
             '<span class="pport">Default port ' + port + "</span></button>";
         }
         var h = "<h2>What are you connecting to?</h2>" +
-          '<p class="lede">Pick the kind of computer on the other end. You can change this later — the rest of the form adapts to it.</p>' +
-          '<div class="proto-grid">' +
+          '<div class="proto-grid" style="margin-top:18px;">' +
           card("RDP", ICONS.monitor, "RDP", "Windows Remote Desktop", 3389) +
           card("SSH", ICONS.terminal, "SSH", "Secure shell &amp; terminal", 22) +
           card("VNC", ICONS.share, "VNC", "VNC servers &amp; Mac Screen Sharing", 5900) +
           "</div>";
         if (proto === "VNC") {
           h += '<div class="auth-expand"><div class="ae-title">How does this server ask you to sign in?</div>' +
-            '<div class="ae-desc">A VNC server can use a short VNC password, or a full user account on the machine. This decides which sign-in fields you get on step 3.</div>' +
+            '<div class="ae-desc">A VNC server can use a short VNC password, or a full user account on the machine.</div>' +
             segHTML("vncAuth", ["VNC password", "Username + password"], S.combo === "vnc-mac" ? "Username + password" : "VNC password") +
             '<p class="hint" style="margin-top:10px;">Username + password means an account on the target machine — e.g. the macOS user account when connecting to Mac Screen Sharing.</p>' +
             "</div>";
@@ -1228,48 +1262,45 @@
         S.touched2 = { name: false, host: false, port: false };
         S.step3Touched = false;
         S.devicesOpen = false; S.step = 1;
-        renderCombos(); renderStepper(); renderStep(); renderModeBar();
+        renderCombos(); renderStepper(); renderStep(); renderEntrySwitcher();
       }
       function resetToNew() {
+        var keepCombo = S.combo;
         applySnapshot(JSON.parse(JSON.stringify(DEFAULT_SNAPSHOT)));
         S.mode = "new"; S.editId = null;
-        setCombo("rdp");
-        renderModeBar();
+        setCombo(keepCombo);
+        renderEntrySwitcher();
       }
-      function renderModeBar() {
-        var h = '<div class="seg" aria-label="Connection mode">' +
-          '<button type="button" data-mode="new"' + (S.mode === "new" ? ' class="active"' : "") + ">New connection</button>" +
-          '<button type="button" data-mode="edit"' + (S.mode === "edit" ? ' class="active"' : "") + ">Edit existing</button></div>";
-        if (S.mode === "edit") {
-          if (EXISTING.length) {
-            h += '<select class="input" id="editSelect" aria-label="Choose a connection to edit">';
-            EXISTING.forEach(function (c) {
-              h += '<option value="' + c.id + '"' + (S.editId === c.id ? " selected" : "") + ">" + esc(c.label) + "</option>";
-            });
-            h += "</select>";
-          } else {
-            h += '<span class="hint" style="margin:0;">No saved connections left.</span>';
-          }
-        }
-        el("modeBar").innerHTML = h;
-        el("modeBar").querySelectorAll("[data-mode]").forEach(function (b) {
-          b.addEventListener("click", function () {
-            var m = b.getAttribute("data-mode");
-            if (m === S.mode) return;
-            if (m === "edit") {
-              if (!EXISTING.length) { toast("No saved connections to edit"); return; }
-              loadExisting(EXISTING[0]);
-            } else {
-              resetToNew();
-            }
-          });
+      function renderEntrySwitcher() {
+        var newBtn = el("entryNewBtn"), editBtn = el("entryEditBtn"), picker = el("entryEditPicker"), sel = el("entryEditSelect");
+        if (newBtn) newBtn.classList.toggle("active", S.mode === "new");
+        if (editBtn) editBtn.classList.toggle("active", S.mode === "edit");
+        if (picker) picker.classList.toggle("hidden", S.mode !== "edit");
+        if (sel && S.editId) sel.value = S.editId;
+      }
+      (function bindEntrySwitcher() {
+        var newBtn = el("entryNewBtn"), editBtn = el("entryEditBtn"), sel = el("entryEditSelect");
+        if (newBtn) newBtn.addEventListener("click", function () {
+          if (S.mode === "new") return;
+          resetToNew();
         });
-        var sel = el("editSelect");
+        if (editBtn) editBtn.addEventListener("click", function () {
+          if (S.mode === "edit") return;
+          if (!EXISTING.length) { toast("No saved connections to edit"); return; }
+          var target = EXISTING.filter(function (x) { return x.combo === S.combo; })[0];
+          if (!target) {
+            var proto = COMBOS[S.combo].proto;
+            target = EXISTING.filter(function (x) { return COMBOS[x.combo].proto === proto; })[0] || EXISTING[0];
+          }
+          loadExisting(target);
+        });
         if (sel) sel.addEventListener("change", function () {
           var c = EXISTING.filter(function (x) { return x.id === sel.value; })[0];
           if (c) loadExisting(c);
         });
-      }
+        var nav = el("panelNavBtn");
+        if (nav) nav.addEventListener("click", function () { toast(S.mode === "edit" ? "Back to launcher (mockup)" : "Closed — back to launcher (mockup)"); });
+      })();
       /* ================= view toggle ================= */
       function setView(v) {
         S.view = v;
@@ -1531,7 +1562,7 @@
 
       /* ================= init ================= */
       renderCombos();
-      renderModeBar();
+      renderEntrySwitcher();
       renderStepper();
       renderStep();
     </script>

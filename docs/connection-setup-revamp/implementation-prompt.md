@@ -49,9 +49,12 @@ mockup:
   "Pair with an existing SSH connection" dropdown with **plain connection names
   only**); Network card for all (proxy segmented Direct/Cloudflare/SOCKS5/HTTP
   with conditional fields, reconnect-automatically toggle).
-- **Edit mode**: "New connection | Edit existing" toggle; picking a saved
-  profile prefills all four steps; header becomes "Edit connection"; footer is
-  "Save changes" (no delete — deletion lives on the launcher).
+- **Edit mode**: two separate entry points, never a toggle. (a) The launcher's
+  "New connection" button opens the flow blank. (b) Edit on a saved connection
+  opens the same flow prefilled for that profile. The flow takes a launch mode
+  (`new` vs `edit(profileId)`); in edit mode the header reads "Edit connection"
+  with a back action, and the footer is "Save changes" (no delete — deletion
+  lives on the launcher).
 - **Validation**: blank required fields show red inline text + red field border,
   and Continue / Save changes stays disabled until valid. Required: name, host,
   port (1–65535) on step 2 for all; sign-in details on step 3 for RDP and both
