@@ -26,4 +26,12 @@ class SetupSignInStateTest {
         state.keyMode=true;state.keyId="owned-key";state.user="keyuser";state.password="unused"
         state.profile(base,listOf(stored)).let {assertEquals("keyuser",it.user);assertEquals("",it.pass);assertEquals("owned-key",it.sshKeyId)}
     }
+    @Test fun rdpAcceptsUsernameWithoutPasswordWhileVncStillRequiresPassword() {
+        val credential=SavedCredential(name="Username only",user="fixture",pass="")
+        val state=SetupSignInState(null).apply {credentialId=credential.id}
+        assertNull(state.error(base.copy(type=ConnectionType.RDP),listOf(credential)))
+        state.specific=true;state.user="fixture"
+        assertNull(state.error(base.copy(type=ConnectionType.RDP),listOf(credential)))
+        assertNotNull(state.error(base.copy(type=ConnectionType.VNC,vncAuthMode=VncAuthMode.MAC_USER),listOf(credential)))
+    }
 }

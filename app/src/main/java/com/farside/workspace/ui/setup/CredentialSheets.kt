@@ -44,7 +44,7 @@ internal fun SetupInput(label:Int,value:String,onChange:(String)->Unit,secret:Bo
 /** Shared by setup and the vault. Existing secrets are never inserted into editor fields. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun CredentialSheet(pm:ProfileManager,vncPassword:Boolean=false,allowMac:Boolean=true,allowPasswordOnly:Boolean=false,
+internal fun CredentialSheet(pm:ProfileManager,vncPassword:Boolean=false,allowMac:Boolean=true,allowPasswordOnly:Boolean=false,allowEmptyPassword:Boolean=true,
     existing:SavedCredential?=null,onDelete:(()->Unit)?=null,onDismiss:()->Unit,onSaved:(SavedCredential)->Unit) {
     var passwordOnly by remember {mutableStateOf(vncPassword)}
     var name by remember { mutableStateOf(existing?.name.orEmpty()) }
@@ -58,7 +58,7 @@ internal fun CredentialSheet(pm:ProfileManager,vncPassword:Boolean=false,allowMa
     var pinSetup by remember { mutableStateOf(false) }
     var attempted by remember { mutableStateOf(false) }
     val effectivePass=pass.ifEmpty { existing?.pass.orEmpty() }
-    val validPass=effectivePass.isNotEmpty() && (!passwordOnly || effectivePass.length<=8 && effectivePass.all { it.code in 1..255 })
+    val validPass=(effectivePass.isEmpty() && allowEmptyPassword && !passwordOnly && !mac) || effectivePass.isNotEmpty() && (!passwordOnly || effectivePass.length<=8 && effectivePass.all { it.code in 1..255 })
     val valid=name.isNotBlank() && validPass && (passwordOnly || user.isNotBlank()) && (!mac || MacLoginNames.validShort(short)) && !pinSetup
     val sheetHeight=LocalConfiguration.current.screenHeightDp.dp*.8f
     ModalBottomSheet(onDismissRequest=onDismiss,containerColor=SetupColors.background,sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)) {

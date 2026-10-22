@@ -130,22 +130,11 @@ private fun SftpListScrollbar(state: LazyListState, modifier: Modifier = Modifie
 @Composable
 internal fun SftpFilesEntry(onClose: () -> Unit, profileId: String? = null, allowDisabledPairedProfile: Boolean = false) {
     val context = LocalContext.current
-    var security by remember { mutableStateOf<Pair<Boolean, String?>?>(null) }
-    var unlocked by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        security = withContext(Dispatchers.IO) { ProfileManager(context).let { it.usesSystemPin() to it.getAppPinVerifier() } }
-    }
     BackHandler { onClose() }
     MaterialTheme(colorScheme = darkColorScheme()) {
         CompositionLocalProvider(LocalContentColor provides Color(0xFFF1F0F4)) {
             Surface(Modifier.fillMaxSize(), color = Color(0xFF202124), contentColor = Color(0xFFF1F0F4)) {
-                val auth = security
-                when {
-                    auth == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Color(0xFFF1F0F4)) }
-                    !unlocked && auth.first -> SystemCredentialDialog(title = stringResource(R.string.unlock_files), message = stringResource(R.string.confirm_headset_files), onUnlocked = { unlocked = true }, onCancel = onClose)
-                    !unlocked && auth.second != null -> CredentialPinDialog(title = stringResource(R.string.unlock_files), verifier = auth.second, onUnlocked = { unlocked = true }, onCancel = onClose)
-                    else -> SftpFilesPanel(onClose, profileId, allowDisabledPairedProfile)
-                }
+                SftpFilesPanel(onClose, profileId, allowDisabledPairedProfile)
             }
         }
     }
@@ -192,6 +181,7 @@ private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?, allowDisable
     var cachedView by remember { mutableStateOf(false) }
     var sortByDate by remember { mutableStateOf(false) }
     var sortMenu by remember { mutableStateOf(false) }
+    var pendingUnlock by remember { mutableStateOf<String?>(null) }
     var autoConnected by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
@@ -253,7 +243,19 @@ private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?, allowDisable
         if (operation == null && hit != null) { entries = hit; path = folder; cachedView = true; error = null; status = "" }
         else work(loadingLabel) { refresh(it, folder) }
     }
-    fun connect(id: String) {
+    fun connect(id: String, unlocked: Boolean = false) {
+        if (!unlocked) {
+            try {
+                val pm = ProfileManager(context)
+                val all = pm.getProfiles()
+                val profile = all.single { it.id == id }
+                if ((pm.usesSystemPin() || pm.getAppPinVerifier() != null) &&
+                    sftpRequiresPin(profile, all, pm.getCredentials(), pm.getSshKeys())) {
+                    pendingUnlock = id
+                    return
+                }
+            } catch (e: Exception) { error = sftpError(context, e); return }
+        }
         work(connectingLabel) { op ->
             session?.close(); session = null; entries = emptyList(); path = ""; selectedId = id; listingCache.clear(); cachedView = false
             val profile = withContext(Dispatchers.IO) {
@@ -273,6 +275,11 @@ private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?, allowDisable
                 op.check(); refresh(op)
             } catch (e: Exception) { next.close(); session = null; throw e }
         }
+    }
+    pendingUnlock?.let { id ->
+        com.farside.workspace.ui.setup.VaultAuthentication(ProfileManager(context),
+            onUnlocked = { pendingUnlock = null; connect(id, unlocked = true) },
+            onCancel = { pendingUnlock = null })
     }
     LaunchedEffect(profiles) {
         if (profileId != null && !autoConnected && profiles.any { it.id == profileId }) { autoConnected = true; connect(profileId) }
@@ -500,3 +507,9 @@ private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?, allowDisable
         confirmButton = { TextButton(onClick = { localFolder = null }) { Text(stringResource(R.string.cancel), color = Color(0xFFB9B7C0)) } }
     ) }
 }
+
+/** Gate only secrets used by this target and its SSH jump hosts, never the browser. */
+internal fun sftpRequiresPin(profile:ConnectionProfile,all:List<ConnectionProfile>,credentials:List<SavedCredential>,keys:List<SavedSshKey>):Boolean =
+    com.farside.workspace.ssh.JumpChains.resolveChain(profile,all).hops.any { hop ->
+        credentials.any {it.id==hop.credentialId && it.requirePin} || keys.any {it.id==hop.sshKeyId && it.requirePin}
+    }

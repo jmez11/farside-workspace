@@ -82,6 +82,7 @@ internal class SetupVaultVerification(private val test:Instrumentation) {
             check(pm.getCredentials().none {it.name=="Owned created password"})
             ui.click(text(R.string.require_pin))
             ui.find(text(R.string.setup_set_pin))
+            check(ui.nodes().none {it.text?.toString()==text(R.string.setup_use_headset_pin)})
             ui.click(text(R.string.cancel))
             check(pm.getAppPinVerifier()==null)
             ui.click(text(R.string.require_pin))

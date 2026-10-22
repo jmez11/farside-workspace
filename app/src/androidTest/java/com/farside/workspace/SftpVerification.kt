@@ -412,48 +412,7 @@ class SftpVerification(private val test: Instrumentation) {
         }
         return report.toString()
     }
-    private fun security(): String {
-        val info = test.uiAutomation.serviceInfo
-        info.flags = info.flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
-        test.uiAutomation.serviceInfo = info
-        val prefs = context.getSharedPreferences("farside_profiles", 0)
-        val keys = listOf("app_pinVerifier", "app-pin-attempts", "app-pin-until", "system_pin_enabled")
-        val recovery = File(context.cacheDir, "sftp-security-recovery.json")
-        // The stored verifier is already Keystore encrypted. Never persist the test PIN or decrypted verifier.
-        val original = if (recovery.exists()) org.json.JSONObject(recovery.readText()) else org.json.JSONObject().apply {
-            keys.forEach { key -> if (prefs.contains(key)) put(key, prefs.all[key]) }
-        }.also { recovery.writeText(it.toString()) }
-        val pm = ProfileManager(context)
-        var activity: MainActivity? = null
-        try {
-            prefs.edit().putBoolean("system_pin_enabled", false).remove("app-pin-attempts").remove("app-pin-until").commit()
-            pm.setAppPinVerifier(CredentialPin.create("583192"))
-            activity = test.startActivitySync(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
-            click("Files"); find("Unlock Files")
-            check(nodes().none { it.text?.toString() == "Farside SSH" })
-            enter("PIN", "0000"); click("Unlock"); find("Incorrect PIN.")
-            check(nodes().none { it.text?.toString() == "Farside SSH" })
-            enter("PIN", "583192"); click("Unlock"); find("Farside SSH")
-            capture(activity, "sftp-unlocked.png")
-            click("Close Files"); click("Files"); find("Unlock Files"); click("Cancel"); find("Farside Connections")
-            record("PASS: Files PIN before profile listing; wrong PIN rejected; correct unlock; close/reopen prompts; Cancel returns to launcher")
-        } finally {
-            activity?.let { test.runOnMainSync { it.finish() } }
-            CredentialPin.clearCache()
-            val editor = prefs.edit()
-            keys.forEach { key ->
-                editor.remove(key)
-                if (original.has(key)) when (key) {
-                    "app_pinVerifier" -> editor.putString(key, original.getString(key))
-                    "app-pin-attempts" -> editor.putInt(key, original.getInt(key))
-                    "app-pin-until" -> editor.putLong(key, original.getLong(key))
-                    "system_pin_enabled" -> editor.putBoolean(key, original.getBoolean(key))
-                }
-            }
-            check(editor.commit()); recovery.delete()
-        }
-        return report.toString()
-    }
+    private fun security(): String = SftpPinVerification(test).run()
     private fun enter(label: String, text: String) {
         var node = find(label)
         while (!node.isEditable) node = checkNotNull(node.parent)

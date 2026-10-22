@@ -79,9 +79,11 @@ internal class SetupSignInVerification(private val test:Instrumentation) {
                     ui.enter(R.string.setup_short_name,"")
                     check(ui.find(text(R.string.setup_short_name),true).text.toString()=="changedfullname")
                 } else if(!passwordOnly) ui.enter(R.string.setup_username,"fixture")
-                ui.enter(if(passwordOnly) R.string.setup_vnc_password else R.string.password,"fixture")
+                if(index!=0) ui.enter(if(passwordOnly) R.string.setup_vnc_password else R.string.password,"fixture")
+                check(ui.nodes().none {it.text?.toString()==text(R.string.setup_use_headset_pin)})
                 ui.click(text(R.string.require_pin));ui.click(text(R.string.save_changes))
                 val created=checkNotNull(pm.getCredentials().find {it.id==state.credentialId})
+                if(index==0) check(created.pass.isEmpty())
                 check(created.requirePin && state.error(base,pm.getCredentials())==null)
                 check(SavedCredential.fromJson(created.toJson()).userShort==created.userShort)
                 if(index==2) {

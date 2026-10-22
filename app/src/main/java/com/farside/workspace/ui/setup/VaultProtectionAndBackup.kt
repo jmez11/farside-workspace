@@ -38,7 +38,6 @@ internal fun VaultProtectionAndBackup(pm:ProfileManager,externalRevision:Int=0,o
     var pin by remember {mutableStateOf("")}
     var pinConfirm by remember {mutableStateOf("")}
     var action by remember {mutableStateOf<String?>(null)}
-    var systemEnable by remember {mutableStateOf(false)}
     var status by remember {mutableStateOf<Int?>(null)}
     var backupMode by remember {mutableStateOf<String?>(null)}
     var phrase by remember {mutableStateOf("")}
@@ -82,9 +81,7 @@ internal fun VaultProtectionAndBackup(pm:ProfileManager,externalRevision:Int=0,o
             VaultButton(stringResource(if(verifier!=null || system) R.string.setup_change else R.string.setup_set_pin),{if(verifier!=null || system) action="change" else pinEditor=true},description=stringResource(if(verifier!=null || system) R.string.change_app_pin else R.string.setup_set_pin))
             if(verifier!=null || system) VaultButton(stringResource(R.string.setup_remove),{action="remove"},description=stringResource(R.string.remove_app_pin),danger=true)
         }
-        if(!system) TextButton(onClick={if(verifier!=null) action="system" else systemEnable=true},contentPadding=PaddingValues(0.dp)) {
-            Text(stringResource(R.string.setup_use_headset_pin),fontSize=12.sp)
-        }
+
     }
     Spacer(Modifier.height(8.dp))
     Text(stringResource(R.string.setup_backup_restore),fontSize=13.sp,color=SetupColors.muted)
@@ -102,13 +99,11 @@ internal fun VaultProtectionAndBackup(pm:ProfileManager,externalRevision:Int=0,o
             when(requested) {
                 "change"->pinEditor=true
                 "remove"->{pm.setAppPinVerifier(null);context.getSharedPreferences("farside_profiles",0).edit().putBoolean("system_pin_enabled",false).commit();changed()}
-                "system"->systemEnable=true
                 "export"->{backupMode="export";phrase="";phraseConfirm=""}
                 "import"->importer.launch(arrayOf("application/octet-stream","application/json","*/*"))
             }
         },onCancel={action=null})
     }
-    if(systemEnable) SystemCredentialDialog(allowRemembered=false,onUnlocked={pm.enableSystemPin();systemEnable=false;changed()},onCancel={systemEnable=false})
     if(pinEditor) AlertDialog(onDismissRequest={pinEditor=false;pin="";pinConfirm=""},title={Text(stringResource(R.string.setup_set_pin))},
         text={Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
             SetupInput(R.string.enter_new_app_pin,pin,{pin=it},secret=true)
@@ -136,13 +131,10 @@ internal fun VaultProtectionAndBackup(pm:ProfileManager,externalRevision:Int=0,o
 internal fun RequirePinSetup(pm:ProfileManager,onSaved:()->Unit,onCancel:()->Unit) {
     var pin by remember {mutableStateOf("")}
     var confirm by remember {mutableStateOf("")}
-    var system by remember {mutableStateOf(false)}
-    if(system) SystemCredentialDialog(allowRemembered=false,onUnlocked={pm.enableSystemPin();onSaved()},onCancel={system=false})
-    else AlertDialog(onDismissRequest=onCancel,title={Text(stringResource(R.string.setup_set_pin))},
+    AlertDialog(onDismissRequest=onCancel,title={Text(stringResource(R.string.setup_set_pin))},
         text={Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
             SetupInput(R.string.enter_new_app_pin,pin,{pin=it},secret=true)
             SetupInput(R.string.setup_confirm_pin,confirm,{confirm=it},secret=true)
-            TextButton(onClick={system=true}) {Text(stringResource(R.string.setup_use_headset_pin))}
         }},confirmButton={TextButton(enabled=CredentialPin.valid(pin) && pin==confirm,onClick={
             pm.setAppPinVerifier(CredentialPin.create(pin));pin="";confirm="";onSaved()
         }) {Text(stringResource(R.string.save_pin))}},dismissButton={TextButton(onClick=onCancel) {Text(stringResource(R.string.cancel))}})

@@ -40,7 +40,7 @@ internal class SetupSignInState(initial:ConnectionProfile?) {
         val resolved=profile(base,credentials)
         val credential=if(specific) SavedCredential(name="",user=resolved.user,pass=resolved.pass) else credentials.find {it.id==credentialId}
         return profileCredentialErrorRes(base.type,base.vncAuthMode,credential,"")
-            ?: if(resolved.pass.isEmpty()) R.string.profile_selected_credential_no_password else null
+
     }
 }
 
@@ -112,7 +112,7 @@ internal fun SetupStepSignIn(base:ConnectionProfile,state:SetupSignInState,pm:Pr
         if(base.type==ConnectionType.VNC && !passwordOnly) Text(stringResource(R.string.setup_mac_sign_in_hint),fontSize=13.sp,color=SetupColors.muted)
         error?.takeIf {showErrors}?.let {Text(stringResource(it),color=SetupColors.danger)}
     }
-    if(sheet=="credential") CredentialSheet(pm,vncPassword=passwordOnly,allowMac=base.type!=ConnectionType.RDP,
+    if(sheet=="credential") CredentialSheet(pm,vncPassword=passwordOnly,allowMac=base.type!=ConnectionType.RDP,allowEmptyPassword=base.type!=ConnectionType.VNC,
         onDismiss={sheet=null},onSaved={state.credentialId=it.id;state.specific=false;state.revision++;sheet=null})
     if(sheet=="key") SshKeySheet(pm,onDismiss={sheet=null},onSaved={state.keyId=it.id;state.revision++;sheet=null})
 }

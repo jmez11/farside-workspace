@@ -25,7 +25,7 @@ The vault has no search: top New/Import buttons, compact icon rows with
 kind/Mac/PIN badges, usage summaries and right-side actions, grouped protection
 and backup cards; Delete remains available inside Edit.
 
-Require PIN opens app/headset protection setup directly in credential/key sheets.
+Require PIN opens app protection setup directly in credential/key sheets.
 Cancel clears the new requirement and keeps unsaved values. New app PIN setup
 refreshes the vault's protection status. Owned-device fixtures exercise credential
 PIN setup/cancel/save, key PIN setup/cancel, no-search rendering, edit/public-key,
@@ -47,7 +47,28 @@ Latest results/artifacts: `build/verification/setup-polish/`:
   protection status after inline PIN creation; external revision refresh fixed it.
 
 The launcher is restored; no manual remote-Mac experiments were run.
-Screenshots validate pixels, not physical Horizon input or headset-PIN confirmation.
+Screenshots validate pixels, not physical Horizon input or headset-PIN setup (now hidden).
+
+## PIN/SFTP/RDP correction
+
+Headset-PIN setup choices are hidden throughout the UI. Existing stored legacy
+protection is preserved. RDP stored and connection-specific sign-in accepts an
+empty password; VNC still enforces passwords. Generic vault credentials may be
+username-only. Files no longer gates its browser with the global PIN. Selecting
+or reconnecting a protected target, including paired/direct entry and protected
+SSH jump hosts, authenticates before any network attempt. Unrelated protected
+credentials/keys do not cause a prompt for a plain target.
+
+Evidence `build/verification/pin-sftp-rdp/`: `build.txt` PASS (80 JVM tests,
+zero failures/errors), app/test APK install Success on Quest3; `sftp-security.txt`,
+`signin.txt` (username-only RDP credential saved), and `vault.txt` all PASS.
+Real profile/PIN preferences remained unchanged. No live user server was used.
+Launcher restored for physical input/appearance acceptance.
+`sftpMode security` now runs isolated preferences and an owned loopback listener,
+checking no browser prompt, no prompt for plain targets, wrong-PIN/cancel with
+zero sockets, correct PIN allowing an attempt, and key/direct-entry gates.
+These refusal-listener checks prove gating; they do not claim a new live SFTP
+protocol/transfer validation. Existing transport/backup formats are unchanged.
 
 ## Commands
 
@@ -107,7 +128,7 @@ remain separate from setup UI validation.
 - Wearer visual acceptance and physical Horizon pointer/keyboard behavior.
 - Actual RDP/VNC LAN discovery (the flow gates inject discovery results).
 - Camera, microphone and storage permission dialogs and actual redirection.
-- SAF file-picker interaction and headset-passcode authentication. The exporter,
+- SAF file-picker interaction. The exporter,
   importer, encryption, PIN dialogs and backup data are automatically checked in
   owned fixtures; no real headset protection is changed by the vault fixture.
 - Mac joystick scrolling is **TO BE TESTED**:60-160 ticks at80-20ms,10x the prior
