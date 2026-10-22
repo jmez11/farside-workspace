@@ -140,30 +140,30 @@ internal class VncSessionConnection(
                     closeMediaRelay()
                     host=directHost;port=directPort
                     var sessionUsername=credential.user
-                        if(route==MacConnectionPolicy.Route.COMPANION) {
-                            val ssh=checkNotNull(companion)
-                            val lease=com.farside.workspace.ssh.SshConnectionManager.acquire(context,ssh.id)
-                            mediaLease=lease
-                            gate?.await()
-                            val client=lease.connect(ssh.copy(reconnectAutomatically=false))
-                            if(profile.macSshRelaySameMac) {
-                                sessionUsername=MacSessionIdentity.resolve(client,credential.user)
-                            }
-                            mediaRelay=MacHevcSshRelay(context,client,if(tunnel==null) directHost else profile.host,{ android.util.Log.i("MacMediaRelay",it) },profile.port,profile.macSshRelaySameMac)
-                            host="127.0.0.1";port=checkNotNull(mediaRelay).port
+                    if(route==MacConnectionPolicy.Route.COMPANION) {
+                        val ssh=checkNotNull(companion)
+                        val lease=com.farside.workspace.ssh.SshConnectionManager.acquire(context,ssh.id)
+                        mediaLease=lease
+                        gate?.await()
+                        val client=lease.connect(ssh.copy(reconnectAutomatically=false))
+                        if(profile.macSshRelaySameMac) {
+                            sessionUsername=MacSessionIdentity.resolve(client,credential.user)
                         }
-                        val streaming=route!=MacConnectionPolicy.Route.VNC
-                        val chosen=profile.copy(expMacHevc=streaming,macPreferAvc=true,macAudioEnabled=true,
-                            proxyType=if(route==MacConnectionPolicy.Route.COMPANION) ProxyType.NONE else profile.proxyType)
-                        instance=bridge.connect(host,port,credential.pass,next,credential.user,profile.vncAuthMode,chosen,
-                            macSessionUsername=sessionUsername,macDatagramSender=mediaRelay?.let { relay -> { p,b -> relay.send(p,b) } },
-                            macAuthenticationGate=gate?.let { { it.await() } })
-                        if(streaming && !bridge.awaitMacVideo(cancelled={closed.get()})) {
-                            bridge.disconnect(instance);instance=0L
-                            throw java.io.IOException("Mac media did not arrive")
-                        }
-                        macRoute=route
-                        android.util.Log.i("MacConnection","Connected using $route")
+                        mediaRelay=MacHevcSshRelay(context,client,if(tunnel==null) directHost else profile.host,{ android.util.Log.i("MacMediaRelay",it) },profile.port,profile.macSshRelaySameMac)
+                        host="127.0.0.1";port=checkNotNull(mediaRelay).port
+                    }
+                    val streaming=route!=MacConnectionPolicy.Route.VNC
+                    val chosen=profile.copy(expMacHevc=streaming,macPreferAvc=true,macAudioEnabled=true,
+                        proxyType=if(route==MacConnectionPolicy.Route.COMPANION) ProxyType.NONE else profile.proxyType)
+                    instance=bridge.connect(host,port,credential.pass,next,credential.user,profile.vncAuthMode,chosen,
+                        macSessionUsername=sessionUsername,macDatagramSender=mediaRelay?.let { relay -> { p,b -> relay.send(p,b) } },
+                        macAuthenticationGate=gate?.let { { it.await() } })
+                    if(streaming && !bridge.awaitMacVideo(cancelled={closed.get()})) {
+                        bridge.disconnect(instance);instance=0L
+                        throw java.io.IOException("Mac media did not arrive")
+                    }
+                    macRoute=route
+                    android.util.Log.i("MacConnection","Connected using $route")
                     instance
                 }
                 if (instance == 0L) {

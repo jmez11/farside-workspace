@@ -1,5 +1,8 @@
 # Translation notes
 
+- `setup_*`: Connection wizard and credential vault labels. The 92 formerly English-only entries now have machine-assisted translations in all 22 locales, with technical names, regional labels and positional placeholders checked. Native-language wording/layout review remains manual.
+- `setup_full_name` / `setup_short_name`: Mac Screen Sharing account display name versus the Unix account name used by SSH; both belong to one complete saved sign-in. Preserve `Mac`, `macOS`, `VNC`, `SSH`, `RDP`, and `Cloudflare` product/protocol names.
+
 - `ssh_connection_closed`: Shared SSH transport lease is closed.
 - `ssh_io_main_thread`: SSH network operations cannot run on Android main/UI thread.
 - `ssh_settings_changed`: Shared open transport has different saved connection settings.

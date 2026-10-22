@@ -80,6 +80,7 @@ private fun SetupProfilePicker(label:Int,selected:String?,profiles:List<Connecti
 @Composable
 internal fun SetupReviewOptions(profile:ConnectionProfile,profiles:List<ConnectionProfile>,onChange:(ConnectionProfile)->Unit,onEdit:(Int)->Unit,showErrors:Boolean=false) {
     val context=LocalContext.current
+    val askAtConnect=stringResource(R.string.setup_ask_at_connect)
     var forwardsOpen by remember {mutableStateOf(false)}
     var relayConfirm by remember {mutableStateOf(false)}
     val mic=rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {granted ->onChange(profile.copy(redirectMicrophone=granted && hasMicrophonePermission(context)))}
@@ -92,7 +93,7 @@ internal fun SetupReviewOptions(profile:ConnectionProfile,profiles:List<Connecti
             Text(profile.name,fontWeight=FontWeight.Bold)
             Text("${profile.type.name} \u00b7 ${profile.host}:${profile.port}",fontSize=14.sp,color=SetupColors.muted)
             Text(if(profile.type==ConnectionType.VNC && profile.vncAuthMode==VncAuthMode.VNC_PASSWORD) stringResource(R.string.setup_using_vnc_password)
-                else stringResource(R.string.setup_signed_in_as,profile.user.ifBlank {context.getString(R.string.setup_ask_at_connect)}),fontSize=13.sp,color=SetupColors.muted)
+                else stringResource(R.string.setup_signed_in_as,profile.user.ifBlank {askAtConnect}),fontSize=13.sp,color=SetupColors.muted)
             Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                 listOf(R.string.setup_protocol,R.string.setup_server,R.string.setup_sign_in).forEachIndexed {index,label ->
                     TextButton(onClick={onEdit(index)}) {Text(stringResource(R.string.setup_edit_step,stringResource(label)))}

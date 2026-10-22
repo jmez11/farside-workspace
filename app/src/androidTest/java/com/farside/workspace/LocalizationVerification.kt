@@ -81,6 +81,27 @@ class LocalizationVerification(private val test: Instrumentation) {
     @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
     fun run(): String {
         evidence.writeText("")
+        val setupStrings = R.string::class.java.fields.filter { it.name.startsWith("setup_") }
+        listOf("cs", "da", "de", "el", "es", "fi", "fr", "it", "ja", "ko", "nb", "nl", "pl", "pt-BR", "pt-PT", "ro", "ru", "sv", "tr", "zh-CN", "zh-HK", "zh-TW").forEach { tag ->
+            val configuration = android.content.res.Configuration(context.resources.configuration).apply {
+                setLocale(java.util.Locale.forLanguageTag(tag))
+            }
+            val localized = context.createConfigurationContext(configuration)
+            check(localized.getString(R.string.setup_new_connection) != context.getString(R.string.setup_new_connection)) { "Setup locale fell back: $tag" }
+            setupStrings.forEach { field ->
+                val id = field.getInt(null)
+                val source = context.getString(id)
+                val arguments = Regex("%(\\d+)\\$([ds])").findAll(source).associate {
+                    it.groupValues[1].toInt() to if (it.groupValues[2] == "d") 42 else "fixture"
+                }
+                val formatted = if (arguments.isEmpty()) localized.getString(id) else {
+                    localized.getString(id, *(1..arguments.keys.max()).map { arguments.getValue(it) }.toTypedArray<Any>())
+                }
+                check(formatted.isNotBlank() && !Regex("%\\d+\\$[ds]").containsMatchIn(formatted)) { "Setup format failed: $tag/${field.name}" }
+                arguments.values.forEach { argument -> check(formatted.contains(argument.toString())) { "Setup argument lost: $tag/${field.name}" } }
+            }
+        }
+        record("PASS compiled setup resources and positional formatting in 22 locales (${setupStrings.size} strings each)")
         val cleanupManager = ProfileManager(context)
         val staleFixtures = cleanupManager.getProfiles().filter {
             it.id.startsWith("l10n-") && it.name == "a" && it.type == ConnectionType.SSH && it.host == "127.0.0.1" && it.user == "user" && it.pass == "bad"
@@ -141,7 +162,8 @@ class LocalizationVerification(private val test: Instrumentation) {
                 com.farside.workspace.ui.setup.ConnectionSetupFlow(a.copy(proxyType = ProxyType.CLOUDFLARED, cloudflaredParameters = "--bad x"),
                     onSave = { error("Invalid Cloudflared form saved") }, onCancel = {}, profileManager = pm)
             } } } }
-            click("SAVE")
+            click("4 " + context.getString(R.string.setup_review))
+            click(context.getString(R.string.save_changes))
             visible("Unsupported Cloudflared option. Allowed: --service-token-id, --service-token-secret, --header (-H).")
             capture(activity, "localization-cloudflared.png")
             test.runOnMainSync { activity.setContent { key("forward-error") { MaterialTheme {
