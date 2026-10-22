@@ -76,6 +76,8 @@ internal class VncVerification(private val test: Instrumentation,private val liv
                 pm.deleteProfile("vnc-verification-profile");pm.deleteCredential("vnc-verification-credential")
                 check(test.targetContext.getSharedPreferences("farside_profiles",0).edit().commit())
                 results.appendText("PASS removed owned interrupted VNC fixture only")
+            } else if(mode=="macRelayDiagnosis") {
+                results.appendText(MacRelayDiagnosis(test).run(requireNotNull(profileId)))
             } else if(mode=="macInput") {
                 results.appendText(MacInputVerification(test).run(requireNotNull(profileId)))
             } else if(mode=="macRelayToggle") {

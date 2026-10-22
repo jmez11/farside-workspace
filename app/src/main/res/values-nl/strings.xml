@@ -641,4 +641,5 @@
   <string name="rdp_layout_auto">Paneelplaatsing volgen</string>
   <string name="rdp_retry_layout">Bureaubladindeling opnieuw proberen</string>
     <string name="remove_connection_photo">Foto voor %1$s verwijderen</string>
+    <string name="mac_ssh_relay_same_mac">Extern inloggen staat op deze Mac</string>
 </resources>

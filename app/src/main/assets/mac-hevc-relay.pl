@@ -9,15 +9,35 @@ $| = 1;
 alarm 600;
 my $host = shift @ARGV;
 my $rfb_port = shift @ARGV;
+my $mode = shift(@ARGV) // 'target';
 die 'Invalid RFB port' unless defined $rfb_port && $rfb_port =~ /^\d+$/ && $rfb_port>0 && $rfb_port<65536;
+die 'Invalid target mode' unless $mode eq 'local' || $mode eq 'target';
+# Explicit same-Mac selection: never resolve the public Access hostname as an origin.
+# Keep the encoder's interface address distinct from our loopback UDP listeners.
+if ($mode eq 'local') {
+    open(my $route_info, '-|', '/sbin/route', '-n', 'get', 'default') or die 'No Mac route';
+    my $interface;
+    while (<$route_info>) { $interface=$1 if /^\s*interface:\s*([a-zA-Z0-9]+)\s*$/; }
+    close $route_info;
+    die 'No Mac interface' unless defined $interface;
+    open(my $address_info, '-|', '/usr/sbin/ipconfig', 'getifaddr', $interface) or die 'No Mac address';
+    $host=<$address_info>;
+    close $address_info;
+    die 'No Mac IPv4 address' unless defined $host;
+    chomp $host;
+    die 'Invalid Mac IPv4 address' unless $host =~ /^(?:\d{1,3}\.){3}\d{1,3}$/;
+}
 my $target = inet_aton($host) or die "Invalid owned target";
+die 'Loopback media target would loop relay packets' if inet_ntoa($target) =~ /^127\./;
 my $route = IO::Socket::INET->new(PeerAddr=>$host, PeerPort=>$rfb_port, Proto=>'udp') or die 'No target route';
 my $same_host = $route->sockhost eq inet_ntoa($target) || inet_ntoa($target) =~ /^127\./;
 close $route;
+die 'Mac target is not local' if $mode eq 'local' && !$same_host;
 my $listener = IO::Socket::INET->new(LocalAddr=>'127.0.0.1', LocalPort=>0,
     Listen=>8, Proto=>'tcp') or die "Control listener: $!";
 my $select = IO::Select->new($listener, \*STDIN);
 my (%udp, %peer, %handles, %udp_port);
+my %reported_drop;
 for my $port (5900, 5901) {
     socket(my $socket, PF_INET, SOCK_DGRAM, 0) or die "UDP socket: $!";
     bind($socket, sockaddr_in($port, inet_aton($same_host ? '127.0.0.1' : '0.0.0.0'))) or die "UDP port unavailable: $!";
@@ -86,7 +106,12 @@ while (1) {
             my $from=recv($socket,my $packet,65535,0);
             next unless defined $from;
             my ($remote_port,$remote_ip)=sockaddr_in($from);
-            next unless $remote_ip eq $target;
+            unless ($remote_ip eq $target) {
+                my $port=$udp_port{fileno($socket)};
+                my $kind=inet_ntoa($remote_ip) =~ /^127\./ ? 'loopback' : 'other';
+                print STDERR "RELAY_DROP $port $kind\n" unless $reported_drop{"$port/$kind"}++;
+                next;
+            }
             my $port=$udp_port{fileno($socket)};
             write_all(\*STDOUT,pack('nn',$port,length($packet)).$packet);
         } else {

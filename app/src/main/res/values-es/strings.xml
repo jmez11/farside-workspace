@@ -641,4 +641,5 @@
   <string name="rdp_layout_auto">Seguir la colocación de los paneles</string>
   <string name="rdp_retry_layout">Reintentar diseño del escritorio</string>
     <string name="remove_connection_photo">Eliminar foto de %1$s</string>
+    <string name="mac_ssh_relay_same_mac">Inicio de sesión remoto está en este Mac</string>
 </resources>

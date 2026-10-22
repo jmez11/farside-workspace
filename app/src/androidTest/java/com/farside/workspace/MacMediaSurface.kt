@@ -21,7 +21,8 @@ import java.util.concurrent.TimeUnit
 internal class MacMediaSurface(private val test: Instrumentation, profile: ConnectionProfile? = null,
     realSessionWindow:Boolean=false) : Closeable {
     private val ready=CountDownLatch(1)
-    private val transientProfile=if(realSessionWindow) requireNotNull(profile).copy(id=java.util.UUID.randomUUID().toString()) else null
+    // Deleting the owned test profile deletes its thumbnail; never borrow the user's file.
+    private val transientProfile=if(realSessionWindow) requireNotNull(profile).copy(id=java.util.UUID.randomUUID().toString(),cardBackground=null) else null
     private val activity:androidx.activity.ComponentActivity=run {
         val pm=com.farside.workspace.data.ProfileManager(test.targetContext)
         if(transientProfile!=null) { pm.addProfile(transientProfile);check(test.targetContext.getSharedPreferences("farside_profiles",0).edit().commit()) }
@@ -88,6 +89,10 @@ internal class MacMediaSurface(private val test: Instrumentation, profile: Conne
     fun ime(delete:Boolean) {
         val session=activity as SessionActivity
         if(session.keyboardEditorView==null) {
+            // The production toolbar fades completely out of the accessibility tree.
+            // Reveal it through the normal top-center touch region before finding Keyboard.
+            val now=android.os.SystemClock.uptimeMillis()
+            touch(.5f,.04f,true,now);Thread.sleep(80);touch(.5f,.04f,false,now);Thread.sleep(400)
             val info=test.uiAutomation.serviceInfo
             info.flags=info.flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
             test.uiAutomation.serviceInfo=info

@@ -65,10 +65,12 @@ internal class MacRelayToggleUiVerification(private val test: Instrumentation) {
             check(nodes().any { it.text?.toString() == dialogTitle }) { "Unsaved approval suppressed warning" }
             click(enableBtn)
 
+            click(test.targetContext.getString(R.string.mac_ssh_relay_same_mac))
             // Click save
             click(test.targetContext.getString(R.string.save_uppercase))
             val result = checkNotNull(saved) { "Profile was not saved" }
             check(result.enableMacSshRelay) { "enableMacSshRelay was not true in saved profile" }
+            check(result.macSshRelaySameMac) { "Same-Mac selection was not saved" }
 
             test.runOnMainSync {
                 activity.setContent {
@@ -80,7 +82,7 @@ internal class MacRelayToggleUiVerification(private val test: Instrumentation) {
             }
             click(toggleLabel)
             check(nodes().none { it.text?.toString() == dialogTitle }) { "Saved enabled profile did not suppress warning" }
-            return "PASS warning repeats without saved opt-in; saved enabled profile suppresses it; no acceptance preference written"
+            return "PASS warning repeats without saved opt-in; saved enabled profile suppresses it; same-Mac control saves true; no acceptance preference written"
         } finally {
             pm.deleteCredential(credential.id)
             test.removeMonitor(monitor)

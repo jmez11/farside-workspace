@@ -641,4 +641,5 @@
   <string name="rdp_layout_auto">Seguir a colocação dos painéis</string>
   <string name="rdp_retry_layout">Tentar novamente o esquema do ambiente de trabalho</string>
     <string name="remove_connection_photo">Remover fotografia de %1$s</string>
+    <string name="mac_ssh_relay_same_mac">O início de sessão remoto está neste Mac</string>
 </resources>

@@ -641,4 +641,5 @@
   <string name="rdp_layout_auto">Följ panelplacering</string>
   <string name="rdp_retry_layout">Försök skrivbordslayout igen</string>
     <string name="remove_connection_photo">Ta bort foto för %1$s</string>
+    <string name="mac_ssh_relay_same_mac">Fjärrinloggning finns på denna Mac</string>
 </resources>

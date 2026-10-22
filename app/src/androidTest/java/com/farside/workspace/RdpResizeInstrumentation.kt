@@ -525,7 +525,31 @@ class RdpResizeInstrumentation : Instrumentation() {
         runOnMainSync {
             check(sent.size == 1) { "Small stick deflection repeated too fast: expected 1, got ${sent.size}" }
             scroll.stop()
+            sent.clear()
+            scroll=RdpControllerScroll(macScrolling={true}) { sent.add(it) }
+            motion(0.3f,0f)
+            check(sent.size==60) { "Small Mac deflection must emit sixty ticks" }
+            motion(0f,0f);sent.clear()
+            motion(1f,0f)
+            check(sent.size==160 && sent.all { it==0x478 }) { "Full Mac deflection did not accelerate" }
+            motion(0f,0f);sent.clear()
+            motion(.3f,0f)
         }
+        Thread.sleep(180)
+        runOnMainSync {
+            check(sent.size>=120) { "Light Mac tilt did not repeat promptly" }
+            sent.clear();motion(1f,0f)
+        }
+        Thread.sleep(130)
+        runOnMainSync {
+            check(sent.size>=640) { "Increasing Mac deflection retained the slow repeat timer" }
+            motion(-1f,0f)
+            check(sent.takeLast(160).all { it==0x588 }) { "Mac reversal did not take effect immediately" }
+            scroll.stop()
+            stoppedCount=sent.size
+        }
+        Thread.sleep(100)
+        runOnMainSync { check(sent.size==stoppedCount) { "Mac wheel continued after stop" } }
     }
 
     private fun verifyDoubleTapTolerance() {

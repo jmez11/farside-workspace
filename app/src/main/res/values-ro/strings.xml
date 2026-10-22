@@ -653,4 +653,5 @@
   <string name="rdp_layout_auto">Urmăriți plasarea panourilor</string>
   <string name="rdp_retry_layout">Reîncercare aspect desktop</string>
     <string name="remove_connection_photo">Elimină fotografia pentru %1$s</string>
+    <string name="mac_ssh_relay_same_mac">Autentificarea la distanță este pe acest Mac</string>
 </resources>

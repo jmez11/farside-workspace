@@ -656,4 +656,5 @@
   <string name="rdp_layout_auto">Podążaj za rozmieszczeniem paneli</string>
   <string name="rdp_retry_layout">Ponów układ pulpitu</string>
     <string name="remove_connection_photo">Usuń zdjęcie dla %1$s</string>
+    <string name="mac_ssh_relay_same_mac">Zdalne logowanie jest na tym Macu</string>
 </resources>

@@ -298,13 +298,11 @@ class VncBridge : DesktopSessionBridge {
                 synchronized(stateLock) { if(instance==active) nativeKey(instance,symbol,down) }
             },beforeInput={ gate?.invoke() })
     }
-    internal fun awaitMacVideo(timeoutMs:Long=3500):Boolean {
-        val end=android.os.SystemClock.uptimeMillis()+timeoutMs
-        while(android.os.SystemClock.uptimeMillis()<end) {
-            if((macMediaPipeline?.framesDecoded?.get() ?: 0)>0) return true
-            Thread.sleep(20)
-        }
-        return false
+    internal fun awaitMacVideo(timeoutMs:Long=3500,cancelled:()->Boolean={false}):Boolean {
+        return MacVideoStartup.await(
+            frame={ (macMediaPipeline?.framesDecoded?.get() ?: 0)>0 },
+            progress={ (macMediaPipeline?.authenticatedPackets?.get() ?: 0)>0 },
+            initialMs=timeoutMs,progressMs=maxOf(timeoutMs,10000),cancelled=cancelled)
     }
     override fun getAudioPlaybackSessionId(instance:Long):Int =
         if(instance!=0L && instance==active) macHevcSession?.videoPipeline?.audio?.playbackSessionId ?: 0 else 0

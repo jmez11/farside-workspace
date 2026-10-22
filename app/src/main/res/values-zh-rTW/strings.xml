@@ -643,4 +643,5 @@
   <string name="rdp_layout_auto">跟隨面板放置</string>
   <string name="rdp_retry_layout">重試桌面版面配置</string>
     <string name="remove_connection_photo">移除 %1$s 的照片</string>
+    <string name="mac_ssh_relay_same_mac">遠端登入位於這部 Mac 上</string>
 </resources>

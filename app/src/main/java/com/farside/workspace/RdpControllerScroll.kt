@@ -7,18 +7,26 @@ import android.view.MotionEvent
 import kotlin.math.abs
 
 /** Wheel input only: never changes the remote pointer or keyboard focus. */
-internal class RdpControllerScroll(private val send: (Int) -> Unit) {
+internal class RdpControllerScroll(private val macScrolling: () -> Boolean = { false }, private val send: (Int) -> Unit) {
     private val handler = Handler(Looper.getMainLooper())
     private var x = 0f
     private var y = 0f
     private var hScrollAccum = 0f
     private var vScrollAccum = 0f
+    private var lastEmissionAt=0L
+    private var nextRepeatAt=0L
+    private fun repeatDelay():Long {
+        if(macScrolling()) return MacJoystickScroll.delayMs(x,y)
+        val magnitude=kotlin.math.hypot(x.toDouble(),y.toDouble()).toFloat().coerceIn(0f,1f)
+        val deflection=((magnitude-0.2f)/0.8f).coerceIn(0f,1f)
+        return (800f-725f*deflection).toLong().coerceIn(75L,800L)
+    }
     private val repeat = object : Runnable {
         override fun run() {
+            lastEmissionAt=android.os.SystemClock.uptimeMillis()
             emit(x, y)
-            val magnitude = kotlin.math.hypot(x.toDouble(), y.toDouble()).toFloat().coerceIn(0f, 1f)
-            val defl = ((magnitude - 0.2f) / 0.8f).coerceIn(0f, 1f)
-            val delay = (800f - (725f * defl)).toLong().coerceIn(75L, 800L)
+            val delay=repeatDelay()
+            nextRepeatAt=lastEmissionAt+delay
             handler.postDelayed(this, delay)
         }
     }
@@ -52,10 +60,21 @@ internal class RdpControllerScroll(private val send: (Int) -> Unit) {
             return if (value.isFinite() && abs(value) > flat) value.coerceIn(-1f, 1f) else 0f
         }
         val wasActive = x != 0f || y != 0f
+        val previousX=x;val previousY=y
         x = axis(MotionEvent.AXIS_X)
         y = -axis(MotionEvent.AXIS_Y) // Android Y is positive down; wheel is positive up.
         if (x == 0f && y == 0f) handler.removeCallbacks(repeat)
         else if (!wasActive) repeat.run()
+        else if(macScrolling()) {
+            val reversed=previousX*x<0f || previousY*y<0f
+            val due=lastEmissionAt+repeatDelay()
+            if(reversed) { handler.removeCallbacks(repeat);repeat.run() }
+            else if(due<nextRepeatAt) {
+                handler.removeCallbacks(repeat)
+                nextRepeatAt=due
+                handler.postDelayed(repeat,(due-android.os.SystemClock.uptimeMillis()).coerceAtLeast(0))
+            }
+        }
         return true
     }
 
@@ -64,7 +83,8 @@ internal class RdpControllerScroll(private val send: (Int) -> Unit) {
             if (!value.isFinite() || value == 0f) return
             // RDP carries a signed nine-bit rotation, including the negative bit.
             val delta = if (value > 0) 120 else -120
-            send(flag or (delta and 0x01ff))
+            val steps=if(macScrolling()) MacJoystickScroll.steps(value) else 1
+            repeat(steps) { send(flag or (delta and 0x01ff)) }
         }
         wheel(horizontal, FreeRDPBridge.PTR_FLAGS_HWHEEL)
         wheel(vertical, FreeRDPBridge.PTR_FLAGS_WHEEL)

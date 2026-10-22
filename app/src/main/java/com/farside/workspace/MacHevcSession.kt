@@ -117,7 +117,7 @@ class MacHevcSession(
         private set
     var currentOffers: MacHevcOffersBundle? = null
         private set
-    private var mediaLayoutEstablished=false
+    private val layoutRefresh=MacLayoutRefresh()
 
     fun setSurface(surface: Surface?) {
         currentSurface = surface
@@ -764,9 +764,7 @@ class MacHevcSession(
                             stream.readFully(data)
                             val resolved = parseAppleDisplayLayout(data)
                             if(selectVirtualDisplay && isAltSession) selectNegotiatedDisplay(data)
-                            val hadLayout=mediaLayoutEstablished
-                            val changed=resolved!=null && (resolved.first!=width || resolved.second!=height)
-                            if(resolved!=null) mediaLayoutEstablished=true
+                            val newLayout=resolved!=null && layoutRefresh.changed(data)
                             if (resolved != null && (resolved.first != width || resolved.second != height)) {
                                 val (newW, newH) = resolved
                                 log("S9: AppleDisplayLayout resized display: ${width}x${height} -> ${newW}x${newH}")
@@ -782,7 +780,11 @@ class MacHevcSession(
                             } else {
                                 log("S9: AppleDisplayLayout (${data.size} bytes)")
                             }
-                            if(hadLayout && changed) reofferMediaStream()
+                            // A login/session switch can keep the same dimensions. Re-arm
+                            // control delivery on every layout and media on new layout data,
+                            // including the first layout; duplicate acknowledgements must not loop.
+                            requestUpdate(incremental=false)
+                            if(newLayout) { reofferMediaStream();videoPipeline?.requestKeyframe() }
                         }
                         1104, 0x450 -> { // CursorImage
                             val cacheId = stream.readInt()

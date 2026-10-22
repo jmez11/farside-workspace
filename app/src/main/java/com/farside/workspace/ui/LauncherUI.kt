@@ -1622,6 +1622,7 @@ fun AddProfileForm(
     var vncAuthMode by rememberSaveable { mutableStateOf(initialProfile?.vncAuthMode ?: com.farside.workspace.data.VncAuthMode.MAC_USER) }
     var sftpPairProfileId by rememberSaveable { mutableStateOf(initialProfile?.sftpPairProfileId ?: initialProfile?.macSshRelayProfileId ?: "") }
     var enableMacSshRelay by rememberSaveable { mutableStateOf(initialProfile?.enableMacSshRelay ?: false) }
+    var macSshRelaySameMac by rememberSaveable { mutableStateOf(initialProfile?.macSshRelaySameMac ?: false) }
     var showMacRelayConfirm by rememberSaveable { mutableStateOf(false) }
 
     
@@ -1789,7 +1790,8 @@ fun AddProfileForm(
                         macPreferAvc = true,
                         macAudioEnabled = true,
                         macSshRelayProfileId = null,
-                        enableMacSshRelay = type == ConnectionType.VNC && sftpPairProfileId.isNotBlank() && enableMacSshRelay
+                        enableMacSshRelay = type == ConnectionType.VNC && sftpPairProfileId.isNotBlank() && enableMacSshRelay,
+                        macSshRelaySameMac = macSshRelaySameMac
                     )
                 )
             }) {
@@ -1977,6 +1979,11 @@ fun AddProfileForm(
                                 showMacRelayConfirm = true
                             } else {
                                 enableMacSshRelay = enabled
+                            }
+                        }
+                        if (enableMacSshRelay) {
+                            SettingsSwitchRow(stringResource(R.string.mac_ssh_relay_same_mac), macSshRelaySameMac) {
+                                macSshRelaySameMac = it
                             }
                         }
                         if (showMacRelayConfirm) {

@@ -14,13 +14,18 @@ import java.util.concurrent.atomic.AtomicLong
 
 /** Session-owned in-memory relay. No installation or remote files. */
 internal class MacHevcSshRelay(context: Context, client: SSHClient, host: String,
-    private val log: (String) -> Unit, targetPort: Int = 5900) : Closeable {
+    private val log: (String) -> Unit, targetPort: Int = 5900, sameMac: Boolean = false) : Closeable {
     private val channel = client.startSession()
     private val script = context.assets.open("mac-hevc-relay.pl").bufferedReader().use { it.readText() }
     private fun quote(s: String) = "'" + s.replace("'", "'\"'\"'") + "'"
-    private val command = channel.exec("exec /usr/bin/perl -e ${quote(script)} ${quote(host)} ${targetPort.also { require(it in 1..65535) }}")
+    private val command = channel.exec("exec /usr/bin/perl -e ${quote(script)} ${quote(host)} ${targetPort.also { require(it in 1..65535) }} ${if(sameMac) "local" else "target"}")
     private val input = DataInputStream(command.inputStream)
     private val output = DataOutputStream(command.outputStream)
+    private val diagnostics=Thread({
+        runCatching { command.errorStream.bufferedReader().useLines { lines ->
+            lines.forEach { if(it.matches(Regex("RELAY_DROP 590[01] (loopback|other)"))) log(it) }
+        } }
+    },"MacRelayDiagnostics").apply { isDaemon=true;start() }
     private val loopback = InetAddress.getByName("127.0.0.1")
     val videoDatagrams = AtomicLong()
     private val remotePort = MacRelayStartup.port({input.readLine()},{channel.close()})
@@ -51,7 +56,7 @@ internal class MacHevcSshRelay(context: Context, client: SSHClient, host: String
         runCatching { forwarder.close() }
         runCatching { listener.close() }
         runCatching { channel.close() }
-        receiver.join(1000); forwardThread.join(1000)
+        receiver.join(1000); forwardThread.join(1000);diagnostics.join(1000)
         log("Owned SSH relay closed; relayed video datagrams=${videoDatagrams.get()}")
     }
 }

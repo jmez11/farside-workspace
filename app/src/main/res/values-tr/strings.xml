@@ -642,4 +642,5 @@
   <string name="rdp_layout_auto">Panel yerleşimini izle</string>
   <string name="rdp_retry_layout">Masaüstü düzenini yeniden dene</string>
     <string name="remove_connection_photo">%1$s için fotoğrafı kaldır</string>
+    <string name="mac_ssh_relay_same_mac">Uzaktan Oturum Açma bu Mac üzerinde</string>
 </resources>

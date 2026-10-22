@@ -641,4 +641,5 @@
   <string name="rdp_layout_auto">Seuraa paneelien sijoittelua</string>
   <string name="rdp_retry_layout">Yritä työpöydän asettelua uudelleen</string>
     <string name="remove_connection_photo">Poista kohteen %1$s kuva</string>
+    <string name="mac_ssh_relay_same_mac">Etäkirjautuminen on tällä Macilla</string>
 </resources>

@@ -20,8 +20,11 @@ internal class MacNativeBaseline(private val test:Instrumentation) {
         val frames=AtomicLong()
         images.setOnImageAvailableListener({ reader -> reader.acquireLatestImage()?.use { frames.incrementAndGet() } },Handler(thread.looper))
         val bridge=VncBridge();var handle=0L
+        val tunnel=if(profile.useCloudflare || profile.proxyType==ProxyType.CLOUDFLARED)
+            com.farside.workspace.tunnel.CloudflaredTunnel(test.targetContext) else null
         try {
-            handle=bridge.connect(profile.host,profile.port,credential.pass,images.surface,credential.user,
+            val port=tunnel?.start(profile.host,profile.cloudflaredParameters,{},{},accessSubcommand="tcp") ?: profile.port
+            handle=bridge.connect(if(tunnel!=null) "127.0.0.1" else profile.host,port,credential.pass,images.surface,credential.user,
                 VncAuthMode.MAC_USER,profile.copy(expMacHevc=false),macAuthenticationGate={gate.await()})
             check(handle!=0L && bridge.isConfirmedMac && !bridge.isMacHevc)
             check(bridge.canSubmitSavedMacPassword(handle)) { "Standard Mac VNC lost saved-password unlock" }
@@ -31,6 +34,7 @@ internal class MacNativeBaseline(private val test:Instrumentation) {
             return "PASS standard Mac VNC authentication, rendered frames=${frames.get()}, saved-password unlock available without typing"
         } finally {
             if(handle!=0L) bridge.disconnect(handle)
+            tunnel?.close()
             images.close();thread.quitSafely();thread.join(1000)
         }
     }

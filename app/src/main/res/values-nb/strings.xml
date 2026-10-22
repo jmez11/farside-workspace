@@ -641,4 +641,5 @@
   <string name="rdp_layout_auto">Følg panelplassering</string>
   <string name="rdp_retry_layout">Prøv skrivebordslayout på nytt</string>
     <string name="remove_connection_photo">Fjern bilde for %1$s</string>
+    <string name="mac_ssh_relay_same_mac">Ekstern pålogging er på denne Macen</string>
 </resources>

@@ -94,7 +94,8 @@ data class ConnectionProfile(
     val macPreferAvc: Boolean = true,
     val macAudioEnabled: Boolean = false,
     val macSshRelayProfileId: String? = null,
-    val enableMacSshRelay: Boolean = false
+    val enableMacSshRelay: Boolean = false,
+    val macSshRelaySameMac: Boolean = false
 ) {
     fun toJson(): JSONObject {
         val json = JSONObject()
@@ -157,6 +158,7 @@ data class ConnectionProfile(
         json.put("macAudioEnabled", macAudioEnabled)
         json.put("macSshRelayProfileId", macSshRelayProfileId)
         json.put("enableMacSshRelay", enableMacSshRelay)
+        json.put("macSshRelaySameMac", macSshRelaySameMac)
         return json
     }
 
@@ -224,7 +226,8 @@ data class ConnectionProfile(
                 macPreferAvc = json.optBoolean("macPreferAvc", true),
                 macAudioEnabled = json.optBoolean("macAudioEnabled", false),
                 macSshRelayProfileId = json.optString("macSshRelayProfileId").takeIf { it.isNotBlank() && it != "null" },
-                enableMacSshRelay = json.optBoolean("enableMacSshRelay", false)
+                enableMacSshRelay = json.optBoolean("enableMacSshRelay", false),
+                macSshRelaySameMac = json.optBoolean("macSshRelaySameMac", false)
             )
         }
     }

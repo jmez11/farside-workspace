@@ -42,7 +42,7 @@ class SessionActivity : ComponentActivity() {
     internal var setPan: ((Float, Float) -> Unit)? = null
     internal var macHover:((Float,Float)->Unit)?=null
     internal var onTouchDebug: ((android.view.MotionEvent, Float, Float, Float) -> Unit)? = null
-    private val controllerScroll = RdpControllerScroll { remoteScroll?.invoke(it) }
+    private val controllerScroll = RdpControllerScroll(macScrolling={ vncBridge?.isConfirmedMac==true }) { remoteScroll?.invoke(it) }
     internal var sshHistoryScroll: ((Int) -> Unit)? = null
         set(value) {
             field = value

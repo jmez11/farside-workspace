@@ -658,4 +658,5 @@
   <string name="rdp_layout_auto">Следовать размещению панелей</string>
   <string name="rdp_retry_layout">Повторить раскладку рабочих столов</string>
     <string name="remove_connection_photo">Удалить фото для %1$s</string>
+    <string name="mac_ssh_relay_same_mac">Удалённый вход находится на этом Mac</string>
 </resources>

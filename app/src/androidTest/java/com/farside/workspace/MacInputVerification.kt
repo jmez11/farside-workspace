@@ -12,7 +12,7 @@ internal class MacInputVerification(private val test:Instrumentation) {
         val context=test.targetContext
         val pm=ProfileManager(context)
         val profile=pm.getProfiles().single { it.id==id && it.type==ConnectionType.VNC }
-        require(!profile.useCloudflare && profile.proxyType==ProxyType.NONE)
+        require(profile.proxyType in listOf(ProxyType.NONE,ProxyType.CLOUDFLARED))
         val report=File(context.cacheDir,"mac-input-results.txt").apply { writeText("") }
         fun record(message:String) { report.appendText("${SystemClock.uptimeMillis()}: $message\n") }
         val action=File(context.cacheDir,"mac-input-action.json").apply { delete() }
@@ -23,7 +23,26 @@ internal class MacInputVerification(private val test:Instrumentation) {
             check(bridge.isMacHevc)
             // Give the real initial resize and its fade time to complete.
             Thread.sleep(8000)
-            check(display.capture("mac-input-current.png"))
+            val initialColored=display.capture("mac-input-current.png")
+            if(test.arguments?.getString("macInspectOnly")!="true") check(initialColored)
+            if(test.arguments?.getString("macInspectOnly")=="true") {
+                display.captureWindow("mac-input-initial-window.png")
+                record("Initial production window captured without physical resize or typed input; colored=$initialColored hardware frames=${bridge.macMediaPipeline?.framesDecoded?.get()}")
+                if(test.arguments?.getString("macInspectWake")=="true") {
+                    display.hover(.5f,.5f);Thread.sleep(1500)
+                    display.capture("mac-input-after-hover.png")
+                    val now=SystemClock.uptimeMillis()
+                    display.touch(.5f,.5f,true,now);Thread.sleep(80);display.touch(.5f,.5f,false,now)
+                    Thread.sleep(1500);display.capture("mac-input-after-wake.png")
+                    record("Captured hover and one noncredential center-click wake comparison")
+                }
+                if(test.arguments?.getString("macInspectResize")=="true") {
+                    display.resize(1191,749);Thread.sleep(6000)
+                    display.capture("mac-input-after-resize.png")
+                    record("Captured comparison after actual task resize")
+                }
+                return report.readText()
+            }
             val before=bridge.macInputCounts
             val started=SystemClock.uptimeMillis()
             display.touch(.1f,.3f,true,started);Thread.sleep(80);display.touch(.1f,.3f,false,started)
@@ -40,6 +59,9 @@ internal class MacInputVerification(private val test:Instrumentation) {
             var unlock=false
             while(!finished && SystemClock.uptimeMillis()<until) {
                 display.capture("mac-input-current.png")
+                bridge.macMediaPipeline?.let { video ->
+                    File(context.cacheDir,"mac-input-media-stats.txt").writeText("frames=${video.framesDecoded.get()} received=${video.packetsReceived.get()} authenticated=${video.authenticatedPackets.get()} ${video.avcAssemblyDiagnostics}")
+                }
                 if(action.exists()) {
                     val request=JSONObject(action.readText());action.delete()
                     when(request.getString("action")) {
