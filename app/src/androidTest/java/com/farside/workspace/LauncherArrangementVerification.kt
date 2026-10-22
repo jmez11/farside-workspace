@@ -156,6 +156,27 @@ internal class LauncherArrangementVerification(private val test: Instrumentation
                 Thread.sleep(650)
                 check(nodes().any { it.text?.toString() == tooltipLabel }) { "Hover tooltip missing for $tooltipLabel" }
             }
+            if(test.arguments?.getString("launcherIconsOnly")=="true") {
+                hover("Star Fixture A", "Favorite")
+                hover("Remove photo for Fixture A")
+                hover("Files", "SFTP Browser")
+                val tools=listOf(context.getString(R.string.add_connection),context.getString(R.string.files),context.getString(R.string.setup_vault),context.getString(R.string.setup_info))
+                val sizes=tools.map {bounds(it)}
+                check(sizes.map {it.width() to it.height()}.distinct().size==1)
+                val star=bounds("Star Fixture A");val photo=bounds("Remove photo for Fixture A")
+                check(star.width()==sizes.first().width() && star.height()==sizes.first().height())
+                check(photo.centerX()-star.centerX()==sizes.last().centerX()-sizes[sizes.lastIndex-1].centerX()) {"Card/toolbar icon spacing differs"}
+                click("Star Fixture A");check("A" in store.load().starred)
+                click("Remove photo for Fixture A");check(captures==listOf("A"))
+                val bitmap=Bitmap.createBitmap(activity.window.decorView.width,activity.window.decorView.height,Bitmap.Config.ARGB_8888)
+                val done=CountDownLatch(1)
+                PixelCopy.request(activity.window,bitmap,{done.countDown()},Handler(Looper.getMainLooper()))
+                check(done.await(5,TimeUnit.SECONDS))
+                File(context.cacheDir,"launcher-compact-icons.png").outputStream().use {bitmap.compress(Bitmap.CompressFormat.PNG,100,it)};bitmap.recycle()
+                click("Reorder");find("Done reordering")
+                find(context.getString(R.string.move_connection_earlier,"Fixture A"));find(context.getString(R.string.move_connection_later,"Fixture A"))
+                return "PASS launcher toolbar/card actions share compact bounds and spacing; favorite/photo callbacks and compact reorder actions remain accessible; hover tooltips and PixelCopy captured. Physical Horizon input remains manual."
+            }
             hover("Star Fixture A", "Favorite")
             hover("Remove photo for Fixture A")
             if (QuestWindowManager.isAvailable(context)) hover("Window Manager")

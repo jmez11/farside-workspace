@@ -157,8 +157,9 @@ fun LauncherScreen(
             ) {
                 BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
                     val compact = maxWidth < 600.dp
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (!compact) Spacer(Modifier.width(if (windowManagerAvailable) 192.dp else 144.dp))
+                    val actionCount = 3 + (if (windowManagerAvailable) 1 else 0) + (if (profiles.any { it.type == ConnectionType.SSH && it.enableSftp }) 1 else 0)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    if (!compact) Spacer(Modifier.width((actionCount * 32 + (actionCount - 1) * 2).dp))
                     Text(stringResource(R.string.farside_connections),
                         style = if (compact) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.headlineLarge,
                         modifier = Modifier.weight(1f), textAlign = TextAlign.Center,
@@ -178,43 +179,43 @@ fun LauncherScreen(
                             )
                             Color.White.copy(alpha = 0.12f * intensity)
                         } else Color.Transparent
-                        IconButton(
+                        LauncherIconButton(
                             onClick = { isAdding = true },
                             interactionSource = interaction,
                             colors = IconButtonDefaults.iconButtonColors(
                                 containerColor = if (hovered) Color.Transparent else pulseColor
                             )
                         ) {
-                            Icon(Icons.Default.Add, contentDescription = stringResource(R.string.add_connection), tint = Color.White)
+                            LauncherIcon(Icons.Default.Add, contentDescription = stringResource(R.string.add_connection), tint = Color.White)
                         }
                     }
                     if (windowManagerAvailable) {
                         CardActionTooltip(stringResource(R.string.window_manager)) {
-                            IconButton(onClick = { QuestWindowManager.toggle(context) }) {
-                                Icon(Icons.Default.Dashboard, contentDescription = stringResource(R.string.window_manager), tint = Color.White)
+                            LauncherIconButton(onClick = { QuestWindowManager.toggle(context) }) {
+                                LauncherIcon(Icons.Default.Dashboard, contentDescription = stringResource(R.string.window_manager), tint = Color.White)
                             }
                         }
                     }
                     if (profiles.any { it.type == ConnectionType.SSH && it.enableSftp }) {
                         CardActionTooltip(stringResource(R.string.sftp_browser)) {
-                            IconButton(onClick = { filesOpen = true }) {
-                                Icon(androidx.compose.material.icons.Icons.Default.Folder, contentDescription = stringResource(R.string.files), tint = Color.White)
+                            LauncherIconButton(onClick = { filesOpen = true }) {
+                                LauncherIcon(androidx.compose.material.icons.Icons.Default.Folder, contentDescription = stringResource(R.string.files), tint = Color.White)
                             }
                         }
                     }
                     CardActionTooltip(stringResource(R.string.setup_vault)) {
-                        IconButton(onClick={isVaultOpen=true}) {
-                            Icon(Icons.Default.VpnKey,contentDescription=stringResource(R.string.setup_vault),tint=Color.White)
+                        LauncherIconButton(onClick={isVaultOpen=true}) {
+                            LauncherIcon(Icons.Default.VpnKey,contentDescription=stringResource(R.string.setup_vault),tint=Color.White)
                         }
                     }
                     CardActionTooltip(stringResource(R.string.setup_info)) {
-                        IconButton(
+                        LauncherIconButton(
                             onClick = {
                                 settingsInitialTab = 0
                                 isSettingsOpen = true
                             },
                         ) {
-                            Icon(Icons.Default.Info, contentDescription = stringResource(R.string.setup_info), tint = Color.White)
+                            LauncherIcon(Icons.Default.Info, contentDescription = stringResource(R.string.setup_info), tint = Color.White)
                         }
                     }
                     }
@@ -301,10 +302,10 @@ fun ProfileCard(profile: ConnectionProfile, onEdit: () -> Unit, onDelete: () -> 
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                Icon(
+                LauncherIcon(
                     imageVector = when (profile.type) { ConnectionType.RDP -> Icons.Default.Computer; ConnectionType.SSH -> Icons.Default.Terminal; ConnectionType.VNC -> Icons.Default.DesktopMac },
                     contentDescription = null,
-                    modifier = Modifier.size(32.dp),
+                    modifier = Modifier.size(28.dp),
                     tint = MaterialTheme.colorScheme.primary
                 )
                 Spacer(modifier = Modifier.height(4.dp))
@@ -325,14 +326,14 @@ fun ProfileCard(profile: ConnectionProfile, onEdit: () -> Unit, onDelete: () -> 
             }
 
             Row(modifier = Modifier.align(Alignment.TopStart).padding(start = 8.dp, top = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                 val starLabel = if (starred) stringResource(R.string.unstar_connection, profile.name)
                     else stringResource(R.string.star_connection, profile.name)
                 val starTooltip = if (starred) stringResource(R.string.unfavorite)
                     else stringResource(R.string.favorite)
                 CardActionTooltip(starTooltip) {
-                    IconButton(onClick = onToggleStar) {
-                        Icon(if (starred) Icons.Default.Star else Icons.Default.StarBorder,
+                    LauncherIconButton(onClick = onToggleStar) {
+                        LauncherIcon(if (starred) Icons.Default.Star else Icons.Default.StarBorder,
                             contentDescription = starLabel,
                             tint = if (starred) Color(0xFFFFD166) else MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -341,25 +342,25 @@ fun ProfileCard(profile: ConnectionProfile, onEdit: () -> Unit, onDelete: () -> 
                     val hasPhoto = profile.cardBackground != null
                     val captureLabel = stringResource(if (hasPhoto) R.string.remove_connection_photo else R.string.capture_connection, profile.name)
                     CardActionTooltip(captureLabel) {
-                        IconButton(onClick = onCapture) {
-                            Icon(if (hasPhoto) Icons.Default.ImageNotSupported else Icons.Default.PhotoCamera, captureLabel)
+                        LauncherIconButton(onClick = onCapture) {
+                            LauncherIcon(if (hasPhoto) Icons.Default.ImageNotSupported else Icons.Default.PhotoCamera, captureLabel)
                         }
                     }
                 }
             }
             if (reordering) {
-                Row(modifier = Modifier.align(Alignment.BottomCenter)) {
-                    IconButton(onClick = { onMoveEarlier?.invoke() }, enabled = onMoveEarlier != null) {
-                        Icon(Icons.Default.KeyboardArrowLeft, stringResource(R.string.move_connection_earlier, profile.name))
+                Row(modifier = Modifier.align(Alignment.BottomCenter), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    LauncherIconButton(onClick = { onMoveEarlier?.invoke() }, enabled = onMoveEarlier != null) {
+                        LauncherIcon(Icons.Default.KeyboardArrowLeft, stringResource(R.string.move_connection_earlier, profile.name))
                     }
-                    IconButton(onClick = { onMoveLater?.invoke() }, enabled = onMoveLater != null) {
-                        Icon(Icons.Default.KeyboardArrowRight, stringResource(R.string.move_connection_later, profile.name))
+                    LauncherIconButton(onClick = { onMoveLater?.invoke() }, enabled = onMoveLater != null) {
+                        LauncherIcon(Icons.Default.KeyboardArrowRight, stringResource(R.string.move_connection_later, profile.name))
                     }
                 }
             }
             Box(modifier = Modifier.align(Alignment.TopEnd).padding(end = 8.dp, top = 4.dp)) {
-                IconButton(onClick = { menuExpanded = true }) {
-                    Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.more_options))
+                LauncherIconButton(onClick = { menuExpanded = true }) {
+                    LauncherIcon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.more_options))
                 }
                 DropdownMenu(
                     expanded = menuExpanded,
@@ -734,6 +735,17 @@ fun ResolutionDropdown(selectedRes: String, onResSelected: (String) -> Unit) {
             }
         }
     }
+}
+
+@Composable
+private fun LauncherIcon(imageVector:androidx.compose.ui.graphics.vector.ImageVector,contentDescription:String?,modifier:Modifier=Modifier.size(20.dp),tint:Color=LocalContentColor.current) {
+    Icon(imageVector,contentDescription,modifier=modifier,tint=tint)
+}
+
+@Composable
+private fun LauncherIconButton(onClick:()->Unit,enabled:Boolean=true,
+    interactionSource:MutableInteractionSource=remember {MutableInteractionSource()},colors:IconButtonColors=IconButtonDefaults.iconButtonColors(),content:@Composable ()->Unit) {
+    IconButton(onClick=onClick,enabled=enabled,modifier=Modifier.size(32.dp),interactionSource=interactionSource,colors=colors,content=content)
 }
 
 internal fun profileCredentialErrorRes(type: ConnectionType, vncMode: com.farside.workspace.data.VncAuthMode,
