@@ -158,8 +158,16 @@ saving both once in a single "Mac login":
   Mac logins appear in both the VNC and SSH username pickers. The vault shows
   the full name with "Short name …" beneath; editing prefills both name fields,
   password stays replace-only.
-- **Validation**: when the macOS toggle is on, both name fields are required
-  (red inline text + blocked Continue, same pattern as the other required fields).
+- **Short-name auto-derive**: when the macOS toggle is on, typing the full name
+  live-derives the short name with macOS's rules — lowercase, strip diacritics,
+  remove whitespace, drop anything outside `[a-z0-9_.-]` (e.g. "Englebert
+  Rumplestiltskin" → "englebertrumplestiltskin"). Auto-fill runs only until the
+  user manually edits the short name (their override wins); clearing the field
+  resumes auto-fill. Toggling macOS on with an existing name derives immediately
+  if the short name is empty.
+- **Validation**: when the macOS toggle is on, both name fields are required,
+  and the short name must match `[a-z0-9_.-]+` (red inline text + blocked
+  Continue, same pattern as the other required fields).
 
 ## 6. Done criteria
 All four phases green, on-device checklists pass, no `git add -A`, no push,

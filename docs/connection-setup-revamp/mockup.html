@@ -334,6 +334,7 @@
           <li><strong>Required fields block the flow, in red</strong>A blank connection name, host or port on step 2 — the port must also be a number from 1 to 65535 — or a missing sign-in where the protocol demands one (RDP, both VNC modes) — shows red error text under the field and dims Continue until it's fixed, validated live as you type. SSH is the exception: its credentials are genuinely optional, so its step 3 never blocks. The same rules gate “Save changes” in edit mode.</li>
           <li><strong>VNC file pairing lists plain connection names</strong>The File access card pairs a VNC connection with an existing SSH connection, and the dropdown shows just connection names — None, Mac mini, homelab — no protocol jargon or suffixes.</li>
           <li><strong>Mac logins save both names, once</strong>A Mac account has a full name and a short name, and the two protocols want different ones: Screen Sharing signs in with the full name, SSH connects with the short name. A Mac login stores both in a single sign-in, so each connection resolves the right name automatically — no per-connection ambiguity. (Implementation note: this is the one approved data-model change: SavedCredential gains an optional shortName; VNC auth uses user, SSH uses shortName ?: user.)</li>
+          <li><strong>Short names fill themselves in, macOS-style</strong>Mac login short names auto-fill from the full name with macOS's rules (lowercase, strip diacritics, drop spaces and disallowed characters) until you override them — same propose-and-replace behavior as macOS user creation. Type in the Short name field and the suggestion stops; clear it and it resumes. A short name with anything outside lowercase letters, numbers, _ - . gets the red error and blocks saving.</li>
         </ul>
       </section>
     </div>
@@ -433,6 +434,25 @@
       }
       function signinById(id) { for (var i = 0; i < signins.length; i++) if (signins[i].id === id) return signins[i]; return null; }
       function keyById(id) { for (var i = 0; i < sshKeys.length; i++) if (sshKeys[i].id === id) return sshKeys[i]; return null; }
+      /* macOS short-name derivation: lowercase, fold diacritics to ASCII,
+         remove whitespace, keep only a-z 0-9 _ - . (like macOS user creation). */
+      function deriveShortName(full) {
+        if (!full) return "";
+        var s = String(full).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        s = s.replace(/æ/g, "ae").replace(/Æ/g, "Ae").replace(/œ/g, "oe").replace(/Œ/g, "Oe")
+             .replace(/ø/g, "o").replace(/Ø/g, "O").replace(/ß/g, "ss")
+             .replace(/đ/g, "d").replace(/Đ/g, "D").replace(/ł/g, "l").replace(/Ł/g, "L")
+             .replace(/þ/g, "th").replace(/Þ/g, "Th").replace(/ð/g, "d").replace(/Ð/g, "D");
+        s = s.toLowerCase();
+        s = s.replace(/\s+/g, "");
+        s = s.replace(/[^a-z0-9_.\-]/g, "");
+        return s;
+      }
+      function shortNameError(v) {
+        if (!v) return "Short name is required";
+        if (!/^[a-z0-9_.\-]+$/.test(v)) return "Use only lowercase letters, numbers, _ - .";
+        return "";
+      }
       function pinBadge(on) { return on ? ' <span class="badge pin">PIN</span>' : ""; }
       function kindBadge(k) { return '<span class="badge kind">' + esc(k) + "</span>"; }
 
@@ -1274,6 +1294,8 @@
         sheetCtx = { type: type, kind: opts.kind || "RDP", edit: opts.edit || null, select: opts.select || null,
           pin: opts._pin != null ? opts._pin : (opts.edit ? !!opts.edit.pin : false),
           mac: opts._mac != null ? opts._mac : (opts.edit ? !!opts.edit.mac : false),
+          shortCustom: opts._shortCustom != null ? opts._shortCustom : !!(opts.edit && opts.edit.mac && opts.edit.shortName),
+          macInteracted: false,
           draft: opts._draft || null };
         var box = el("sheetBox");
         var h = '<div class="grab"></div>';
@@ -1284,6 +1306,7 @@
           var usV = dr.user != null ? dr.user : (ed && !ed.mac ? ed.user : "");
           var fuV = dr.full != null ? dr.full : (ed && ed.mac ? ed.user : "");
           var shV = dr.short != null ? dr.short : (ed ? (ed.shortName || "") : "");
+          if (sheetCtx.mac && !shV && fuV) shV = deriveShortName(fuV);
           var pwV = dr.pass || "";
           var macTgl = sheetCtx.kind === "Login" || sheetCtx.kind === "SSH" || !!(ed && ed.mac);
           h += "<h3>" + (sheetCtx.mac ? (ed ? "Edit Mac login" : "New Mac login") : (ed ? "Edit sign-in" : "New sign-in")) + "</h3>" +
@@ -1296,7 +1319,9 @@
           }
           if (sheetCtx.mac) {
             h += '<div class="field-group"><label for="shFull">Full name — used for Screen Sharing</label><input class="input" id="shFull" type="text" value="' + esc(fuV) + '" placeholder="e.g. Jordan Lee" /></div>' +
-              '<div class="field-group"><label for="shShort">Short name — used for SSH</label><input class="input" id="shShort" type="text" value="' + esc(shV) + '" placeholder="e.g. jordan" /></div>';
+              '<div class="field-group"><label for="shShort">Short name — used for SSH</label><input class="input" id="shShort" type="text" value="' + esc(shV) + '" placeholder="e.g. jordan" />' +
+              '<p class="hint" id="shShortHint">Suggested from the full name, like macOS does — edit it to override.</p>' +
+              '<div class="field-error" id="shShortErr"></div></div>';
           } else {
             h += '<div class="field-group"><label for="shUser">Username</label><input class="input" id="shUser" type="text" value="' + esc(usV) + '" placeholder="e.g. user" /></div>';
           }
@@ -1338,7 +1363,7 @@
           var c = sheetCtx;
           if (!c.mac && d.user && !d.full) d.full = d.user;
           if (c.mac && d.full && !d.user) d.user = d.full;
-          openSheet(c.type, { kind: c.kind, edit: c.edit, select: c.select, _mac: !c.mac, _pin: c.pin, _draft: d });
+          openSheet(c.type, { kind: c.kind, edit: c.edit, select: c.select, _mac: !c.mac, _pin: c.pin, _shortCustom: c.shortCustom, _draft: d });
         });
         el("shCancel").addEventListener("click", closeSheet);
         el("shSave").addEventListener("click", saveSheet);
@@ -1356,8 +1381,39 @@
             if (!nameInp.dataset.touched && fullInp.value.trim()) nameInp.value = fullInp.value.trim() + " login";
           });
         }
+        var shortInp = el("shShort");
+        if (fullInp && shortInp) {
+          fullInp.addEventListener("input", function () {
+            sheetCtx.macInteracted = true;
+            if (!sheetCtx.shortCustom) shortInp.value = deriveShortName(fullInp.value);
+            refreshSheetMac();
+          });
+          shortInp.addEventListener("input", function () {
+            sheetCtx.macInteracted = true;
+            sheetCtx.shortCustom = shortInp.value !== "";
+            refreshSheetMac();
+          });
+          shortInp.addEventListener("blur", function () { sheetCtx.macInteracted = true; refreshSheetMac(); });
+        }
+        refreshSheetMac();
         var first = el("shName");
         if (first) first.focus();
+      }
+      function refreshSheetMac() {
+        if (!sheetCtx || sheetCtx.type !== "signin" || !sheetCtx.mac) return;
+        var shortInp = el("shShort");
+        if (!shortInp) return;
+        var err = shortNameError(shortInp.value);
+        var errEl = el("shShortErr");
+        if (errEl) {
+          errEl.textContent = err;
+          errEl.classList.toggle("show", !!err && !!sheetCtx.macInteracted);
+        }
+        shortInp.classList.toggle("invalid", !!err && !!sheetCtx.macInteracted);
+        var hint = el("shShortHint");
+        if (hint) hint.classList.toggle("hidden", !!sheetCtx.shortCustom);
+        var save = el("shSave");
+        if (save) save.disabled = !!err;
       }
       function openSheetRefreshPin() {
         var sw = document.querySelector('[data-switch="shPin"]');
@@ -1390,6 +1446,7 @@
           }
         } else {
           var isMac = !!sheetCtx.mac;
+          if (isMac && el("shShort") && shortNameError(el("shShort").value)) { toast("Short name isn't valid yet"); return; }
           var user = isMac ? (el("shFull") ? el("shFull").value.trim() : "")
                            : (el("shUser") ? el("shUser").value.trim() : "");
           var short = isMac && el("shShort") ? el("shShort").value.trim() : "";
