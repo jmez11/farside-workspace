@@ -1,0 +1,1701 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <link rel="icon" href="data:," />
+    <title>Farside — Connection Setup, Redesigned</title>
+    <style>
+      :root {
+        --bg: #0e0e12;
+        --panel: #17171d;
+        --card: #1f1f27;
+        --card-hover: #24242f;
+        --border: #2d2d38;
+        --field: #101014;
+        --accent: #d0bcff;
+        --accent-soft: rgba(208, 188, 255, 0.13);
+        --danger: #ff6b6b;
+        --danger-soft: rgba(255, 107, 107, 0.12);
+        --ok: #5fd68a;
+        --text: #f2f2f5;
+        --muted: #a7a7b3;
+        --faint: #6f6f7d;
+        --radius: 16px;
+      }
+      * { box-sizing: border-box; }
+      html { -webkit-text-size-adjust: 100%; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        font-size: 15px;
+        line-height: 1.5;
+      }
+      button { font: inherit; color: inherit; cursor: pointer; }
+      input, select, textarea { font: inherit; color: var(--text); }
+      svg { display: block; }
+
+      .page { max-width: 920px; margin: 0 auto; padding: 36px 20px 64px; }
+
+      header.page-head { margin-bottom: 22px; }
+      header.page-head h1 { font-size: 27px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 6px; }
+      header.page-head p { margin: 0; color: var(--muted); font-size: 14.5px; }
+
+      /* ---------- view toggle & combo pills ---------- */
+      .view-toggle { display: inline-flex; background: var(--card); border: 1px solid var(--border); border-radius: 999px; padding: 4px; gap: 4px; margin-bottom: 18px; }
+      .view-toggle button { border: 0; background: transparent; color: var(--muted); padding: 8px 18px; border-radius: 999px; font-weight: 600; font-size: 14px; }
+      .view-toggle button.active { background: var(--accent); color: #1c1b1f; }
+
+      .combo-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+      .combo-pill { border: 1px solid var(--border); background: var(--card); color: var(--muted); padding: 8px 15px; border-radius: 999px; font-size: 13.5px; font-weight: 600; }
+      .combo-pill:hover { background: var(--card-hover); color: var(--text); }
+      .combo-pill.active { border-color: var(--accent); color: var(--text); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent), 0 0 18px rgba(208,188,255,0.25); }
+
+      /* ---------- UI vs guidance framing ---------- */
+      .legend {
+        position: sticky; top: 0; z-index: 70;
+        display: flex; gap: 10px 26px; flex-wrap: wrap;
+        padding: 11px 20px;
+        background: #101016; border-bottom: 1px solid var(--border);
+        font-size: 13px; color: var(--muted);
+      }
+      .legend-item { display: flex; align-items: flex-start; gap: 9px; max-width: 560px; }
+      .legend-item strong { color: var(--text); letter-spacing: .04em; }
+      .sw { width: 15px; height: 15px; border-radius: 4px; flex: none; margin-top: 2px; }
+      .sw-ui { background: var(--accent); border: 2px solid var(--accent); }
+      .sw-guide { background: transparent; border: 2px dashed var(--faint); }
+
+      .guidance-label {
+        display: flex; align-items: center; gap: 8px;
+        font-size: 11px; font-weight: 800; letter-spacing: .16em;
+        text-transform: uppercase; color: var(--faint);
+        margin: 0 0 10px;
+      }
+      .guidance-label::before { content: ""; width: 10px; height: 10px; border-radius: 3px; border: 1.5px dashed var(--faint); flex: none; }
+      .guidance-block { margin-top: 24px; }
+      .guidance-text {
+        color: var(--muted); font-size: 14px; margin: 0;
+        background: var(--panel); border: 1px dashed var(--border);
+        border-radius: 12px; padding: 12px 14px;
+      }
+
+      .panel-wrap { position: relative; margin-top: 14px; }
+      .ui-tag {
+        position: absolute; top: -11px; left: 18px; z-index: 5;
+        background: var(--accent); color: #1c1b1f;
+        font-size: 11px; font-weight: 800; letter-spacing: .09em;
+        padding: 3px 11px; border-radius: 999px;
+        box-shadow: 0 4px 14px rgba(0,0,0,.45);
+      }
+
+      /* ---------- spatial panel ---------- */
+      .panel {
+        background: #1c1b1f;
+        border: 2px solid var(--accent);
+        border-radius: var(--radius);
+        box-shadow: 0 0 0 5px rgba(208,188,255,0.08), 0 24px 60px rgba(0,0,0,0.55), 0 4px 16px rgba(0,0,0,0.4);
+        overflow: hidden;
+      }
+      .panel-head { padding: 18px 24px 0; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+      .panel-head .panel-title { font-size: 17px; font-weight: 700; }
+      .panel-head .panel-sub { color: var(--muted); font-size: 13.5px; }
+
+      /* ---------- stepper ---------- */
+      .stepper { display: flex; align-items: flex-start; padding: 20px 24px 6px; }
+      .step { display: flex; flex-direction: column; align-items: center; gap: 7px; background: none; border: 0; padding: 0; min-width: 74px; }
+      .step .dot {
+        width: 34px; height: 34px; border-radius: 50%;
+        border: 2px solid var(--border); background: var(--card);
+        display: flex; align-items: center; justify-content: center;
+        font-weight: 700; font-size: 14px; color: var(--muted);
+        transition: border-color .15s, background .15s, color .15s;
+      }
+      .step .lbl { font-size: 12.5px; color: var(--faint); font-weight: 600; text-align: center; }
+      .step.active .dot { border-color: var(--accent); background: var(--accent); color: #1c1b1f; }
+      .step.active .lbl { color: var(--text); }
+      .step.done .dot { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+      .step.done .lbl { color: var(--muted); }
+      .step-line { flex: 1; height: 2px; background: var(--border); margin-top: 17px; border-radius: 2px; }
+      .step-line.done { background: var(--accent); }
+
+      .step-body { padding: 18px 24px 8px; }
+      .step-body h2 { font-size: 20px; font-weight: 700; margin: 0 0 4px; letter-spacing: -0.01em; }
+      .step-body .lede { color: var(--muted); margin: 0 0 18px; font-size: 14px; }
+
+      .panel-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 24px 22px; }
+      .btn { border: 1px solid var(--border); background: var(--card); color: var(--text); padding: 11px 22px; border-radius: 12px; font-weight: 600; font-size: 14.5px; }
+      .btn:hover { background: var(--card-hover); }
+      .btn.primary { background: var(--accent); border-color: var(--accent); color: #1c1b1f; }
+      .btn.primary:hover { background: #bea6f7; }
+      .btn.ghost { background: transparent; }
+      .btn:disabled { opacity: .4; cursor: default; }
+      .btn.small { padding: 8px 14px; font-size: 13.5px; border-radius: 10px; }
+
+      /* ---------- protocol cards ---------- */
+      .proto-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+      .proto-card {
+        text-align: left; background: var(--card); border: 1.5px solid var(--border);
+        border-radius: 14px; padding: 18px 16px; width: 100%;
+        transition: border-color .15s, background .15s, box-shadow .15s;
+      }
+      .proto-card:hover { background: var(--card-hover); }
+      .proto-card.selected { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent), 0 0 22px rgba(208,188,255,0.22); }
+      .proto-card .icon { width: 42px; height: 42px; border-radius: 11px; background: var(--field); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; margin-bottom: 12px; color: var(--accent); }
+      .proto-card.selected .icon { border-color: var(--accent); }
+      .proto-card .pname { font-size: 16.5px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+      .proto-card .pdesc { display: block; color: var(--muted); font-size: 13px; margin-top: 2px; }
+      .proto-card .pport { display: block; color: var(--faint); font-size: 12px; margin-top: 8px; font-variant-numeric: tabular-nums; }
+
+      .auth-expand { margin-top: 14px; background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px; }
+      .auth-expand .ae-title { font-weight: 700; font-size: 14.5px; margin-bottom: 4px; }
+      .auth-expand .ae-desc { color: var(--muted); font-size: 13.5px; margin-bottom: 12px; }
+
+      /* ---------- segmented ---------- */
+      .seg { display: inline-flex; background: var(--field); border: 1px solid var(--border); border-radius: 999px; padding: 3px; gap: 3px; flex-wrap: wrap; }
+      .seg button { border: 0; background: transparent; color: var(--muted); padding: 7px 15px; border-radius: 999px; font-size: 13.5px; font-weight: 600; white-space: nowrap; }
+      .seg button.active { background: var(--accent); color: #1c1b1f; }
+      .seg.full { display: flex; }
+      .seg.full button { flex: 1; }
+
+      /* ---------- fields ---------- */
+      .field-group { margin-bottom: 16px; }
+      .field-group label, .flabel { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 7px; }
+      .input, select.input, textarea.input {
+        width: 100%; background: var(--field); border: 1px solid var(--border);
+        border-radius: 11px; padding: 11px 13px; font-size: 15px; outline: none;
+      }
+      .input:focus { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+      .input.invalid { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger); }
+      textarea.input { resize: vertical; min-height: 92px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
+      .field-row { display: grid; grid-template-columns: 1fr 130px; gap: 12px; }
+      .hint { color: var(--faint); font-size: 13px; margin-top: 7px; }
+      .note { color: var(--muted); font-size: 13.5px; background: var(--card); border: 1px solid var(--border); border-radius: 11px; padding: 11px 13px; margin-top: 12px; }
+      .note strong { color: var(--text); }
+      .field-error { color: var(--danger); font-size: 13px; margin-top: 7px; display: none; }
+      .field-error.show { display: block; }
+      .char-count { font-variant-numeric: tabular-nums; color: var(--faint); font-size: 12.5px; }
+      .char-count.over { color: var(--danger); font-weight: 700; }
+      .label-row { display: flex; justify-content: space-between; align-items: baseline; }
+      .input-wrap { position: relative; }
+      .input-wrap .eye { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: 0; color: var(--muted); padding: 6px; border-radius: 8px; font-size: 12.5px; font-weight: 600; }
+      .input-wrap .eye:hover { color: var(--text); }
+
+      /* ---------- selectable cards (credentials, devices) ---------- */
+      .pick-list { display: flex; flex-direction: column; gap: 10px; }
+      .pick-card {
+        display: flex; align-items: center; gap: 13px; text-align: left; width: 100%;
+        background: var(--card); border: 1.5px solid var(--border); border-radius: 13px; padding: 13px 15px;
+        transition: border-color .15s, background .15s, box-shadow .15s;
+      }
+      .pick-card:hover { background: var(--card-hover); }
+      .pick-card.selected { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent), 0 0 18px rgba(208,188,255,0.18); }
+      .pick-card.dashed { border-style: dashed; justify-content: center; color: var(--accent); font-weight: 700; background: transparent; }
+      .pick-card.dashed:hover { background: var(--accent-soft); }
+      .pick-card .avatar { width: 38px; height: 38px; border-radius: 10px; background: var(--field); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; color: var(--accent); flex: none; }
+      .pick-card .pc-main { flex: 1; min-width: 0; }
+      .pick-card .pc-name { font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .pick-card .pc-sub { color: var(--muted); font-size: 13px; }
+      .pick-card .radio { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--border); flex: none; position: relative; }
+      .pick-card.selected .radio { border-color: var(--accent); }
+      .pick-card.selected .radio::after { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: var(--accent); }
+      .pick-card .chev { color: var(--faint); flex: none; }
+
+      .badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; letter-spacing: .02em; padding: 2.5px 8px; border-radius: 999px; background: var(--field); border: 1px solid var(--border); color: var(--muted); vertical-align: middle; }
+      .badge.kind { color: var(--accent); border-color: rgba(208,188,255,.45); }
+      .badge.pin { color: #ffc46b; border-color: rgba(255,196,107,.4); }
+      .badge.count { background: var(--accent); color: #1c1b1f; border-color: var(--accent); min-width: 22px; justify-content: center; }
+
+      .group-label { font-size: 13px; font-weight: 700; color: var(--muted); margin: 20px 0 9px; }
+      .group-label:first-child { margin-top: 0; }
+
+      .expand-toggle { display: flex; align-items: center; gap: 8px; background: none; border: 0; color: var(--accent); font-weight: 700; font-size: 14px; padding: 6px 0; }
+      .expand-body { margin-top: 10px; }
+
+      .form-error { display: none; background: var(--danger-soft); border: 1px solid var(--danger); color: #ffb3b3; border-radius: 11px; padding: 11px 13px; font-size: 13.5px; margin-top: 14px; }
+      .form-error.show { display: block; }
+
+      /* ---------- review / options ---------- */
+      .summary-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-bottom: 18px; }
+      .summary-card .sc-main { font-size: 16.5px; font-weight: 700; }
+      .summary-card .sc-sub { color: var(--muted); font-size: 13.5px; margin-top: 3px; }
+      .summary-card .sc-links { margin-top: 10px; display: flex; gap: 16px; flex-wrap: wrap; }
+      .link-btn { background: none; border: 0; color: var(--accent); font-size: 13px; font-weight: 700; padding: 0; }
+
+      .opt-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-bottom: 14px; }
+      .opt-card h3 { margin: 0 0 12px; font-size: 15px; font-weight: 700; }
+      .opt-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 9px 0; }
+      .opt-row + .opt-row { border-top: 1px solid var(--border); }
+      .opt-row .or-main { min-width: 0; }
+      .opt-row .or-name { font-weight: 600; font-size: 14.5px; display: flex; align-items: center; gap: 8px; }
+      .opt-row .or-sub { color: var(--faint); font-size: 12.5px; }
+      .opt-row select.input { width: auto; padding: 7px 10px; font-size: 13.5px; }
+
+      .route-preview { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+      .route-chip { background: var(--field); border: 1px solid var(--accent); color: var(--text); border-radius: 999px; padding: 5px 12px; font-size: 13px; font-weight: 600; }
+      .route-arrow { color: var(--faint); }
+
+      /* ---------- toggle switch ---------- */
+      .switch { position: relative; width: 46px; height: 27px; flex: none; background: var(--field); border: 1px solid var(--border); border-radius: 999px; padding: 0; transition: background .15s, border-color .15s; }
+      .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 21px; height: 21px; border-radius: 50%; background: var(--muted); transition: transform .15s, background .15s; }
+      .switch.on { background: var(--accent); border-color: var(--accent); }
+      .switch.on::after { transform: translateX(19px); background: #1c1b1f; }
+
+      /* ---------- vault ---------- */
+      .vault-panel { padding: 22px 24px 24px; }
+      .vault-tools { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+      .empty-note { color: var(--faint); font-size: 14px; padding: 14px 2px; }
+      .vault-section { margin-top: 26px; }
+      .vault-section .group-label { margin-top: 0; }
+      .setting-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px; }
+      .setting-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+      .setting-main { min-width: 0; }
+      .setting-name { font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+      .setting-help { color: var(--muted); font-size: 13.5px; margin: 4px 0 0; }
+      .setting-actions { display: flex; gap: 8px; flex: none; flex-wrap: wrap; }
+      .status-pill { display: inline-flex; align-items: center; font-size: 11px; font-weight: 800; letter-spacing: .03em; padding: 2.5px 8px; border-radius: 999px; color: var(--ok); border: 1px solid rgba(95,214,138,.45); background: rgba(95,214,138,.1); }
+      .status-pill.off { color: var(--muted); border-color: var(--border); background: var(--field); }
+      .btn.danger { color: #ffb3b3; border-color: rgba(255,107,107,.45); background: rgba(255,107,107,.08); }
+      .btn.danger:hover { background: rgba(255,107,107,.15); }
+      .backup-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+      .pin-form { border-top: 1px solid var(--border); margin-top: 16px; padding-top: 16px; }
+      .pin-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+      .pin-grid .field-group { margin-bottom: 0; }
+      .pin-form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+
+      /* ---------- sheet ---------- */
+      .sheet-overlay { position: fixed; inset: 0; background: rgba(5,5,8,.66); display: none; align-items: flex-end; justify-content: center; z-index: 60; padding: 0; }
+      .sheet-overlay.open { display: flex; }
+      .sheet { background: var(--panel); border: 1px solid var(--border); border-bottom: 0; border-radius: 20px 20px 0 0; width: 100%; max-width: 560px; max-height: 88vh; overflow-y: auto; padding: 10px 24px 28px; box-shadow: 0 -18px 50px rgba(0,0,0,.6); animation: sheetUp .22s ease; }
+      @keyframes sheetUp { from { transform: translateY(26px); opacity: .5; } to { transform: translateY(0); opacity: 1; } }
+      @media (prefers-reduced-motion: reduce) { .sheet { animation: none; } }
+      .sheet .grab { width: 42px; height: 5px; border-radius: 3px; background: var(--border); margin: 6px auto 14px; }
+      .sheet h3 { margin: 0 0 4px; font-size: 19px; font-weight: 700; }
+      .sheet .sheet-sub { color: var(--muted); font-size: 13.5px; margin: 0 0 18px; }
+      .sheet-foot { display: flex; gap: 10px; margin-top: 20px; }
+      .sheet-foot .btn { flex: 1; }
+
+      /* ---------- toast ---------- */
+      .toast { position: fixed; left: 50%; bottom: 26px; transform: translate(-50%, 16px); background: #23232e; border: 1px solid var(--accent); color: var(--text); padding: 11px 18px; border-radius: 999px; font-size: 14px; font-weight: 600; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 80; box-shadow: 0 10px 30px rgba(0,0,0,.5); display: flex; align-items: center; gap: 8px; }
+      .toast.show { opacity: 1; transform: translate(-50%, 0); }
+      .toast .t-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); flex: none; }
+
+      /* ---------- rationale ---------- */
+      .rationale { margin-top: 30px; }
+      .rationale h2 { font-size: 20px; font-weight: 700; margin: 0 0 14px; letter-spacing: -0.01em; }
+      .rationale ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      .rationale li { background: var(--panel); border: 1px solid var(--border); border-radius: 13px; padding: 14px 16px; font-size: 14px; color: var(--muted); }
+      .rationale li strong { color: var(--text); display: block; margin-bottom: 3px; font-size: 14.5px; }
+
+      /* ---------- entry-point switcher (guidance only) ---------- */
+      .entry-switcher { background: var(--panel); border: 1px dashed var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 18px; }
+      .entry-switcher-title { font-weight: 700; color: var(--text); font-size: 14.5px; margin: 0 0 4px; }
+      .entry-switcher-text { color: var(--muted); font-size: 13.5px; margin: 0 0 12px; }
+      .entry-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      .entry-option { text-align: left; background: var(--card); border: 1.5px solid var(--border); border-radius: 12px; padding: 12px 14px; color: var(--text); }
+      .entry-option:hover { background: var(--card-hover); }
+      .entry-option.active { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent); }
+      .entry-option .eo-title { font-weight: 700; font-size: 14.5px; display: block; }
+      .entry-option .eo-sub { color: var(--muted); font-size: 12.5px; display: block; margin-top: 2px; }
+      .entry-picker { margin-top: 12px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+      .entry-picker label { font-size: 13px; font-weight: 600; color: var(--muted); }
+      .entry-picker select.input { width: auto; max-width: 100%; padding: 8px 12px; font-size: 14px; }
+      @media (max-width: 640px) { .entry-options { grid-template-columns: 1fr; } }
+      .panel-nav-btn { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--border); background: var(--card); color: var(--text); font-size: 19px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; flex: none; padding: 0 0 2px; }
+      .panel-nav-btn:hover { background: var(--card-hover); }
+      .panel-head-left { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+
+      .hidden { display: none !important; }
+
+      @media (max-width: 640px) {
+        .page { padding: 24px 14px 48px; }
+        .proto-grid { grid-template-columns: 1fr; }
+        .field-row { grid-template-columns: 1fr; }
+        .stepper { padding: 16px 14px 4px; }
+        .step { min-width: 0; flex: 1; }
+        .step-body, .panel-foot, .vault-panel { padding-left: 16px; padding-right: 16px; }
+        .panel-head { padding-left: 16px; padding-right: 16px; }
+        .rationale ul { grid-template-columns: 1fr; }
+        .pin-grid { grid-template-columns: 1fr; }
+        .setting-row { flex-direction: column; }
+        header.page-head h1 { font-size: 23px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="legend" role="note" aria-label="How to read this page">
+      <span class="legend-item"><span class="sw sw-ui"></span><span><strong>QUEST APP UI</strong> — everything inside the framed panel below (this is what would ship on the headset)</span></span>
+      <span class="legend-item"><span class="sw sw-guide"></span><span><strong>GUIDANCE</strong> — everything outside the panel (spec notes, rationale, my explanations; not app UI)</span></span>
+    </div>
+    <div class="page">
+      <header class="page-head">
+        <div class="guidance-label">Guidance — about this mockup</div>
+        <h1>Farside — connection setup, redesigned</h1>
+        <p>Interactive mockup · fields and validation match the real connection model</p>
+      </header>
+
+      <div class="guidance-label">Guidance — switch mockup screens</div>
+      <div class="view-toggle" role="tablist" aria-label="View">
+        <button id="viewFlowBtn" class="active" type="button">New connection flow</button>
+        <button id="viewVaultBtn" type="button">Vault</button>
+      </div>
+
+      <!-- ============ FLOW VIEW ============ -->
+      <div id="flowView">
+        <div class="guidance-label">Guidance — preview a connection type</div>
+        <div class="combo-row" id="comboRow" aria-label="Connection type"></div>
+
+        <div class="guidance-label">Guidance — preview entry point</div>
+        <div class="entry-switcher" id="entrySwitcher">
+          <p class="entry-switcher-title">Preview entry point — mockup navigation only (not app UI)</p>
+          <p class="entry-switcher-text">In the real app these are two separate entry points: the New button at the top of the launcher opens a blank flow, and Edit on a saved connection opens the same flow prefilled. The user never switches between them.</p>
+          <div class="entry-options" role="group" aria-label="Preview entry point">
+            <button type="button" class="entry-option active" id="entryNewBtn"><span class="eo-title">＋ New connection</span><span class="eo-sub">from the launcher's New button</span></button>
+            <button type="button" class="entry-option" id="entryEditBtn"><span class="eo-title">✎ Edit saved connection</span><span class="eo-sub">from Edit on a connection card</span></button>
+          </div>
+          <div class="entry-picker hidden" id="entryEditPicker">
+            <label for="entryEditSelect">Connection being edited</label>
+            <select class="input" id="entryEditSelect" aria-label="Choose a connection to edit">
+              <option value="ex-office">Office PC</option>
+              <option value="ex-macmini">Mac mini</option>
+              <option value="ex-homelab">homelab</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="panel-wrap">
+        <div class="ui-tag">QUEST APP UI — interactive mockup</div>
+        <div class="panel">
+          <div class="panel-head">
+            <div class="panel-head-left">
+              <button type="button" class="panel-nav-btn" id="panelNavBtn" aria-label="Close">×</button>
+              <div>
+                <div class="panel-title" id="panelTitle">New connection</div>
+                <div class="panel-sub" id="panelSub">RDP · Windows Remote Desktop</div>
+              </div>
+            </div>
+            <div class="panel-sub" id="panelStepLabel">Step 1 of 4</div>
+          </div>
+
+          <div class="stepper" id="stepper"></div>
+          <div class="step-body" id="stepBody"></div>
+
+          <div class="panel-foot">
+            <button class="btn ghost" id="backBtn" type="button">Back</button>
+            <button class="btn primary" id="continueBtn" type="button">Continue</button>
+          </div>
+        </div>
+        </div>
+
+        <div class="guidance-block">
+          <div class="guidance-label">Guidance — about this connection type</div>
+          <p class="guidance-text" id="comboNoteText"></p>
+        </div>
+      </div>
+
+      <!-- ============ VAULT VIEW ============ -->
+      <div id="vaultView" class="hidden">
+        <div class="guidance-block" style="margin-top:0;">
+          <div class="guidance-label">Guidance — second app screen</div>
+          <p class="guidance-text">The vault is a separate screen of the app, shown here so it can be reviewed alongside the setup flow. The framed panel below is that screen's UI.</p>
+        </div>
+        <div class="panel-wrap">
+        <div class="ui-tag">QUEST APP UI — interactive mockup</div>
+        <div class="panel">
+          <div class="vault-panel">
+            <div class="panel-title" style="font-size:19px; font-weight:700; margin-bottom:4px;">Vault</div>
+            <p style="color:var(--muted); margin:0 0 18px; font-size:14px;">Sign-ins, SSH keys, PIN protection, and backup &amp; restore — stored encrypted on the headset.</p>
+            <div class="vault-tools">
+              <button class="btn small" id="vaultNewSignin" type="button">+ New sign-in</button>
+              <button class="btn small" id="vaultImportKey" type="button">+ Import key</button>
+            </div>
+            <div id="vaultBody"></div>
+
+            <section class="vault-section" aria-labelledby="vaultProtectionTitle">
+              <div class="group-label" id="vaultProtectionTitle">Vault protection</div>
+              <div class="setting-card">
+                <div class="setting-row">
+                  <div class="setting-main">
+                    <div class="setting-name">App PIN <span class="status-pill" id="appPinStatus">On</span></div>
+                    <p class="setting-help">PIN-gated sign-ins and keys ask for this before they can be used.</p>
+                  </div>
+                  <div class="setting-actions">
+                    <button class="btn small" id="appPinChangeBtn" type="button" aria-expanded="false" aria-controls="appPinForm">Change</button>
+                    <button class="btn small danger" id="appPinRemoveBtn" type="button">Remove</button>
+                  </div>
+                </div>
+                <div class="pin-form hidden" id="appPinForm">
+                  <div class="pin-grid">
+                    <div class="field-group" id="currentPinGroup">
+                      <label for="currentPin">Current PIN</label>
+                      <input class="input" id="currentPin" type="password" inputmode="numeric" autocomplete="current-password" />
+                    </div>
+                    <div class="field-group">
+                      <label for="newPin">New PIN</label>
+                      <input class="input" id="newPin" type="password" inputmode="numeric" autocomplete="new-password" />
+                    </div>
+                    <div class="field-group">
+                      <label for="confirmPin">Confirm new PIN</label>
+                      <input class="input" id="confirmPin" type="password" inputmode="numeric" autocomplete="new-password" />
+                    </div>
+                  </div>
+                  <div class="field-error" id="pinFormError">New PIN and confirmation must match.</div>
+                  <div class="pin-form-actions">
+                    <button class="btn small" id="appPinCancelBtn" type="button">Cancel</button>
+                    <button class="btn small primary" id="appPinSaveBtn" type="button" disabled>Save PIN</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="vault-section" aria-labelledby="vaultBackupTitle">
+              <div class="group-label" id="vaultBackupTitle">Backup &amp; restore</div>
+              <div class="setting-card">
+                <p class="setting-help" style="margin-top:0;">Encrypted backups include connections, sign-ins, SSH keys, and PIN settings. You choose the passphrase.</p>
+                <div class="backup-actions">
+                  <button class="btn small" id="exportBackupBtn" type="button">Export backup</button>
+                  <button class="btn small" id="importBackupBtn" type="button">Import backup</button>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+        </div>
+      </div>
+
+      <!-- ============ RATIONALE ============ -->
+      <section class="rationale">
+        <div class="guidance-label">Guidance — design rationale</div>
+        <h2>What changed &amp; why</h2>
+        <ul>
+          <li><strong>The mockup labels itself</strong>Everything inside the accent-framed panel tagged “QUEST APP UI” is the proposed app UI — the flow starts at step 1, “What are you connecting to?”. Everything outside the frame is guidance: the legend, the connection-type switcher, the per-type notes, and this section. None of the guidance ships.</li>
+          <li><strong>Guided steps instead of one long scroll</strong>The old form was a single ~2,000-line scrolling list. The redesign splits it into four steps — protocol, server, sign-in, review — one decision per screen, with targets sized for a headset pointer.</li>
+          <li><strong>Protocol and auth mode are decided first</strong>VNC's password-vs-account choice used to sit as radio buttons between the name and host fields. Now it's part of step 1, so every later screen only shows fields that apply.</li>
+          <li><strong>Sign-ins are created in place</strong>Picking “+ New sign-in” used to eject you into Settings and lose your place. It now opens a sheet right over the form — save, and the new sign-in is already selected.</li>
+          <li><strong>Credential forms match the credential</strong>The old form was the same name/user/password blob for everything. A VNC password now gets its 8-character counter, a username + password login explains it wants an account on the target machine, and key import is shaped for pasting a PEM.</li>
+          <li><strong>SSH choices are explicit, not interdependent</strong>Username (saved / type / ask), auth (password / key), and jump host are separate segmented choices, and picking a jump host draws the route: laptop → bastion → target. The username lives in exactly one place — typing a password by hand asks for the password only, and it pairs with whichever username mode is selected above.</li>
+          <li><strong>A review screen before saving</strong>Step 4 summarises the whole connection up top with Edit links back to each step, then groups the extras — display &amp; audio, tunnel, files, network — into cards instead of a flat toggle pile.</li>
+          <li><strong>The vault knows what things are</strong>Sign-ins and SSH keys are grouped separately, with kind and PIN badges and a “used by N connections” line, so it's obvious what breaks if you delete one.</li>
+          <li><strong>App PIN and backup/restore move into the Vault</strong>The PIN protects vault contents and backups export the vault, so they live with the secrets instead of a leftover Settings tab.</li>
+          <li><strong>Discovery only shows what you picked</strong>An SSH server can't be found by scanning the local network, so step 2 has no finder for SSH — just name, host and port, no explanation needed. Where the finder does appear, it only lists servers of the type you selected: RDP finds RDP PCs, VNC finds VNC servers, and switching protocol swaps the list.</li>
+          <li><strong>VNC is a general protocol, not Mac-only</strong>VNC wording no longer assumes the target is a Mac — it runs on Windows, Linux and media boxes too. Mac Screen Sharing appears exactly once, as the example for username + password sign-in, and the password flow just says “VNC password”.</li>
+          <li><strong>Two entry points, no toggle</strong>The flow is reached two separate ways, and the user never switches between them: the New button at the top of the main launcher opens it blank (header “New connection”, close ×, footer “Save connection”), and Edit on a saved connection in the launcher opens the same flow prefilled — protocol, server, sign-in, options — with the stepper fully visitable (header “Edit connection”, back ←, footer “Save changes”). There's no delete in edit mode, since removing a connection already lives on the main launcher. The switcher above the panel is mockup navigation only, for previewing both entry points — it is not app UI.</li>
+          <li><strong>Private keys are replace-only, never displayed</strong>Editing an SSH key shows an empty box, exactly like a password field: paste a new key to replace the saved one, or leave it blank to keep it. The saved key is never rendered anywhere — only the public key can be viewed or copied, which is safe to share.</li>
+          <li><strong>Required fields block the flow, in red</strong>A blank connection name, host or port on step 2 — the port must also be a number from 1 to 65535 — or a missing sign-in where the protocol demands one (RDP, both VNC modes) — shows red error text under the field and dims Continue until it's fixed, validated live as you type. SSH is the exception: its credentials are genuinely optional, so its step 3 never blocks. The same rules gate “Save changes” in edit mode.</li>
+          <li><strong>VNC file pairing lists plain connection names</strong>The File access card pairs a VNC connection with an existing SSH connection, and the dropdown shows just connection names — None, Mac mini, homelab — no protocol jargon or suffixes.</li>
+          <li><strong>Mac logins save both names, once</strong>A Mac account has a full name and a short name, and the two protocols want different ones: Screen Sharing signs in with the full name, SSH connects with the short name. A Mac login stores both in a single sign-in, so each connection resolves the right name automatically — no per-connection ambiguity. (Implementation note: this is the one approved data-model change: SavedCredential gains an optional shortName; VNC auth uses user, SSH uses shortName ?: user.)</li>
+          <li><strong>Short names fill themselves in, macOS-style</strong>Mac login short names auto-fill from the full name with macOS's rules (lowercase, strip diacritics, drop spaces and disallowed characters) until you override them — same propose-and-replace behavior as macOS user creation. Type in the Short name field and the suggestion stops; clear it and it resumes. A short name with anything outside lowercase letters, numbers, _ - . gets the red error and blocks saving.</li>
+        </ul>
+      </section>
+    </div>
+
+    <!-- ============ SHEET ============ -->
+    <div class="sheet-overlay" id="sheetOverlay">
+      <div class="sheet" role="dialog" aria-modal="true" id="sheetBox"></div>
+    </div>
+
+    <div class="toast" id="toast"><span class="t-dot"></span><span id="toastText">Saved to vault</span></div>
+
+    <script>
+      "use strict";
+      /* ================= mock vault data ================= */
+      var signins = [
+        { id: "si-work",  name: "Work account",     user: "user",  kind: "RDP", pin: false, usedBy: 2 },
+        { id: "si-mac",   name: "Mac mini",         user: "user",  kind: "Login", pin: true,  usedBy: 1 },
+        { id: "si-macmini", name: "Mac mini login", user: "Jordan Lee", shortName: "jordan", mac: true, kind: "Login", pin: true, usedBy: 1 },
+        { id: "si-vnc",   name: "Media server VNC", user: "",       kind: "VNC", pin: false, usedBy: 1 },
+        { id: "si-ssh",   name: "Server login",     user: "ubuntu", kind: "SSH", pin: false, usedBy: 3 }
+      ];
+      var sshKeys = [
+        { id: "key-laptop", name: "laptop-ed25519", type: "ED25519", pin: true,  usedBy: 2 },
+        { id: "key-gh",     name: "github-deploy",  type: "RSA",     pin: false, usedBy: 1 }
+      ];
+
+      /* ================= flow state ================= */
+      var COMBOS = {
+        "rdp":      { label: "RDP",               proto: "RDP", port: 3389 },
+        "vnc-pass": { label: "VNC · password",    proto: "VNC", port: 5900 },
+        "vnc-mac":  { label: "VNC · username+password", proto: "VNC", port: 5900 },
+        "ssh-pass": { label: "SSH · user+password", proto: "SSH", port: 22 },
+        "ssh-key":  { label: "SSH · user+key",    proto: "SSH", port: 22 }
+      };
+      var SERVER_DEFAULTS = {
+        "rdp":      { name: "Office PC",      host: "192.0.2.50" },
+        "vnc-pass": { name: "Media server",   host: "192.0.2.20" },
+        "vnc-mac":  { name: "Living room PC", host: "192.0.2.20" },
+        "ssh-pass": { name: "Homelab server", host: "192.0.2.250" },
+        "ssh-key":  { name: "Homelab server", host: "192.0.2.250" }
+      };
+      var DISCOVERY = {
+        "RDP": [
+          { name: "Office PC", host: "192.0.2.50", port: 3389, combo: "rdp" },
+          { name: "Desktop-PC",    host: "192.0.2.60", port: 3389, combo: "rdp" }
+        ],
+        "VNC": [
+          { name: "Mac mini",     host: "192.0.2.20", port: 5900, combo: "vnc-mac" },
+          { name: "Media server", host: "192.0.2.70", port: 5900, combo: "vnc-pass" }
+        ]
+      };
+
+      var S = {
+        view: "flow",
+        mode: "new",
+        editId: null,
+        combo: "rdp",
+        step: 1,
+        serverName: "Office PC",
+        serverHost: "192.0.2.50",
+        serverPort: 3389,
+        portText: "3389",
+        devicesOpen: false,
+        touched2: { name: false, host: false, port: false },
+        step3Touched: false,
+        /* step 3 */
+        rdp:  { mode: "saved", savedId: "si-work", onceUser: "", oncePass: "" },
+        vncp: { mode: "saved", savedId: "si-vnc", typePass: "" },
+        vncm: { mode: "saved", savedId: "si-macmini", onceUser: "", oncePass: "" },
+        ssh:  { userMode: "saved", savedUserId: "si-ssh", typedUser: "",
+                auth: "password",
+                pwMode: "saved", savedPwId: "si-ssh", oncePass: "",
+                keyId: "key-laptop" },
+        /* step 4 options */
+        opt: {
+          playSound: true, mic: true, camera: true, cameraRes: "HD 720p",
+          clipboard: true, drives: false, console: false, admin: false,
+          jump: "direct", sftp: true, autoCopy: false, portForwards: 2,
+          vncPair: "none",
+          proxy: "Direct", cfParams: "", cfShow: false,
+          pxHost: "", pxPort: "", pxUser: "", pxPass: "", pxExclude: "",
+          reconnect: true
+        }
+      };
+
+      /* ================= helpers ================= */
+      function el(id) { return document.getElementById(id); }
+      function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+      }); }
+      var toastTimer = null;
+      function toast(msg) {
+        el("toastText").textContent = msg;
+        el("toast").classList.add("show");
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () { el("toast").classList.remove("show"); }, 2400);
+      }
+      function signinById(id) { for (var i = 0; i < signins.length; i++) if (signins[i].id === id) return signins[i]; return null; }
+      function keyById(id) { for (var i = 0; i < sshKeys.length; i++) if (sshKeys[i].id === id) return sshKeys[i]; return null; }
+      /* macOS short-name derivation: lowercase, fold diacritics to ASCII,
+         remove whitespace, keep only a-z 0-9 _ - . (like macOS user creation). */
+      function deriveShortName(full) {
+        if (!full) return "";
+        var s = String(full).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        s = s.replace(/æ/g, "ae").replace(/Æ/g, "Ae").replace(/œ/g, "oe").replace(/Œ/g, "Oe")
+             .replace(/ø/g, "o").replace(/Ø/g, "O").replace(/ß/g, "ss")
+             .replace(/đ/g, "d").replace(/Đ/g, "D").replace(/ł/g, "l").replace(/Ł/g, "L")
+             .replace(/þ/g, "th").replace(/Þ/g, "Th").replace(/ð/g, "d").replace(/Ð/g, "D");
+        s = s.toLowerCase();
+        s = s.replace(/\s+/g, "");
+        s = s.replace(/[^a-z0-9_.\-]/g, "");
+        return s;
+      }
+      function shortNameError(v) {
+        if (!v) return "Short name is required";
+        if (!/^[a-z0-9_.\-]+$/.test(v)) return "Use only lowercase letters, numbers, _ - .";
+        return "";
+      }
+      function pinBadge(on) { return on ? ' <span class="badge pin">PIN</span>' : ""; }
+      function kindBadge(k) { return '<span class="badge kind">' + esc(k) + "</span>"; }
+
+      var ICONS = {
+        monitor: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M9 20h6M12 16v4"/></svg>',
+        terminal: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M12.5 15H17"/></svg>',
+        share: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 12V8.5M9.8 10.2L12 8l2.2 2.2M9 20h6M12 16v4"/></svg>',
+        user: '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c1.2-3.2 3.8-4.8 7-4.8s5.8 1.6 7 4.8"/></svg>',
+        key: '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="14" r="4.5"/><path d="M11.5 10.5L20 2M17 5l2.5 2.5M14.5 7.5L17 10"/></svg>',
+        lock: '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg>',
+        check: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.5l5 5L19.5 7"/></svg>',
+        chev: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>'
+      };
+
+      function segHTML(id, options, current) {
+        var h = '<div class="seg" data-seg="' + id + '">';
+        options.forEach(function (o) {
+          h += '<button type="button" data-val="' + esc(o) + '"' + (o === current ? ' class="active"' : "") + ">" + esc(o) + "</button>";
+        });
+        return h + "</div>";
+      }
+      function switchHTML(id, on) {
+        return '<button type="button" class="switch' + (on ? " on" : "") + '" data-switch="' + id + '" role="switch" aria-checked="' + on + '" aria-label="Toggle"></button>';
+      }
+      function credCard(si, selected, group) {
+        var sub = si.kind === "VNC" ? "Saved VNC password"
+          : si.mac ? si.user + " · " + si.shortName
+          : (si.user ? "Username · " + si.user : "");
+        return '<button type="button" class="pick-card' + (selected ? " selected" : "") + '" data-pick="' + group + '" data-id="' + si.id + '">' +
+          '<span class="avatar">' + (si.kind === "VNC" ? ICONS.lock : ICONS.user) + "</span>" +
+          '<span class="pc-main"><span class="pc-name">' + esc(si.name) + (si.mac ? ' <span class="badge kind">Mac</span>' : "") + pinBadge(si.pin) + "</span>" +
+          '<span class="pc-sub">' + esc(sub) + "</span></span>" +
+          '<span class="radio"></span></button>';
+      }
+      function newCard(group, label) {
+        return '<button type="button" class="pick-card dashed" data-new="' + group + '">+ ' + esc(label) + "</button>";
+      }
+
+      /* ================= combo / stepper chrome ================= */
+      function renderCombos() {
+        var h = "";
+        Object.keys(COMBOS).forEach(function (k) {
+          h += '<button type="button" class="combo-pill' + (S.combo === k ? " active" : "") + '" data-combo="' + k + '">' + esc(COMBOS[k].label) + "</button>";
+        });
+        el("comboRow").innerHTML = h;
+      }
+      var STEP_LABELS = ["Protocol", "Server", "Sign in", "Review & options"];
+      function renderStepper() {
+        var h = "";
+        for (var i = 1; i <= 4; i++) {
+          var cls = i === S.step ? "active" : (i < S.step ? "done" : "");
+          h += '<button type="button" class="step ' + cls + '" data-step="' + i + '"><span class="dot">' +
+            (i < S.step ? ICONS.check : i) + '</span><span class="lbl">' + STEP_LABELS[i - 1] + "</span></button>";
+          if (i < 4) h += '<div class="step-line' + (i < S.step ? " done" : "") + '"></div>';
+        }
+        el("stepper").innerHTML = h;
+        el("panelStepLabel").textContent = "Step " + S.step + " of 4";
+        var c = COMBOS[S.combo];
+        var sub = c.proto === "RDP" ? "RDP · Windows Remote Desktop"
+          : c.proto === "SSH" ? "SSH · Secure shell & terminal"
+          : (S.combo === "vnc-mac" ? "VNC · Username + password" : "VNC · VNC password");
+        el("panelSub").textContent = sub;
+        el("panelTitle").textContent = S.mode === "edit" ? "Edit connection" : "New connection";
+        var navBtn = el("panelNavBtn");
+        if (navBtn) {
+          navBtn.textContent = S.mode === "edit" ? "←" : "×";
+          navBtn.setAttribute("aria-label", S.mode === "edit" ? "Back" : "Close");
+        }
+        var cn = el("comboNoteText");
+        if (cn) cn.textContent = c.proto === "RDP"
+          ? "RDP always needs a username and password — in the flow above, step 3 is where you pick a saved sign-in or type one just for this connection. On step 4, Play sound is a plain on/off toggle and the camera resolution is the three-way picker (SD 480p / HD 720p / Native)."
+          : c.proto === "SSH"
+          ? "SSH connections can also carry SFTP file access and port forwards — in the flow above, those live on the review step (step 4), once the basics are in."
+          : "VNC's sign-in type is chosen on step 1 — a short VNC password, or a username + password account on the target machine — and step 3 only shows the fields that match the choice.";
+        el("backBtn").disabled = S.step === 1;
+        el("continueBtn").textContent = S.step === 4 ? (S.mode === "edit" ? "Save changes" : "Save connection") : "Continue";
+      }
+
+      function setCombo(combo, keepStep) {
+        if (!COMBOS[combo]) return;
+        S.combo = combo;
+        var d = SERVER_DEFAULTS[combo];
+        S.serverName = d.name; S.serverHost = d.host; S.serverPort = COMBOS[combo].port;
+        S.portText = String(COMBOS[combo].port);
+        S.touched2 = { name: false, host: false, port: false };
+        S.step3Touched = false;
+        if (combo === "ssh-key") S.ssh.auth = "key";
+        if (combo === "ssh-pass") S.ssh.auth = "password";
+        if (!keepStep) S.step = 1;
+        renderCombos(); renderStepper(); renderStep();
+      }
+
+      /* ================= step 1: protocol ================= */
+      function renderStep1() {
+        var proto = COMBOS[S.combo].proto;
+        function card(p, icon, name, desc, port) {
+          return '<button type="button" class="proto-card' + (proto === p ? " selected" : "") + '" data-proto="' + p + '">' +
+            '<span class="icon">' + icon + "</span>" +
+            '<span class="pname">' + name + "</span>" +
+            '<span class="pdesc">' + desc + "</span>" +
+            '<span class="pport">Default port ' + port + "</span></button>";
+        }
+        var h = "<h2>What are you connecting to?</h2>" +
+          '<div class="proto-grid" style="margin-top:18px;">' +
+          card("RDP", ICONS.monitor, "RDP", "Windows Remote Desktop", 3389) +
+          card("SSH", ICONS.terminal, "SSH", "Secure shell &amp; terminal", 22) +
+          card("VNC", ICONS.share, "VNC", "VNC servers &amp; Mac Screen Sharing", 5900) +
+          "</div>";
+        if (proto === "VNC") {
+          h += '<div class="auth-expand"><div class="ae-title">How does this server ask you to sign in?</div>' +
+            '<div class="ae-desc">A VNC server can use a short VNC password, or a full user account on the machine.</div>' +
+            segHTML("vncAuth", ["VNC password", "Username + password"], S.combo === "vnc-mac" ? "Username + password" : "VNC password") +
+            '<p class="hint" style="margin-top:10px;">Username + password means an account on the target machine — e.g. the macOS user account when connecting to Mac Screen Sharing.</p>' +
+            "</div>";
+        }
+        return h;
+      }
+
+      /* ================= step 2: server ================= */
+      function renderStep2() {
+        var proto = COMBOS[S.combo].proto;
+        var h = "<h2>Which computer?</h2>" +
+          '<p class="lede">Give it a name you\'ll recognise in the launcher, and where to find it on the network.</p>' +
+          '<div class="field-group"><label for="fName">Connection name</label>' +
+          '<input class="input" id="fName" type="text" value="' + esc(S.serverName) + '" placeholder="e.g. Office PC" />' +
+          '<div class="field-error" id="fNameErr">Name is required</div></div>' +
+          '<div class="field-row">' +
+            '<div class="field-group"><label for="fHost">Host</label>' +
+            '<input class="input" id="fHost" type="text" value="' + esc(S.serverHost) + '" placeholder="Hostname or IP address" />' +
+            '<div class="field-error" id="fHostErr">Host is required</div></div>' +
+            '<div class="field-group"><label for="fPort">Port</label>' +
+            '<input class="input" id="fPort" type="number" value="' + esc(S.portText) + '" />' +
+            '<div class="field-error" id="fPortErr">Port is required</div></div>' +
+          "</div>";
+        if (proto !== "SSH") {
+          var findLabel = proto === "RDP" ? "local PCs" : "local devices";
+          h += '<button type="button" class="expand-toggle" id="findDevicesBtn">' +
+            '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>' +
+            (S.devicesOpen ? "Hide " + findLabel : "Find " + findLabel) + "</button>";
+        }
+        if (S.devicesOpen) {
+          var found = DISCOVERY[proto] || [];
+          h += '<div class="pick-list" style="margin-top:10px;">';
+          found.forEach(function (d) {
+            var sel = S.serverHost === d.host && S.serverName === d.name;
+            h += '<button type="button" class="pick-card' + (sel ? " selected" : "") + '" data-device="' + esc(d.name) + '">' +
+              '<span class="avatar">' + (proto === "RDP" ? ICONS.monitor : ICONS.share) + "</span>" +
+              '<span class="pc-main"><span class="pc-name">' + esc(d.name) + " " + kindBadge(proto) + "</span>" +
+              '<span class="pc-sub">' + esc(d.host) + " · port " + d.port + "</span></span>" +
+              '<span class="radio"></span></button>';
+          });
+          h += '</div>';
+        }
+        return h;
+      }
+
+      /* ================= step 3: sign in ================= */
+      function vncPassField(id, value) {
+        var over = value.length > 8, nonLatin = /[^\u0000-\u00FF]/.test(value);
+        var bad = over || nonLatin;
+        var msg = over ? "Too long — VNC passwords are capped at 8 characters."
+          : nonLatin ? "That character isn't Latin-1 — VNC passwords only allow basic Latin letters, digits and symbols." : "";
+        return '<div class="field-group"><div class="label-row"><label for="' + id + '">VNC password</label>' +
+          '<span class="char-count' + (over ? " over" : "") + '" id="' + id + 'Count">' + value.length + "/8</span></div>" +
+          '<input class="input' + (bad ? " invalid" : "") + '" id="' + id + '" type="password" value="' + esc(value) + '" autocomplete="off" />' +
+          '<div class="field-error' + (bad ? " show" : "") + '" id="' + id + 'Err">' + msg + "</div></div>";
+      }
+      function bindVncCounter(id, onInput) {
+        var inp = el(id);
+        if (!inp) return;
+        inp.addEventListener("input", function () {
+          onInput(inp.value);
+          var over = inp.value.length > 8, nonLatin = /[^\u0000-\u00FF]/.test(inp.value);
+          var bad = over || nonLatin;
+          inp.classList.toggle("invalid", bad);
+          var c = el(id + "Count");
+          if (c) { c.textContent = inp.value.length + "/8"; c.classList.toggle("over", over); }
+          var e = el(id + "Err");
+          if (e) {
+            e.textContent = over ? "Too long — VNC passwords are capped at 8 characters."
+              : nonLatin ? "That character isn't Latin-1 — VNC passwords only allow basic Latin letters, digits and symbols." : "";
+            e.classList.toggle("show", bad);
+          }
+        });
+      }
+
+      function renderStep3() {
+        if (S.combo === "rdp") return step3Rdp();
+        if (S.combo === "vnc-pass") return step3VncPass();
+        if (S.combo === "vnc-mac") return step3VncMac();
+        return step3Ssh();
+      }
+
+      function step3Rdp() {
+        var st = S.rdp;
+        var h = "<h2>How do you sign in?</h2>" +
+          '<p class="lede">RDP needs a username and password. Use one from the vault, or type it just for this connection.</p>' +
+          '<div class="group-label">Saved sign-in</div><div class="pick-list">';
+        signins.filter(function (s) { return s.kind === "RDP"; }).forEach(function (si) {
+          h += credCard(si, st.mode === "saved" && st.savedId === si.id, "rdpSaved");
+        });
+        h += newCard("rdp", "New sign-in") + "</div>" +
+          '<button type="button" class="expand-toggle" id="rdpOnceToggle" style="margin-top:16px;">' +
+          (st.mode === "once" ? "▾" : "▸") + " Type just this once</button>";
+        if (st.mode === "once") {
+          h += '<div class="expand-body">' +
+            '<div class="field-group"><label for="rdpOnceUser">Username</label><input class="input" id="rdpOnceUser" type="text" value="' + esc(st.onceUser) + '" placeholder="e.g. user" /></div>' +
+            '<div class="field-group"><label for="rdpOncePass">Password</label><input class="input" id="rdpOncePass" type="password" value="' + esc(st.oncePass) + '" /></div>' +
+            '<p class="hint">Won\'t be saved to the vault — you\'ll type it again next time this connection is edited.</p></div>';
+        }
+        h += '<div class="form-error" id="step3Error">RDP needs a username and password. Pick a saved sign-in above, add a new one, or type both just this once.</div>';
+        return h;
+      }
+
+      function step3VncPass() {
+        var st = S.vncp;
+        var h = "<h2>VNC password</h2>" +
+          '<p class="lede">The short password set on the VNC server itself — not a user account password.</p>' +
+          '<div class="group-label">Saved password</div><div class="pick-list">';
+        signins.filter(function (s) { return s.kind === "VNC"; }).forEach(function (si) {
+          h += credCard(si, st.mode === "saved" && st.savedId === si.id, "vncpSaved");
+        });
+        h += newCard("vncp", "New VNC password") + "</div>" +
+          '<button type="button" class="expand-toggle" id="vncpTypeToggle" style="margin-top:16px;">' +
+          (st.mode === "type" ? "▾" : "▸") + " Type it here instead</button>";
+        if (st.mode === "type") {
+          h += '<div class="expand-body">' + vncPassField("vncpTypePass", st.typePass) + "</div>";
+        }
+        h += '<div class="form-error" id="step3Error">A VNC password is required. Pick a saved one above, add a new one, or type it here — 8 characters max.</div>' +
+          '<div class="note"><strong>8 characters, max.</strong> VNC passwords are capped at 8 characters by the protocol, and only basic Latin characters work.</div>';
+        return h;
+      }
+
+      function step3VncMac() {
+        var st = S.vncm;
+        var h = "<h2>Username + password</h2>" +
+          '<p class="lede">Sign in with a user account on the target machine, the same one you\'d use at its keyboard.</p>' +
+          '<div class="group-label">Saved login</div><div class="pick-list">';
+        signins.filter(function (s) { return s.kind === "Login"; }).forEach(function (si) {
+          h += credCard(si, st.mode === "saved" && st.savedId === si.id, "vncmSaved");
+        });
+        h += newCard("vncm", "New login") + "</div>";
+        if (st.mode === "saved") {
+          var sv = signinById(st.savedId);
+          if (sv) h += '<p class="hint" style="margin-top:10px;">' + (sv.mac
+            ? "Signs in to Screen Sharing as '" + esc(sv.user) + "'."
+            : "Signs in as '" + esc(sv.user) + "'.") + "</p>";
+        }
+        h += '<button type="button" class="expand-toggle" id="vncmOnceToggle" style="margin-top:16px;">' +
+          (st.mode === "once" ? "▾" : "▸") + " Type just this once</button>";
+        if (st.mode === "once") {
+          h += '<div class="expand-body">' +
+            '<div class="field-group"><label for="vncmOnceUser">Username</label><input class="input" id="vncmOnceUser" type="text" value="' + esc(st.onceUser) + '" /></div>' +
+            '<div class="field-group"><label for="vncmOncePass">Password</label><input class="input" id="vncmOncePass" type="password" value="' + esc(st.oncePass) + '" /></div>' +
+            '<p class="hint">Won\'t be saved to the vault.</p></div>';
+        }
+        h += '<div class="form-error" id="step3Error">A username and password are required. Pick a saved login above, add a new one, or type both just this once.</div>' +
+          '<div class="note">Use an <strong>account on the target machine</strong> — not the short VNC password. If the server only has a VNC password set, go back to step 1 and switch the sign-in type.</div>';
+        return h;
+      }
+
+      function step3Ssh() {
+        var st = S.ssh;
+        var h = "<h2>Sign in to the shell</h2>" +
+          '<p class="lede">SSH sign-in is flexible: the username and the credential are separate choices.</p>' +
+          '<div class="group-label">Username</div>' +
+          segHTML("sshUserMode", ["Saved", "Type", "Ask at connect"],
+            st.userMode === "saved" ? "Saved" : st.userMode === "type" ? "Type" : "Ask at connect");
+        if (st.userMode === "saved") {
+          h += '<div class="pick-list" style="margin-top:12px;">';
+          signins.filter(function (s) { return s.kind === "SSH" || s.mac; }).forEach(function (si) {
+            h += credCard(si, st.savedUserId === si.id, "sshUser");
+          });
+          h += "</div>";
+          var su2 = signinById(st.savedUserId);
+          if (su2) h += '<p class="hint" style="margin-top:10px;">' + (su2.mac
+            ? "Connects as '" + esc(su2.shortName) + "' (short name)."
+            : "Connects as '" + esc(su2.user) + "'.") + "</p>";
+        } else if (st.userMode === "type") {
+          h += '<div class="field-group" style="margin-top:12px;"><label for="sshTypedUser">Username</label>' +
+            '<input class="input" id="sshTypedUser" type="text" value="' + esc(st.typedUser) + '" placeholder="e.g. ubuntu" /></div>';
+        } else {
+          h += '<p class="hint" style="margin-top:12px;">You\'ll be prompted for a username each time you connect. Nothing is stored.</p>';
+        }
+
+        h += '<div class="group-label">Authentication</div>' +
+          segHTML("sshAuth", ["Password", "SSH key"], st.auth === "key" ? "SSH key" : "Password");
+        if (st.auth === "password") {
+          h += '<div style="margin-top:12px;">' + segHTML("sshPwMode", ["Saved sign-in", "Type it here"],
+              st.pwMode === "saved" ? "Saved sign-in" : "Type it here") + "</div>";
+          if (st.pwMode === "saved") {
+            h += '<div class="pick-list" style="margin-top:12px;">';
+            signins.filter(function (s) { return s.kind === "SSH"; }).forEach(function (si) {
+              h += credCard(si, st.savedPwId === si.id, "sshPw");
+            });
+            h += newCard("sshPw", "New sign-in") + "</div>";
+          } else {
+            h += '<div style="margin-top:12px;">' +
+              '<div class="field-group"><label for="sshOncePass">Password</label><input class="input" id="sshOncePass" type="password" value="' + esc(st.oncePass) + '" /></div>' +
+              '<p class="hint">Password only — it pairs with the username chosen above. Used for this connection only, not added to the vault.</p></div>';
+          }
+        } else {
+          h += '<div class="pick-list" style="margin-top:12px;">';
+          sshKeys.forEach(function (k) {
+            h += '<button type="button" class="pick-card' + (st.keyId === k.id ? " selected" : "") + '" data-pick="sshKey" data-id="' + k.id + '">' +
+              '<span class="avatar">' + ICONS.key + "</span>" +
+              '<span class="pc-main"><span class="pc-name">' + esc(k.name) + pinBadge(k.pin) + "</span>" +
+              '<span class="pc-sub">' + esc(k.type) + " key" + (k.pin ? " · PIN protected" : "") + "</span></span>" +
+              '<span class="radio"></span></button>';
+          });
+          h += newCard("sshKey", "Import key") + "</div>" +
+            '<p class="hint">Keys live in the vault. A saved passphrase is stored encrypted, so you never retype it.</p>';
+        }
+        return h;
+      }
+
+      /* ================= step 4: review & options ================= */
+      function signinSummary() {
+        if (S.combo === "rdp") {
+          if (S.rdp.mode === "saved") { var a = signinById(S.rdp.savedId); return a ? "signed in as " + a.name + " (" + a.user + ")" : "no sign-in chosen"; }
+          return S.rdp.onceUser ? "signing in as " + S.rdp.onceUser + " (typed once)" : "no sign-in chosen";
+        }
+        if (S.combo === "vnc-pass") {
+          if (S.vncp.mode === "saved") { var b = signinById(S.vncp.savedId); return b ? "using saved password “" + b.name + "”" : "no password chosen"; }
+          return S.vncp.typePass ? "using a typed VNC password" : "no password chosen";
+        }
+        if (S.combo === "vnc-mac") {
+          if (S.vncm.mode === "saved") { var c = signinById(S.vncm.savedId); return c ? (c.mac ? "signed in as " + c.user : "signed in as " + c.name + " (" + c.user + ")") : "no login chosen"; }
+          return S.vncm.onceUser ? "signing in as " + S.vncm.onceUser + " (typed once)" : "no login chosen";
+        }
+        var st = S.ssh;
+        var how = st.auth === "key" ? ("key " + ((keyById(st.keyId) || {}).name || "—"))
+          : st.pwMode === "saved" ? ("password · " + ((signinById(st.savedPwId) || {}).name || "—")) : "typed password";
+        if (st.userMode === "ask") return "username asked at connect · " + how;
+        if (st.userMode === "type")
+          return "signed in as " + (st.typedUser ? st.typedUser + " (typed username)" : "typed username") + " · " + how;
+        var su = signinById(st.savedUserId);
+        return "signed in as " + (su ? (su.mac ? su.shortName : su.name + " (" + su.user + ")") : "—") + " · " + how;
+      }
+
+      function optRow(name, sub, control, extra) {
+        return '<div class="opt-row"><div class="or-main"><div class="or-name">' + name + (extra || "") + "</div>" +
+          (sub ? '<div class="or-sub">' + sub + "</div>" : "") + "</div>" + control + "</div>";
+      }
+
+      function renderStep4() {
+        var c = COMBOS[S.combo];
+        var h = "<h2>Review &amp; options</h2>" +
+          '<p class="lede">Check the summary, then tune anything else. Everything below is optional.</p>' +
+          '<div class="summary-card"><div class="sc-main">' + esc(S.serverName || "Untitled connection") + " · " + c.proto +
+          " · " + esc(S.serverHost || "—") + ":" + S.serverPort + "</div>" +
+          '<div class="sc-sub">' + esc(signinSummary()) + "</div>" +
+          '<div class="sc-links">' +
+          '<button type="button" class="link-btn" data-goto="1">Edit protocol</button>' +
+          '<button type="button" class="link-btn" data-goto="2">Edit server</button>' +
+          '<button type="button" class="link-btn" data-goto="3">Edit sign-in</button>' +
+          "</div></div>" +
+          '<div class="form-error" id="step4Error" style="margin:-4px 0 14px;">Some required fields are still blank — check the Server and Sign in steps before saving.</div>';
+
+        if (c.proto === "RDP") {
+          h += '<div class="opt-card"><h3>Display &amp; audio</h3>' +
+            optRow("Play sound", "Play the remote PC's audio on this headset", switchHTML("playSound", S.opt.playSound)) +
+            optRow("Microphone", "Send your voice to the remote PC", switchHTML("mic", S.opt.mic)) +
+            optRow("Camera", "Share the headset camera", switchHTML("camera", S.opt.camera));
+          if (S.opt.camera) {
+            h += '<div class="opt-row"><div class="or-main"><div class="or-name">Camera resolution</div></div>' +
+              segHTML("cameraRes", ["SD 480p", "HD 720p", "Native"], S.opt.cameraRes) + "</div>";
+          }
+          h += optRow("Clipboard", "Copy &amp; paste text between headset and PC", switchHTML("clipboard", S.opt.clipboard)) +
+            optRow("Drive storage", "Expose headset storage as a drive on the PC", switchHTML("drives", S.opt.drives)) +
+            optRow("Console session", "Connect with console session flags.", switchHTML("console", S.opt.console)) +
+            optRow("Admin mode", "Connect with administrative session flags", switchHTML("admin", S.opt.admin)) +
+            "</div>";
+        }
+
+        if (c.proto === "SSH") {
+          var jumpOpts = '<option value="direct"' + (S.opt.jump === "direct" ? " selected" : "") + ">Direct connection</option>" +
+            '<option value="bastion"' + (S.opt.jump === "bastion" ? " selected" : "") + ">bastion — 203.0.113.10 (saved SSH)</option>" +
+            '<option value="laptop"' + (S.opt.jump === "laptop" ? " selected" : "") + ">laptop — 192.0.2.60 (saved SSH)</option>";
+          h += '<div class="opt-card"><h3>Tunnel</h3>' +
+            '<div class="field-group" style="margin-bottom:2px;"><label for="jumpSel">Jump host</label>' +
+            '<select class="input" id="jumpSel">' + jumpOpts + "</select></div>";
+          if (S.opt.jump !== "direct") {
+            h += '<div class="route-preview"><span class="route-chip">laptop</span><span class="route-arrow">→</span>' +
+              '<span class="route-chip">' + esc(S.opt.jump) + '</span><span class="route-arrow">→</span>' +
+              '<span class="route-chip">' + esc(S.serverHost || "target") + "</span></div>" +
+              '<p class="hint">Farside connects to the jump host first, then tunnels through to ' + esc(S.serverHost || "the target") + ".</p>";
+          }
+          h += "</div>" +
+            '<div class="opt-card"><h3>Files &amp; terminal</h3>' +
+            optRow("SFTP file access", "Browse and transfer files for this connection", switchHTML("sftp", S.opt.sftp)) +
+            '<div class="opt-row"><div class="or-main"><div class="or-name">Port forwards <span class="badge count">' + S.opt.portForwards + '</span></div>' +
+            '<div class="or-sub">Local and remote tunnels for this connection</div></div>' +
+            '<button type="button" class="btn small" id="pfBtn">Manage ' + ICONS.chev.replace('width="18" height="18"', 'width="14" height="14" style="display:inline;vertical-align:-2px"') + "</button></div>" +
+            optRow("Auto-copy selection", "Copy terminal text as soon as you select it", switchHTML("autoCopy", S.opt.autoCopy)) +
+            "</div>";
+        }
+
+        if (c.proto === "VNC") {
+          h += '<div class="opt-card"><h3>File access</h3>' +
+            '<div class="field-group" style="margin-bottom:2px;"><label for="vncPairSel">Pair with an existing SSH connection</label>' +
+            '<select class="input" id="vncPairSel">' +
+            '<option value="none"' + (S.opt.vncPair === "none" ? " selected" : "") + ">None</option>" +
+            '<option value="macmini"' + (S.opt.vncPair === "macmini" ? " selected" : "") + ">Mac mini</option>" +
+            '<option value="homelab"' + (S.opt.vncPair === "homelab" ? " selected" : "") + ">homelab</option>" +
+            "</select>" +
+            '<p class="hint">VNC has no file transfer of its own. Pairing adds file access through the chosen SSH connection.</p></div></div>';
+        }
+
+        /* network card — all combos */
+        h += '<div class="opt-card"><h3>Network</h3>' +
+          '<div class="opt-row"><div class="or-main"><div class="or-name">Connection route</div></div>' +
+          segHTML("proxy", ["Direct", "Cloudflare", "SOCKS5", "HTTP"], S.opt.proxy) + "</div>";
+        if (S.opt.proxy === "Cloudflare") {
+          h += '<div class="field-group" style="margin-top:12px;"><label for="cfParams">Cloudflare parameters</label>' +
+            '<div class="input-wrap"><input class="input" id="cfParams" type="' + (S.opt.cfShow ? "text" : "password") + '" value="' + esc(S.opt.cfParams) + '" placeholder="access client id / secret…" style="padding-right:64px;" />' +
+            '<button type="button" class="eye" id="cfEye">' + (S.opt.cfShow ? "Hide" : "Show") + "</button></div>" +
+            '<p class="hint">Extra parameters passed to the Cloudflare tunnel for this connection.</p></div>';
+        }
+        if (S.opt.proxy === "SOCKS5" || S.opt.proxy === "HTTP") {
+          h += '<div class="field-row" style="margin-top:12px;">' +
+            '<div class="field-group"><label for="pxHost">Proxy host</label><input class="input" id="pxHost" type="text" value="' + esc(S.opt.pxHost) + '" placeholder="proxy.example.com" /></div>' +
+            '<div class="field-group"><label for="pxPort">Proxy port</label><input class="input" id="pxPort" type="number" value="' + esc(S.opt.pxPort) + '" placeholder="' + (S.opt.proxy === "SOCKS5" ? "1080" : "8080") + '" /></div></div>' +
+            '<div class="field-row">' +
+            '<div class="field-group"><label for="pxUser">Username (optional)</label><input class="input" id="pxUser" type="text" value="' + esc(S.opt.pxUser) + '" /></div>' +
+            '<div class="field-group"><label for="pxPass">Password (optional)</label><input class="input" id="pxPass" type="password" value="' + esc(S.opt.pxPass) + '" /></div></div>' +
+            '<div class="field-group"><label for="pxExclude">Exclude hosts</label><input class="input" id="pxExclude" type="text" value="' + esc(S.opt.pxExclude) + '" placeholder="localhost, 192.168.0.0/16" />' +
+            '<p class="hint">These hosts connect directly, bypassing the proxy.</p></div>';
+        }
+        h += optRow("Reconnect automatically", "Rejoin the session if the connection drops", switchHTML("reconnect", S.opt.reconnect)) + "</div>";
+        return h;
+      }
+
+      function renderStep() {
+        var body = el("stepBody");
+        if (S.step === 1) body.innerHTML = renderStep1();
+        else if (S.step === 2) body.innerHTML = renderStep2();
+        else if (S.step === 3) body.innerHTML = renderStep3();
+        else body.innerHTML = renderStep4();
+        bindStep();
+        refreshValidityUI();
+      }
+
+      /* ================= step event binding ================= */
+      function setSeg(id, val) {
+        var segs = document.querySelectorAll('[data-seg="' + id + '"] button');
+        segs.forEach(function (b) { b.classList.toggle("active", b.getAttribute("data-val") === val); });
+      }
+      function bindSeg(id, fn) {
+        var seg = document.querySelector('[data-seg="' + id + '"]');
+        if (!seg) return;
+        seg.addEventListener("click", function (e) {
+          var b = e.target.closest("button");
+          if (!b) return;
+          fn(b.getAttribute("data-val"));
+        });
+      }
+      function bindSwitch(id, fn) {
+        var sw = document.querySelector('[data-switch="' + id + '"]');
+        if (!sw) return;
+        sw.addEventListener("click", function () { fn(); });
+      }
+      function bindText(id, fn) {
+        var inp = el(id);
+        if (!inp) return;
+        inp.addEventListener("input", function () { fn(inp.value); });
+      }
+      function bindPick(group, fn) {
+        document.querySelectorAll('[data-pick="' + group + '"]').forEach(function (card) {
+          card.addEventListener("click", function () { fn(card.getAttribute("data-id")); });
+        });
+      }
+      function bindNew(group, fn) {
+        var card = document.querySelector('[data-new="' + group + '"]');
+        if (card) card.addEventListener("click", fn);
+      }
+
+      function bindStep() {
+        /* ---- step 1 ---- */
+        document.querySelectorAll("[data-proto]").forEach(function (card) {
+          card.addEventListener("click", function () {
+            var p = card.getAttribute("data-proto");
+            if (p === "RDP") setCombo("rdp", true);
+            else if (p === "SSH") setCombo(S.ssh.auth === "key" ? "ssh-key" : "ssh-pass", true);
+            else setCombo(S.combo === "vnc-mac" ? "vnc-mac" : "vnc-pass", true);
+            S.step = 1; renderStepper(); renderStep();
+          });
+        });
+        bindSeg("vncAuth", function (v) { setCombo(v === "Username + password" ? "vnc-mac" : "vnc-pass", true); S.step = 1; renderStepper(); renderStep(); });
+
+        /* ---- step 2 ---- */
+        bindText("fName", function (v) { S.serverName = v; S.touched2.name = true; });
+        bindText("fHost", function (v) { S.serverHost = v; S.touched2.host = true; });
+        var fnEl = el("fName");
+        if (fnEl) fnEl.addEventListener("blur", function () { S.touched2.name = true; refreshValidityUI(); });
+        var fhEl = el("fHost");
+        if (fhEl) fhEl.addEventListener("blur", function () { S.touched2.host = true; refreshValidityUI(); });
+        bindText("fPort", function (v) { S.portText = v; S.serverPort = parseInt(v, 10) || 0; S.touched2.port = true; });
+        var fpEl = el("fPort");
+        if (fpEl) fpEl.addEventListener("blur", function () { S.touched2.port = true; refreshValidityUI(); });
+        var fd = el("findDevicesBtn");
+        if (fd) fd.addEventListener("click", function () { S.devicesOpen = !S.devicesOpen; renderStep(); });
+        document.querySelectorAll("[data-device]").forEach(function (card) {
+          card.addEventListener("click", function () {
+            var name = card.getAttribute("data-device");
+            var proto = COMBOS[S.combo].proto;
+            var d = (DISCOVERY[proto] || []).filter(function (x) { return x.name === name; })[0];
+            if (!d) return;
+            if (d.combo !== S.combo) setCombo(d.combo, true);
+            S.serverName = d.name; S.serverHost = d.host; S.serverPort = d.port; S.portText = String(d.port);
+            S.step = 2; renderStepper(); renderStep();
+            toast("Filled in from " + d.name);
+          });
+        });
+
+        /* ---- step 3: RDP ---- */
+        bindPick("rdpSaved", function (id) { S.rdp.mode = "saved"; S.rdp.savedId = id; renderStep(); });
+        bindNew("rdp", function () { openSheet("signin", { kind: "RDP", select: function (id) { S.rdp.mode = "saved"; S.rdp.savedId = id; renderStep(); } }); });
+        var rot = el("rdpOnceToggle");
+        if (rot) rot.addEventListener("click", function () { S.rdp.mode = S.rdp.mode === "once" ? "saved" : "once"; renderStep(); });
+        bindText("rdpOnceUser", function (v) { S.rdp.onceUser = v; });
+        bindText("rdpOncePass", function (v) { S.rdp.oncePass = v; });
+
+        /* ---- step 3: VNC password ---- */
+        bindPick("vncpSaved", function (id) { S.vncp.mode = "saved"; S.vncp.savedId = id; renderStep(); });
+        bindNew("vncp", function () { openSheet("vnc", { select: function (id) { S.vncp.mode = "saved"; S.vncp.savedId = id; renderStep(); } }); });
+        var vtt = el("vncpTypeToggle");
+        if (vtt) vtt.addEventListener("click", function () { S.vncp.mode = S.vncp.mode === "type" ? "saved" : "type"; renderStep(); });
+        bindVncCounter("vncpTypePass", function (v) { S.vncp.typePass = v; });
+
+        /* ---- step 3: VNC Mac ---- */
+        bindPick("vncmSaved", function (id) { S.vncm.mode = "saved"; S.vncm.savedId = id; renderStep(); });
+        bindNew("vncm", function () { openSheet("signin", { kind: "Login", select: function (id) { S.vncm.mode = "saved"; S.vncm.savedId = id; renderStep(); } }); });
+        var vot = el("vncmOnceToggle");
+        if (vot) vot.addEventListener("click", function () { S.vncm.mode = S.vncm.mode === "once" ? "saved" : "once"; renderStep(); });
+        bindText("vncmOnceUser", function (v) { S.vncm.onceUser = v; });
+        bindText("vncmOncePass", function (v) { S.vncm.oncePass = v; });
+
+        /* ---- step 3: SSH ---- */
+        bindSeg("sshUserMode", function (v) {
+          S.ssh.userMode = v === "Saved" ? "saved" : v === "Type" ? "type" : "ask";
+          renderStep();
+        });
+        bindPick("sshUser", function (id) { S.ssh.savedUserId = id; renderStep(); });
+        bindText("sshTypedUser", function (v) { S.ssh.typedUser = v; });
+        bindSeg("sshAuth", function (v) {
+          S.ssh.auth = v === "SSH key" ? "key" : "password";
+          setCombo(S.ssh.auth === "key" ? "ssh-key" : "ssh-pass", true);
+          S.step = 3; renderStepper(); renderStep();
+        });
+        bindSeg("sshPwMode", function (v) { S.ssh.pwMode = v === "Saved sign-in" ? "saved" : "type"; renderStep(); });
+        bindPick("sshPw", function (id) { S.ssh.savedPwId = id; renderStep(); });
+        bindNew("sshPw", function () { openSheet("signin", { kind: "SSH", select: function (id) {
+          var nsi = signinById(id);
+          if (nsi && nsi.mac) { S.ssh.userMode = "saved"; S.ssh.savedUserId = id; }
+          else { S.ssh.savedPwId = id; S.ssh.savedUserId = id; }
+          renderStep();
+        } }); });
+        bindText("sshOncePass", function (v) { S.ssh.oncePass = v; });
+        bindPick("sshKey", function (id) { S.ssh.keyId = id; renderStep(); });
+        bindNew("sshKey", function () { openSheet("key", { select: function (id) { S.ssh.keyId = id; renderStep(); } }); });
+
+        /* ---- step 4 ---- */
+        document.querySelectorAll("[data-goto]").forEach(function (b) {
+          b.addEventListener("click", function () { S.step = parseInt(b.getAttribute("data-goto"), 10); renderStepper(); renderStep(); window.scrollTo({ top: 0, behavior: "smooth" }); });
+        });
+        bindSwitch("playSound", function () { S.opt.playSound = !S.opt.playSound; renderStep(); });
+        bindSwitch("mic", function () { S.opt.mic = !S.opt.mic; renderStep(); });
+        bindSwitch("camera", function () { S.opt.camera = !S.opt.camera; renderStep(); });
+        bindSwitch("clipboard", function () { S.opt.clipboard = !S.opt.clipboard; renderStep(); });
+        bindSwitch("drives", function () { S.opt.drives = !S.opt.drives; renderStep(); });
+        bindSwitch("console", function () { S.opt.console = !S.opt.console; renderStep(); });
+        bindSwitch("admin", function () { S.opt.admin = !S.opt.admin; renderStep(); });
+        bindSeg("cameraRes", function (v) { S.opt.cameraRes = v; setSeg("cameraRes", v); });
+        var js = el("jumpSel");
+        if (js) js.addEventListener("change", function () { S.opt.jump = js.value; renderStep(); });
+        bindSwitch("sftp", function () { S.opt.sftp = !S.opt.sftp; renderStep(); });
+        bindSwitch("autoCopy", function () { S.opt.autoCopy = !S.opt.autoCopy; renderStep(); });
+        var pf = el("pfBtn");
+        if (pf) pf.addEventListener("click", function () { toast(S.opt.portForwards + " port forwards configured"); });
+        var vp = el("vncPairSel");
+        if (vp) vp.addEventListener("change", function () { S.opt.vncPair = vp.value; });
+        bindSeg("proxy", function (v) { S.opt.proxy = v; renderStep(); });
+        bindText("cfParams", function (v) { S.opt.cfParams = v; });
+        var eye = el("cfEye");
+        if (eye) eye.addEventListener("click", function () { S.opt.cfShow = !S.opt.cfShow; renderStep(); var i = el("cfParams"); if (i) i.focus(); });
+        bindText("pxHost", function (v) { S.opt.pxHost = v; });
+        bindText("pxPort", function (v) { S.opt.pxPort = v; });
+        bindText("pxUser", function (v) { S.opt.pxUser = v; });
+        bindText("pxPass", function (v) { S.opt.pxPass = v; });
+        bindText("pxExclude", function (v) { S.opt.pxExclude = v; });
+        bindSwitch("reconnect", function () { S.opt.reconnect = !S.opt.reconnect; renderStep(); });
+      }
+
+      /* ================= validation & navigation ================= */
+      function portState() {
+        var t = S.portText == null ? "" : String(S.portText).trim();
+        if (!t) return { ok: false, msg: "Port is required" };
+        if (!/^\d+$/.test(t)) return { ok: false, msg: "Enter a port from 1 to 65535" };
+        var n = parseInt(t, 10);
+        if (n < 1 || n > 65535) return { ok: false, msg: "Enter a port from 1 to 65535" };
+        return { ok: true, msg: "" };
+      }
+      function step2Valid() {
+        return !!S.serverName.trim() && !!S.serverHost.trim() && portState().ok;
+      }
+      function step3Valid() {
+        if (S.combo === "rdp") {
+          return (S.rdp.mode === "saved" && !!S.rdp.savedId) ||
+                 (S.rdp.mode === "once" && !!S.rdp.onceUser.trim() && !!S.rdp.oncePass);
+        }
+        if (S.combo === "vnc-pass") {
+          if (S.vncp.mode === "saved") return !!S.vncp.savedId;
+          var p = S.vncp.typePass;
+          return !!p && p.length <= 8 && !/[^\u0000-\u00FF]/.test(p);
+        }
+        if (S.combo === "vnc-mac") {
+          return (S.vncm.mode === "saved" && !!S.vncm.savedId) ||
+                 (S.vncm.mode === "once" && !!S.vncm.onceUser.trim() && !!S.vncm.oncePass);
+        }
+        return true; /* SSH: credentials are optional — prompt-at-connect is valid */
+      }
+      function currentStepValid() {
+        if (S.step === 2) return step2Valid();
+        if (S.step === 3) return step3Valid();
+        if (S.step === 4) return step2Valid() && step3Valid();
+        return true;
+      }
+      function refreshValidityUI() {
+        var cb = el("continueBtn");
+        if (cb) cb.disabled = !currentStepValid();
+        if (S.step === 2) {
+          var nameBad = !S.serverName.trim(), hostBad = !S.serverHost.trim();
+          var nErr = el("fNameErr"), hErr = el("fHostErr");
+          if (nErr) nErr.classList.toggle("show", nameBad && S.touched2.name);
+          if (hErr) hErr.classList.toggle("show", hostBad && S.touched2.host);
+          var fn = el("fName"), fh = el("fHost");
+          if (fn) fn.classList.toggle("invalid", nameBad && S.touched2.name);
+          if (fh) fh.classList.toggle("invalid", hostBad && S.touched2.host);
+          var ps = portState();
+          var pErr = el("fPortErr");
+          if (pErr) { pErr.textContent = ps.msg; pErr.classList.toggle("show", !ps.ok && S.touched2.port); }
+          var fp = el("fPort");
+          if (fp) fp.classList.toggle("invalid", !ps.ok && S.touched2.port);
+        }
+        if (S.step === 3) {
+          var e3 = el("step3Error");
+          if (e3) e3.classList.toggle("show", !step3Valid() && S.step3Touched);
+        }
+        if (S.step === 4) {
+          var e4 = el("step4Error");
+          if (e4) e4.classList.toggle("show", !(step2Valid() && step3Valid()));
+        }
+      }
+      el("stepBody").addEventListener("input", function () {
+        S.step3Touched = true;
+        refreshValidityUI();
+      });
+      el("stepBody").addEventListener("click", function () {
+        S.step3Touched = true;
+        refreshValidityUI();
+      });
+      el("backBtn").addEventListener("click", function () {
+        if (S.step > 1) { S.step--; renderStepper(); renderStep(); }
+      });
+      el("continueBtn").addEventListener("click", function () {
+        if (!currentStepValid()) { refreshValidityUI(); return; }
+        if (S.step < 4) { S.step++; renderStepper(); renderStep(); window.scrollTo({ top: 0, behavior: "smooth" }); }
+        else toast(S.mode === "edit" ? "Changes saved — connection updated" : "Connection saved — find it in the launcher");
+      });
+      el("stepper").addEventListener("click", function (e) {
+        var b = e.target.closest("[data-step]");
+        if (!b) return;
+        var target = parseInt(b.getAttribute("data-step"), 10);
+        if (target > S.step) {
+          if (S.step === 2 && !step2Valid()) { S.touched2.name = true; S.touched2.host = true; S.touched2.port = true; }
+          if (S.step === 3 && !step3Valid()) S.step3Touched = true;
+        }
+        S.step = target;
+        renderStepper(); renderStep();
+      });
+      el("comboRow").addEventListener("click", function (e) {
+        var b = e.target.closest("[data-combo]");
+        if (!b) return;
+        setCombo(b.getAttribute("data-combo"));
+      });
+
+      /* ================= edit existing connections ================= */
+      var DEFAULT_SNAPSHOT = JSON.parse(JSON.stringify({ rdp: S.rdp, vncp: S.vncp, vncm: S.vncm, ssh: S.ssh, opt: S.opt }));
+      var EXISTING = [
+        { id: "ex-office", label: "Office PC — RDP", combo: "rdp",
+          name: "Office PC", host: "192.0.2.50", port: 3389,
+          cred: { rdp: { mode: "saved", savedId: "si-work" } },
+          opt: { playSound: true, mic: true, camera: true, cameraRes: "HD 720p", clipboard: true, proxy: "Direct", reconnect: true } },
+        { id: "ex-macmini", label: "Mac mini — VNC · username+password", combo: "vnc-mac",
+          name: "Mac mini", host: "192.0.2.20", port: 5900,
+          cred: { vncm: { mode: "saved", savedId: "si-macmini" } },
+          opt: { vncPair: "homelab", proxy: "Direct", reconnect: true } },
+        { id: "ex-homelab", label: "homelab — SSH · user+key", combo: "ssh-key",
+          name: "homelab", host: "192.0.2.250", port: 22,
+          cred: { ssh: { userMode: "saved", savedUserId: "si-ssh", auth: "key", keyId: "key-laptop" } },
+          opt: { jump: "bastion", sftp: true, autoCopy: true, portForwards: 2, proxy: "Direct", reconnect: true } }
+      ];
+      function applySnapshot(snap) {
+        S.rdp = snap.rdp; S.vncp = snap.vncp; S.vncm = snap.vncm; S.ssh = snap.ssh; S.opt = snap.opt;
+      }
+      function loadExisting(c) {
+        if (!c) return;
+        var snap = JSON.parse(JSON.stringify(DEFAULT_SNAPSHOT));
+        if (c.cred) Object.keys(c.cred).forEach(function (k) { Object.assign(snap[k], c.cred[k]); });
+        if (c.opt) Object.assign(snap.opt, c.opt);
+        applySnapshot(snap);
+        S.mode = "edit"; S.editId = c.id;
+        S.combo = c.combo; S.serverName = c.name; S.serverHost = c.host; S.serverPort = c.port;
+        S.portText = String(c.port);
+        S.touched2 = { name: false, host: false, port: false };
+        S.step3Touched = false;
+        S.devicesOpen = false; S.step = 1;
+        renderCombos(); renderStepper(); renderStep(); renderEntrySwitcher();
+      }
+      function resetToNew() {
+        var keepCombo = S.combo;
+        applySnapshot(JSON.parse(JSON.stringify(DEFAULT_SNAPSHOT)));
+        S.mode = "new"; S.editId = null;
+        setCombo(keepCombo);
+        renderEntrySwitcher();
+      }
+      function renderEntrySwitcher() {
+        var newBtn = el("entryNewBtn"), editBtn = el("entryEditBtn"), picker = el("entryEditPicker"), sel = el("entryEditSelect");
+        if (newBtn) newBtn.classList.toggle("active", S.mode === "new");
+        if (editBtn) editBtn.classList.toggle("active", S.mode === "edit");
+        if (picker) picker.classList.toggle("hidden", S.mode !== "edit");
+        if (sel && S.editId) sel.value = S.editId;
+      }
+      (function bindEntrySwitcher() {
+        var newBtn = el("entryNewBtn"), editBtn = el("entryEditBtn"), sel = el("entryEditSelect");
+        if (newBtn) newBtn.addEventListener("click", function () {
+          if (S.mode === "new") return;
+          resetToNew();
+        });
+        if (editBtn) editBtn.addEventListener("click", function () {
+          if (S.mode === "edit") return;
+          if (!EXISTING.length) { toast("No saved connections to edit"); return; }
+          var target = EXISTING.filter(function (x) { return x.combo === S.combo; })[0];
+          if (!target) {
+            var proto = COMBOS[S.combo].proto;
+            target = EXISTING.filter(function (x) { return COMBOS[x.combo].proto === proto; })[0] || EXISTING[0];
+          }
+          loadExisting(target);
+        });
+        if (sel) sel.addEventListener("change", function () {
+          var c = EXISTING.filter(function (x) { return x.id === sel.value; })[0];
+          if (c) loadExisting(c);
+        });
+        var nav = el("panelNavBtn");
+        if (nav) nav.addEventListener("click", function () { toast(S.mode === "edit" ? "Back to launcher (mockup)" : "Closed — back to launcher (mockup)"); });
+      })();
+      /* ================= view toggle ================= */
+      function setView(v) {
+        S.view = v;
+        el("flowView").classList.toggle("hidden", v !== "flow");
+        el("vaultView").classList.toggle("hidden", v !== "vault");
+        el("viewFlowBtn").classList.toggle("active", v === "flow");
+        el("viewVaultBtn").classList.toggle("active", v === "vault");
+        if (v === "vault") renderVault();
+      }
+      el("viewFlowBtn").addEventListener("click", function () { setView("flow"); });
+      el("viewVaultBtn").addEventListener("click", function () { setView("vault"); });
+
+      /* ================= vault view ================= */
+      function renderVault() {
+        var h = '<div class="group-label">Sign-ins</div><div class="pick-list">';
+        var anyS = false;
+        signins.forEach(function (si) {
+          anyS = true;
+          var sub = si.kind === "VNC" ? "VNC password"
+            : si.mac ? si.user + " · Short name " + si.shortName
+            : "Username · " + si.user;
+          h += '<div class="pick-card" style="cursor:default;">' +
+            '<span class="avatar">' + (si.kind === "VNC" ? ICONS.lock : ICONS.user) + "</span>" +
+            '<span class="pc-main"><span class="pc-name">' + esc(si.name) + " " + kindBadge(si.kind) + (si.mac ? ' <span class="badge kind">Mac</span>' : "") + pinBadge(si.pin) + "</span>" +
+            '<span class="pc-sub">' + esc(sub) + " · Used by " + si.usedBy + " connection" + (si.usedBy === 1 ? "" : "s") + "</span></span>" +
+            '<button type="button" class="btn small" data-edit-signin="' + si.id + '">Edit</button></div>';
+        });
+        if (!anyS) h += '<div class="empty-note">No sign-ins saved yet.</div>';
+        h += '</div><div class="group-label">SSH keys</div><div class="pick-list">';
+        var anyK = false;
+        sshKeys.forEach(function (k) {
+          anyK = true;
+          h += '<div class="pick-card" style="cursor:default;">' +
+            '<span class="avatar">' + ICONS.key + "</span>" +
+            '<span class="pc-main"><span class="pc-name">' + esc(k.name) + pinBadge(k.pin) + "</span>" +
+            '<span class="pc-sub">' + esc(k.type) + " · Used by " + k.usedBy + " connection" + (k.usedBy === 1 ? "" : "s") + "</span></span>" +
+            '<button type="button" class="btn small" data-pubkey="' + k.id + '">Public key</button>' +
+            '<button type="button" class="btn small" data-edit-key="' + k.id + '">Edit</button></div>';
+        });
+        if (!anyK) h += '<div class="empty-note">No keys imported yet.</div>';
+        h += "</div>";
+        el("vaultBody").innerHTML = h;
+        document.querySelectorAll("[data-edit-signin]").forEach(function (b) {
+          b.addEventListener("click", function () {
+            var si = signinById(b.getAttribute("data-edit-signin"));
+            if (si) openSheet(si.kind === "VNC" ? "vnc" : "signin", { kind: si.kind, edit: si, select: function () { renderVault(); } });
+          });
+        });
+        document.querySelectorAll("[data-edit-key]").forEach(function (b) {
+          b.addEventListener("click", function () {
+            var k = keyById(b.getAttribute("data-edit-key"));
+            if (k) openSheet("key", { edit: k, select: function () { renderVault(); } });
+          });
+        });
+        document.querySelectorAll("[data-pubkey]").forEach(function (b) {
+          b.addEventListener("click", function () { toast("Public key copied"); });
+        });
+      }
+      el("vaultNewSignin").addEventListener("click", function () {
+        openSheet("signin", { kind: "RDP", select: function () { renderVault(); } });
+      });
+      el("vaultImportKey").addEventListener("click", function () {
+        openSheet("key", { select: function () { renderVault(); } });
+      });
+
+      /* ---- vault protection & backup actions ---- */
+      var vaultPinOn = true;
+      function clearPinForm() {
+        ["currentPin", "newPin", "confirmPin"].forEach(function (id) {
+          var input = el(id);
+          if (input) input.value = "";
+        });
+        var save = el("appPinSaveBtn");
+        if (save) save.disabled = true;
+        var err = el("pinFormError");
+        if (err) err.classList.remove("show");
+      }
+      function setPinFormOpen(open) {
+        var form = el("appPinForm");
+        var btn = el("appPinChangeBtn");
+        if (form) form.classList.toggle("hidden", !open);
+        if (btn) btn.setAttribute("aria-expanded", open ? "true" : "false");
+        if (!open) clearPinForm();
+      }
+      function updatePinUI() {
+        var status = el("appPinStatus");
+        if (status) {
+          status.textContent = vaultPinOn ? "On" : "Off";
+          status.classList.toggle("off", !vaultPinOn);
+        }
+        var change = el("appPinChangeBtn");
+        if (change) change.textContent = vaultPinOn ? "Change" : "Set";
+        var remove = el("appPinRemoveBtn");
+        if (remove) remove.classList.toggle("hidden", !vaultPinOn);
+        var current = el("currentPinGroup");
+        if (current) current.classList.toggle("hidden", !vaultPinOn);
+      }
+      function validatePinForm() {
+        var current = el("currentPin") ? el("currentPin").value : "";
+        var next = el("newPin") ? el("newPin").value : "";
+        var confirm = el("confirmPin") ? el("confirmPin").value : "";
+        var mismatch = !!confirm && !!next && next !== confirm;
+        var err = el("pinFormError");
+        if (err) err.classList.toggle("show", mismatch);
+        var confirmInput = el("confirmPin");
+        if (confirmInput) confirmInput.classList.toggle("invalid", mismatch);
+        var save = el("appPinSaveBtn");
+        if (save) save.disabled = !((!vaultPinOn || !!current) && !!next && !!confirm && next === confirm);
+      }
+      ["currentPin", "newPin", "confirmPin"].forEach(function (id) {
+        var input = el(id);
+        if (input) input.addEventListener("input", validatePinForm);
+      });
+      el("appPinChangeBtn").addEventListener("click", function () {
+        var form = el("appPinForm");
+        var opening = form && form.classList.contains("hidden");
+        updatePinUI();
+        setPinFormOpen(!!opening);
+        validatePinForm();
+        var first = el(vaultPinOn ? "currentPin" : "newPin");
+        if (opening && first) first.focus();
+      });
+      el("appPinCancelBtn").addEventListener("click", function () { setPinFormOpen(false); });
+      el("appPinSaveBtn").addEventListener("click", function () {
+        var wasOn = vaultPinOn;
+        vaultPinOn = true;
+        updatePinUI();
+        setPinFormOpen(false);
+        toast(wasOn ? "App PIN changed" : "App PIN set");
+      });
+      el("appPinRemoveBtn").addEventListener("click", function () {
+        vaultPinOn = false;
+        updatePinUI();
+        setPinFormOpen(false);
+        toast("App PIN removed");
+      });
+      el("exportBackupBtn").addEventListener("click", function () { toast("Choose a passphrase to encrypt the backup"); });
+      el("importBackupBtn").addEventListener("click", function () { toast("Choose a backup file to import"); });
+      updatePinUI();
+
+      /* ================= bottom sheet ================= */
+      var sheetCtx = null;
+      function closeSheet() { el("sheetOverlay").classList.remove("open"); sheetCtx = null; }
+      el("sheetOverlay").addEventListener("click", function (e) { if (e.target === el("sheetOverlay")) closeSheet(); });
+      document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeSheet(); });
+
+      function openSheet(type, opts) {
+        opts = opts || {};
+        sheetCtx = { type: type, kind: opts.kind || "RDP", edit: opts.edit || null, select: opts.select || null,
+          pin: opts._pin != null ? opts._pin : (opts.edit ? !!opts.edit.pin : false),
+          mac: opts._mac != null ? opts._mac : (opts.edit ? !!opts.edit.mac : false),
+          shortCustom: opts._shortCustom != null ? opts._shortCustom : !!(opts.edit && opts.edit.mac && opts.edit.shortName),
+          macInteracted: false,
+          draft: opts._draft || null };
+        var box = el("sheetBox");
+        var h = '<div class="grab"></div>';
+        if (type === "signin") {
+          var ed = sheetCtx.edit;
+          var dr = sheetCtx.draft || {};
+          var nmV = dr.name != null ? dr.name : (ed ? ed.name : "");
+          var usV = dr.user != null ? dr.user : (ed && !ed.mac ? ed.user : "");
+          var fuV = dr.full != null ? dr.full : (ed && ed.mac ? ed.user : "");
+          var shV = dr.short != null ? dr.short : (ed ? (ed.shortName || "") : "");
+          if (sheetCtx.mac && !shV && fuV) shV = deriveShortName(fuV);
+          var pwV = dr.pass || "";
+          var macTgl = sheetCtx.kind === "Login" || sheetCtx.kind === "SSH" || !!(ed && ed.mac);
+          h += "<h3>" + (sheetCtx.mac ? (ed ? "Edit Mac login" : "New Mac login") : (ed ? "Edit sign-in" : "New sign-in")) + "</h3>" +
+            '<p class="sheet-sub">' + esc(sheetCtx.kind) + ' sign-in · stored encrypted in the on-device vault.</p>' +
+            '<div class="field-group"><label for="shName">Name</label><input class="input" id="shName" type="text" value="' + esc(nmV) + '" placeholder="e.g. Work account" /></div>';
+          if (macTgl) {
+            h += '<div class="opt-row" style="padding-top:2px;"><div class="or-main"><div class="or-name">macOS account</div>' +
+              '<div class="or-sub">Mac accounts have two names — Screen Sharing signs in with the full name, SSH with the short name. Save both once and each connection uses the right one.</div></div>' +
+              switchHTML("shMac", sheetCtx.mac) + "</div>";
+          }
+          if (sheetCtx.mac) {
+            h += '<div class="field-group"><label for="shFull">Full name — used for Screen Sharing</label><input class="input" id="shFull" type="text" value="' + esc(fuV) + '" placeholder="e.g. Jordan Lee" /></div>' +
+              '<div class="field-group"><label for="shShort">Short name — used for SSH</label><input class="input" id="shShort" type="text" value="' + esc(shV) + '" placeholder="e.g. jordan" />' +
+              '<p class="hint" id="shShortHint">Suggested from the full name, like macOS does — edit it to override.</p>' +
+              '<div class="field-error" id="shShortErr"></div></div>';
+          } else {
+            h += '<div class="field-group"><label for="shUser">Username</label><input class="input" id="shUser" type="text" value="' + esc(usV) + '" placeholder="e.g. user" /></div>';
+          }
+          h += '<div class="field-group"><label for="shPass">Password</label><input class="input" id="shPass" type="password" value="' + esc(pwV) + '" placeholder="' + (ed ? "Leave blank to keep current" : "") + '" /></div>' +
+            '<div class="opt-row" style="padding-top:2px;"><div class="or-main"><div class="or-name">Require headset PIN to use</div><div class="or-sub">Ask for your PIN before this sign-in is used</div></div>' + switchHTML("shPin", sheetCtx.pin) + "</div>" +
+            '<p class="hint">Stored encrypted in the on-device vault — never leaves the headset.</p>';
+        } else if (type === "vnc") {
+          var ev = sheetCtx.edit;
+          h += "<h3>" + (ev ? "Edit VNC password" : "New VNC password") + "</h3>" +
+            '<p class="sheet-sub">The short password set on the VNC server — capped at 8 characters by the VNC protocol.</p>' +
+            '<div class="field-group"><label for="shName">Name</label><input class="input" id="shName" type="text" value="' + esc(ev ? ev.name : "") + '" placeholder="e.g. Media server VNC" /></div>' +
+            vncPassField("shVncPass", "") +
+            '<div class="opt-row" style="padding-top:2px;"><div class="or-main"><div class="or-name">Require headset PIN to use</div></div>' + switchHTML("shPin", sheetCtx.pin) + "</div>" +
+            '<p class="hint">Stored encrypted in the on-device vault.</p>';
+        } else { /* key import */
+          var ek = sheetCtx.edit;
+          h += "<h3>" + (ek ? "Edit SSH key" : "Import SSH key") + "</h3>" +
+            '<p class="sheet-sub">Paste a PEM private key. It stays on the headset, encrypted in the vault.</p>' +
+            '<div class="field-group"><label for="shName">Name</label><input class="input" id="shName" type="text" value="' + esc(ek ? ek.name : "") + '" placeholder="e.g. laptop-ed25519" /></div>' +
+            '<div class="field-group"><label for="shPem">Private key</label><textarea class="input" id="shPem" placeholder="' + (ek ? "Paste a new private key to replace the saved one" : "-----BEGIN OPENSSH PRIVATE KEY-----") + '"></textarea>' +
+            (ek ? '<p class="hint">The saved key is never shown. Leave blank to keep it.</p>' : "") + "</div>" +
+            '<div class="field-group"><label for="shPhrase">Passphrase (optional)</label><input class="input" id="shPhrase" type="password" placeholder="' + (ek ? "Leave blank to keep current" : "") + '" /></div>' +
+            '<div class="opt-row" style="padding-top:2px;"><div class="or-main"><div class="or-name">Require headset PIN</div><div class="or-sub">Ask for your PIN before this key is used</div></div>' + switchHTML("shPin", sheetCtx.pin) + "</div>" +
+            '<p class="hint">The passphrase is saved encrypted — you won\'t retype it.</p>';
+        }
+        h += '<div class="sheet-foot"><button type="button" class="btn" id="shCancel">Cancel</button>' +
+          '<button type="button" class="btn primary" id="shSave">' + (sheetCtx.edit ? "Save changes" : type === "key" ? "Import key" : "Save sign-in") + "</button></div>";
+        box.innerHTML = h;
+        el("sheetOverlay").classList.add("open");
+
+        bindSwitch("shPin", function () { sheetCtx.pin = !sheetCtx.pin; openSheetRefreshPin(); });
+        bindSwitch("shMac", function () {
+          var d = {};
+          if (el("shName")) d.name = el("shName").value;
+          if (el("shUser")) d.user = el("shUser").value;
+          if (el("shFull")) d.full = el("shFull").value;
+          if (el("shShort")) d.short = el("shShort").value;
+          if (el("shPass")) d.pass = el("shPass").value;
+          var c = sheetCtx;
+          if (!c.mac && d.user && !d.full) d.full = d.user;
+          if (c.mac && d.full && !d.user) d.user = d.full;
+          openSheet(c.type, { kind: c.kind, edit: c.edit, select: c.select, _mac: !c.mac, _pin: c.pin, _shortCustom: c.shortCustom, _draft: d });
+        });
+        el("shCancel").addEventListener("click", closeSheet);
+        el("shSave").addEventListener("click", saveSheet);
+        bindVncCounter("shVncPass", function () {});
+        var nameInp = el("shName"), userInp = el("shUser");
+        if (nameInp && userInp) {
+          userInp.addEventListener("input", function () {
+            if (!nameInp.dataset.touched && userInp.value.trim()) nameInp.value = userInp.value.trim() + " account";
+          });
+          nameInp.addEventListener("input", function () { nameInp.dataset.touched = "1"; });
+        }
+        var fullInp = el("shFull");
+        if (nameInp && fullInp) {
+          fullInp.addEventListener("input", function () {
+            if (!nameInp.dataset.touched && fullInp.value.trim()) nameInp.value = fullInp.value.trim() + " login";
+          });
+        }
+        var shortInp = el("shShort");
+        if (fullInp && shortInp) {
+          fullInp.addEventListener("input", function () {
+            sheetCtx.macInteracted = true;
+            if (!sheetCtx.shortCustom) shortInp.value = deriveShortName(fullInp.value);
+            refreshSheetMac();
+          });
+          shortInp.addEventListener("input", function () {
+            sheetCtx.macInteracted = true;
+            sheetCtx.shortCustom = shortInp.value !== "";
+            refreshSheetMac();
+          });
+          shortInp.addEventListener("blur", function () { sheetCtx.macInteracted = true; refreshSheetMac(); });
+        }
+        refreshSheetMac();
+        var first = el("shName");
+        if (first) first.focus();
+      }
+      function refreshSheetMac() {
+        if (!sheetCtx || sheetCtx.type !== "signin" || !sheetCtx.mac) return;
+        var shortInp = el("shShort");
+        if (!shortInp) return;
+        var err = shortNameError(shortInp.value);
+        var errEl = el("shShortErr");
+        if (errEl) {
+          errEl.textContent = err;
+          errEl.classList.toggle("show", !!err && !!sheetCtx.macInteracted);
+        }
+        shortInp.classList.toggle("invalid", !!err && !!sheetCtx.macInteracted);
+        var hint = el("shShortHint");
+        if (hint) hint.classList.toggle("hidden", !!sheetCtx.shortCustom);
+        var save = el("shSave");
+        if (save) save.disabled = !!err;
+      }
+      function openSheetRefreshPin() {
+        var sw = document.querySelector('[data-switch="shPin"]');
+        if (sw && sheetCtx) { sw.classList.toggle("on", sheetCtx.pin); sw.setAttribute("aria-checked", sheetCtx.pin); }
+      }
+      function saveSheet() {
+        if (!sheetCtx) return;
+        var name = (el("shName") ? el("shName").value.trim() : "");
+        var id;
+        if (sheetCtx.type === "key") {
+          if (sheetCtx.edit) {
+            sheetCtx.edit.name = name || sheetCtx.edit.name;
+            sheetCtx.edit.pin = sheetCtx.pin;
+            var pemEdit = el("shPem") ? el("shPem").value : "";
+            if (pemEdit) sheetCtx.edit.type = pemEdit.indexOf("RSA") >= 0 ? "RSA" : "ED25519";
+            id = sheetCtx.edit.id;
+          } else {
+            var pem = el("shPem") ? el("shPem").value : "";
+            var type = pem.indexOf("RSA") >= 0 || pem.indexOf("BEGIN RSA") >= 0 ? "RSA" : "ED25519";
+            id = "key-" + Date.now();
+            sshKeys.push({ id: id, name: name || "Untitled key", type: type, pin: sheetCtx.pin, usedBy: 0 });
+          }
+        } else if (sheetCtx.type === "vnc") {
+          var pw = el("shVncPass") ? el("shVncPass").value : "";
+          if (pw && (pw.length > 8 || /[^\u0000-\u00FF]/.test(pw))) { toast("VNC password isn't valid yet"); return; }
+          if (sheetCtx.edit) { sheetCtx.edit.name = name || sheetCtx.edit.name; sheetCtx.edit.pin = sheetCtx.pin; id = sheetCtx.edit.id; }
+          else {
+            id = "si-" + Date.now();
+            signins.push({ id: id, name: name || "VNC password", user: "", kind: "VNC", pin: sheetCtx.pin, usedBy: 0 });
+          }
+        } else {
+          var isMac = !!sheetCtx.mac;
+          if (isMac && el("shShort") && shortNameError(el("shShort").value)) { toast("Short name isn't valid yet"); return; }
+          var user = isMac ? (el("shFull") ? el("shFull").value.trim() : "")
+                           : (el("shUser") ? el("shUser").value.trim() : "");
+          var short = isMac && el("shShort") ? el("shShort").value.trim() : "";
+          if (sheetCtx.edit) {
+            sheetCtx.edit.name = name || sheetCtx.edit.name;
+            if (user) sheetCtx.edit.user = user;
+            sheetCtx.edit.mac = isMac;
+            sheetCtx.edit.shortName = isMac ? short : undefined;
+            if (isMac) sheetCtx.edit.kind = "Login";
+            sheetCtx.edit.pin = sheetCtx.pin;
+            id = sheetCtx.edit.id;
+          } else {
+            id = "si-" + Date.now();
+            signins.push({ id: id, name: name || (user ? user + " account" : "Untitled sign-in"), user: user,
+              shortName: isMac ? short : undefined, mac: isMac, kind: isMac ? "Login" : sheetCtx.kind,
+              pin: sheetCtx.pin, usedBy: 0 });
+          }
+        }
+        var cb = sheetCtx.select;
+        closeSheet();
+        toast("Saved to vault");
+        if (cb) cb(id);
+        if (S.view === "vault") renderVault();
+      }
+
+      /* ================= init ================= */
+      renderCombos();
+      renderEntrySwitcher();
+      renderStepper();
+      renderStep();
+    </script>
+  </body>
+</html>
