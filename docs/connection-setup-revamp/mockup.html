@@ -14,8 +14,8 @@
         --card-hover: #24242f;
         --border: #2d2d38;
         --field: #101014;
-        --accent: #4da3ff;
-        --accent-soft: rgba(77, 163, 255, 0.13);
+        --accent: #d0bcff;
+        --accent-soft: rgba(208, 188, 255, 0.13);
         --danger: #ff6b6b;
         --danger-soft: rgba(255, 107, 107, 0.12);
         --ok: #5fd68a;
@@ -47,12 +47,12 @@
       /* ---------- view toggle & combo pills ---------- */
       .view-toggle { display: inline-flex; background: var(--card); border: 1px solid var(--border); border-radius: 999px; padding: 4px; gap: 4px; margin-bottom: 18px; }
       .view-toggle button { border: 0; background: transparent; color: var(--muted); padding: 8px 18px; border-radius: 999px; font-weight: 600; font-size: 14px; }
-      .view-toggle button.active { background: var(--accent); color: #0b1524; }
+      .view-toggle button.active { background: var(--accent); color: #1c1b1f; }
 
       .combo-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
       .combo-pill { border: 1px solid var(--border); background: var(--card); color: var(--muted); padding: 8px 15px; border-radius: 999px; font-size: 13.5px; font-weight: 600; }
       .combo-pill:hover { background: var(--card-hover); color: var(--text); }
-      .combo-pill.active { border-color: var(--accent); color: var(--text); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent), 0 0 18px rgba(77,163,255,0.25); }
+      .combo-pill.active { border-color: var(--accent); color: var(--text); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent), 0 0 18px rgba(208,188,255,0.25); }
 
       /* ---------- UI vs guidance framing ---------- */
       .legend {
@@ -85,7 +85,7 @@
       .panel-wrap { position: relative; margin-top: 14px; }
       .ui-tag {
         position: absolute; top: -11px; left: 18px; z-index: 5;
-        background: var(--accent); color: #0b1524;
+        background: var(--accent); color: #1c1b1f;
         font-size: 11px; font-weight: 800; letter-spacing: .09em;
         padding: 3px 11px; border-radius: 999px;
         box-shadow: 0 4px 14px rgba(0,0,0,.45);
@@ -93,10 +93,10 @@
 
       /* ---------- spatial panel ---------- */
       .panel {
-        background: #181820;
+        background: #1c1b1f;
         border: 2px solid var(--accent);
         border-radius: var(--radius);
-        box-shadow: 0 0 0 5px rgba(77,163,255,0.08), 0 24px 60px rgba(0,0,0,0.55), 0 4px 16px rgba(0,0,0,0.4);
+        box-shadow: 0 0 0 5px rgba(208,188,255,0.08), 0 24px 60px rgba(0,0,0,0.55), 0 4px 16px rgba(0,0,0,0.4);
         overflow: hidden;
       }
       .panel-head { padding: 18px 24px 0; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
@@ -114,7 +114,7 @@
         transition: border-color .15s, background .15s, color .15s;
       }
       .step .lbl { font-size: 12.5px; color: var(--faint); font-weight: 600; text-align: center; }
-      .step.active .dot { border-color: var(--accent); background: var(--accent); color: #0b1524; }
+      .step.active .dot { border-color: var(--accent); background: var(--accent); color: #1c1b1f; }
       .step.active .lbl { color: var(--text); }
       .step.done .dot { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
       .step.done .lbl { color: var(--muted); }
@@ -128,8 +128,8 @@
       .panel-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 24px 22px; }
       .btn { border: 1px solid var(--border); background: var(--card); color: var(--text); padding: 11px 22px; border-radius: 12px; font-weight: 600; font-size: 14.5px; }
       .btn:hover { background: var(--card-hover); }
-      .btn.primary { background: var(--accent); border-color: var(--accent); color: #0b1524; }
-      .btn.primary:hover { background: #6db1ff; }
+      .btn.primary { background: var(--accent); border-color: var(--accent); color: #1c1b1f; }
+      .btn.primary:hover { background: #bea6f7; }
       .btn.ghost { background: transparent; }
       .btn:disabled { opacity: .4; cursor: default; }
       .btn.small { padding: 8px 14px; font-size: 13.5px; border-radius: 10px; }
@@ -142,7 +142,7 @@
         transition: border-color .15s, background .15s, box-shadow .15s;
       }
       .proto-card:hover { background: var(--card-hover); }
-      .proto-card.selected { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent), 0 0 22px rgba(77,163,255,0.22); }
+      .proto-card.selected { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent), 0 0 22px rgba(208,188,255,0.22); }
       .proto-card .icon { width: 42px; height: 42px; border-radius: 11px; background: var(--field); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; margin-bottom: 12px; color: var(--accent); }
       .proto-card.selected .icon { border-color: var(--accent); }
       .proto-card .pname { font-size: 16.5px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
@@ -156,7 +156,7 @@
       /* ---------- segmented ---------- */
       .seg { display: inline-flex; background: var(--field); border: 1px solid var(--border); border-radius: 999px; padding: 3px; gap: 3px; flex-wrap: wrap; }
       .seg button { border: 0; background: transparent; color: var(--muted); padding: 7px 15px; border-radius: 999px; font-size: 13.5px; font-weight: 600; white-space: nowrap; }
-      .seg button.active { background: var(--accent); color: #0b1524; }
+      .seg button.active { background: var(--accent); color: #1c1b1f; }
       .seg.full { display: flex; }
       .seg.full button { flex: 1; }
 
@@ -191,7 +191,7 @@
         transition: border-color .15s, background .15s, box-shadow .15s;
       }
       .pick-card:hover { background: var(--card-hover); }
-      .pick-card.selected { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent), 0 0 18px rgba(77,163,255,0.18); }
+      .pick-card.selected { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent), 0 0 18px rgba(208,188,255,0.18); }
       .pick-card.dashed { border-style: dashed; justify-content: center; color: var(--accent); font-weight: 700; background: transparent; }
       .pick-card.dashed:hover { background: var(--accent-soft); }
       .pick-card .avatar { width: 38px; height: 38px; border-radius: 10px; background: var(--field); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; color: var(--accent); flex: none; }
@@ -204,9 +204,9 @@
       .pick-card .chev { color: var(--faint); flex: none; }
 
       .badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; letter-spacing: .02em; padding: 2.5px 8px; border-radius: 999px; background: var(--field); border: 1px solid var(--border); color: var(--muted); vertical-align: middle; }
-      .badge.kind { color: var(--accent); border-color: rgba(77,163,255,.45); }
+      .badge.kind { color: var(--accent); border-color: rgba(208,188,255,.45); }
       .badge.pin { color: #ffc46b; border-color: rgba(255,196,107,.4); }
-      .badge.count { background: var(--accent); color: #0b1524; border-color: var(--accent); min-width: 22px; justify-content: center; }
+      .badge.count { background: var(--accent); color: #1c1b1f; border-color: var(--accent); min-width: 22px; justify-content: center; }
 
       .group-label { font-size: 13px; font-weight: 700; color: var(--muted); margin: 20px 0 9px; }
       .group-label:first-child { margin-top: 0; }
@@ -241,7 +241,7 @@
       .switch { position: relative; width: 46px; height: 27px; flex: none; background: var(--field); border: 1px solid var(--border); border-radius: 999px; padding: 0; transition: background .15s, border-color .15s; }
       .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 21px; height: 21px; border-radius: 50%; background: var(--muted); transition: transform .15s, background .15s; }
       .switch.on { background: var(--accent); border-color: var(--accent); }
-      .switch.on::after { transform: translateX(19px); background: #0b1524; }
+      .switch.on::after { transform: translateX(19px); background: #1c1b1f; }
 
       /* ---------- vault ---------- */
       .vault-panel { padding: 22px 24px 24px; }

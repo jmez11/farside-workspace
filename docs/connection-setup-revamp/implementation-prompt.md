@@ -67,6 +67,15 @@ mockup:
   an empty field ("The saved key is never shown. Leave blank to keep it."),
   mirroring the password fields. Public-key viewing stays.
 
+## 1b. Theme
+
+Match the launcher theme exactly — the mockup (`mockup.html`) is the visual
+reference. Background: launcher gray `#1C1B1F`. Highlights/accents: launcher
+purple `#D0BCFF` (selected cards, pills, segmented selections, toggle on-state,
+focus rings, links, badges) with dark `#1C1B1F` text on purple surfaces, exactly
+like the launcher's selected tabs. Body text near-white on the gray background;
+secondary text muted gray.
+
 ## 2. Non-negotiable rules
 
 - **Git identity**: every commit as `jmez11 <40301782+jmez11@users.noreply.github.com>`.
