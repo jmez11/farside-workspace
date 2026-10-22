@@ -665,4 +665,23 @@
     <string name="mac_ssh_relay_dialog_desc">Remote video may be blocked by your network. This option runs a small Perl script on the Mac, over your SSH login, to relay video. It lasts only for the session and installs nothing. Enable?</string>
     <string name="remove_connection_photo">Remove photo for %1$s</string>
     <string name="mac_ssh_relay_same_mac">Remote Login is on this Mac</string>
+    <string name="setup_new_connection">New connection</string>
+    <string name="setup_protocol">Protocol</string>
+    <string name="setup_server">Server</string>
+    <string name="setup_port">Port</string>
+    <string name="setup_sign_in">Sign in</string>
+    <string name="setup_review">Review &amp; options</string>
+    <string name="setup_step_of">Step %1$d of 4</string>
+    <string name="setup_connecting_to">What are you connecting to?</string>
+    <string name="setup_rdp_description">Windows Remote Desktop</string>
+    <string name="setup_ssh_description">Secure shell &amp; terminal</string>
+    <string name="setup_vnc_description">VNC servers &amp; Mac Screen Sharing</string>
+    <string name="setup_vnc_password">VNC password</string>
+    <string name="setup_user_password">Username + password</string>
+    <string name="setup_find_pcs">Find local PCs</string>
+    <string name="setup_find_devices">Find local devices</string>
+    <string name="setup_finding">Finding local devices...</string>
+    <string name="setup_discovery_failed">Could not find devices. Try again.</string>
+    <string name="setup_edit_sign_in_options">Edit sign-in and options</string>
+    <string name="setup_save_connection">Save connection</string>
 </resources>

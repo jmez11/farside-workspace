@@ -129,7 +129,7 @@ fun LauncherScreen(
 
     Box(modifier = Modifier.fillMaxSize()) {
         if (isAdding || editingProfile != null) {
-            AddProfileForm(
+            com.farside.workspace.ui.setup.ConnectionSetupFlow(
                 initialProfile = editingProfile,
                 onSave = {
                     onAddProfile(it)

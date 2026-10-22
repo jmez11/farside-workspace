@@ -118,6 +118,11 @@ class RdpResizeInstrumentation : Instrumentation() {
     override fun onStart() {
         val results = Bundle()
         try {
+            if (jumpArgs?.getString("setupPhaseOneOnly") == "true") {
+                results.putString("stream", SetupPhaseOneVerification(this).run()+"\n")
+                finish(0, results)
+                return
+            }
             if (jumpArgs?.getString("cameraResolutionOnly") == "true") {
                 results.putString("stream", CredentialUiVerification(this).verifyCameraResolutionColors() + "\n")
                 finish(0, results)
