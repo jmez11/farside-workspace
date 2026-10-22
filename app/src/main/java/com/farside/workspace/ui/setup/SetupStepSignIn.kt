@@ -15,6 +15,8 @@ import com.farside.workspace.ui.profileCredentialErrorRes
 
 /** A saved credential is indivisible. Specific fields never borrow one of its components. */
 internal class SetupSignInState(initial:ConnectionProfile?) {
+    private val originalCredentialId=initial?.credentialId
+    private val originalKeyId=initial?.sshKeyId
     var specific by mutableStateOf(initial!=null && initial.credentialId==null)
     var credentialId by mutableStateOf(initial?.credentialId)
     var user by mutableStateOf(if(initial?.credentialId==null) initial?.user.orEmpty() else "")
@@ -30,7 +32,8 @@ internal class SetupSignInState(initial:ConnectionProfile?) {
             user=if(specific) (if(base.type==ConnectionType.VNC && base.vncAuthMode==VncAuthMode.VNC_PASSWORD) "" else user) else
                 (if(base.type==ConnectionType.SSH) stored?.userShort ?: stored?.user else stored?.user).orEmpty(),
             pass=if(specific) (if(base.type==ConnectionType.SSH && keyMode) "" else password.ifEmpty {originalPassword}) else stored?.pass.orEmpty(),
-            sshKeyId=if(specific && base.type==ConnectionType.SSH && keyMode) keyId else null)
+            sshKeyId=if(specific && base.type==ConnectionType.SSH && keyMode) keyId
+                else if(!specific && base.type==ConnectionType.SSH && credentialId==originalCredentialId) originalKeyId else null)
     }
     fun error(base:ConnectionProfile,credentials:List<SavedCredential>):Int? {
         if(base.type==ConnectionType.SSH) return null
@@ -74,6 +77,9 @@ internal fun SetupStepSignIn(base:ConnectionProfile,state:SetupSignInState,pm:Pr
                 }
             }
             OutlinedButton(onClick={sheet="credential"}) {Text(stringResource(if(passwordOnly) R.string.setup_new_vnc_password else R.string.setup_new_sign_in))}
+            state.profile(base,credentials).sshKeyId?.let {id ->
+                Text(stringResource(R.string.setup_saved_key_in_use,keys.find {it.id==id}?.name.orEmpty()),fontSize=13.sp,color=SetupColors.muted)
+            }
         } else {
             if(!passwordOnly) SetupInput(R.string.setup_username,state.user,{state.user=it})
             if(base.type==ConnectionType.SSH) Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) {

@@ -57,7 +57,7 @@ internal class SetupPhaseOneVerification(private val test:Instrumentation) {
         }))
         Thread.sleep(150)
     }
-    private fun enabled(text:String):Boolean {
+    internal fun enabled(text:String):Boolean {
         var node=find(text)
         while(!node.isClickable && node.parent!=null) node=checkNotNull(node.parent)
         return node.isEnabled
@@ -133,7 +133,7 @@ internal class SetupPhaseOneVerification(private val test:Instrumentation) {
                 }
                 if(type==ConnectionType.RDP) capture(activity,"setup-phase2-sign-in.png")
                 click(label(R.string.continue_action))
-                find(label(R.string.setup_edit_sign_in_options))
+                find(test.targetContext.getString(R.string.setup_edit_step,label(R.string.setup_sign_in)))
                 click(label(R.string.setup_save_connection))
                 val result=checkNotNull(saved)
                 check(result.type==type && result.host=="127.0.0.1" && result.name=="Setup fixture ${type.name}")

@@ -51,11 +51,15 @@ fun ConnectionSetupFlow(
     val id = rememberSaveable { initialProfile?.id ?: UUID.randomUUID().toString() }
     val signIn=remember(id) {SetupSignInState(initialProfile)}
     val credentials=remember(signIn.revision,credentialRevision) {profileManager.getCredentials()}
-    val base=(initialProfile ?: ConnectionProfile(id=id,name=name,type=type,host=host,user="",pass="",macAudioEnabled=true)).copy(
+    var options by remember(id) {mutableStateOf((initialProfile ?: ConnectionProfile(id=id,name=name,type=type,host=host,user="",pass="",macAudioEnabled=true)).let {
+        if(it.useCloudflare) it.copy(proxyType=ProxyType.CLOUDFLARED,useCloudflare=false) else it
+    })}
+    val base=options.copy(
         name=name,type=type,host=host,port=port.toIntOrNull() ?: 0,vncAuthMode=auth,
         expMacHevc=type==ConnectionType.VNC && auth==VncAuthMode.MAC_USER)
     val signInValid=signIn.error(base,credentials)==null
     val draft=signIn.profile(base,credentials)
+    val optionsValid=setupOptionsError(context,draft,savedProfiles)==null
     var found by remember { mutableStateOf(emptyList<DiscoveredHost>()) }
     var scanning by remember { mutableStateOf(false) }
     var scanError by remember { mutableStateOf(false) }
@@ -142,15 +146,12 @@ fun ConnectionSetupFlow(
                         SetupStepSignIn(base,signIn,profileManager)
                     }
                     3 -> Column(Modifier.weight(1f).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-                        Text(stringResource(R.string.setup_review),style=MaterialTheme.typography.titleLarge)
-                        Text(name,style=MaterialTheme.typography.titleMedium)
-                        Text("${type.name}  $host:$port")
-                        TextButton(onClick={step=2}) { Text(stringResource(R.string.setup_edit_sign_in_options)) }
+                        SetupReviewOptions(draft,savedProfiles,onChange={options=it},onEdit={step=it})
                     }
                 }
                 Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
                     OutlinedButton(shape=RoundedCornerShape(12.dp),border=BorderStroke(1.dp,SetupColors.border),enabled=step>0,onClick={step--}) { Text(stringResource(R.string.back)) }
-                    Button(shape=RoundedCornerShape(12.dp),enabled=step==0 || validServer && (step<2 || signInValid),onClick={
+                    Button(shape=RoundedCornerShape(12.dp),enabled=step==0 || validServer && (step<2 || signInValid) && (step!=3 || optionsValid),onClick={
                         if(step==3) onSave(draft)
                         else step++
                     }) { Text(stringResource(if(step!=3) R.string.continue_action else if(initialProfile==null) R.string.setup_save_connection else R.string.save_changes)) }
