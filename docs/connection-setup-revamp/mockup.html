@@ -547,9 +547,9 @@
                 <div class="setting-card">
                   <p class="setting-help" style="margin-top:0;">Options for testing sign-in, trust store prompts and permission re-prompts.</p>
                   <div class="debug-actions">
-                    <button class="btn small debug-red" id="dbgCertsBtn" type="button">Clear trusted certificates</button>
+                    <button class="btn small debug-orange" id="dbgCertsBtn" type="button">Clear trusted certificates</button>
                     <button class="btn small debug-orange" id="dbgPermsBtn" type="button">Revoke granted permissions</button>
-                    <button class="btn small" id="dbgCfBtn" type="button">Clear Cloudflare logins</button>
+                    <button class="btn small debug-orange" id="dbgCfBtn" type="button">Clear Cloudflare logins</button>
                   </div>
                 </div>
               </section>
@@ -573,7 +573,7 @@
           <li><strong>A review screen before saving</strong>Step 4 summarises the whole connection up top with Edit links back to each step, then groups the extras — display &amp; audio, tunnel, files, network — into cards instead of a flat toggle pile.</li>
           <li><strong>The vault knows what things are</strong>Sign-ins and SSH keys are grouped separately, with kind and PIN badges and a “used by N connections” line, so it's obvious what breaks if you delete one.</li>
           <li><strong>App PIN and backup/restore move into the Vault</strong>The PIN protects vault contents and backups export the vault, so they live with the secrets instead of a leftover Settings tab.</li>
-          <li><strong>Settings becomes About / Info</strong>With the PIN and backup gone to the Vault, the old settings screen is just About: app name, version, publisher and the open source licenses — which is all a release user without developer mode ever sees. The Wireless ADB tunnel setup and the debug actions stay on the same screen but only appear with developer mode on in a debug build, and the two destructive debug buttons keep their existing red and orange fills — the only off-theme colors on the screen.</li>
+          <li><strong>Settings becomes About / Info</strong>With the PIN and backup gone to the Vault, the old settings screen is just About: app name, version, publisher and the open source licenses — which is all a release user without developer mode ever sees. The Wireless ADB tunnel setup and the debug actions stay on the same screen but only appear with developer mode on in a debug build, and all three debug buttons use the same orange fill (#E65100) — the only off-theme color on the screen.</li>
           <li><strong>Discovery only shows what you picked</strong>An SSH server can't be found by scanning the local network, so step 2 has no finder for SSH — just name, host and port, no explanation needed. Where the finder does appear, it only lists servers of the type you selected: RDP finds RDP PCs, VNC finds VNC servers, and switching protocol swaps the list.</li>
           <li><strong>VNC is a general protocol, not Mac-only</strong>VNC wording no longer assumes the target is a Mac — it runs on Windows, Linux and media boxes too. Mac Screen Sharing appears exactly once, as the example for username + password sign-in, and the password flow just says “VNC password”.</li>
           <li><strong>Two entry points, no toggle</strong>The flow is reached two separate ways, and the user never switches between them: the New button at the top of the main launcher opens it blank (header “New connection”, close ×, footer “Save connection”), and Edit on a saved connection in the launcher opens the same flow prefilled — protocol, server, sign-in, options — with the stepper fully visitable (header “Edit connection”, back ←, footer “Save changes”). There's no delete in edit mode, since removing a connection already lives on the main launcher. The switcher above the panel is mockup navigation only, for previewing both entry points — it is not app UI.</li>

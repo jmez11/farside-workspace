@@ -145,9 +145,9 @@ like `setup-revamp: phase 2 sign-in step`.
   (Proprietary) — under "Open source licenses". Developer-mode-only sections
   keep their existing copy and behavior above the About block: Wireless ADB
   tunnel (`AdbTunnelSection`, hidden unless developer mode is on) and Debug
-  actions (debug builds only) with the existing button colors — Clear trusted
-  certificates red (#D32F2F), Revoke granted permissions orange (#E65100),
-  Clear Cloudflare logins outlined neutral.
+  actions (debug builds only), all three debug buttons using the orange fill
+  (#E65100, white text) — Clear trusted certificates, Revoke granted
+  permissions, Clear Cloudflare logins.
   **Launcher top bar**: add a vault icon (key/lock, e.g. `Icons.Default.Key`)
   immediately left of the settings icon — i.e. between the folder icon (when
   present) and the settings icon — opening the new vault UI. Change the
