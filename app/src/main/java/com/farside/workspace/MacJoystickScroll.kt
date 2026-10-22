@@ -7,7 +7,7 @@ internal object MacJoystickScroll {
     fun steps(value:Float):Int {
         if(!value.isFinite() || abs(value)<=0.2f) return 0
         val deflection=((abs(value)-0.2f)/0.8f).coerceIn(0f,1f)
-        return 10*(6+(10f*deflection*deflection).toInt())
+        return 100*(6+(10f*deflection*deflection).toInt())
     }
     fun delayMs(x:Float,y:Float):Long {
         val magnitude=kotlin.math.hypot(x.toDouble(),y.toDouble()).toFloat().coerceIn(0f,1f)

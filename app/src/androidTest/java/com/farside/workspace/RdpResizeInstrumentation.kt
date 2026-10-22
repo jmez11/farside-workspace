@@ -548,28 +548,36 @@ class RdpResizeInstrumentation : Instrumentation() {
             sent.clear()
             scroll=RdpControllerScroll(macScrolling={true}) { sent.add(it) }
             motion(0.3f,0f)
-            check(sent.size==60) { "Small Mac deflection must emit sixty ticks" }
+            check(sent.size==600) { "Small Mac deflection must emit six hundred ticks" }
             motion(0f,0f);sent.clear()
             motion(1f,0f)
-            check(sent.size==160 && sent.all { it==0x478 }) { "Full Mac deflection did not accelerate" }
+            check(sent.size==1600 && sent.all { it==0x478 }) { "Full Mac deflection did not accelerate" }
             motion(0f,0f);sent.clear()
             motion(.3f,0f)
         }
         Thread.sleep(180)
         runOnMainSync {
-            check(sent.size>=120) { "Light Mac tilt did not repeat promptly" }
+            check(sent.size>=1200) { "Light Mac tilt did not repeat promptly" }
             sent.clear();motion(1f,0f)
         }
         Thread.sleep(130)
         runOnMainSync {
-            check(sent.size>=640) { "Increasing Mac deflection retained the slow repeat timer" }
+            check(sent.size>=6400) { "Increasing Mac deflection retained the slow repeat timer" }
             motion(-1f,0f)
-            check(sent.takeLast(160).all { it==0x588 }) { "Mac reversal did not take effect immediately" }
+            check(sent.takeLast(1600).all { it==0x588 }) { "Mac reversal did not take effect immediately" }
             scroll.stop()
             stoppedCount=sent.size
         }
         Thread.sleep(100)
         runOnMainSync { check(sent.size==stoppedCount) { "Mac wheel continued after stop" } }
+        runOnMainSync {
+            sent.clear();scroll=RdpControllerScroll(macScrolling={true}) {sent.add(it)}
+            val coords=android.view.MotionEvent.PointerCoords().apply {setAxisValue(android.view.MotionEvent.AXIS_VSCROLL,.1f)}
+            val event=android.view.MotionEvent.obtain(0,android.os.SystemClock.uptimeMillis(),android.view.MotionEvent.ACTION_SCROLL,1,
+                arrayOf(android.view.MotionEvent.PointerProperties().apply {id=0}),arrayOf(coords),0,0,1f,1f,0,0,android.view.InputDevice.SOURCE_MOUSE,0)
+            try {check(scroll.onMotion(event));check(sent==listOf(0x278)) {"Light Horizon wheel-style Mac input was lost"}}
+            finally {event.recycle();scroll.stop()}
+        }
     }
 
     private fun verifyDoubleTapTolerance() {

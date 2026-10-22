@@ -29,6 +29,7 @@ internal fun SetupInput(label:Int,value:String,onChange:(String)->Unit,secret:Bo
             keyboardOptions=androidx.compose.foundation.text.KeyboardOptions(autoCorrectEnabled=false,
                 keyboardType=when {
                     label==R.string.enter_new_app_pin || label==R.string.setup_confirm_pin -> androidx.compose.ui.text.input.KeyboardType.NumberPassword
+                    label==R.string.bridge_port_hint -> androidx.compose.ui.text.input.KeyboardType.Number
                     secret -> androidx.compose.ui.text.input.KeyboardType.Password
                     else -> androidx.compose.ui.text.input.KeyboardType.Text
                 }),

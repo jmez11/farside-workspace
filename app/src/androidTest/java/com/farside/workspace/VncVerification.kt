@@ -331,6 +331,8 @@ internal class VncVerification(private val test: Instrumentation,private val liv
                     }
                     check(server.disconnected.await(10,java.util.concurrent.TimeUnit.SECONDS))
                 } } finally { fixtureManager.deleteCredential(fixtureCredential.id) }
+            } else if (mode == "macDualFixture") {
+                record(MacDualStreamVerification(test).run())
             } else if (mode == "macAvcSourceFixture") {
                 record(MacAvcSourceFixture(test).run())
             } else if (mode in listOf("macAudioFixture","macAudioBackgroundFixture")) {

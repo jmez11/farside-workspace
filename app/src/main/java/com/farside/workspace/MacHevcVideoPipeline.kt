@@ -116,8 +116,8 @@ class MacHevcVideoPipeline(
         set(value) { avc?.packetObserver=value }
     private val audioSender=audioKeyBlobV?.let { MacHevcSrtpSender(it,ourAudioSsrc) }
 
-    private var udpSocket: DatagramSocket? = null
-    private var udpCtrlSocket: DatagramSocket? = null
+    private var udpSocket: MacMediaUdpSocket? = null
+    private var udpCtrlSocket: MacMediaUdpSocket? = null
     private var mediaCodec: MediaCodec? = null
     private var receiverThread: Thread? = null
     private var ctrlReceiverThread: Thread? = null
@@ -147,69 +147,17 @@ class MacHevcVideoPipeline(
             log("Discovered target network for UDP binding: $targetNetwork")
         }
 
-        // Bind UDP video socket (5901)
+        // Fixed ports are shared by session-owned subscriptions, never competing kernel sockets.
         try {
-            val sock = DatagramSocket(null).apply {
-                reuseAddress = true
-                receiveBufferSize = 4 * 1024 * 1024
-                soTimeout = if(preferAvc) 16 else 1000
+            fun bindNetwork(socket:DatagramSocket) {
+                try {targetNetwork?.bindSocket(socket)} catch(e:Exception) {log("UDP network binding failed: ${e.message}")}
             }
-            try {
-                targetNetwork?.bindSocket(sock)
-                log("Bound UDP video socket to network $targetNetwork")
-            } catch (e: Exception) {
-                log("Failed to bind UDP video socket to network $targetNetwork: ${e.message}")
-            }
-            sock.bind(InetSocketAddress(videoPort))
-            udpSocket = sock
-            log("UDP video socket bound to port $videoPort (rcvbuf=${sock.receiveBufferSize})")
-        } catch (e: Exception) {
-            log("Failed to bind UDP port $videoPort, attempting ephemeral fallback: ${e.message}")
-            try {
-                val sock = DatagramSocket(null).apply {
-                    reuseAddress = true
-                    receiveBufferSize = 4 * 1024 * 1024
-                    soTimeout = if(preferAvc) 16 else 1000
-                }
-                try { targetNetwork?.bindSocket(sock) } catch (ignored: Exception) {}
-                sock.bind(InetSocketAddress(0))
-                udpSocket = sock
-                log("Fallback UDP video socket bound to port ${sock.localPort}")
-            } catch (e2: Exception) {
-                log("UDP socket bind failed: ${e2.message}")
-                isRunning.set(false)
-                return
-            }
-        }
-
-        // Bind UDP control socket (5900)
-        try {
-            val cSock = DatagramSocket(null).apply {
-                reuseAddress = true
-                receiveBufferSize = 1024 * 1024
-                soTimeout = if(preferAvc) 16 else 1000
-            }
-            try {
-                targetNetwork?.bindSocket(cSock)
-                log("Bound UDP control socket to network $targetNetwork")
-            } catch (e: Exception) {
-                log("Failed to bind UDP control socket to network $targetNetwork: ${e.message}")
-            }
-            cSock.bind(InetSocketAddress(ctrlPort))
-            udpCtrlSocket = cSock
-            log("UDP control socket bound to port $ctrlPort")
-        } catch (e: Exception) {
-            log("Failed to bind UDP control port $ctrlPort: ${e.message}")
-            try {
-                val cSock = DatagramSocket(null).apply {
-                    reuseAddress = true
-                    soTimeout = if(preferAvc) 16 else 1000
-                }
-                try { targetNetwork?.bindSocket(cSock) } catch (ignored: Exception) {}
-                cSock.bind(InetSocketAddress(0))
-                udpCtrlSocket = cSock
-                log("Fallback UDP control socket bound to port ${cSock.localPort}")
-            } catch (ignored: Exception) {}
+            udpSocket=MacMediaUdpSocket.open(videoPort,if(preferAvc) 16 else 1000,::bindNetwork)
+            udpCtrlSocket=MacMediaUdpSocket.open(ctrlPort,if(preferAvc) 16 else 1000,::bindNetwork)
+            log("Subscribed to shared UDP media ports $videoPort/$ctrlPort with session-specific SRTP keys")
+        } catch(e:Exception) {
+            close()
+            throw e
         }
 
         receiverThread = Thread({

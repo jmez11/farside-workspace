@@ -33,10 +33,11 @@ internal class RdpControllerScroll(private val macScrolling: () -> Boolean = { f
 
     fun onMotion(event: MotionEvent): Boolean {
         if (event.actionMasked == MotionEvent.ACTION_SCROLL) {
+            val multiplier=if(macScrolling()) 10f else 1f
             val h = event.getAxisValue(MotionEvent.AXIS_HSCROLL)
             val v = event.getAxisValue(MotionEvent.AXIS_VSCROLL)
             if (h.isFinite() && h != 0f) {
-                hScrollAccum += h
+                hScrollAccum += h*multiplier
                 while (abs(hScrollAccum) >= 1.0f) {
                     val dir = if (hScrollAccum > 0) 1 else -1
                     send(FreeRDPBridge.PTR_FLAGS_HWHEEL or ((if (dir > 0) 120 else -120) and 0x01ff))
@@ -44,7 +45,7 @@ internal class RdpControllerScroll(private val macScrolling: () -> Boolean = { f
                 }
             }
             if (v.isFinite() && v != 0f) {
-                vScrollAccum += v
+                vScrollAccum += v*multiplier
                 while (abs(vScrollAccum) >= 1.0f) {
                     val dir = if (vScrollAccum > 0) 1 else -1
                     send(FreeRDPBridge.PTR_FLAGS_WHEEL or ((if (dir > 0) 120 else -120) and 0x01ff))

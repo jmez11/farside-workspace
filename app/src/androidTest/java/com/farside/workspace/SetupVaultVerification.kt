@@ -127,7 +127,8 @@ internal class SetupVaultVerification(private val test:Instrumentation) {
                 LauncherScreen(profiles=pm.getProfiles(),profileManager=pm,onAddProfile={},onDeleteProfile={},onConnectProfile={})
             }}}
             ui.click(text(R.string.setup_vault));ui.find(text(R.string.setup_close_vault));ui.click(text(R.string.setup_close_vault))
-            ui.click(text(R.string.setup_info));ui.find(text(R.string.about_open_source_licenses))
+            ui.click(text(R.string.setup_info));ui.find(text(R.string.open_source_licenses));ui.capture(activity,"about-screen.png")
+            ui.find(text(R.string.clear_trusted_certificates));ui.capture(activity,"about-actions.png")
             check(ui.nodes().none {it.text?.toString()==text(R.string.setup_vault_protection)})
             return "PASS compact search-free vault/edit and immediate require-PIN setup/cancel, Mac fields and replace-only password/key, public-key view, inline VNC-password creation, real app-PIN set/change/remove dialogs, authenticated encrypted URI backup/import with profiles/short names/keys/PIN/photos/inline VNC, launcher Vault and Info entries. Isolated preferences/files only; physical headset-passcode and SAF-picker UI remain manual."
         } finally {

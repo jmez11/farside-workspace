@@ -555,21 +555,22 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
 }
 
 @Composable
-fun ClearCloudflareLoginsButton(onStatus: (String) -> Unit) {
+fun ClearCloudflareLoginsButton(compact:Boolean=false,onStatus: (String) -> Unit) {
     val context = LocalContext.current
     val loginsClearedMsg = stringResource(R.string.cloudflare_logins_cleared)
     val loginsClearFailedMsg = stringResource(R.string.cloudflare_logins_clear_failed)
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+    Column(if(compact) Modifier else Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
         Button(
+            shape=RoundedCornerShape(if(compact) 8.dp else 20.dp),
             onClick = {
                 onStatus(runCatching {
                     com.farside.workspace.tunnel.CloudflaredTunnel.clearCachedLogins(context)
                     loginsClearedMsg
                 }.getOrElse { it.message ?: loginsClearFailedMsg })
             },
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
-        ) { Text(stringResource(R.string.clear_cloudflare_logins)) }
-        Text(
+            colors = if(compact) ButtonDefaults.buttonColors(containerColor=Color(0xFFEA5A00),contentColor=Color.White) else ButtonDefaults.buttonColors(containerColor=Color(0xFFD32F2F))
+        ) { Text(stringResource(R.string.clear_cloudflare_logins),fontSize=if(compact) 12.sp else 14.sp) }
+        if(!compact) Text(
             stringResource(R.string.close_cloudflare_sessions_first_clears_cached_access_tokens_brow),
             color = Color.Gray,
             fontSize = 12.sp

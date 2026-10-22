@@ -757,4 +757,6 @@
     <string name="setup_remove">Remove</string>
     <string name="setup_public_key">Public key</string>
     <string name="setup_sign_ins">Sign-ins</string>
+    <string name="open_source_licenses">Open source licenses</string>
+    <string name="about_version">Version %1$s</string>
 </resources>
