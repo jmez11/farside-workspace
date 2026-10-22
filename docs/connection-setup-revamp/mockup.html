@@ -260,6 +260,24 @@
       .btn.danger { color: #ffb3b3; border-color: rgba(255,107,107,.45); background: rgba(255,107,107,.08); }
       .btn.danger:hover { background: rgba(255,107,107,.15); }
       .backup-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+      /* ---------- about / info ---------- */
+      .about-panel { padding: 22px 24px 24px; }
+      .about-app-name { font-size: 19px; font-weight: 700; }
+      .about-app-meta { color: var(--muted); font-size: 14px; margin-top: 2px; }
+      .license-list { list-style: none; margin: 0; padding: 0; }
+      .license-list li { display: flex; gap: 10px; align-items: baseline; padding: 9px 0; font-size: 14.5px; }
+      .license-list li + li { border-top: 1px solid var(--border); }
+      .license-list li::before { content: "•"; color: var(--accent); font-weight: 700; flex: none; }
+      .adb-status { display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: 14px; margin: 14px 0; }
+      .adb-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); flex: none; animation: adbPulse 1.6s ease-in-out infinite; }
+      @keyframes adbPulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+      @media (prefers-reduced-motion: reduce) { .adb-dot { animation: none; } }
+      .debug-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+      .btn.debug-red { background: #D32F2F; border-color: #D32F2F; color: #fff; }
+      .btn.debug-red:hover { background: #b71c1c; }
+      .btn.debug-orange { background: #E65100; border-color: #E65100; color: #fff; }
+      .btn.debug-orange:hover { background: #bf4300; }
+
       .pin-form { border-top: 1px solid var(--border); margin-top: 16px; padding-top: 16px; }
       .pin-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
       .pin-grid .field-group { margin-bottom: 0; }
@@ -315,7 +333,7 @@
         .field-row { grid-template-columns: 1fr; }
         .stepper { padding: 16px 14px 4px; }
         .step { min-width: 0; flex: 1; }
-        .step-body, .panel-foot, .vault-panel { padding-left: 16px; padding-right: 16px; }
+        .step-body, .panel-foot, .vault-panel, .about-panel { padding-left: 16px; padding-right: 16px; }
         .panel-head { padding-left: 16px; padding-right: 16px; }
         .rationale ul { grid-template-columns: 1fr; }
         .pin-grid { grid-template-columns: 1fr; }
@@ -340,6 +358,7 @@
       <div class="view-toggle" role="tablist" aria-label="View">
         <button id="viewFlowBtn" class="active" type="button">New connection flow</button>
         <button id="viewVaultBtn" type="button">Vault</button>
+        <button id="viewAboutBtn" type="button">About / Info</button>
       </div>
 
       <!-- ============ FLOW VIEW ============ -->
@@ -465,6 +484,81 @@
         </div>
       </div>
 
+      <!-- ============ ABOUT / INFO VIEW ============ -->
+      <div id="aboutView" class="hidden">
+        <div class="guidance-block" style="margin-top:0;">
+          <div class="guidance-label">Guidance — third app screen</div>
+          <p class="guidance-text">The About screen is reached from the info icon at the top right of the launcher (where the settings gear used to be). Its lower sections are conditional in the real app: a release user without developer mode sees only the app block and the licenses, while the Wireless ADB and debug sections appear when developer mode is on in a debug build. Preview both states with the switcher below.</p>
+        </div>
+
+        <div class="guidance-label">Guidance — preview screen state</div>
+        <div class="entry-switcher" id="aboutStateSwitcher">
+          <p class="entry-switcher-title">Preview screen state — mockup navigation only (not app UI)</p>
+          <p class="entry-switcher-text">The user never switches between these: which sections appear is decided by the build and whether developer mode is on.</p>
+          <div class="entry-options" role="group" aria-label="Preview About screen state">
+            <button type="button" class="entry-option active" id="aboutStateReleaseBtn"><span class="eo-title">Release user, no developer mode</span><span class="eo-sub">App info and open source licenses only</span></button>
+            <button type="button" class="entry-option" id="aboutStateDevBtn"><span class="eo-title">Developer mode on (debug build)</span><span class="eo-sub">Adds Wireless ADB setup and debug actions</span></button>
+          </div>
+        </div>
+
+        <div class="panel-wrap">
+        <div class="ui-tag">QUEST APP UI — interactive mockup</div>
+        <div class="panel">
+          <div class="about-panel">
+            <div class="panel-title" style="font-size:19px; font-weight:700; margin-bottom:14px;">About</div>
+
+            <div class="about-app-name">Farside Workspace</div>
+            <div class="about-app-meta">Version 0.1.0-rc3</div>
+            <div class="about-app-meta">OceanSideVR</div>
+
+            <section class="vault-section" aria-labelledby="aboutLicensesTitle">
+              <div class="group-label" id="aboutLicensesTitle">Open source licenses</div>
+              <div class="setting-card">
+                <ul class="license-list">
+                  <li>FreeRDP 3.x (Apache-2.0)</li>
+                  <li>SSHJ (Apache-2.0)</li>
+                  <li>Termux Terminal Emulator (GPLv3)</li>
+                  <li>Jetpack Compose &amp; Kotlin (Apache-2.0)</li>
+                  <li>Meta Spatial SDK (Proprietary)</li>
+                </ul>
+              </div>
+            </section>
+
+            <div id="aboutDevSections" class="hidden">
+              <section class="vault-section" aria-labelledby="aboutAdbTitle">
+                <div class="group-label" id="aboutAdbTitle">Wireless ADB</div>
+                <div class="setting-card">
+                  <p class="setting-help" style="margin-top:0;">Enable wireless debugging on the headset to set up the tunnel.</p>
+                  <p class="adb-status"><span class="adb-dot" aria-hidden="true"></span>Discovering this headset's wireless ADB endpoint…</p>
+                  <div class="field-group">
+                    <label for="adbHost">Tunnel hostname</label>
+                    <input class="input" id="adbHost" type="text" value="quest-adb.example.com" />
+                  </div>
+                  <p class="hint">In Cloudflare's tunnel dashboard, publish this hostname as TCP to 127.0.0.1:&lt;port&gt;. The headset keeps that bridge connected to the current wireless ADB port.</p>
+                  <div class="backup-actions">
+                    <button class="btn small primary" id="adbSaveBtn" type="button">Save &amp; start tunnel</button>
+                    <button class="btn small" id="adbStopBtn" type="button">Stop tunnel</button>
+                  </div>
+                </div>
+              </section>
+
+              <section class="vault-section" aria-labelledby="aboutDebugTitle">
+                <div class="group-label" id="aboutDebugTitle">Debug actions</div>
+                <div class="setting-card">
+                  <p class="setting-help" style="margin-top:0;">Options for testing sign-in, trust store prompts and permission re-prompts.</p>
+                  <div class="debug-actions">
+                    <button class="btn small debug-red" id="dbgCertsBtn" type="button">Clear trusted certificates</button>
+                    <button class="btn small debug-orange" id="dbgPermsBtn" type="button">Revoke granted permissions</button>
+                    <button class="btn small" id="dbgCfBtn" type="button">Clear Cloudflare logins</button>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+        </div>
+      </div>
+
       <!-- ============ RATIONALE ============ -->
       <section class="rationale">
         <div class="guidance-label">Guidance — design rationale</div>
@@ -479,6 +573,7 @@
           <li><strong>A review screen before saving</strong>Step 4 summarises the whole connection up top with Edit links back to each step, then groups the extras — display &amp; audio, tunnel, files, network — into cards instead of a flat toggle pile.</li>
           <li><strong>The vault knows what things are</strong>Sign-ins and SSH keys are grouped separately, with kind and PIN badges and a “used by N connections” line, so it's obvious what breaks if you delete one.</li>
           <li><strong>App PIN and backup/restore move into the Vault</strong>The PIN protects vault contents and backups export the vault, so they live with the secrets instead of a leftover Settings tab.</li>
+          <li><strong>Settings becomes About / Info</strong>With the PIN and backup gone to the Vault, the old settings screen is just About: app name, version, publisher and the open source licenses — which is all a release user without developer mode ever sees. The Wireless ADB tunnel setup and the debug actions stay on the same screen but only appear with developer mode on in a debug build, and the two destructive debug buttons keep their existing red and orange fills — the only off-theme colors on the screen.</li>
           <li><strong>Discovery only shows what you picked</strong>An SSH server can't be found by scanning the local network, so step 2 has no finder for SSH — just name, host and port, no explanation needed. Where the finder does appear, it only lists servers of the type you selected: RDP finds RDP PCs, VNC finds VNC servers, and switching protocol swaps the list.</li>
           <li><strong>VNC is a general protocol, not Mac-only</strong>VNC wording no longer assumes the target is a Mac — it runs on Windows, Linux and media boxes too. Mac Screen Sharing appears exactly once, as the example for username + password sign-in, and the password flow just says “VNC password”.</li>
           <li><strong>Two entry points, no toggle</strong>The flow is reached two separate ways, and the user never switches between them: the New button at the top of the main launcher opens it blank (header “New connection”, close ×, footer “Save connection”), and Edit on a saved connection in the launcher opens the same flow prefilled — protocol, server, sign-in, options — with the stepper fully visitable (header “Edit connection”, back ←, footer “Save changes”). There's no delete in edit mode, since removing a connection already lives on the main launcher. The switcher above the panel is mockup navigation only, for previewing both entry points — it is not app UI.</li>
@@ -541,6 +636,7 @@
 
       var S = {
         view: "flow",
+        aboutState: "release",
         mode: "new",
         editId: null,
         combo: "rdp",
@@ -1367,12 +1463,30 @@
         S.view = v;
         el("flowView").classList.toggle("hidden", v !== "flow");
         el("vaultView").classList.toggle("hidden", v !== "vault");
+        el("aboutView").classList.toggle("hidden", v !== "about");
         el("viewFlowBtn").classList.toggle("active", v === "flow");
         el("viewVaultBtn").classList.toggle("active", v === "vault");
+        el("viewAboutBtn").classList.toggle("active", v === "about");
         if (v === "vault") renderVault();
       }
       el("viewFlowBtn").addEventListener("click", function () { setView("flow"); });
       el("viewVaultBtn").addEventListener("click", function () { setView("vault"); });
+      el("viewAboutBtn").addEventListener("click", function () { setView("about"); });
+
+      /* ================= about / info view ================= */
+      function setAboutState(state) {
+        S.aboutState = state;
+        el("aboutStateReleaseBtn").classList.toggle("active", state === "release");
+        el("aboutStateDevBtn").classList.toggle("active", state === "dev");
+        el("aboutDevSections").classList.toggle("hidden", state !== "dev");
+      }
+      el("aboutStateReleaseBtn").addEventListener("click", function () { setAboutState("release"); });
+      el("aboutStateDevBtn").addEventListener("click", function () { setAboutState("dev"); });
+      el("adbSaveBtn").addEventListener("click", function () { toast("Tunnel settings saved — tunnel starting"); });
+      el("adbStopBtn").addEventListener("click", function () { toast("Tunnel stopped"); });
+      el("dbgCertsBtn").addEventListener("click", function () { toast("Trusted certificates cleared"); });
+      el("dbgPermsBtn").addEventListener("click", function () { toast("Granted permissions revoked"); });
+      el("dbgCfBtn").addEventListener("click", function () { toast("Cloudflare logins cleared"); });
 
       /* ================= vault view ================= */
       function renderVault() {

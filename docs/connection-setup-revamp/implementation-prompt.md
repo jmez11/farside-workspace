@@ -137,7 +137,17 @@ like `setup-revamp: phase 2 sign-in step`.
   set/change/remove — the PIN gates vault items, so it lives here), and
   **Backup & restore** (export/import; the encrypted backup covers connections,
   sign-ins, keys, PIN settings). The old Settings General tab shrinks to the
-  remaining non-secret items (ADB tunnel, debug actions, about/licenses).
+  remaining non-secret items (ADB tunnel, debug actions, about/licenses) as a
+  slimmed **About / info screen** in the new theme (§1b): header "About";
+  app block (Farside Workspace, version, OceanSideVR); the existing five
+  license lines — FreeRDP 3.x (Apache-2.0), SSHJ (Apache-2.0), Termux Terminal
+  Emulator (GPLv3), Jetpack Compose & Kotlin (Apache-2.0), Meta Spatial SDK
+  (Proprietary) — under "Open source licenses". Developer-mode-only sections
+  keep their existing copy and behavior above the About block: Wireless ADB
+  tunnel (`AdbTunnelSection`, hidden unless developer mode is on) and Debug
+  actions (debug builds only) with the existing button colors — Clear trusted
+  certificates red (#D32F2F), Revoke granted permissions orange (#E65100),
+  Clear Cloudflare logins outlined neutral.
   **Launcher top bar**: add a vault icon (key/lock, e.g. `Icons.Default.Key`)
   immediately left of the settings icon — i.e. between the folder icon (when
   present) and the settings icon — opening the new vault UI. Change the
