@@ -10,7 +10,7 @@ import androidx.compose.material3.MaterialTheme
 import com.farside.workspace.data.ConnectionProfile
 import com.farside.workspace.data.ConnectionType
 import com.farside.workspace.data.ProfileManager
-import com.farside.workspace.ui.AddProfileForm
+import com.farside.workspace.ui.setup.ConnectionSetupFlow
 import java.io.File
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
@@ -40,7 +40,7 @@ internal class MacRelayToggleUiVerification(private val test: Instrumentation) {
             test.runOnMainSync {
                 activity.setContent {
                     MaterialTheme {
-                        AddProfileForm(initialProfile = fixture, onSave = { saved = it }, onCancel = {}, profileManager = pm, savedProfiles = listOf(fixture, ssh))
+                        ConnectionSetupFlow(initialProfile = fixture, onSave = { saved = it }, onCancel = {}, profileManager = pm, savedProfiles = listOf(fixture, ssh))
                     }
                 }
             }
@@ -75,7 +75,7 @@ internal class MacRelayToggleUiVerification(private val test: Instrumentation) {
             test.runOnMainSync {
                 activity.setContent {
                     MaterialTheme {
-                        AddProfileForm(initialProfile = fixture, onSave = { saved = it }, onCancel = {}, profileManager = pm,
+                        ConnectionSetupFlow(initialProfile = fixture, onSave = { saved = it }, onCancel = {}, profileManager = pm,
                             savedProfiles = listOf(fixture, ssh, result.copy(id = "accepted-fixture")))
                     }
                 }

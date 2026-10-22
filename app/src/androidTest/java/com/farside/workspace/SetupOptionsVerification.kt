@@ -26,7 +26,9 @@ internal class SetupOptionsVerification(private val test:Instrumentation) {
         val legacyCredential=SavedCredential(name="Owned legacy login",user="fixture",pass="fixture")
         pm.addCredential(legacyCredential)
         val legacyKey=ssh.copy(id="owned-legacy-key",name="Owned legacy key login",credentialId=legacyCredential.id,pass=legacyCredential.pass)
-        val fixtures=listOf(rdp,ssh,vnc,legacyKey)
+        val sshPassword=ssh.copy(id="owned-ssh-password",name="Owned SSH password",credentialId=legacyCredential.id,pass=legacyCredential.pass,sshKeyId=null)
+        val vncPassword=vnc.copy(id="owned-vnc-password",name="Owned VNC password",vncAuthMode=VncAuthMode.VNC_PASSWORD,user="")
+        val fixtures=listOf(rdp,ssh,vnc,legacyKey,sshPassword,vncPassword)
         fixtures.forEach(pm::addProfile)
         val ui=SetupPhaseOneVerification(test)
         fun text(id:Int)=context.getString(id)
@@ -71,7 +73,7 @@ internal class SetupOptionsVerification(private val test:Instrumentation) {
                 check(result.id==fixture.id && loaded.host==fixture.host && loaded.user==fixture.user)
                 when(fixture.type) {
                     ConnectionType.RDP -> check(loaded.soundRedirection==SoundRedirection.DO_NOT_PLAY && loaded.proxyType==ProxyType.HTTP && loaded.proxyPort==3128 && loaded.resolutionScaling==125)
-                    ConnectionType.SSH -> check(!loaded.autoCopySelection && loaded.sshKeyId==key.id &&
+                    ConnectionType.SSH -> check(!loaded.autoCopySelection && loaded.sshKeyId==fixture.sshKeyId &&
                         (if(fixture.credentialId==null) loaded.pass.isEmpty() else loaded.credentialId==fixture.credentialId && loaded.pass==fixture.pass))
                     ConnectionType.VNC -> check(loaded.sftpPairProfileId==ssh.id && loaded.pass==fixture.pass)
                 }

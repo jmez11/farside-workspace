@@ -26,6 +26,12 @@ internal fun SetupInput(label:Int,value:String,onChange:(String)->Unit,secret:Bo
     Column(verticalArrangement=Arrangement.spacedBy(6.dp)) {
         Text(text,fontSize=13.sp,color=SetupColors.muted)
         OutlinedTextField(value=value,onValueChange=onChange,singleLine=!multiline,minLines=if(multiline) 3 else 1,
+            keyboardOptions=androidx.compose.foundation.text.KeyboardOptions(autoCorrectEnabled=false,
+                keyboardType=when {
+                    label==R.string.enter_new_app_pin || label==R.string.setup_confirm_pin -> androidx.compose.ui.text.input.KeyboardType.NumberPassword
+                    secret -> androidx.compose.ui.text.input.KeyboardType.Password
+                    else -> androidx.compose.ui.text.input.KeyboardType.Text
+                }),
             maxLines=if(multiline) 6 else 1,visualTransformation=if(secret) PasswordVisualTransformation() else VisualTransformation.None,
             isError=error!=null,shape=androidx.compose.foundation.shape.RoundedCornerShape(11.dp),
             colors=OutlinedTextFieldDefaults.colors(focusedContainerColor=SetupColors.field,unfocusedContainerColor=SetupColors.field,
@@ -38,8 +44,9 @@ internal fun SetupInput(label:Int,value:String,onChange:(String)->Unit,secret:Bo
 /** Shared by setup and the vault. Existing secrets are never inserted into editor fields. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun CredentialSheet(pm:ProfileManager,vncPassword:Boolean=false,allowMac:Boolean=true,
+internal fun CredentialSheet(pm:ProfileManager,vncPassword:Boolean=false,allowMac:Boolean=true,allowPasswordOnly:Boolean=false,
     existing:SavedCredential?=null,onDismiss:()->Unit,onSaved:(SavedCredential)->Unit) {
+    var passwordOnly by remember {mutableStateOf(vncPassword)}
     var name by remember { mutableStateOf(existing?.name.orEmpty()) }
     var nameEdited by remember { mutableStateOf(existing!=null) }
     var user by remember { mutableStateOf(existing?.user.orEmpty()) }
@@ -50,14 +57,18 @@ internal fun CredentialSheet(pm:ProfileManager,vncPassword:Boolean=false,allowMa
     var pin by remember { mutableStateOf(existing?.requirePin ?: false) }
     var pinError by remember { mutableStateOf(false) }
     val effectivePass=pass.ifEmpty { existing?.pass.orEmpty() }
-    val validPass=effectivePass.isNotEmpty() && (!vncPassword || effectivePass.length<=8 && effectivePass.all { it.code in 1..255 })
-    val valid=name.isNotBlank() && validPass && (vncPassword || user.isNotBlank()) && (!mac || MacLoginNames.validShort(short)) && !pinError
+    val validPass=effectivePass.isNotEmpty() && (!passwordOnly || effectivePass.length<=8 && effectivePass.all { it.code in 1..255 })
+    val valid=name.isNotBlank() && validPass && (passwordOnly || user.isNotBlank()) && (!mac || MacLoginNames.validShort(short)) && !pinError
     val sheetHeight=LocalConfiguration.current.screenHeightDp.dp*.8f
     ModalBottomSheet(onDismissRequest=onDismiss,containerColor=SetupColors.background,sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)) {
         Column(Modifier.fillMaxWidth().heightIn(max=sheetHeight).verticalScroll(rememberScrollState()).padding(24.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-            Text(stringResource(if(existing!=null) R.string.edit_credential else if(mac) R.string.setup_new_mac_login else if(vncPassword) R.string.setup_new_vnc_password else R.string.setup_new_sign_in),style=MaterialTheme.typography.titleLarge)
+            Text(stringResource(if(existing!=null) R.string.edit_credential else if(mac) R.string.setup_new_mac_login else if(passwordOnly) R.string.setup_new_vnc_password else R.string.setup_new_sign_in),style=MaterialTheme.typography.titleLarge)
+            if(allowPasswordOnly && existing==null) Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+                listOf(false,true).forEach { only ->FilterChip(selected=passwordOnly==only,onClick={passwordOnly=only;if(only) mac=false},
+                    label={Text(stringResource(if(only) R.string.setup_vnc_password else R.string.setup_user_password))}) }
+            }
             SetupInput(R.string.account_display_name,name,{name=it;nameEdited=true})
-            if(!vncPassword) {
+            if(!passwordOnly) {
                 if(allowMac) Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
                     Text(stringResource(R.string.setup_macos_account),modifier=Modifier.weight(1f))
                     val macLabel=stringResource(R.string.setup_macos_account)
@@ -73,9 +84,9 @@ internal fun CredentialSheet(pm:ProfileManager,vncPassword:Boolean=false,allowMa
                     },error=if(!MacLoginNames.validShort(short)) stringResource(R.string.setup_short_invalid) else null)
                 }
             }
-            SetupInput(if(vncPassword) R.string.setup_vnc_password else R.string.password,pass,{pass=it},secret=true,
+            SetupInput(if(passwordOnly) R.string.setup_vnc_password else R.string.password,pass,{pass=it},secret=true,
                 error=if(pass.isNotEmpty() && !validPass) stringResource(R.string.vnc_password_latin1) else null)
-            if(vncPassword) Text("${pass.length}/8",color=if(pass.length>8) SetupColors.danger else SetupColors.muted)
+            if(passwordOnly) Text("${pass.length}/8",color=if(pass.length>8) SetupColors.danger else SetupColors.muted)
             if(existing!=null) Text(stringResource(R.string.setup_password_keep),fontSize=13.sp,color=SetupColors.muted)
             Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
                 Text(stringResource(R.string.require_pin),modifier=Modifier.weight(1f))
@@ -88,7 +99,7 @@ internal fun CredentialSheet(pm:ProfileManager,vncPassword:Boolean=false,allowMa
             if(pinError) Text(stringResource(R.string.setup_pin_first),color=SetupColors.danger)
             Button(enabled=valid,onClick={
                 val saved=SavedCredential(id=existing?.id ?: java.util.UUID.randomUUID().toString(),name=name.trim(),
-                    user=if(vncPassword) "" else user.trim(),pass=effectivePass,requirePin=pin,userShort=short.takeIf { mac })
+                    user=if(passwordOnly) "" else user.trim(),pass=effectivePass,requirePin=pin,userShort=short.takeIf { mac })
                 if(existing==null) pm.addCredential(saved) else pm.updateCredential(saved)
                 onSaved(saved)
             },modifier=Modifier.fillMaxWidth()) { Text(stringResource(R.string.save_changes)) }

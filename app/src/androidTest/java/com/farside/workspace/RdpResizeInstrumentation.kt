@@ -118,6 +118,11 @@ class RdpResizeInstrumentation : Instrumentation() {
     override fun onStart() {
         val results = Bundle()
         try {
+            if (jumpArgs?.getString("setupVaultOnly") == "true") {
+                results.putString("stream", SetupVaultVerification(this).run()+"\n")
+                finish(0, results)
+                return
+            }
             if (jumpArgs?.getString("setupOptionsOnly") == "true") {
                 results.putString("stream", SetupOptionsVerification(this).run()+"\n")
                 finish(0, results)

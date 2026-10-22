@@ -379,7 +379,7 @@ class SshFeaturesVerification(private val test: Instrumentation, private val ime
                 main {
                     launcher.setContent {
                         androidx.compose.material3.MaterialTheme(colorScheme = androidx.compose.material3.darkColorScheme()) {
-                            com.farside.workspace.ui.AddProfileForm(initialProfile = current,
+                            com.farside.workspace.ui.setup.ConnectionSetupFlow(initialProfile = current,
                                 onSave = { formResult = it }, onCancel = { }, profileManager = pm)
                         }
                     }

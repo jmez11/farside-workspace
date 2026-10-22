@@ -46,10 +46,19 @@ internal class SetupPhaseOneVerification(private val test:Instrumentation) {
         error("Missing setup control: $text")
     }
     internal fun click(text:String) {
-        var node=find(text)
-        while(!node.isClickable) node=checkNotNull(node.parent)
-        check(node.isEnabled && node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) { "Disabled setup control: $text" }
-        Thread.sleep(250)
+        find(text)
+        val deadline=SystemClock.uptimeMillis()+7000
+        while(SystemClock.uptimeMillis()<deadline) {
+            // setContent and dialog dismissal can leave one old accessibility frame.
+            val matches=nodes().filter {it.isVisibleToUser && (it.text?.toString()==text || it.contentDescription?.toString()==text)}.sortedBy {it.isEditable}
+            for(node in matches) {
+                var target:AccessibilityNodeInfo?=node
+                while(target!=null && !target.isClickable) target=target.parent
+                if(target?.isEnabled==true && target.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {Thread.sleep(250);return}
+            }
+            Thread.sleep(100)
+        }
+        error("No enabled clickable setup control: $text")
     }
     internal fun enter(id:Int,value:String) {
         check(find(label(id),true).performAction(AccessibilityNodeInfo.ACTION_SET_TEXT,Bundle().apply {
@@ -80,6 +89,9 @@ internal class SetupPhaseOneVerification(private val test:Instrumentation) {
         val credential=SavedCredential(name="Setup phase one fixture",user="fixture",pass="fixture")
         val owned=mutableListOf<String>()
         pm.addCredential(credential)
+        val keyPair=java.security.KeyPairGenerator.getInstance("RSA").apply {initialize(2048)}.generateKeyPair()
+        val fixtureKey=com.farside.workspace.data.SavedSshKey(name="Setup flow owned key",privateKey="-----BEGIN PRIVATE KEY-----\n"+android.util.Base64.encodeToString(keyPair.private.encoded,android.util.Base64.NO_WRAP).chunked(64).joinToString("\n")+"\n-----END PRIVATE KEY-----\n")
+        pm.addSshKey(fixtureKey)
         val info=test.uiAutomation.serviceInfo
         info.flags=info.flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
         test.uiAutomation.serviceInfo=info
@@ -88,29 +100,33 @@ internal class SetupPhaseOneVerification(private val test:Instrumentation) {
         try {
             context.startActivity(Intent(context,MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
             activity=checkNotNull(test.waitForMonitorWithTimeout(monitor,15000)) as MainActivity
-            for(type in ConnectionType.entries) {
+            val modes=listOf(ConnectionType.RDP to false,ConnectionType.SSH to false,ConnectionType.VNC to false,ConnectionType.VNC to true,ConnectionType.SSH to true)
+            for((index,mode) in modes.withIndex()) {
+                val type=mode.first
+                val accountOrKey=mode.second
+                val profileName="Setup fixture ${type.name} $index"
                 var saved:ConnectionProfile?=null
                 val scans=mutableListOf<ConnectionType>()
                 test.runOnMainSync {
                     activity.setContent {
-                        androidx.compose.runtime.key(type) {
+                        androidx.compose.runtime.key(index) {
                             ConnectionSetupFlow(profileManager=pm,onCancel={},onSave={ profile ->
                                 saved=profile;owned+=profile.id;pm.addProfile(profile)
                             },discovery={ requested ->
                                 scans+=requested
-                                listOf(DiscoveredHost("127.0.0.1","Setup fixture ${requested.name}",if(requested==ConnectionType.RDP) 3389 else 5900))
+                                listOf(DiscoveredHost("127.0.0.1",profileName,if(requested==ConnectionType.RDP) 3389 else 5900))
                             })
                         }
                     }
                 }
                 click(type.name)
-                if(type==ConnectionType.VNC) click(label(R.string.setup_vnc_password))
+                if(type==ConnectionType.VNC) click(label(if(accountOrKey) R.string.setup_user_password else R.string.setup_vnc_password))
                 if(type==ConnectionType.RDP) { find(label(R.string.setup_connecting_to));capture(activity,"setup-phase1-protocol.png") }
                 click(label(R.string.continue_action))
                 check(!enabled(label(R.string.continue_action))) { "Blank server allowed Continue" }
                 find(label(R.string.profile_name_required));find(label(R.string.profile_host_required))
                 if(type==ConnectionType.RDP) capture(activity,"setup-phase1-validation.png")
-                enter(R.string.connection_name,"Setup fixture ${type.name}")
+                enter(R.string.connection_name,profileName)
                 enter(R.string.host_server,"127.0.0.1")
                 enter(R.string.setup_port,"65536")
                 check(!enabled(label(R.string.continue_action)))
@@ -122,28 +138,31 @@ internal class SetupPhaseOneVerification(private val test:Instrumentation) {
                     enter(R.string.setup_port,"22")
                 } else {
                     click(label(if(type==ConnectionType.RDP) R.string.setup_find_pcs else R.string.setup_find_devices))
-                    click("Setup fixture ${type.name}")
+                    click(profileName)
                     check(scans==listOf(type)) { "Discovery requested another protocol" }
                 }
                 check(enabled(label(R.string.continue_action)))
                 if(type==ConnectionType.RDP) capture(activity,"setup-phase1-server.png")
                 click(label(R.string.continue_action))
-                if(type!=ConnectionType.SSH) {
-                    click(credential.name)
-                }
+                if(type==ConnectionType.SSH && accountOrKey) {
+                    click(label(R.string.setup_connection_specific));enter(R.string.setup_username,"fixture")
+                    click(label(R.string.setup_ssh_key));click(fixtureKey.name)
+                } else click(credential.name)
                 if(type==ConnectionType.RDP) capture(activity,"setup-phase2-sign-in.png")
                 click(label(R.string.continue_action))
                 find(test.targetContext.getString(R.string.setup_edit_step,label(R.string.setup_sign_in)))
                 click(label(R.string.setup_save_connection))
                 val result=checkNotNull(saved)
-                check(result.type==type && result.host=="127.0.0.1" && result.name=="Setup fixture ${type.name}")
+                check(result.type==type && result.host=="127.0.0.1" && result.name==profileName)
                 check(result.port==when(type) { ConnectionType.RDP->3389;ConnectionType.SSH->22;ConnectionType.VNC->5900 })
                 check(pm.getProfiles().single { it.id==result.id }.type==type)
-                if(type==ConnectionType.VNC) check(result.vncAuthMode==VncAuthMode.VNC_PASSWORD && result.credentialId==credential.id)
+                if(type==ConnectionType.VNC) check(result.vncAuthMode==(if(accountOrKey) VncAuthMode.MAC_USER else VncAuthMode.VNC_PASSWORD) && result.credentialId==credential.id)
+                if(type==ConnectionType.SSH && accountOrKey) check(result.sshKeyId==fixtureKey.id && result.credentialId==null)
+                if(type==ConnectionType.SSH) check(result.enableSftp) {"New SSH profile did not default to SFTP enabled"}
             }
-            return "PASS Phase1 actual flow creates/reloads owned RDP,SSH,VNC; required name/host/port and range errors; SSH has no discovery; injected RDP/VNC scans select name/IP/port; existing sign-in/save path; photo integrity. Physical Horizon input and live discovery not asserted."
+            return "PASS actual flow creates/reloads all five owned RDP,SSH password/key,VNC password/account variants; required name/host/port and range errors; SSH has no discovery; injected RDP/VNC scans select name/IP/port; existing sign-in/save path; photo integrity. Physical Horizon input and live discovery not asserted."
         } finally {
-            owned.forEach(pm::deleteProfile);pm.deleteCredential(credential.id)
+            owned.forEach(pm::deleteProfile);pm.deleteCredential(credential.id);pm.deleteSshKey(fixtureKey.id)
             test.runOnMainSync { activity?.finish() };test.removeMonitor(monitor)
             check(pm.getProfiles().map { it.id }.toSet()==originalIds) { "Profile cleanup changed original identities" }
             check(images()==originalImages) { "Setup fixture changed existing photos" }

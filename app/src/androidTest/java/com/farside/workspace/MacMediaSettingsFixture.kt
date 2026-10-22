@@ -10,7 +10,7 @@ import androidx.compose.material3.MaterialTheme
 import com.farside.workspace.data.ConnectionProfile
 import com.farside.workspace.data.ConnectionType
 import com.farside.workspace.data.ProfileManager
-import com.farside.workspace.ui.AddProfileForm
+import com.farside.workspace.ui.setup.ConnectionSetupFlow
 import java.io.File
 
 /** Exercises actual settings and JSON without saving or authenticating any connection. */
@@ -33,7 +33,7 @@ internal class MacMediaSettingsFixture(private val test:Instrumentation) {
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
             activity=checkNotNull(test.waitForMonitorWithTimeout(monitor,15000)) { "Horizon did not open companion editor fixture" } as MainActivity
             test.runOnMainSync { activity.setContent { MaterialTheme {
-                AddProfileForm(initialProfile=fixture,onSave={ saved=it },onCancel={},profileManager=pm,savedProfiles=listOf(fixture,ssh))
+                ConnectionSetupFlow(initialProfile=fixture,onSave={ saved=it },onCancel={},profileManager=pm,savedProfiles=listOf(fixture,ssh))
             } } }
             val forbidden=listOf(R.string.mac_media_avc,R.string.mac_media_audio,R.string.mac_media_ssh)
                 .map(test.targetContext::getString)

@@ -56,7 +56,8 @@ fun ConnectionSetupFlow(
     })}
     val base=options.copy(
         name=name,type=type,host=host,port=port.toIntOrNull() ?: 0,vncAuthMode=auth,
-        expMacHevc=type==ConnectionType.VNC && auth==VncAuthMode.MAC_USER)
+        expMacHevc=type==ConnectionType.VNC && auth==VncAuthMode.MAC_USER,
+        enableSftp=if(initialProfile==null && type==ConnectionType.SSH && options.type!=ConnectionType.SSH) true else options.enableSftp)
     val signInValid=signIn.error(base,credentials)==null
     val draft=signIn.profile(base,credentials)
     val optionsValid=setupOptionsError(context,draft,savedProfiles)==null

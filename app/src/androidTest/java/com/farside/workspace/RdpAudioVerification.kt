@@ -12,7 +12,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import com.farside.workspace.data.ConnectionType
 import com.farside.workspace.data.ProfileManager
-import com.farside.workspace.ui.AddProfileForm
+import com.farside.workspace.ui.setup.ConnectionSetupFlow
 
 /** Real runtime permission dialogs and session controls; audio packets require the Windows probe. */
 internal class RdpAudioVerification(private val test: Instrumentation) {
@@ -127,7 +127,7 @@ internal class RdpAudioVerification(private val test: Instrumentation) {
                 test.runOnMainSync {
                     activity.setContent {
                         MaterialTheme(colorScheme = darkColorScheme()) {
-                            AddProfileForm(onSave = {}, onCancel = {}, profileManager = manager, onNavigateToSettings = {})
+                            ConnectionSetupFlow(onSave = {}, onCancel = {}, profileManager = manager, onNavigateToSettings = {})
                         }
                     }
                 }

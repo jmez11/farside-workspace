@@ -385,7 +385,7 @@ class SftpVerification(private val test: Instrumentation) {
         try {
             check(!hasStoragePermission(context))
             activity = test.startActivitySync(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
-            test.runOnMainSync { activity!!.setContent { MaterialTheme { com.farside.workspace.ui.AddProfileForm(initialProfile = profile, onSave = {}, onCancel = {}, profileManager = pm) } } }
+            test.runOnMainSync { activity!!.setContent { MaterialTheme { com.farside.workspace.ui.setup.ConnectionSetupFlow(initialProfile = profile, onSave = {}, onCancel = {}, profileManager = pm) } } }
             action.set(null)
             click("Enable SFTP file access")
             check(action.get() == android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION || action.get() == android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
@@ -516,10 +516,10 @@ class SftpVerification(private val test: Instrumentation) {
                 click("Close Files")
                 record("PASS: launcher folder button; enabled-only profile list; actual connect/list/descend/back")
             }
-            test.runOnMainSync { activity.setContent { MaterialTheme { com.farside.workspace.ui.AddProfileForm(initialProfile = fixture, onSave = {}, onCancel = {}, profileManager = pm) } } }
+            test.runOnMainSync { activity.setContent { MaterialTheme { com.farside.workspace.ui.setup.ConnectionSetupFlow(initialProfile = fixture, onSave = {}, onCancel = {}, profileManager = pm) } } }
             find("Enable SFTP file access")
             for (type in listOf(ConnectionType.RDP, ConnectionType.VNC)) {
-                test.runOnMainSync { activity.setContent { MaterialTheme { com.farside.workspace.ui.AddProfileForm(initialProfile = fixture.copy(type = type), onSave = {}, onCancel = {}, profileManager = pm) } } }
+                test.runOnMainSync { activity.setContent { MaterialTheme { com.farside.workspace.ui.setup.ConnectionSetupFlow(initialProfile = fixture.copy(type = type), onSave = {}, onCancel = {}, profileManager = pm) } } }
                 Thread.sleep(500)
                 check(nodes().none { it.text?.toString() == "Enable SFTP file access" })
             }

@@ -68,7 +68,22 @@ internal class VncVerification(private val test: Instrumentation,private val liv
         val clipboard = test.targetContext.getSystemService(android.content.ClipboardManager::class.java)
         val originalClip = clipboard.primaryClip
         try {
-            if(mode=="vncFixtureCleanup") {
+            if(mode=="inlineFixture") {
+                val pm=ProfileManager(test.targetContext)
+                val credentials=pm.getCredentials().map {it.id}.toSet()
+                Fixture(0).use {server ->
+                    val profile=ConnectionProfile(java.util.UUID.randomUUID().toString(),"Owned inline VNC",ConnectionType.VNC,
+                        "127.0.0.1",server.port,"","testpass",vncAuthMode=VncAuthMode.VNC_PASSWORD)
+                    pm.addProfile(profile)
+                    try {
+                        val loaded=pm.getProfiles().single {it.id==profile.id}
+                        check(loaded.credentialId==null && loaded.pass=="testpass")
+                        session(loaded,server,expectedFiles=false)
+                    } finally {pm.deleteProfile(profile.id)}
+                }
+                check(pm.getCredentials().map {it.id}.toSet()==credentials)
+                record("PASS connection-specific encrypted VNC password reload, actual SessionActivity/JNI authentication/render/input/clipboard and cleanup; no vault credential created")
+            } else if(mode=="vncFixtureCleanup") {
                 val pm=ProfileManager(test.targetContext)
                 val fixtures=pm.getProfiles().filter { it.id=="vnc-verification-profile" }
                 check(fixtures.all { it.host=="127.0.0.1" && it.credentialId=="vnc-verification-credential" })
@@ -971,7 +986,7 @@ internal class VncVerification(private val test: Instrumentation,private val liv
         try {
             main { launcher.setContent {
                 androidx.compose.material3.MaterialTheme(colorScheme = androidx.compose.material3.darkColorScheme()) {
-                    com.farside.workspace.ui.AddProfileForm(initialProfile = initial, onCancel = {}, profileManager = pm,
+                    com.farside.workspace.ui.setup.ConnectionSetupFlow(initialProfile = initial, onCancel = {}, profileManager = pm,
                         onSave = { saved.set(it); pm.addProfile(it) })
                 }
             } }

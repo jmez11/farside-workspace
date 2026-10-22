@@ -138,7 +138,7 @@ class LocalizationVerification(private val test: Instrumentation) {
         val pm = ProfileManager(context)
         try {
             test.runOnMainSync { activity.setContent { key("cloudflared-error") { MaterialTheme {
-                com.farside.workspace.ui.AddProfileForm(a.copy(proxyType = ProxyType.CLOUDFLARED, cloudflaredParameters = "--bad x"),
+                com.farside.workspace.ui.setup.ConnectionSetupFlow(a.copy(proxyType = ProxyType.CLOUDFLARED, cloudflaredParameters = "--bad x"),
                     onSave = { error("Invalid Cloudflared form saved") }, onCancel = {}, profileManager = pm)
             } } } }
             click("SAVE")
