@@ -1236,7 +1236,8 @@ fun SettingsScreen(onClose: () -> Unit, profileManager: com.farside.workspace.da
                                         name = credentialName, user = newCredUser,
                                         pass = if (editingCredentialId != null && newCredPass.isEmpty())
                                             credentials.first { it.id == editingCredentialId }.pass else newCredPass,
-                                        requirePin = requirePin)
+                                        requirePin = requirePin,
+                                        userShort = credentials.firstOrNull { it.id == editingCredentialId }?.userShort)
                                     val editing = editingCredentialId != null
                                     savingCredential = true
                                     credentialScope.launch {

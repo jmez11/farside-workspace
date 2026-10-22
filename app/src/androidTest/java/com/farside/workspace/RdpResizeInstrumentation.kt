@@ -118,6 +118,11 @@ class RdpResizeInstrumentation : Instrumentation() {
     override fun onStart() {
         val results = Bundle()
         try {
+            if (jumpArgs?.getString("setupSignInOnly") == "true") {
+                results.putString("stream", SetupSignInVerification(this).run()+"\n")
+                finish(0, results)
+                return
+            }
             if (jumpArgs?.getString("setupPhaseOneOnly") == "true") {
                 results.putString("stream", SetupPhaseOneVerification(this).run()+"\n")
                 finish(0, results)

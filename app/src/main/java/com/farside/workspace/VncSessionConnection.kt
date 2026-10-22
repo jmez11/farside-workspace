@@ -105,7 +105,8 @@ internal class VncSessionConnection(
                 }
                 val credential = profile.credentialId?.let { id ->
                     com.farside.workspace.data.ProfileManager(context).getCredentials().find { it.id == id }
-                }
+                } ?: if(profile.credentialId==null) com.farside.workspace.data.SavedCredential(
+                    id=profile.id,name=profile.name,user=profile.user,pass=profile.pass) else null
                 if (profile.credentialId != null && credential == null) {
                     next.release(); ended.set(true); tunnel?.close()
                     main.post { if (!closed.get()) { onDisconnected(context.getString(R.string.choose_another_credential), false); onConnected(0L) } }

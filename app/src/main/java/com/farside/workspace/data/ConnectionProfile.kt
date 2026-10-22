@@ -104,7 +104,8 @@ data class ConnectionProfile(
         json.put("type", type.name)
         json.put("host", host)
         json.put("port", port)
-        if (credentialId == null && type != ConnectionType.VNC) {
+        json.put("credentialSource", if(credentialId==null) "connection" else "vault")
+        if (credentialId == null) {
             json.put("user", user)
             com.farside.workspace.CredentialManager.writePassword(json, "pass", pass)
         }
@@ -174,7 +175,7 @@ data class ConnectionProfile(
                 host = json.getString("host"),
                 port = json.optInt("port", when (json.getString("type")) { "VNC" -> 5900; "SSH" -> 22; else -> 3389 }),
                 user = json.optString("user", ""),
-                pass = if (json.getString("type") == "VNC") "" else com.farside.workspace.CredentialManager.readPassword(json, "pass") ?: "",
+                pass = com.farside.workspace.CredentialManager.readPassword(json, "pass") ?: "",
                 credentialId = if (json.has("credentialId") && !json.isNull("credentialId")) json.getString("credentialId") else null,
                 sshKeyId = if (json.has("sshKeyId") && !json.isNull("sshKeyId")) json.getString("sshKeyId") else null,
                 jumpHostProfileId = if (json.getString("type") == "SSH" && json.has("jumpHostProfileId") && !json.isNull("jumpHostProfileId")) json.getString("jumpHostProfileId") else null,

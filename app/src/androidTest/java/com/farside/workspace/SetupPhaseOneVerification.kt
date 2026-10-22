@@ -15,7 +15,7 @@ import java.security.MessageDigest
 /** Real Compose/accessibility flow and owned persistence; discovery responses are synthetic. */
 internal class SetupPhaseOneVerification(private val test:Instrumentation) {
     private fun label(id:Int)=test.targetContext.getString(id)
-    private fun nodes():List<AccessibilityNodeInfo> {
+    internal fun nodes():List<AccessibilityNodeInfo> {
         test.uiAutomation.clearCache()
         val result=mutableListOf<AccessibilityNodeInfo>()
         fun visit(n:AccessibilityNodeInfo) { result+=n;repeat(n.childCount) { n.getChild(it)?.let(::visit) } }
@@ -23,10 +23,11 @@ internal class SetupPhaseOneVerification(private val test:Instrumentation) {
         for(i in 0 until windows.size()) windows.valueAt(i).forEach { it.root?.let(::visit) }
         return result
     }
-    private fun find(text:String,editable:Boolean=false):AccessibilityNodeInfo {
+    internal fun find(text:String,editable:Boolean=false):AccessibilityNodeInfo {
         val deadline=SystemClock.uptimeMillis()+7000
         while(SystemClock.uptimeMillis()<deadline) {
             val all=nodes()
+            if(!editable) all.firstOrNull {it.isVisibleToUser && it.isClickable && !it.isEditable && it.contentDescription?.toString()==text}?.let {return it}
             for(node in all.filter { it.isVisibleToUser && (it.text?.toString()==text || it.hintText?.toString()==text || it.contentDescription?.toString()==text) }) {
                 if(!editable && !node.isEditable) return node
                 if(editable) {
@@ -39,15 +40,18 @@ internal class SetupPhaseOneVerification(private val test:Instrumentation) {
             all.filter { it.isScrollable && it.className?.toString()!="android.widget.EditText" }.forEach { it.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD) }
             Thread.sleep(150)
         }
+        java.io.File(test.targetContext.cacheDir,"setup-missing-ui-private.txt").writeText(nodes().joinToString("\n") {
+            "${it.className} text=${it.text} desc=${it.contentDescription} editable=${it.isEditable} password=${it.isPassword} visible=${it.isVisibleToUser}"
+        })
         error("Missing setup control: $text")
     }
-    private fun click(text:String) {
+    internal fun click(text:String) {
         var node=find(text)
         while(!node.isClickable) node=checkNotNull(node.parent)
         check(node.isEnabled && node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) { "Disabled setup control: $text" }
         Thread.sleep(250)
     }
-    private fun enter(id:Int,value:String) {
+    internal fun enter(id:Int,value:String) {
         check(find(label(id),true).performAction(AccessibilityNodeInfo.ACTION_SET_TEXT,Bundle().apply {
             putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,value)
         }))
@@ -58,7 +62,7 @@ internal class SetupPhaseOneVerification(private val test:Instrumentation) {
         while(!node.isClickable && node.parent!=null) node=checkNotNull(node.parent)
         return node.isEnabled
     }
-    private fun capture(activity:MainActivity,name:String) {
+    internal fun capture(activity:MainActivity,name:String) {
         val bitmap=android.graphics.Bitmap.createBitmap(activity.window.decorView.width,activity.window.decorView.height,android.graphics.Bitmap.Config.ARGB_8888)
         val done=java.util.concurrent.CountDownLatch(1)
         var status=-1
@@ -125,9 +129,10 @@ internal class SetupPhaseOneVerification(private val test:Instrumentation) {
                 if(type==ConnectionType.RDP) capture(activity,"setup-phase1-server.png")
                 click(label(R.string.continue_action))
                 if(type!=ConnectionType.SSH) {
-                    click(label(R.string.select_saved_credential));click(credential.name)
+                    click(credential.name)
                 }
-                click(label(R.string.save_uppercase))
+                if(type==ConnectionType.RDP) capture(activity,"setup-phase2-sign-in.png")
+                click(label(R.string.continue_action))
                 find(label(R.string.setup_edit_sign_in_options))
                 click(label(R.string.setup_save_connection))
                 val result=checkNotNull(saved)

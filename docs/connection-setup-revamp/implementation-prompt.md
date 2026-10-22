@@ -5,6 +5,16 @@ interactive mockup at `docs/connection-setup-revamp/mockup.html` (open it in a
 browser — the 5 combo pills, 4-step flow, edit mode, vault view, and the
 "What changed & why" section are the spec).
 
+## User clarification (2026-10-21)
+
+For ALL protocols, use one complete stored credential OR connection-specific
+credentials. Never combine a saved username with a separately saved/typed password,
+or a saved password with a different username. This supersedes the SSH split-picker
+instructions below. Scoped storage changes are approved to preserve explicit
+connection-specific credentials (including VNC) without auto-linking them to vault
+entries. Mac full/short names remain one stored credential; no independent SSH
+username-override model is requested.
+
 ## 1. What you are building
 
 Replace the connection/profile setup UI with the redesigned 4-step flow from the

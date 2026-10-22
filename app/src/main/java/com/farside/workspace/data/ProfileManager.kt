@@ -47,7 +47,7 @@ class ProfileManager(private val context: Context) {
                 val profile = ConnectionProfile.fromJson(json)
                 // Old profiles stored only a snapshot. Link only an unambiguous match.
                 val credential = if (profile.credentialId != null) credentials.find { it.id == profile.credentialId }
-                    else credentials.singleOrNull { it.user == profile.user && it.pass == profile.pass }
+                    else if(!json.has("credentialSource")) credentials.singleOrNull { it.user == profile.user && it.pass == profile.pass } else null
                 if (profile.credentialId == null && credential != null) {
                     json.put("credentialId", credential.id)
                     migrated = true
@@ -57,7 +57,7 @@ class ProfileManager(private val context: Context) {
                         if (json.has(field)) { json.remove(field); migrated = true }
                     }
                     profiles.add(profile.copy(credentialId = credential?.id ?: profile.credentialId,
-                        user = credential?.user.orEmpty(), pass = credential?.pass.orEmpty()))
+                        user = (if(profile.type==ConnectionType.SSH) credential?.userShort ?: credential?.user else credential?.user).orEmpty(), pass = credential?.pass.orEmpty()))
                 } else profiles.add(profile)
             }
             if (migrated) check(prefs.edit().putString("profiles", jsonArray.toString()).commit())

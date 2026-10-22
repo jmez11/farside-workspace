@@ -1,0 +1,29 @@
+package com.farside.workspace
+
+import com.farside.workspace.data.*
+import com.farside.workspace.ui.setup.SetupSignInState
+import org.junit.Assert.*
+import org.junit.Test
+
+class SetupSignInStateTest {
+    private val base=ConnectionProfile("owned","Owned",ConnectionType.SSH,"127.0.0.1",user="",pass="")
+    @Test fun savedPairsNeverBorrowConnectionSpecificUsernameOrPassword() {
+        val first=SavedCredential(name="First",user="full",userShort="short",pass="first")
+        val second=SavedCredential(name="Second",user="other",pass="second")
+        val all=listOf(first,second)
+        val state=SetupSignInState(null).apply {credentialId=first.id;user="typed";password="typedpass"}
+        state.profile(base,all).let {assertEquals("short",it.user);assertEquals("first",it.pass)}
+        state.credentialId=second.id
+        state.profile(base,all).let {assertEquals("other",it.user);assertEquals("second",it.pass)}
+        state.specific=true
+        state.profile(base,all).let {assertNull(it.credentialId);assertEquals("typed",it.user);assertEquals("typedpass",it.pass)}
+    }
+    @Test fun storedPasswordNeverLeaksIntoSpecificKeyOrEmptyInteractiveAuth() {
+        val stored=SavedCredential(name="Stored",user="account",pass="secret")
+        val state=SetupSignInState(base.copy(credentialId=stored.id,user=stored.user,pass=stored.pass))
+        state.specific=true
+        state.profile(base,listOf(stored)).let {assertEquals("",it.user);assertEquals("",it.pass);assertNull(it.credentialId)}
+        state.keyMode=true;state.keyId="owned-key";state.user="keyuser";state.password="unused"
+        state.profile(base,listOf(stored)).let {assertEquals("keyuser",it.user);assertEquals("",it.pass);assertEquals("owned-key",it.sshKeyId)}
+    }
+}

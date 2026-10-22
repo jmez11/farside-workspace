@@ -21,14 +21,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.farside.workspace.R
 import com.farside.workspace.data.*
-import com.farside.workspace.ui.AddProfileForm
 import com.farside.workspace.utils.DiscoveredHost
 import com.farside.workspace.utils.NetworkScanner
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.util.UUID
 
-/** Phase 1 keeps the existing sign-in/options editor until its replacement passes device checks. */
+/** Guided setup keeps secrets in memory until the user saves the connection. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConnectionSetupFlow(
@@ -50,7 +49,13 @@ fun ConnectionSetupFlow(
     var host by rememberSaveable { mutableStateOf(initialProfile?.host ?: "") }
     var port by rememberSaveable { mutableStateOf((initialProfile?.port ?: 3389).toString()) }
     val id = rememberSaveable { initialProfile?.id ?: UUID.randomUUID().toString() }
-    var candidate by remember { mutableStateOf<ConnectionProfile?>(null) }
+    val signIn=remember(id) {SetupSignInState(initialProfile)}
+    val credentials=remember(signIn.revision,credentialRevision) {profileManager.getCredentials()}
+    val base=(initialProfile ?: ConnectionProfile(id=id,name=name,type=type,host=host,user="",pass="",macAudioEnabled=true)).copy(
+        name=name,type=type,host=host,port=port.toIntOrNull() ?: 0,vncAuthMode=auth,
+        expMacHevc=type==ConnectionType.VNC && auth==VncAuthMode.MAC_USER)
+    val signInValid=signIn.error(base,credentials)==null
+    val draft=signIn.profile(base,credentials)
     var found by remember { mutableStateOf(emptyList<DiscoveredHost>()) }
     var scanning by remember { mutableStateOf(false) }
     var scanError by remember { mutableStateOf(false) }
@@ -70,7 +75,7 @@ fun ConnectionSetupFlow(
                     }
                     Text(stringResource(R.string.setup_step_of, step+1),fontSize=13.sp,color=SetupColors.muted)
                 }
-                SetupStepper(step,canVisit={index -> index<2 || validServer && (index==2 || candidate!=null)},onStep={step=it})
+                SetupStepper(step,canVisit={index -> index<2 || validServer && (index==2 || signInValid)},onStep={step=it})
                 when(step) {
                     0 -> Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement=Arrangement.spacedBy(12.dp)) {
                         Text(stringResource(R.string.setup_connecting_to), fontSize=20.sp,fontWeight=FontWeight.Bold)
@@ -78,7 +83,7 @@ fun ConnectionSetupFlow(
                         SetupProtocolCards(type) { choice ->
                             if(type!=choice) {
                                 scan?.cancel();scanning=false;found=emptyList();scanError=false
-                                type=choice;port=when(choice) {ConnectionType.RDP->"3389";ConnectionType.SSH->"22";ConnectionType.VNC->"5900"};candidate=null
+                                type=choice;port=when(choice) {ConnectionType.RDP->"3389";ConnectionType.SSH->"22";ConnectionType.VNC->"5900"}
                             }
                         }
                         if(type==ConnectionType.VNC) Surface(shape=RoundedCornerShape(14.dp),color=SetupColors.card,border=BorderStroke(1.dp,SetupColors.border)) {
@@ -87,7 +92,7 @@ fun ConnectionSetupFlow(
                                 Text(stringResource(R.string.setup_vnc_auth_description),fontSize=13.sp,color=SetupColors.muted)
                                 Row(horizontalArrangement=Arrangement.spacedBy(4.dp)) {
                                     VncAuthMode.entries.forEach { mode ->
-                                        FilterChip(selected=auth==mode,onClick={auth=mode;candidate=null},label={Text(stringResource(if(mode==VncAuthMode.VNC_PASSWORD) R.string.setup_vnc_password else R.string.setup_user_password))},
+                                        FilterChip(selected=auth==mode,onClick={auth=mode},label={Text(stringResource(if(mode==VncAuthMode.VNC_PASSWORD) R.string.setup_vnc_password else R.string.setup_user_password))},
                                             colors=FilterChipDefaults.filterChipColors(selectedContainerColor=accent,selectedLabelColor=SetupColors.background))
                                     }
                                 }
@@ -133,14 +138,8 @@ fun ConnectionSetupFlow(
                             }
                         }
                     }
-                    2 -> Box(Modifier.weight(1f)) {
-                        val draft=(candidate ?: initialProfile ?: ConnectionProfile(id=id,name=name,type=type,host=host,user="",pass="")).copy(
-                            name=name,type=type,host=host,port=port.toIntOrNull() ?: 0,vncAuthMode=auth)
-                        key(type,auth) { AddProfileForm(initialProfile=draft, profileManager=profileManager,savedProfiles=savedProfiles,
-                            credentialRevision=credentialRevision,onNavigateToSettings=onNavigateToSettings,onCancel=onCancel,
-                            onSave={ chosen ->
-                                candidate=chosen;name=chosen.name;host=chosen.host;port=chosen.port.toString();type=chosen.type;auth=chosen.vncAuthMode;step=3
-                            }) }
+                    2 -> Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                        SetupStepSignIn(base,signIn,profileManager)
                     }
                     3 -> Column(Modifier.weight(1f).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
                         Text(stringResource(R.string.setup_review),style=MaterialTheme.typography.titleLarge)
@@ -151,8 +150,8 @@ fun ConnectionSetupFlow(
                 }
                 Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
                     OutlinedButton(shape=RoundedCornerShape(12.dp),border=BorderStroke(1.dp,SetupColors.border),enabled=step>0,onClick={step--}) { Text(stringResource(R.string.back)) }
-                    if(step!=2) Button(shape=RoundedCornerShape(12.dp),enabled=step==0 || validServer && (step!=3 || candidate!=null),onClick={
-                        if(step==3) candidate?.let { onSave(it.copy(name=name,host=host,port=port.toInt(),type=type,vncAuthMode=auth)) }
+                    Button(shape=RoundedCornerShape(12.dp),enabled=step==0 || validServer && (step<2 || signInValid),onClick={
+                        if(step==3) onSave(draft)
                         else step++
                     }) { Text(stringResource(if(step!=3) R.string.continue_action else if(initialProfile==null) R.string.setup_save_connection else R.string.save_changes)) }
                 }
