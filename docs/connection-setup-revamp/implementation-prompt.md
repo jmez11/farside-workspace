@@ -138,10 +138,19 @@ like `setup-revamp: phase 2 sign-in step`.
   **Backup & restore** (export/import; the encrypted backup covers connections,
   sign-ins, keys, PIN settings). The old Settings General tab shrinks to the
   remaining non-secret items (ADB tunnel, debug actions, about/licenses).
+  **Launcher top bar**: add a vault icon (key/lock, e.g. `Icons.Default.Key`)
+  immediately left of the settings icon — i.e. between the folder icon (when
+  present) and the settings icon — opening the new vault UI. Change the
+  settings gear to an info icon (`Icons.Default.Info`): post-revamp, Settings
+  shows only license info for a typical release user without developer mode
+  (`AdbTunnelSection` returns early unless developer mode is on; debug actions
+  are debug-build only; PIN, backup/restore, credentials and keys all moved to
+  the vault).
   Delete `AddProfileForm` and the old inline credential/key forms from
   `LauncherUI.kt`. On-device: full pass — new + edit for all five combos,
   vault search/edit, key replace-only, PIN change/remove, backup export/import
-  round-trip. Final `./gradlew assembleDebug` green.
+  round-trip, vault icon opens vault, info icon opens slimmed Settings.
+  Final `./gradlew assembleDebug` green.
 
 ## 4. Ground truth — verify in code, never from memory
 
