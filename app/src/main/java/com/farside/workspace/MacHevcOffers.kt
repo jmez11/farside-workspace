@@ -357,6 +357,7 @@ object MacHevcOffers {
         buf.putShort(3.toShort()) // version = 3
 
         val configFlags = if (altSession) 5 else 7 // bit 0 (60fps stream 1), bit 1 (60fps stream 2), bit 2 (no cursor)
+        // Keep the interoperable client wire order; the agent IPC path also transforms this field.
         buf.putInt(configFlags)
         buf.putShort(asSize.toShort())
         buf.putShort(vsSize.toShort())

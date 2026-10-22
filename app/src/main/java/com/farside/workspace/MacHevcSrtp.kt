@@ -235,7 +235,7 @@ data class DecryptedRtpPacket(
 
 /**
  * RFC 3711 SRTCP Sender for Apple High-Performance Media Transport.
- * Encrypts RTCP compound feedback packets (RR, PLI, FIR) sent to UDP port 5900.
+ * Encrypts RTCP compound feedback packets (RR, PLI, FIR) sent on the corresponding media stream's RTCP-mux port.
  */
 class MacHevcSrtcpEncryptor(
     masterKey: ByteArray,

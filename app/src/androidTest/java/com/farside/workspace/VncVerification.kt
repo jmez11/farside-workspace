@@ -68,7 +68,9 @@ internal class VncVerification(private val test: Instrumentation,private val liv
         val clipboard = test.targetContext.getSystemService(android.content.ClipboardManager::class.java)
         val originalClip = clipboard.primaryClip
         try {
-            if(mode=="firstFrameFixture") {
+            if(mode=="macCapture") {
+                record(MacCaptureVerification(test).run(requireNotNull(profileId)))
+            } else if(mode=="firstFrameFixture") {
                 verifyFirstFrameCover()
             } else if(mode=="inlineFixture") {
                 val pm=ProfileManager(test.targetContext)

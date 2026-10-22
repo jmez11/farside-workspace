@@ -99,6 +99,7 @@ class MacHevcVideoPipeline(
     private val needsRecovery=AtomicBoolean(false)
     private val avc = if(preferAvc) MacAvcStream(::log) { framesDecoded.incrementAndGet(); onFrameDecoded() }.also { stream ->
         stream.onRecovery={ needsRecovery.set(true) }
+        stream.onRecoveryComplete={ needsRecovery.set(false) }
         if(encodedVideoObserver!=null) stream.accessUnitObserver={ bytes -> encodedVideoObserver.invoke(stream.activeSsrc ?: 0,bytes) }
     } else null
     val decoderDescription: String get() = avc?.description ?: "HEVC MediaCodec"
@@ -273,19 +274,21 @@ class MacHevcVideoPipeline(
 
                 // Do not wait two seconds to repair a damaged text/drag update.
                 val ssrc = serverVideoSsrc.get()
-                val needFir = ssrc != 0L && cSock != null && !cSock.isClosed && srtcpEncryptor != null &&
+                val needFir = ssrc != 0L && vSock != null && !vSock.isClosed && srtcpEncryptor != null &&
                     keyframeRequests.due(System.nanoTime()/1_000_000,framesDecoded.get()>0,needsRecovery.get())
-                if (needFir && cSock != null && srtcpEncryptor != null) {
-                    needsRecovery.set(false)
+                if (needFir && vSock != null && srtcpEncryptor != null) {
+                    // AVC recovery remains pending until a clean IDR is submitted, not merely sent.
+                    if(!preferAvc) needsRecovery.set(false)
                     try {
                         val firPkt = MacHevcRtcp.buildCompoundFir(ourVideoSsrc, targetSsrc = ssrc)
                         val protected = srtcpEncryptor.protect(firPkt)
-                        val rtcpDatagram = DatagramPacket(protected, protected.size, targetAddr, ctrlPort)
-                        if (datagramSender != null) datagramSender.invoke(ctrlPort, protected) else cSock.send(rtcpDatagram)
+                        val rtcpDatagram = DatagramPacket(protected, protected.size, targetAddr, videoPort)
+                        if (datagramSender != null) datagramSender.invoke(videoPort, protected) else vSock.send(rtcpDatagram)
                         if (tick % 20 == 0) {
-                            log("Sent SRTCP Compound FIR keyframe trigger for SSRC 0x${java.lang.Long.toHexString(ssrc)} to $host:$ctrlPort (seq=$tick)")
+                            log("Sent SRTCP Compound FIR keyframe trigger for SSRC 0x${java.lang.Long.toHexString(ssrc)} to $host:$videoPort (seq=$tick)")
                         }
                     } catch (e: Exception) {
+                        needsRecovery.set(true)
                         log("Error sending SRTCP FIR: ${e.message}")
                     }
                 }

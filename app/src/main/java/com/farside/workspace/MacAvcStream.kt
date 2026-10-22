@@ -73,14 +73,19 @@ internal class MacAvcRecovery {
     var skipped=0L; private set
     fun lost() { waiting=true }
     fun accept(unit:ByteArray):Boolean {
-        var idr=false
-        for(i in 0 until unit.size-4) {
-            if(unit[i]==0.toByte() && unit[i+1]==0.toByte() && unit[i+2]==0.toByte() &&
-                unit[i+3]==1.toByte() && (unit[i+4].toInt() and 31)==5) {idr=true;break}
-        }
+        val idr=isIdr(unit)
         if(waiting && !idr) {skipped++;return false}
         if(idr) waiting=false
         return true
+    }
+    companion object {
+        fun isIdr(unit:ByteArray):Boolean {
+            for(i in 0 until unit.size-4) {
+                if(unit[i]==0.toByte() && unit[i+1]==0.toByte() && unit[i+2]==0.toByte() &&
+                    unit[i+3]==1.toByte() && (unit[i+4].toInt() and 31)==5) return true
+            }
+            return false
+        }
     }
 }
 
@@ -107,6 +112,7 @@ internal class MacAvcStream(private val log: (String)->Unit, private val frame: 
     @Synchronized fun assemblyDiagnostics():String="${assembler.diagnostics} skippedUntilIdr=${recovery.skipped} reordered=${packetOrder.repaired} duplicates=${packetOrder.duplicates} expiredGaps=${packetOrder.expiredGaps}"
     val inputDrops=java.util.concurrent.atomic.AtomicLong()
     var onRecovery:()->Unit={}
+    var onRecoveryComplete:()->Unit={}
     @Synchronized fun configurationSnapshot():ByteArray?=config?.copyOf()
     private var codec: MediaCodec?=null
     private var config: ByteArray?=null
@@ -174,6 +180,7 @@ internal class MacAvcStream(private val log: (String)->Unit, private val frame: 
                 check(unit.size<=input.capacity()) { "AVC access unit too large" }
                 input.clear();input.put(unit)
                 decoder.queueInputBuffer(index,0,unit.size,timestamp*1_000_000L/90000,0)
+                if(MacAvcRecovery.isIdr(unit)) onRecoveryComplete()
                 accessUnitObserver?.invoke(unit)
             } else { inputDrops.incrementAndGet();recover() }
         }

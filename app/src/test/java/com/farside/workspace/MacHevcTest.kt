@@ -214,9 +214,33 @@ class MacHevcTest {
         val ms = buf.getShort(2).toInt() and 0xffff
         assertEquals(msg1c.size - 4, ms)
         assertEquals(3.toShort(), buf.getShort(4)) // version = 3
-        assertEquals(7, buf.getInt(6))              // configFlags = 7
+        assertArrayEquals(byteArrayOf(0,0,0,7),msg1c.copyOfRange(6,10))
+        assertEquals(7, ByteBuffer.wrap(msg1c).order(ByteOrder.BIG_ENDIAN).getInt(6))
+        assertEquals(0,buf.getShort(14).toInt()) // No second video offer in a one-desktop session.
         assertEquals(audioOffer.size, buf.getShort(10).toInt() and 0xffff)
         assertEquals(videoOffer.size, buf.getShort(12).toInt() and 0xffff)
+    }
+
+    @Test
+    fun oneDesktopOfferHasIndependentKeysAndNoSecondStreamBlock() {
+        val offers=MacHevcOffers.createOffers(preferAvc=true)
+        val keys=MacHevcNegotiationKeys.random()
+        for(alt in listOf(false,true)) {
+            val packet=MacHevcOffers.build0x1cMessage(offers.audioOffer,offers.videoOffer,keys,altSession=alt)
+            assertArrayEquals(byteArrayOf(0,0,0,if(alt) 5 else 7),packet.copyOfRange(6,10))
+            val header=ByteBuffer.wrap(packet).order(ByteOrder.BIG_ENDIAN)
+            assertEquals(packet.size-4,header.getShort(2).toInt() and 65535)
+            assertEquals(offers.audioOffer.size,header.getShort(10).toInt() and 65535)
+            assertEquals(offers.videoOffer.size,header.getShort(12).toInt() and 65535)
+            assertEquals(0,header.getShort(14).toInt())
+            assertEquals(0,header.getInt(16))
+            assertArrayEquals(keys.audioKeyV,packet.copyOfRange(0x24,0x52))
+            assertArrayEquals(keys.audioKeyS,packet.copyOfRange(0x52,0x80))
+            val video=0x80+offers.audioOffer.size
+            assertArrayEquals(keys.videoKeyV,packet.copyOfRange(video,video+46))
+            assertArrayEquals(keys.videoKeyS,packet.copyOfRange(video+46,video+92))
+            assertEquals(packet.size,video+92+offers.videoOffer.size)
+        }
     }
 
     @Test
