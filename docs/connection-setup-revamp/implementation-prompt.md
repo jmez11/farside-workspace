@@ -133,9 +133,15 @@ like `setup-revamp: phase 2 sign-in step`.
   On-device: edit each of the three profiles, change one option, save, confirm
   it persisted; key edit shows empty private-key field.
 - **Phase 4 — vault manager + cleanup.** Rework Settings tabs into the vault
-  screen; delete `AddProfileForm` and the old inline credential/key forms from
+  screen: Sign-ins group, SSH keys group, **Vault protection** (app PIN
+  set/change/remove — the PIN gates vault items, so it lives here), and
+  **Backup & restore** (export/import; the encrypted backup covers connections,
+  sign-ins, keys, PIN settings). The old Settings General tab shrinks to the
+  remaining non-secret items (ADB tunnel, debug actions, about/licenses).
+  Delete `AddProfileForm` and the old inline credential/key forms from
   `LauncherUI.kt`. On-device: full pass — new + edit for all five combos,
-  vault search/edit, key replace-only. Final `./gradlew assembleDebug` green.
+  vault search/edit, key replace-only, PIN change/remove, backup export/import
+  round-trip. Final `./gradlew assembleDebug` green.
 
 ## 4. Ground truth — verify in code, never from memory
 

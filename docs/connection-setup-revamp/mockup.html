@@ -246,10 +246,24 @@
       /* ---------- vault ---------- */
       .vault-panel { padding: 22px 24px 24px; }
       .vault-tools { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
-      .vault-tools .search-wrap { flex: 1; min-width: 200px; position: relative; }
-      .vault-tools .search-wrap svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--faint); }
-      .vault-tools .search-wrap .input { padding-left: 38px; }
       .empty-note { color: var(--faint); font-size: 14px; padding: 14px 2px; }
+      .vault-section { margin-top: 26px; }
+      .vault-section .group-label { margin-top: 0; }
+      .setting-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px; }
+      .setting-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+      .setting-main { min-width: 0; }
+      .setting-name { font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+      .setting-help { color: var(--muted); font-size: 13.5px; margin: 4px 0 0; }
+      .setting-actions { display: flex; gap: 8px; flex: none; flex-wrap: wrap; }
+      .status-pill { display: inline-flex; align-items: center; font-size: 11px; font-weight: 800; letter-spacing: .03em; padding: 2.5px 8px; border-radius: 999px; color: var(--ok); border: 1px solid rgba(95,214,138,.45); background: rgba(95,214,138,.1); }
+      .status-pill.off { color: var(--muted); border-color: var(--border); background: var(--field); }
+      .btn.danger { color: #ffb3b3; border-color: rgba(255,107,107,.45); background: rgba(255,107,107,.08); }
+      .btn.danger:hover { background: rgba(255,107,107,.15); }
+      .backup-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+      .pin-form { border-top: 1px solid var(--border); margin-top: 16px; padding-top: 16px; }
+      .pin-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+      .pin-grid .field-group { margin-bottom: 0; }
+      .pin-form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
 
       /* ---------- sheet ---------- */
       .sheet-overlay { position: fixed; inset: 0; background: rgba(5,5,8,.66); display: none; align-items: flex-end; justify-content: center; z-index: 60; padding: 0; }
@@ -304,6 +318,8 @@
         .step-body, .panel-foot, .vault-panel { padding-left: 16px; padding-right: 16px; }
         .panel-head { padding-left: 16px; padding-right: 16px; }
         .rationale ul { grid-template-columns: 1fr; }
+        .pin-grid { grid-template-columns: 1fr; }
+        .setting-row { flex-direction: column; }
         header.page-head h1 { font-size: 23px; }
       }
     </style>
@@ -323,7 +339,7 @@
       <div class="guidance-label">Guidance — switch mockup screens</div>
       <div class="view-toggle" role="tablist" aria-label="View">
         <button id="viewFlowBtn" class="active" type="button">New connection flow</button>
-        <button id="viewVaultBtn" type="button">Sign-in vault</button>
+        <button id="viewVaultBtn" type="button">Vault</button>
       </div>
 
       <!-- ============ FLOW VIEW ============ -->
@@ -383,23 +399,67 @@
       <div id="vaultView" class="hidden">
         <div class="guidance-block" style="margin-top:0;">
           <div class="guidance-label">Guidance — second app screen</div>
-          <p class="guidance-text">The sign-in vault is a separate screen of the app, shown here so it can be reviewed alongside the setup flow. The framed panel below is that screen's UI.</p>
+          <p class="guidance-text">The vault is a separate screen of the app, shown here so it can be reviewed alongside the setup flow. The framed panel below is that screen's UI.</p>
         </div>
         <div class="panel-wrap">
         <div class="ui-tag">QUEST APP UI — interactive mockup</div>
         <div class="panel">
           <div class="vault-panel">
-            <div class="panel-title" style="font-size:19px; font-weight:700; margin-bottom:4px;">Sign-in vault</div>
-            <p style="color:var(--muted); margin:0 0 18px; font-size:14px;">Everything Farside can sign in with — stored encrypted on the headset, shared across connections.</p>
+            <div class="panel-title" style="font-size:19px; font-weight:700; margin-bottom:4px;">Vault</div>
+            <p style="color:var(--muted); margin:0 0 18px; font-size:14px;">Sign-ins, SSH keys, PIN protection, and backup &amp; restore — stored encrypted on the headset.</p>
             <div class="vault-tools">
-              <div class="search-wrap">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-                <input class="input" id="vaultSearch" type="search" placeholder="Search sign-ins and keys…" aria-label="Search sign-ins and keys" />
-              </div>
               <button class="btn small" id="vaultNewSignin" type="button">+ New sign-in</button>
               <button class="btn small" id="vaultImportKey" type="button">+ Import key</button>
             </div>
             <div id="vaultBody"></div>
+
+            <section class="vault-section" aria-labelledby="vaultProtectionTitle">
+              <div class="group-label" id="vaultProtectionTitle">Vault protection</div>
+              <div class="setting-card">
+                <div class="setting-row">
+                  <div class="setting-main">
+                    <div class="setting-name">App PIN <span class="status-pill" id="appPinStatus">On</span></div>
+                    <p class="setting-help">PIN-gated sign-ins and keys ask for this before they can be used.</p>
+                  </div>
+                  <div class="setting-actions">
+                    <button class="btn small" id="appPinChangeBtn" type="button" aria-expanded="false" aria-controls="appPinForm">Change</button>
+                    <button class="btn small danger" id="appPinRemoveBtn" type="button">Remove</button>
+                  </div>
+                </div>
+                <div class="pin-form hidden" id="appPinForm">
+                  <div class="pin-grid">
+                    <div class="field-group" id="currentPinGroup">
+                      <label for="currentPin">Current PIN</label>
+                      <input class="input" id="currentPin" type="password" inputmode="numeric" autocomplete="current-password" />
+                    </div>
+                    <div class="field-group">
+                      <label for="newPin">New PIN</label>
+                      <input class="input" id="newPin" type="password" inputmode="numeric" autocomplete="new-password" />
+                    </div>
+                    <div class="field-group">
+                      <label for="confirmPin">Confirm new PIN</label>
+                      <input class="input" id="confirmPin" type="password" inputmode="numeric" autocomplete="new-password" />
+                    </div>
+                  </div>
+                  <div class="field-error" id="pinFormError">New PIN and confirmation must match.</div>
+                  <div class="pin-form-actions">
+                    <button class="btn small" id="appPinCancelBtn" type="button">Cancel</button>
+                    <button class="btn small primary" id="appPinSaveBtn" type="button" disabled>Save PIN</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="vault-section" aria-labelledby="vaultBackupTitle">
+              <div class="group-label" id="vaultBackupTitle">Backup &amp; restore</div>
+              <div class="setting-card">
+                <p class="setting-help" style="margin-top:0;">Encrypted backups include connections, sign-ins, SSH keys, and PIN settings. You choose the passphrase.</p>
+                <div class="backup-actions">
+                  <button class="btn small" id="exportBackupBtn" type="button">Export backup</button>
+                  <button class="btn small" id="importBackupBtn" type="button">Import backup</button>
+                </div>
+              </div>
+            </section>
           </div>
         </div>
         </div>
@@ -418,6 +478,7 @@
           <li><strong>SSH choices are explicit, not interdependent</strong>Username (saved / type / ask), auth (password / key), and jump host are separate segmented choices, and picking a jump host draws the route: laptop → bastion → target. The username lives in exactly one place — typing a password by hand asks for the password only, and it pairs with whichever username mode is selected above.</li>
           <li><strong>A review screen before saving</strong>Step 4 summarises the whole connection up top with Edit links back to each step, then groups the extras — display &amp; audio, tunnel, files, network — into cards instead of a flat toggle pile.</li>
           <li><strong>The vault knows what things are</strong>Sign-ins and SSH keys are grouped separately, with kind and PIN badges and a “used by N connections” line, so it's obvious what breaks if you delete one.</li>
+          <li><strong>App PIN and backup/restore move into the Vault</strong>The PIN protects vault contents and backups export the vault, so they live with the secrets instead of a leftover Settings tab.</li>
           <li><strong>Discovery only shows what you picked</strong>An SSH server can't be found by scanning the local network, so step 2 has no finder for SSH — just name, host and port, no explanation needed. Where the finder does appear, it only lists servers of the type you selected: RDP finds RDP PCs, VNC finds VNC servers, and switching protocol swaps the list.</li>
           <li><strong>VNC is a general protocol, not Mac-only</strong>VNC wording no longer assumes the target is a Mac — it runs on Windows, Linux and media boxes too. Mac Screen Sharing appears exactly once, as the example for username + password sign-in, and the password flow just says “VNC password”.</li>
           <li><strong>Two entry points, no toggle</strong>The flow is reached two separate ways, and the user never switches between them: the New button at the top of the main launcher opens it blank (header “New connection”, close ×, footer “Save connection”), and Edit on a saved connection in the launcher opens the same flow prefilled — protocol, server, sign-in, options — with the stepper fully visitable (header “Edit connection”, back ←, footer “Save changes”). There's no delete in edit mode, since removing a connection already lives on the main launcher. The switcher above the panel is mockup navigation only, for previewing both entry points — it is not app UI.</li>
@@ -1315,12 +1376,9 @@
 
       /* ================= vault view ================= */
       function renderVault() {
-        var q = (el("vaultSearch").value || "").toLowerCase();
-        var match = function (txt) { return !q || txt.toLowerCase().indexOf(q) >= 0; };
         var h = '<div class="group-label">Sign-ins</div><div class="pick-list">';
         var anyS = false;
         signins.forEach(function (si) {
-          if (!match(si.name + " " + si.user + " " + (si.shortName || "") + " " + si.kind)) return;
           anyS = true;
           var sub = si.kind === "VNC" ? "VNC password"
             : si.mac ? si.user + " · Short name " + si.shortName
@@ -1331,11 +1389,10 @@
             '<span class="pc-sub">' + esc(sub) + " · Used by " + si.usedBy + " connection" + (si.usedBy === 1 ? "" : "s") + "</span></span>" +
             '<button type="button" class="btn small" data-edit-signin="' + si.id + '">Edit</button></div>';
         });
-        if (!anyS) h += '<div class="empty-note">No sign-ins match.</div>';
+        if (!anyS) h += '<div class="empty-note">No sign-ins saved yet.</div>';
         h += '</div><div class="group-label">SSH keys</div><div class="pick-list">';
         var anyK = false;
         sshKeys.forEach(function (k) {
-          if (!match(k.name + " " + k.type)) return;
           anyK = true;
           h += '<div class="pick-card" style="cursor:default;">' +
             '<span class="avatar">' + ICONS.key + "</span>" +
@@ -1344,7 +1401,7 @@
             '<button type="button" class="btn small" data-pubkey="' + k.id + '">Public key</button>' +
             '<button type="button" class="btn small" data-edit-key="' + k.id + '">Edit</button></div>';
         });
-        if (!anyK) h += '<div class="empty-note">No keys match.</div>';
+        if (!anyK) h += '<div class="empty-note">No keys imported yet.</div>';
         h += "</div>";
         el("vaultBody").innerHTML = h;
         document.querySelectorAll("[data-edit-signin]").forEach(function (b) {
@@ -1363,13 +1420,87 @@
           b.addEventListener("click", function () { toast("Public key copied"); });
         });
       }
-      el("vaultSearch").addEventListener("input", renderVault);
       el("vaultNewSignin").addEventListener("click", function () {
         openSheet("signin", { kind: "RDP", select: function () { renderVault(); } });
       });
       el("vaultImportKey").addEventListener("click", function () {
         openSheet("key", { select: function () { renderVault(); } });
       });
+
+      /* ---- vault protection & backup actions ---- */
+      var vaultPinOn = true;
+      function clearPinForm() {
+        ["currentPin", "newPin", "confirmPin"].forEach(function (id) {
+          var input = el(id);
+          if (input) input.value = "";
+        });
+        var save = el("appPinSaveBtn");
+        if (save) save.disabled = true;
+        var err = el("pinFormError");
+        if (err) err.classList.remove("show");
+      }
+      function setPinFormOpen(open) {
+        var form = el("appPinForm");
+        var btn = el("appPinChangeBtn");
+        if (form) form.classList.toggle("hidden", !open);
+        if (btn) btn.setAttribute("aria-expanded", open ? "true" : "false");
+        if (!open) clearPinForm();
+      }
+      function updatePinUI() {
+        var status = el("appPinStatus");
+        if (status) {
+          status.textContent = vaultPinOn ? "On" : "Off";
+          status.classList.toggle("off", !vaultPinOn);
+        }
+        var change = el("appPinChangeBtn");
+        if (change) change.textContent = vaultPinOn ? "Change" : "Set";
+        var remove = el("appPinRemoveBtn");
+        if (remove) remove.classList.toggle("hidden", !vaultPinOn);
+        var current = el("currentPinGroup");
+        if (current) current.classList.toggle("hidden", !vaultPinOn);
+      }
+      function validatePinForm() {
+        var current = el("currentPin") ? el("currentPin").value : "";
+        var next = el("newPin") ? el("newPin").value : "";
+        var confirm = el("confirmPin") ? el("confirmPin").value : "";
+        var mismatch = !!confirm && !!next && next !== confirm;
+        var err = el("pinFormError");
+        if (err) err.classList.toggle("show", mismatch);
+        var confirmInput = el("confirmPin");
+        if (confirmInput) confirmInput.classList.toggle("invalid", mismatch);
+        var save = el("appPinSaveBtn");
+        if (save) save.disabled = !((!vaultPinOn || !!current) && !!next && !!confirm && next === confirm);
+      }
+      ["currentPin", "newPin", "confirmPin"].forEach(function (id) {
+        var input = el(id);
+        if (input) input.addEventListener("input", validatePinForm);
+      });
+      el("appPinChangeBtn").addEventListener("click", function () {
+        var form = el("appPinForm");
+        var opening = form && form.classList.contains("hidden");
+        updatePinUI();
+        setPinFormOpen(!!opening);
+        validatePinForm();
+        var first = el(vaultPinOn ? "currentPin" : "newPin");
+        if (opening && first) first.focus();
+      });
+      el("appPinCancelBtn").addEventListener("click", function () { setPinFormOpen(false); });
+      el("appPinSaveBtn").addEventListener("click", function () {
+        var wasOn = vaultPinOn;
+        vaultPinOn = true;
+        updatePinUI();
+        setPinFormOpen(false);
+        toast(wasOn ? "App PIN changed" : "App PIN set");
+      });
+      el("appPinRemoveBtn").addEventListener("click", function () {
+        vaultPinOn = false;
+        updatePinUI();
+        setPinFormOpen(false);
+        toast("App PIN removed");
+      });
+      el("exportBackupBtn").addEventListener("click", function () { toast("Choose a passphrase to encrypt the backup"); });
+      el("importBackupBtn").addEventListener("click", function () { toast("Choose a backup file to import"); });
+      updatePinUI();
 
       /* ================= bottom sheet ================= */
       var sheetCtx = null;
