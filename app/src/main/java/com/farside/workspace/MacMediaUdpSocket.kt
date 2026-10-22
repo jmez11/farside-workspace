@@ -15,6 +15,7 @@ import java.util.concurrent.TimeUnit
  * Fan-out preserves fixed-port/NAT behavior and also handles multiple loopback SSH relays.
  */
 internal class MacMediaUdpSocket private constructor(private val hub:Hub,private val timeout:Int):Closeable {
+    val droppedPackets=java.util.concurrent.atomic.AtomicLong()
     private val packets=ArrayBlockingQueue<DatagramPacket>(256)
     @Volatile private var closed=false
     val isClosed get()=closed
@@ -30,7 +31,7 @@ internal class MacMediaUdpSocket private constructor(private val hub:Hub,private
     }
     fun send(packet:DatagramPacket) {if(closed) throw SocketException("Subscription closed");hub.socket.send(packet)}
     private fun offer(packet:DatagramPacket) {
-        if(!closed && !packets.offer(packet)) {packets.poll();packets.offer(packet)}
+        if(!closed && !packets.offer(packet)) {if(packets.poll()!=null) droppedPackets.incrementAndGet();packets.offer(packet)}
     }
     override fun close() = synchronized(hubs) {
         if(!closed) {

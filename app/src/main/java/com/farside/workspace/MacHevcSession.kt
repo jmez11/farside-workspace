@@ -874,6 +874,7 @@ class MacHevcSession(
             if(out!=null && stage!="CLOSED") {
                 out.write(checkNotNull(recordLayer).pointerEvent(point.x,point.y,point.buttons,width,height));out.flush()
                 pointerEventsSent.incrementAndGet()
+                MacInputTrace.event("pointer-written")
             }
         } catch(_:Exception) { log("Pointer output stopped") }
     }

@@ -5,11 +5,11 @@ internal object MacConnectionPolicy {
     enum class Route { DIRECT, COMPANION, VNC }
     fun isTerminal(error:Exception):Boolean = error is VncAuthenticationException ||
         error is MacSessionRejectedException || error is SecurityException || error is InterruptedException
-    fun routes(macLogin:Boolean,companion:Boolean):List<Route> = if(!macLogin) listOf(Route.VNC)
-        else buildList { add(Route.DIRECT);if(companion) add(Route.COMPANION);add(Route.VNC) }
+    fun routes(macLogin:Boolean,companion:Boolean,directMediaAvailable:Boolean=true):List<Route> = if(!macLogin) listOf(Route.VNC)
+        else buildList { if(directMediaAvailable) add(Route.DIRECT);if(companion) add(Route.COMPANION);add(Route.VNC) }
     fun <T> connect(macLogin:Boolean, companion:Boolean, cancelled:()->Boolean,
-        terminal:(Exception)->Boolean, failed:(Route,Exception)->Unit, attempt:(Route)->T):T? {
-        for(route in routes(macLogin,companion)) {
+        terminal:(Exception)->Boolean, failed:(Route,Exception)->Unit, directMediaAvailable:Boolean=true, attempt:(Route)->T):T? {
+        for(route in routes(macLogin,companion,directMediaAvailable)) {
             if(cancelled()) break
             try { return attempt(route) } catch(error:Exception) {
                 failed(route,error)

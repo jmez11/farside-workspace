@@ -23,7 +23,7 @@ internal class MacHevcSshRelay(context: Context, client: SSHClient, host: String
     private val output = DataOutputStream(command.outputStream)
     private val diagnostics=Thread({
         runCatching { command.errorStream.bufferedReader().useLines { lines ->
-            lines.forEach { if(it.matches(Regex("RELAY_DROP 590[01] (loopback|other)"))) log(it) }
+            lines.forEach { if(it.matches(Regex("RELAY_DROP 590[01] (loopback|other)|RELAY_STATS queued=\\d+ dropped=\\d+ forwarded=\\d+ control=\\d+"))) log(it) }
         } }
     },"MacRelayDiagnostics").apply { isDaemon=true;start() }
     private val loopback = InetAddress.getByName("127.0.0.1")

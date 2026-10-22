@@ -63,8 +63,22 @@ internal class MacAvcSourceFixture(private val test:Instrumentation) {
                 feed(10,red);color("mac-avc-source-red.png",false)
                 feed(20,blue);color("mac-avc-source-blue.png",true)
                 repeat(5) { feed(10,red);feed(20,blue);color("mac-avc-source-overlap.png",true) }
+                var submitted=0;var recoveries=0
+                decoder.accessUnitObserver={submitted++};decoder.onRecovery={recoveries++}
+                val beforeLoss=frames
+                var next=(sequences.getValue(20L)+1) and 65535 // Lose one complete packet.
+                decoder.accept(byteArrayOf(0x61,0),next++,ts,true,20)
+                Thread.sleep(120);decoder.drain()
+                repeat(20) {i ->decoder.accept(byteArrayOf(0x61,0),next++ and 65535,ts+(i+1)*90000L,true,20)}
+                repeat(10) {Thread.sleep(16);decoder.drain()}
+                check(submitted==0 && frames==beforeLoss && recoveries>0) {"Damaged dependent pictures reached hardware AVC"}
+                color("mac-avc-loss-held.png",true)
+                sequences[20L]=next and 65535;ts+=21*90000L
+                feed(20,blue)
+                check(frames>beforeLoss && submitted>0) {"Valid IDR did not resume decoding"}
+                color("mac-avc-loss-recovered.png",true)
                 check(decoder.activeSsrc==20L && frames>=2)
-                return "PASS Qualcomm hardware AVC reordered FU-A/wrap/duplicate input; five retired red/current blue overlaps remain blue; frames=$frames; ${decoder.assemblyDiagnostics()}"
+                return "PASS Qualcomm hardware AVC reordered FU-A/wrap/duplicate input; five retired red/current blue overlaps remain blue; packet loss holds clean image, suppresses dependent pictures and resumes on IDR; frames=$frames; ${decoder.assemblyDiagnostics()}"
             } finally { decoder.close() }
         }
     }

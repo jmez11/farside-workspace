@@ -29,6 +29,19 @@ class MacConnectionPolicyTest {
         }
         assertEquals(listOf(direct,vnc),attempts)
     }
+    @Test fun tcpOnlyTunnelStartsHelperWithoutDisposableDirectLogin() {
+        val attempts=mutableListOf<MacConnectionPolicy.Route>()
+        assertEquals("connected",MacConnectionPolicy.connect(true,true,{false},{false},{_,_->fail()},directMediaAvailable=false) {
+            attempts+=it;"connected"
+        })
+        assertEquals(listOf(companion),attempts)
+        assertEquals(listOf(vnc),MacConnectionPolicy.routes(true,false,directMediaAvailable=false))
+        attempts.clear()
+        MacConnectionPolicy.connect(true,true,{false},{false},{_,_->},directMediaAvailable=false) {
+            attempts+=it;if(it==companion) throw IOException();"connected"
+        }
+        assertEquals(listOf(companion,vnc),attempts)
+    }
     @Test fun rejectionAndCancellationDoNotRetryCredentials() {
         for(error in listOf(VncAuthenticationException(),MacSessionRejectedException("Declined"),SecurityException(),InterruptedException())) {
         val attempts=mutableListOf<MacConnectionPolicy.Route>()

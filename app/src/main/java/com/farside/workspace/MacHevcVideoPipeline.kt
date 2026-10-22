@@ -249,6 +249,7 @@ class MacHevcVideoPipeline(
         }
         log("Started active UDP pinhole punch loop to $host:$videoPort and $host:$ctrlPort")
 
+        val keyframeRequests=MacKeyframeRequests()
         while (isRunning.get()) {
             try {
                 val vSock = udpSocket
@@ -270,10 +271,12 @@ class MacHevcVideoPipeline(
                     }
                 }
 
-                // Send keyframe request if server SSRC is known and no frames decoded or every ~2s (20 ticks)
+                // Do not wait two seconds to repair a damaged text/drag update.
                 val ssrc = serverVideoSsrc.get()
-                val needFir = ssrc != 0L && ((framesDecoded.get() == 0L && tick % 5 == 0) || (tick % 20 == 0 && needsRecovery.getAndSet(false)))
-                if (needFir && cSock != null && !cSock.isClosed && srtcpEncryptor != null) {
+                val needFir = ssrc != 0L && cSock != null && !cSock.isClosed && srtcpEncryptor != null &&
+                    keyframeRequests.due(System.nanoTime()/1_000_000,framesDecoded.get()>0,needsRecovery.get())
+                if (needFir && cSock != null && srtcpEncryptor != null) {
+                    needsRecovery.set(false)
                     try {
                         val firPkt = MacHevcRtcp.buildCompoundFir(ourVideoSsrc, targetSsrc = ssrc)
                         val protected = srtcpEncryptor.protect(firPkt)
@@ -287,6 +290,7 @@ class MacHevcVideoPipeline(
                     }
                 }
 
+                if(tick%50==0) log("Media health relayed=${datagramSender!=null} authenticated=${authenticatedPackets.get()} decoded=${framesDecoded.get()} udpDrops=${vSock?.droppedPackets?.get() ?: 0} decoderDrops=$avcInputDrops $avcAssemblyDiagnostics")
                 tick++
                 Thread.sleep(100)
             } catch (e: InterruptedException) {

@@ -67,15 +67,44 @@ internal class MacAvcSourceSelector {
     }
 }
 
+/** After a damaged reference picture, retain the last clean image until an IDR arrives. */
+internal class MacAvcRecovery {
+    private var waiting=true
+    var skipped=0L; private set
+    fun lost() { waiting=true }
+    fun accept(unit:ByteArray):Boolean {
+        var idr=false
+        for(i in 0 until unit.size-4) {
+            if(unit[i]==0.toByte() && unit[i+1]==0.toByte() && unit[i+2]==0.toByte() &&
+                unit[i+3]==1.toByte() && (unit[i+4].toInt() and 31)==5) {idr=true;break}
+        }
+        if(waiting && !idr) {skipped++;return false}
+        if(idr) waiting=false
+        return true
+    }
+}
+
+/** Pending loss is serviced promptly, with a bounded request rate even over a slow relay. */
+internal class MacKeyframeRequests {
+    private var last:Long?=null
+    fun due(now:Long,hasFrames:Boolean,pending:Boolean):Boolean {
+        if(hasFrames && !pending) return false
+        if(last?.let {now-it<500}==true) return false
+        last=now
+        return true
+    }
+}
+
 /** Apple's 0x92 VisualSampleEntry config followed by RFC6184 H.264 access units. */
 internal class MacAvcStream(private val log: (String)->Unit, private val frame: ()->Unit) : Closeable {
     private val assembler=MacAvcAssembler()
+    private val recovery=MacAvcRecovery()
     private val packetOrder=MacAvcPacketOrder()
     private val sources=MacAvcSourceSelector()
     val activeSsrc:Long? get()=sources.active
     @Volatile var accessUnitObserver:((ByteArray)->Unit)?=null
     @Volatile var packetObserver:((ByteArray,Int,Long,Boolean,Long)->Unit)?=null
-    @Synchronized fun assemblyDiagnostics():String="${assembler.diagnostics} reordered=${packetOrder.repaired} duplicates=${packetOrder.duplicates} expiredGaps=${packetOrder.expiredGaps}"
+    @Synchronized fun assemblyDiagnostics():String="${assembler.diagnostics} skippedUntilIdr=${recovery.skipped} reordered=${packetOrder.repaired} duplicates=${packetOrder.duplicates} expiredGaps=${packetOrder.expiredGaps}"
     val inputDrops=java.util.concurrent.atomic.AtomicLong()
     var onRecovery:()->Unit={}
     @Synchronized fun configurationSnapshot():ByteArray?=config?.copyOf()
@@ -114,7 +143,7 @@ internal class MacAvcStream(private val log: (String)->Unit, private val frame: 
             val previous=sources.active
             if(!sources.accept(ssrc,true)) return
             if(previous!=ssrc || config?.contentEquals(parsed.third)!=true || width!=parsed.first || height!=parsed.second) {
-                closeCodec();assembler.reset();packetOrder.reset((seq+1) and 65535);width=parsed.first; height=parsed.second; config=parsed.third; configure()
+                closeCodec();recovery.lost();assembler.reset();packetOrder.reset((seq+1) and 65535);width=parsed.first; height=parsed.second; config=parsed.third; configure()
                 accessUnitObserver?.invoke(parsed.third)
                 log("AVC source selected ${ssrc.toString(16)}; retired source packets excluded")
             }
@@ -125,19 +154,20 @@ internal class MacAvcStream(private val log: (String)->Unit, private val frame: 
         if(!sources.accept(ssrc,false)) return
         submitOrdered(MacAvcPacketOrder.Packet(payload,seq,timestamp,marker))
     }
+    private fun recover() { recovery.lost();onRecovery() }
     private fun submitOrdered(packet:MacAvcPacketOrder.Packet) {
         val ready=packetOrder.accept(packet,System.nanoTime()/1_000_000)
-        if(packetOrder.takeLoss()) onRecovery()
+        if(packetOrder.takeLoss()) recover()
         ready.forEach(::submitPacket)
     }
     private fun submitPacket(packet:MacAvcPacketOrder.Packet) {
         if(packet.payload.isEmpty()) return
         val timestamp=packet.timestamp
         val unit=assembler.accept(packet.payload,packet.sequence,timestamp,packet.marker)
-        if(assembler.takeLoss()) onRecovery()
+        if(assembler.takeLoss()) recover()
         val decoder=codec ?: return
         drainCodec()
-        if(unit!=null) {
+        if(unit!=null && recovery.accept(unit)) {
             val index=decoder.dequeueInputBuffer(5000)
             if(index>=0) {
                 val input=decoder.getInputBuffer(index)!!
@@ -145,13 +175,14 @@ internal class MacAvcStream(private val log: (String)->Unit, private val frame: 
                 input.clear();input.put(unit)
                 decoder.queueInputBuffer(index,0,unit.size,timestamp*1_000_000L/90000,0)
                 accessUnitObserver?.invoke(unit)
-            } else { inputDrops.incrementAndGet();onRecovery() }
+            } else { inputDrops.incrementAndGet();recover() }
         }
         drainCodec()
     }
     @Synchronized fun drain() {
-        packetOrder.drain(System.nanoTime()/1_000_000).forEach(::submitPacket)
-        if(packetOrder.takeLoss()) onRecovery()
+        val ready=packetOrder.drain(System.nanoTime()/1_000_000)
+        if(packetOrder.takeLoss()) recover()
+        ready.forEach(::submitPacket)
         drainCodec()
     }
     private fun drainCodec() {

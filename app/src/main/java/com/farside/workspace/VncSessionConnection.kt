@@ -73,30 +73,6 @@ internal class VncSessionConnection(
                 }
                 var host = profile.host
                 var port = profile.port
-                if (tunnel != null) try {
-                    port = tunnel.start(profile.host, profile.cloudflaredParameters,
-                        { status -> main.post { if (!closed.get()) onStatus(status) } },
-                        {
-                            if (ended.compareAndSet(false, true)) main.post {
-                                if (!closed.get()) {
-                                    onDisconnected(context.getString(R.string.cloudflared_tunnel_exited), connected.get())
-                                    if (!connected.get()) onConnected(0L)
-                                }
-                            }
-                        }, accessSubcommand = "tcp")
-                    host = "127.0.0.1"
-                } catch (error: Exception) {
-                    android.util.Log.w("Cloudflared", "Tunnel setup failed: ${error.message}")
-                    tunnel.close()
-                    next.release()
-                    ended.set(true)
-                    main.post { if (!closed.get()) {
-                        onStatus("")
-                        onDisconnected(error.localizedMessage(context) ?: context.getString(R.string.cloudflared_connection_failed), false)
-                        onConnected(0L)
-                    } }
-                    return@execute
-                }
                 if (closed.get() || ended.get()) { next.release(); return@execute }
                 if (tunnel == null && profile.proxyType == ProxyType.NONE) {
                     host = kotlinx.coroutines.runBlocking {
@@ -128,6 +104,9 @@ internal class VncSessionConnection(
                 val gate=if(isMacAuth) MacAuthenticationGate { closed.get() } else null
                 val directHost=host;val directPort=port
                 MacConnectionPolicy.connect(isMacAuth,companion!=null && profile.enableMacSshRelay,
+                    // A Cloudflare TCP loopback endpoint cannot carry direct Apple UDP media.
+                    // Do not create/discard a virtual Mac login before trying its SSH helper.
+                    directMediaAvailable=tunnel==null,
                     cancelled={ closed.get() },
                     terminal={ MacConnectionPolicy.isTerminal(it) || closed.get() },
                     failed={ route,error ->
@@ -139,6 +118,20 @@ internal class VncSessionConnection(
                     }) { route ->
                     closeMediaRelay()
                     host=directHost;port=directPort
+                    // The helper owns its own control channel. Open the separate Cloudflare
+                    // VNC tunnel only if ordinary VNC fallback is actually needed.
+                    if(route!=MacConnectionPolicy.Route.COMPANION && tunnel!=null) {
+                        port=tunnel.start(profile.host,profile.cloudflaredParameters,
+                            { status -> main.post {if(!closed.get()) onStatus(status)} },
+                            {
+                                if(ended.compareAndSet(false,true)) main.post {if(!closed.get()) {
+                                    onDisconnected(context.getString(R.string.cloudflared_tunnel_exited),connected.get())
+                                    if(!connected.get()) onConnected(0L)
+                                }}
+                            },accessSubcommand="tcp")
+                        host="127.0.0.1"
+                    }
+                    if(closed.get() || ended.get()) throw InterruptedException("Connection cancelled")
                     var sessionUsername=credential.user
                     if(route==MacConnectionPolicy.Route.COMPANION) {
                         val ssh=checkNotNull(companion)

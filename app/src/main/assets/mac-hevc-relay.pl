@@ -3,6 +3,8 @@ use warnings;
 use Socket qw(:DEFAULT IPPROTO_TCP TCP_NODELAY);
 use IO::Socket::INET;
 use IO::Select;
+use Fcntl qw(F_GETFL F_SETFL O_NONBLOCK);
+use Errno qw(EAGAIN EWOULDBLOCK EINTR);
 use Time::HiRes qw(time);
 $SIG{PIPE}='IGNORE';
 $| = 1;
@@ -49,13 +51,40 @@ for my $port (5900, 5901) {
 print 'READY ', $listener->sockport, "\n";
 my $stdin_buffer='';
 my $last_punch=0;
-sub write_all {
-    my ($fh,$data)=@_;
-    while (length $data) {
-        my $count=syswrite($fh,$data);
-        die "Write failed: $!" unless defined $count && $count>0;
-        substr($data,0,$count,'');
+my $writes=IO::Select->new();
+my (%tcp_output,%read_eof,%write_eof);
+my @media;
+my ($media_offset,$media_bytes,$media_drops,$media_forwarded,$control_bytes)=(0,0,0,0,0);
+my $last_report=time;
+sub nonblocking {
+    my ($fh)=@_;
+    my $flags=fcntl($fh,F_GETFL,0);
+    die "Cannot read descriptor flags: $!" unless defined $flags;
+    fcntl($fh,F_SETFL,$flags | O_NONBLOCK) or die "Cannot set nonblocking output: $!";
+}
+nonblocking(\*STDOUT);
+sub retry_write { return $! == EAGAIN || $! == EWOULDBLOCK || $! == EINTR; }
+sub enqueue_media {
+    my ($port,$packet)=@_;
+    my $frame=pack('nn',$port,length($packet)).$packet;
+    push @media,$frame; $media_bytes+=length($frame);
+    # Never drop a partially written frame: the receiver must retain framing.
+    while (@media>512 || $media_bytes>4*1024*1024) {
+        my $index=$media_offset>0 ? 1 : 0;
+        last if $index>=@media;
+        my ($dropped)=splice(@media,$index,1);
+        $media_bytes-=length($dropped); $media_drops++;
     }
+    $writes->add(\*STDOUT);
+}
+sub flush_media {
+    return unless @media;
+    my $count=syswrite(STDOUT,$media[0],length($media[0])-$media_offset,$media_offset);
+    return if !defined($count) && retry_write();
+    die "Media output failed: $!" unless defined $count && $count>0;
+    $media_offset+=$count; $media_bytes-=$count;
+    if ($media_offset==length($media[0])) { shift @media; $media_offset=0; $media_forwarded++; }
+    $writes->remove(\*STDOUT) unless @media;
 }
 sub close_pair {
     my ($socket)=@_;
@@ -63,17 +92,32 @@ sub close_pair {
     return unless defined $id;
     my $other=delete $peer{$id};
     $select->remove($socket);
-    delete $handles{$id};
+    delete $handles{$id}; delete $tcp_output{$id}; delete $read_eof{$id}; delete $write_eof{$id};
+    $writes->remove($socket);
     if (defined $other && defined fileno($other)) {
         my $other_id=fileno($other);
         $select->remove($other);
         delete $peer{$other_id}; delete $handles{$other_id};
+        delete $tcp_output{$other_id}; delete $read_eof{$other_id}; delete $write_eof{$other_id};
+        $writes->remove($other);
         close $other;
     }
     close $socket;
 }
+sub finish_tcp {
+    my ($socket)=@_;
+    my $id=fileno($socket); return unless defined $id;
+    my $other=$peer{$id}; return unless defined $other && defined fileno($other);
+    my $other_id=fileno($other);
+    if ($read_eof{$other_id} && !length($tcp_output{$id} // '') && !$write_eof{$id}) {
+        shutdown($socket,1); $write_eof{$id}=1;
+    }
+    close_pair($socket) if $read_eof{$id} && $read_eof{$other_id} &&
+        !length($tcp_output{$id} // '') && !length($tcp_output{$other_id} // '');
+}
 while (1) {
-    for my $socket ($select->can_read(0.1)) {
+    my ($readable,$writable)=IO::Select->select($select,$writes,undef,0.1);
+    for my $socket (@{$readable // []}) {
         next unless defined fileno($socket);
         if (fileno($socket)==fileno($listener)) {
             my $incoming=$listener->accept or next;
@@ -82,7 +126,7 @@ while (1) {
             $options{LocalAddr}='127.0.0.1' if $same_host;
             my $outgoing=IO::Socket::INET->new(%options);
             unless ($outgoing) { close $incoming; next; }
-            setsockopt($_,IPPROTO_TCP,TCP_NODELAY,pack('i',1)) for ($incoming,$outgoing);
+            for ($incoming,$outgoing) { setsockopt($_,IPPROTO_TCP,TCP_NODELAY,pack('i',1)); nonblocking($_); }
             $peer{fileno($incoming)}=$outgoing;
             $peer{fileno($outgoing)}=$incoming;
             $handles{fileno($incoming)}=$incoming;
@@ -113,17 +157,43 @@ while (1) {
                 next;
             }
             my $port=$udp_port{fileno($socket)};
-            write_all(\*STDOUT,pack('nn',$port,length($packet)).$packet);
+            enqueue_media($port,$packet);
         } else {
             my $id=fileno($socket);
             my $count=sysread($socket,my $data,65536);
             if (defined $count && $count>0) {
-                my $ok=eval { write_all($peer{$id},$data); 1; };
-                close_pair($socket) unless $ok;
-            } else {
-                close_pair($socket);
-            }
+                my $other=$peer{$id};
+                my $other_id=fileno($other);
+                $tcp_output{$other_id}.=$data;
+                $writes->add($other);
+                # TCP is lossless: pause reads instead of dropping or accumulating without limit.
+                $select->remove($socket) if length($tcp_output{$other_id})>=256*1024;
+            } elsif (defined $count) {
+                $read_eof{$id}=1; $select->remove($socket);
+                finish_tcp($peer{$id}); finish_tcp($socket);
+            } elsif (!retry_write()) { close_pair($socket); }
         }
+    }
+    # Control always progresses independently of a backed-up media stdout channel.
+    for my $socket (@{$writable // []}) {
+        next unless defined fileno($socket);
+        next if fileno($socket)==fileno(STDOUT);
+        my $id=fileno($socket);
+        next unless exists $peer{$id};
+        my $count=syswrite($socket,$tcp_output{$id},(length($tcp_output{$id})<65536 ? length($tcp_output{$id}) : 65536));
+        if (defined $count && $count>0) {
+            substr($tcp_output{$id},0,$count,''); $control_bytes+=$count;
+            $writes->remove($socket) unless length($tcp_output{$id});
+            my $other=$peer{$id};
+            $select->add($other) if !$read_eof{fileno($other)} && length($tcp_output{$id})<64*1024;
+            finish_tcp($socket);
+        } elsif (!defined($count) && retry_write()) { next; }
+        else { close_pair($socket); }
+    }
+    flush_media() if @media && grep { defined fileno($_) && fileno($_)==fileno(STDOUT) } @{$writable // []};
+    if (time-$last_report>=5) {
+        print STDERR "RELAY_STATS queued=$media_bytes dropped=$media_drops forwarded=$media_forwarded control=$control_bytes\n";
+        $last_report=time;
     }
     # Responses from the encoder are local; the SSH channel carries the resulting media to Quest.
     if (time-$last_punch>=0.1) {
