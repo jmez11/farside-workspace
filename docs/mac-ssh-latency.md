@@ -24,3 +24,9 @@ Evidence: `build/verification/mac-latency/` (ignored). The original device logs 
 ## Remaining live checks
 
 Open both real Macs again. For the tunneled Mac, check initial login visibility without clicking/resizing, then slow/fast text selection, held-button dragging, release and scrolling. These symptoms have not been declared fixed by fixture checks. Its virtual-session/window-server login presentation remains an open defect if startup still needs a resize. Inspect new helper/media/input counters alongside the symptom before further tuning. Audio remains a separate unresolved investigation.
+
+## Follow-up: alternating desktops (2026-10-22)
+
+The wearer confirms that Matt alternates between two desktops/login states on that Mac, rather than between Matt and the other computer. Latest logs in `build/verification/mac-source-switch/logcat-private.txt` show one source replacement during the1920x1080 to1280x800 transition, then a stable selected AVC source while decoded frames continue increasing. They do not show repeated source-selector changes during the reported alternation. Relay media drops remain0 in this sample; local UDP drops reached167 early and then stopped growing. This narrows the investigation, but does not prove which capture/session negotiation field causes the wrong picture.
+
+Prior `docs/mac-hevc-reevaluation.md` evidence contains independently decoded clean intra pictures with different account images within a single authenticated source; display-ID/index selection probes were already tried. Do not repeat those probes or restrict the app to one Mac stream without a new hypothesis. The current app requests one virtual display. Explicitly requesting two desktops with separately negotiated streams/windows is a distinct deferred feature, now listed in `TODO.md`. Alternating login states in one window remains an open defect. No app restart, install, remote account change or claimed repair accompanied this read-only diagnosis.

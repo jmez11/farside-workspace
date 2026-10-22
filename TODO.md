@@ -1,5 +1,10 @@
 # TODOs
 
+## Mac high-performance desktops
+
+- [ ] Fix the remote different-account presentation defect: one Matt window alternates between two desktops/login states from the same Mac. Latest logs keep a stable selected video source after the resize; previous independent software decoding also found both account images within one authenticated source. Investigate capture/session/display identity; do not describe this as working multi-desktop support or assume retiring another SSRC will fix it. See [latency findings](docs/mac-ssh-latency.md).
+- [ ] Add an explicit request for two separate desktops from one Mac, each in its own movable window, similar to RDP Add desktop. Negotiate and identify each display/stream, route its video and input to the correct window, and preserve the other desktop during resize/close/reconnect. Support the SSH media helper and share transport/audio ownership appropriately. Two connections to different Macs already work; two desktops from one Mac remain deferred. Never alternate two displays in one window or restore a global single-stream limit as a workaround.
+
 ## RDP multiple desktop windows: wearer checks
 
 James confirms the layout/carry build works well on Quest 3S, including the hand icon, and the Adjusting transitions and loading-ring timing (2026-10-20). The checks below remain open; automated results and implementation limits are in [RDP desktop windows](docs/rdp-multi-monitor.md).
