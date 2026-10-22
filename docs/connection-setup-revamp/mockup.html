@@ -54,12 +54,49 @@
       .combo-pill:hover { background: var(--card-hover); color: var(--text); }
       .combo-pill.active { border-color: var(--accent); color: var(--text); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent), 0 0 18px rgba(77,163,255,0.25); }
 
+      /* ---------- UI vs guidance framing ---------- */
+      .legend {
+        position: sticky; top: 0; z-index: 70;
+        display: flex; gap: 10px 26px; flex-wrap: wrap;
+        padding: 11px 20px;
+        background: #101016; border-bottom: 1px solid var(--border);
+        font-size: 13px; color: var(--muted);
+      }
+      .legend-item { display: flex; align-items: flex-start; gap: 9px; max-width: 560px; }
+      .legend-item strong { color: var(--text); letter-spacing: .04em; }
+      .sw { width: 15px; height: 15px; border-radius: 4px; flex: none; margin-top: 2px; }
+      .sw-ui { background: var(--accent); border: 2px solid var(--accent); }
+      .sw-guide { background: transparent; border: 2px dashed var(--faint); }
+
+      .guidance-label {
+        display: flex; align-items: center; gap: 8px;
+        font-size: 11px; font-weight: 800; letter-spacing: .16em;
+        text-transform: uppercase; color: var(--faint);
+        margin: 0 0 10px;
+      }
+      .guidance-label::before { content: ""; width: 10px; height: 10px; border-radius: 3px; border: 1.5px dashed var(--faint); flex: none; }
+      .guidance-block { margin-top: 24px; }
+      .guidance-text {
+        color: var(--muted); font-size: 14px; margin: 0;
+        background: var(--panel); border: 1px dashed var(--border);
+        border-radius: 12px; padding: 12px 14px;
+      }
+
+      .panel-wrap { position: relative; margin-top: 14px; }
+      .ui-tag {
+        position: absolute; top: -11px; left: 18px; z-index: 5;
+        background: var(--accent); color: #0b1524;
+        font-size: 11px; font-weight: 800; letter-spacing: .09em;
+        padding: 3px 11px; border-radius: 999px;
+        box-shadow: 0 4px 14px rgba(0,0,0,.45);
+      }
+
       /* ---------- spatial panel ---------- */
       .panel {
-        background: var(--panel);
-        border: 1px solid var(--border);
+        background: #181820;
+        border: 2px solid var(--accent);
         border-radius: var(--radius);
-        box-shadow: 0 24px 60px rgba(0,0,0,0.55), 0 4px 16px rgba(0,0,0,0.4);
+        box-shadow: 0 0 0 5px rgba(77,163,255,0.08), 0 24px 60px rgba(0,0,0,0.55), 0 4px 16px rgba(0,0,0,0.4);
         overflow: hidden;
       }
       .panel-head { padding: 18px 24px 0; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
@@ -261,12 +298,18 @@
     </style>
   </head>
   <body>
+    <div class="legend" role="note" aria-label="How to read this page">
+      <span class="legend-item"><span class="sw sw-ui"></span><span><strong>QUEST APP UI</strong> — everything inside the framed panel below (this is what would ship on the headset)</span></span>
+      <span class="legend-item"><span class="sw sw-guide"></span><span><strong>GUIDANCE</strong> — everything outside the panel (spec notes, rationale, my explanations; not app UI)</span></span>
+    </div>
     <div class="page">
       <header class="page-head">
+        <div class="guidance-label">Guidance — about this mockup</div>
         <h1>Farside — connection setup, redesigned</h1>
         <p>Interactive mockup · fields and validation match the real connection model</p>
       </header>
 
+      <div class="guidance-label">Guidance — switch mockup screens</div>
       <div class="view-toggle" role="tablist" aria-label="View">
         <button id="viewFlowBtn" class="active" type="button">New connection flow</button>
         <button id="viewVaultBtn" type="button">Sign-in vault</button>
@@ -274,8 +317,11 @@
 
       <!-- ============ FLOW VIEW ============ -->
       <div id="flowView">
+        <div class="guidance-label">Guidance — preview a connection type</div>
         <div class="combo-row" id="comboRow" aria-label="Connection type"></div>
 
+        <div class="panel-wrap">
+        <div class="ui-tag">QUEST APP UI — interactive mockup</div>
         <div class="panel">
           <div class="panel-head">
             <div>
@@ -295,10 +341,22 @@
             <button class="btn primary" id="continueBtn" type="button">Continue</button>
           </div>
         </div>
+        </div>
+
+        <div class="guidance-block">
+          <div class="guidance-label">Guidance — about this connection type</div>
+          <p class="guidance-text" id="comboNoteText"></p>
+        </div>
       </div>
 
       <!-- ============ VAULT VIEW ============ -->
       <div id="vaultView" class="hidden">
+        <div class="guidance-block" style="margin-top:0;">
+          <div class="guidance-label">Guidance — second app screen</div>
+          <p class="guidance-text">The sign-in vault is a separate screen of the app, shown here so it can be reviewed alongside the setup flow. The framed panel below is that screen's UI.</p>
+        </div>
+        <div class="panel-wrap">
+        <div class="ui-tag">QUEST APP UI — interactive mockup</div>
         <div class="panel">
           <div class="vault-panel">
             <div class="panel-title" style="font-size:19px; font-weight:700; margin-bottom:4px;">Sign-in vault</div>
@@ -314,12 +372,15 @@
             <div id="vaultBody"></div>
           </div>
         </div>
+        </div>
       </div>
 
       <!-- ============ RATIONALE ============ -->
       <section class="rationale">
+        <div class="guidance-label">Guidance — design rationale</div>
         <h2>What changed &amp; why</h2>
         <ul>
+          <li><strong>The mockup labels itself</strong>Everything inside the accent-framed panel tagged “QUEST APP UI” is the proposed app UI — the flow starts at step 1, “What are you connecting to?”. Everything outside the frame is guidance: the legend, the connection-type switcher, the per-type notes, and this section. None of the guidance ships.</li>
           <li><strong>Guided steps instead of one long scroll</strong>The old form was a single ~2,000-line scrolling list. The redesign splits it into four steps — protocol, server, sign-in, review — one decision per screen, with targets sized for a headset pointer.</li>
           <li><strong>Protocol and auth mode are decided first</strong>VNC's password-vs-account choice used to sit as radio buttons between the name and host fields. Now it's part of step 1, so every later screen only shows fields that apply.</li>
           <li><strong>Sign-ins are created in place</strong>Picking “+ New sign-in” used to eject you into Settings and lose your place. It now opens a sheet right over the form — save, and the new sign-in is already selected.</li>
@@ -410,7 +471,7 @@
                 keyId: "key-laptop" },
         /* step 4 options */
         opt: {
-          rdpSound: "Headset", mic: true, camera: true, cameraRes: "720p",
+          playSound: true, mic: true, camera: true, cameraRes: "HD 720p",
           clipboard: true, drives: false, console: false, admin: false,
           jump: "direct", sftp: true, autoCopy: false, portForwards: 2,
           vncPair: "none",
@@ -516,6 +577,12 @@
           : (S.combo === "vnc-mac" ? "VNC · Username + password" : "VNC · VNC password");
         el("panelSub").textContent = sub;
         el("panelTitle").textContent = S.mode === "edit" ? "Edit connection" : "New connection";
+        var cn = el("comboNoteText");
+        if (cn) cn.textContent = c.proto === "RDP"
+          ? "RDP always needs a username and password — in the flow above, step 3 is where you pick a saved sign-in or type one just for this connection. On step 4, Play sound is a plain on/off toggle and the camera resolution is the three-way picker (SD 480p / HD 720p / Native)."
+          : c.proto === "SSH"
+          ? "SSH connections can also carry SFTP file access and port forwards — in the flow above, those live on the review step (step 4), once the basics are in."
+          : "VNC's sign-in type is chosen on step 1 — a short VNC password, or a username + password account on the target machine — and step 3 only shows the fields that match the choice.";
         el("backBtn").disabled = S.step === 1;
         el("continueBtn").textContent = S.step === 4 ? (S.mode === "edit" ? "Save changes" : "Save connection") : "Continue";
       }
@@ -557,12 +624,6 @@
             segHTML("vncAuth", ["VNC password", "Username + password"], S.combo === "vnc-mac" ? "Username + password" : "VNC password") +
             '<p class="hint" style="margin-top:10px;">Username + password means an account on the target machine — e.g. the macOS user account when connecting to Mac Screen Sharing.</p>' +
             "</div>";
-        }
-        if (proto === "SSH") {
-          h += '<div class="note">SSH connections can also carry <strong>SFTP file access</strong> and <strong>port forwards</strong> — those live on the review step, once the basics are in.</div>';
-        }
-        if (proto === "RDP") {
-          h += '<div class="note">RDP always needs a <strong>username and password</strong>. You\'ll pick a saved sign-in — or type one just for this connection — on step 3.</div>';
         }
         return h;
       }
@@ -810,19 +871,16 @@
 
         if (c.proto === "RDP") {
           h += '<div class="opt-card"><h3>Display &amp; audio</h3>' +
-            '<div class="opt-row"><div class="or-main"><div class="or-name">Play sound</div></div>' +
-            segHTML("rdpSound", ["Headset", "Remote PC", "Off"], S.opt.rdpSound) + "</div>" +
+            optRow("Play sound", "Play the remote PC's audio on this headset", switchHTML("playSound", S.opt.playSound)) +
             optRow("Microphone", "Send your voice to the remote PC", switchHTML("mic", S.opt.mic)) +
             optRow("Camera", "Share the headset camera", switchHTML("camera", S.opt.camera));
           if (S.opt.camera) {
             h += '<div class="opt-row"><div class="or-main"><div class="or-name">Camera resolution</div></div>' +
-              '<select class="input" id="cameraRes"><option' + (S.opt.cameraRes === "480p" ? " selected" : "") + '>480p</option>' +
-              '<option' + (S.opt.cameraRes === "720p" ? " selected" : "") + '>720p</option>' +
-              '<option' + (S.opt.cameraRes === "Native" ? " selected" : "") + ">Native</option></select></div>";
+              segHTML("cameraRes", ["SD 480p", "HD 720p", "Native"], S.opt.cameraRes) + "</div>";
           }
           h += optRow("Clipboard", "Copy &amp; paste text between headset and PC", switchHTML("clipboard", S.opt.clipboard)) +
             optRow("Drive storage", "Expose headset storage as a drive on the PC", switchHTML("drives", S.opt.drives)) +
-            optRow("Console session", "Take over the PC's physical screen session", switchHTML("console", S.opt.console)) +
+            optRow("Console session", "Connect with console session flags.", switchHTML("console", S.opt.console)) +
             optRow("Admin mode", "Connect with administrative session flags", switchHTML("admin", S.opt.admin)) +
             "</div>";
         }
@@ -1018,21 +1076,20 @@
         document.querySelectorAll("[data-goto]").forEach(function (b) {
           b.addEventListener("click", function () { S.step = parseInt(b.getAttribute("data-goto"), 10); renderStepper(); renderStep(); window.scrollTo({ top: 0, behavior: "smooth" }); });
         });
-        bindSeg("rdpSound", function (v) { S.opt.rdpSound = v; setSeg("rdpSound", v); });
+        bindSwitch("playSound", function () { S.opt.playSound = !S.opt.playSound; renderStep(); });
         bindSwitch("mic", function () { S.opt.mic = !S.opt.mic; renderStep(); });
         bindSwitch("camera", function () { S.opt.camera = !S.opt.camera; renderStep(); });
         bindSwitch("clipboard", function () { S.opt.clipboard = !S.opt.clipboard; renderStep(); });
         bindSwitch("drives", function () { S.opt.drives = !S.opt.drives; renderStep(); });
         bindSwitch("console", function () { S.opt.console = !S.opt.console; renderStep(); });
         bindSwitch("admin", function () { S.opt.admin = !S.opt.admin; renderStep(); });
-        var cr = el("cameraRes");
-        if (cr) cr.addEventListener("change", function () { S.opt.cameraRes = cr.value; });
+        bindSeg("cameraRes", function (v) { S.opt.cameraRes = v; setSeg("cameraRes", v); });
         var js = el("jumpSel");
         if (js) js.addEventListener("change", function () { S.opt.jump = js.value; renderStep(); });
         bindSwitch("sftp", function () { S.opt.sftp = !S.opt.sftp; renderStep(); });
         bindSwitch("autoCopy", function () { S.opt.autoCopy = !S.opt.autoCopy; renderStep(); });
         var pf = el("pfBtn");
-        if (pf) pf.addEventListener("click", function () { toast(S.opt.portForwards + " port forwards configured (mock)"); });
+        if (pf) pf.addEventListener("click", function () { toast(S.opt.portForwards + " port forwards configured"); });
         var vp = el("vncPairSel");
         if (vp) vp.addEventListener("change", function () { S.opt.vncPair = vp.value; });
         bindSeg("proxy", function (v) { S.opt.proxy = v; renderStep(); });
@@ -1146,7 +1203,7 @@
         { id: "ex-office", label: "Office PC — RDP", combo: "rdp",
           name: "Office PC", host: "192.0.2.50", port: 3389,
           cred: { rdp: { mode: "saved", savedId: "si-work" } },
-          opt: { rdpSound: "Headset", mic: true, camera: true, cameraRes: "720p", clipboard: true, proxy: "Direct", reconnect: true } },
+          opt: { playSound: true, mic: true, camera: true, cameraRes: "HD 720p", clipboard: true, proxy: "Direct", reconnect: true } },
         { id: "ex-macmini", label: "Mac mini — VNC · username+password", combo: "vnc-mac",
           name: "Mac mini", host: "192.0.2.20", port: 5900,
           cred: { vncm: { mode: "saved", savedId: "si-macmini" } },
@@ -1272,7 +1329,7 @@
           });
         });
         document.querySelectorAll("[data-pubkey]").forEach(function (b) {
-          b.addEventListener("click", function () { toast("Public key copied (mock)"); });
+          b.addEventListener("click", function () { toast("Public key copied"); });
         });
       }
       el("vaultSearch").addEventListener("input", renderVault);

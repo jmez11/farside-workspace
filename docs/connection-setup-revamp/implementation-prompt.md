@@ -40,9 +40,11 @@ mockup:
   passphrase, require-PIN toggle). Saving adds to the vault and selects it.
 - Step 4 **Review & options**: summary card
   ("Office PC · RDP · host:port · signed in as …") with Edit jump-links back to
-  steps 1/2/3; per-protocol option cards (RDP: display & audio incl. sound
-  segmented Headset/Remote/Off + mic/camera(+resolution)/clipboard/storage/
-  console/admin toggles; SSH: jump-host picker with route preview chip,
+  steps 1/2/3; per-protocol option cards (RDP: display & audio incl. "Play sound"
+  on/off toggle + mic/camera toggles with camera resolution as a 3-choice
+  segmented picker (SD 480p / HD 720p / Native) + clipboard/storage toggles +
+  console-session toggle with helper text exactly "Connect with console session
+  flags." + admin toggle; SSH: jump-host picker with route preview chip,
   SFTP toggle, port-forwards row with count badge, auto-copy toggle; VNC:
   "Pair with an existing SSH connection" dropdown with **plain connection names
   only**); Network card for all (proxy segmented Direct/Cloudflare/SOCKS5/HTTP
@@ -136,6 +138,18 @@ like `setup-revamp: phase 2 sign-in step`.
   validated via `CloudflaredOptions`; keep the existing permission-request
   flows for microphone/camera/storage.
 - VNC file pairing (`sftpPairProfileId`) lists SSH profiles with SFTP enabled.
+- RDP "Play sound" is a plain on/off toggle in the UI: on maps to
+  `SoundRedirection.PLAY_ON_DEVICE`, off maps to `DO_NOT_PLAY`. The
+  `SoundRedirection` enum stays as-is for JSON read-tolerance; a stored
+  `PLAY_ON_REMOTE` renders as on.
+- Camera resolution is a 3-choice segmented picker (SD 480p / HD 720p / Native),
+  enabled when the camera toggle is on. Console-session toggle helper text is
+  exactly "Connect with console session flags."
+- Mockup reading guide: in `mockup.html`, everything inside the framed
+  "QUEST APP UI" panel is the proposed headset UI (the flow starts at step 1,
+  "What are you connecting to?"); everything outside the frame — combo
+  switcher, per-combo notes, rationale — is guidance, not app UI. The numbered
+  1-2-3-4 stepper inside the frame IS part of the proposed UI.
 
 ## 5. Mac logins (full name + short name)
 
