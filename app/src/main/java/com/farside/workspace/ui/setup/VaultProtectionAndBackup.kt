@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.farside.workspace.CredentialPin
 import com.farside.workspace.R
 import com.farside.workspace.data.BackupManager
@@ -29,7 +30,7 @@ internal fun VaultAuthentication(pm:ProfileManager,onUnlocked:()->Unit,onCancel:
 
 /** Uses the existing PIN verifier, OS authentication and authenticated backup format unchanged. */
 @Composable
-internal fun VaultProtectionAndBackup(pm:ProfileManager,onChanged:()->Unit) {
+internal fun VaultProtectionAndBackup(pm:ProfileManager,externalRevision:Int=0,onChanged:()->Unit) {
     val context=LocalContext.current
     val scope=rememberCoroutineScope()
     var revision by remember {mutableIntStateOf(0)}
@@ -66,27 +67,35 @@ internal fun VaultProtectionAndBackup(pm:ProfileManager,onChanged:()->Unit) {
     val importer=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {uri ->
         if(uri!=null) {pendingUri=uri;backupMode="restore";phrase="";phraseConfirm=""}
     }
-    val verifier=remember(revision) {pm.getAppPinVerifier()}
-    val system=remember(revision) {pm.usesSystemPin()}
-    Text(stringResource(R.string.setup_vault_protection),style=MaterialTheme.typography.titleMedium)
-    Text(stringResource(if(system) R.string.setup_headset_pin_active else if(verifier!=null) R.string.app_pin_active else R.string.setup_no_pin))
-    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(onClick={if(verifier!=null || system) action="change" else pinEditor=true}) {
-            Text(stringResource(if(verifier!=null) R.string.change_app_pin else R.string.setup_set_pin))
+    val verifier=remember(revision,externalRevision) {pm.getAppPinVerifier()}
+    val system=remember(revision,externalRevision) {pm.usesSystemPin()}
+    Text(stringResource(R.string.setup_vault_protection),fontSize=13.sp,color=SetupColors.muted)
+    VaultCard {
+        Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(5.dp)) {
+                Row(horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {
+                    Text(stringResource(if(system) R.string.setup_headset_pin_active else R.string.setup_app_pin_label),fontSize=14.sp,fontWeight=androidx.compose.ui.text.font.FontWeight.Bold)
+                    VaultBadge(if(system || verifier!=null) "On" else "Off",if(system || verifier!=null) androidx.compose.ui.graphics.Color(0xFF63C99A) else SetupColors.muted)
+                }
+                Text(stringResource(R.string.setup_pin_help),fontSize=12.sp,color=SetupColors.muted)
+            }
+            VaultButton(stringResource(if(verifier!=null || system) R.string.setup_change else R.string.setup_set_pin),{if(verifier!=null || system) action="change" else pinEditor=true},description=stringResource(if(verifier!=null || system) R.string.change_app_pin else R.string.setup_set_pin))
+            if(verifier!=null || system) VaultButton(stringResource(R.string.setup_remove),{action="remove"},description=stringResource(R.string.remove_app_pin),danger=true)
         }
-        if(verifier!=null || system) OutlinedButton(onClick={action="remove"}) {Text(stringResource(R.string.remove_app_pin))}
+        if(!system) TextButton(onClick={if(verifier!=null) action="system" else systemEnable=true},contentPadding=PaddingValues(0.dp)) {
+            Text(stringResource(R.string.setup_use_headset_pin),fontSize=12.sp)
+        }
     }
-    OutlinedButton(onClick={if(system) action="remove" else if(verifier!=null) action="system" else systemEnable=true}) {
-        Text(stringResource(if(system) R.string.setup_disable_headset_pin else R.string.setup_use_headset_pin))
+    Spacer(Modifier.height(8.dp))
+    Text(stringResource(R.string.setup_backup_restore),fontSize=13.sp,color=SetupColors.muted)
+    VaultCard {
+        Text(stringResource(R.string.setup_backup_covers),fontSize=12.sp,color=SetupColors.muted)
+        Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+            VaultButton(stringResource(R.string.export_backup),{action="export"},enabled=!busy)
+            VaultButton(stringResource(R.string.restore_backup),{action="import"},enabled=!busy)
+        }
+        status?.let {Text(stringResource(it),color=SetupColors.muted)}
     }
-    Divider()
-    Text(stringResource(R.string.setup_backup_restore),style=MaterialTheme.typography.titleMedium)
-    Text(stringResource(R.string.setup_backup_covers))
-    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(enabled=!busy,onClick={action="export"}) {Text(stringResource(R.string.export_backup))}
-        OutlinedButton(enabled=!busy,onClick={action="import"}) {Text(stringResource(R.string.restore_backup))}
-    }
-    status?.let {Text(stringResource(it),color=SetupColors.muted)}
     action?.let {requested ->
         VaultAuthentication(pm,onUnlocked={
             action=null
@@ -120,4 +129,21 @@ internal fun VaultProtectionAndBackup(pm:ProfileManager,onChanged:()->Unit) {
                 if(mode=="export") exporter.launch("farside-workspace.fsbk") else pendingUri?.let {runBackup(it,false)}
             }) {Text(stringResource(R.string.continue_action))}},dismissButton={TextButton(onClick={backupMode=null;phrase="";phraseConfirm="";pendingUri=null}) {Text(stringResource(R.string.cancel))}})
     }
+}
+
+/** Set protection without losing the credential sheet's unsaved fields. */
+@Composable
+internal fun RequirePinSetup(pm:ProfileManager,onSaved:()->Unit,onCancel:()->Unit) {
+    var pin by remember {mutableStateOf("")}
+    var confirm by remember {mutableStateOf("")}
+    var system by remember {mutableStateOf(false)}
+    if(system) SystemCredentialDialog(allowRemembered=false,onUnlocked={pm.enableSystemPin();onSaved()},onCancel={system=false})
+    else AlertDialog(onDismissRequest=onCancel,title={Text(stringResource(R.string.setup_set_pin))},
+        text={Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
+            SetupInput(R.string.enter_new_app_pin,pin,{pin=it},secret=true)
+            SetupInput(R.string.setup_confirm_pin,confirm,{confirm=it},secret=true)
+            TextButton(onClick={system=true}) {Text(stringResource(R.string.setup_use_headset_pin))}
+        }},confirmButton={TextButton(enabled=CredentialPin.valid(pin) && pin==confirm,onClick={
+            pm.setAppPinVerifier(CredentialPin.create(pin));pin="";confirm="";onSaved()
+        }) {Text(stringResource(R.string.save_pin))}},dismissButton={TextButton(onClick=onCancel) {Text(stringResource(R.string.cancel))}})
 }

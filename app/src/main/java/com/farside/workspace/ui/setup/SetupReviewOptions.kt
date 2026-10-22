@@ -78,7 +78,7 @@ private fun SetupProfilePicker(label:Int,selected:String?,profiles:List<Connecti
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun SetupReviewOptions(profile:ConnectionProfile,profiles:List<ConnectionProfile>,onChange:(ConnectionProfile)->Unit,onEdit:(Int)->Unit) {
+internal fun SetupReviewOptions(profile:ConnectionProfile,profiles:List<ConnectionProfile>,onChange:(ConnectionProfile)->Unit,onEdit:(Int)->Unit,showErrors:Boolean=false) {
     val context=LocalContext.current
     var forwardsOpen by remember {mutableStateOf(false)}
     var relayConfirm by remember {mutableStateOf(false)}
@@ -87,7 +87,7 @@ internal fun SetupReviewOptions(profile:ConnectionProfile,profiles:List<Connecti
     val storage=rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {_ ->onChange(profile.copy(redirectStorage=hasStoragePermission(context)))}
     val sftp=rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {_ ->onChange(profile.copy(enableSftp=hasStoragePermission(context)))}
     Column(verticalArrangement=Arrangement.spacedBy(16.dp)) {
-        Text(stringResource(R.string.setup_review),style=MaterialTheme.typography.titleLarge)
+        Text(stringResource(R.string.setup_review),fontSize=20.sp,fontWeight=FontWeight.Bold)
         SetupOptionGroup(R.string.setup_summary) {
             Text(profile.name,fontWeight=FontWeight.Bold)
             Text("${profile.type.name} \u00b7 ${profile.host}:${profile.port}",fontSize=14.sp,color=SetupColors.muted)
@@ -162,7 +162,7 @@ internal fun SetupReviewOptions(profile:ConnectionProfile,profiles:List<Connecti
                 SetupInput(R.string.proxy_password_optional,profile.proxyPass.orEmpty(),{onChange(profile.copy(proxyPass=it))},secret=true)
             }
             SetupToggle(R.string.reconnect_automatically,profile.reconnectAutomatically,{onChange(profile.copy(reconnectAutomatically=it))})
-            setupOptionsError(context,profile,profiles)?.let {Text(it,color=SetupColors.danger,fontSize=13.sp)}
+            setupOptionsError(context,profile,profiles)?.takeIf {showErrors}?.let {Text(it,color=SetupColors.danger,fontSize=13.sp)}
         }
     }
     if(forwardsOpen) SshForwardingDialog(profile.sshForwards,onChange={onChange(profile.copy(sshForwards=it))},onDismiss={forwardsOpen=false})

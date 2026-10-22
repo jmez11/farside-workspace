@@ -46,14 +46,14 @@ internal class SetupSignInState(initial:ConnectionProfile?) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun SetupStepSignIn(base:ConnectionProfile,state:SetupSignInState,pm:ProfileManager) {
+internal fun SetupStepSignIn(base:ConnectionProfile,state:SetupSignInState,pm:ProfileManager,showErrors:Boolean=false) {
     val credentials=remember(state.revision) {pm.getCredentials()}
     val keys=remember(state.revision) {pm.getSshKeys()}
     var sheet by remember {mutableStateOf<String?>(null)}
     val passwordOnly=base.type==ConnectionType.VNC && base.vncAuthMode==VncAuthMode.VNC_PASSWORD
     val error=state.error(base,credentials)
     Column(verticalArrangement=Arrangement.spacedBy(14.dp)) {
-        Text(stringResource(R.string.setup_sign_in),style=MaterialTheme.typography.titleLarge)
+        Text(stringResource(R.string.setup_sign_in),fontSize=20.sp,fontWeight=androidx.compose.ui.text.font.FontWeight.Bold)
         Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) {
             listOf(false,true).forEach { specific ->
                 FilterChip(selected=state.specific==specific,onClick={state.specific=specific},
@@ -104,13 +104,13 @@ internal fun SetupStepSignIn(base:ConnectionProfile,state:SetupSignInState,pm:Pr
                 OutlinedButton(onClick={sheet="key"}) {Text(stringResource(R.string.setup_import_key))}
             } else {
                 SetupInput(if(passwordOnly) R.string.setup_vnc_password else R.string.password,state.password,{state.password=it},secret=true)
-                if(passwordOnly) Text("${state.password.length}/8",color=if(state.password.length>8) SetupColors.danger else SetupColors.muted)
+                if(passwordOnly) Text("${state.password.length}/8",color=if(showErrors && state.password.length>8) SetupColors.danger else SetupColors.muted)
                 if(state.keepingPassword) Text(stringResource(R.string.setup_password_keep),fontSize=13.sp,color=SetupColors.muted)
             }
         }
         if(base.type==ConnectionType.SSH) Text(stringResource(R.string.setup_ssh_optional),fontSize=13.sp,color=SetupColors.muted)
         if(base.type==ConnectionType.VNC && !passwordOnly) Text(stringResource(R.string.setup_mac_sign_in_hint),fontSize=13.sp,color=SetupColors.muted)
-        error?.let {Text(stringResource(it),color=SetupColors.danger)}
+        error?.takeIf {showErrors}?.let {Text(stringResource(it),color=SetupColors.danger)}
     }
     if(sheet=="credential") CredentialSheet(pm,vncPassword=passwordOnly,allowMac=base.type!=ConnectionType.RDP,
         onDismiss={sheet=null},onSaved={state.credentialId=it.id;state.specific=false;state.revision++;sheet=null})

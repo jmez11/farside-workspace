@@ -40,25 +40,26 @@ internal object SetupColors {
 @Composable
 internal fun SetupStepper(step:Int,canVisit:(Int)->Boolean,onStep:(Int)->Unit) {
     val labels=listOf(R.string.setup_protocol,R.string.setup_server,R.string.setup_sign_in,R.string.setup_review)
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
-    val stepWidth=(maxWidth/5).coerceAtMost(92.dp)
     Row(Modifier.fillMaxWidth().padding(vertical=12.dp),verticalAlignment=Alignment.Top) {
         labels.forEachIndexed { index,label ->
             val description="${index+1} ${stringResource(label)}"
-            Column(Modifier.width(stepWidth).semantics { contentDescription=description }
-                .clickable(enabled=canVisit(index),role=Role.Button) { onStep(index) },horizontalAlignment=Alignment.CenterHorizontally,
-                verticalArrangement=Arrangement.spacedBy(7.dp)) {
-                Box(Modifier.size(34.dp).background(if(index==step) SetupColors.accent else if(index<step) SetupColors.accent.copy(alpha=.13f) else SetupColors.card,CircleShape)
-                    .border(2.dp,if(index<=step) SetupColors.accent else SetupColors.border,CircleShape),contentAlignment=Alignment.Center) {
-                    Text(if(index<step) "\u2713" else (index+1).toString(),fontSize=14.sp,fontWeight=FontWeight.Bold,
-                        color=if(index==step) SetupColors.background else if(index<step) SetupColors.accent else SetupColors.muted)
+            Box(Modifier.weight(1f)) {
+                if(index>0) Box(Modifier.fillMaxWidth(.5f).padding(top=17.dp).height(2.dp).background(if(index<=step) SetupColors.accent else SetupColors.border))
+                if(index<3) Box(Modifier.fillMaxWidth(.5f).align(Alignment.TopEnd).padding(top=17.dp).height(2.dp).background(if(index<step) SetupColors.accent else SetupColors.border))
+                Column(Modifier.fillMaxWidth().semantics {contentDescription=description}
+                    .clickable(enabled=canVisit(index),role=Role.Button) {onStep(index)},
+                    horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(7.dp)) {
+                    Box(Modifier.size(34.dp).background(if(index==step) SetupColors.accent else SetupColors.background,CircleShape)
+                        .border(2.dp,if(index<=step) SetupColors.accent else SetupColors.border,CircleShape),contentAlignment=Alignment.Center) {
+                        Text(if(index<step) "\u2713" else (index+1).toString(),fontSize=14.sp,fontWeight=FontWeight.Bold,
+                            color=if(index==step) SetupColors.background else if(index<step) SetupColors.accent else SetupColors.muted)
+                    }
+                    Text(stringResource(label),fontSize=12.sp,fontWeight=FontWeight.SemiBold,maxLines=1,softWrap=false,
+                        textAlign=androidx.compose.ui.text.style.TextAlign.Center,
+                        color=if(index==step) Color.White else if(index<step) SetupColors.muted else SetupColors.faint)
                 }
-                Text(stringResource(label),fontSize=12.sp,fontWeight=FontWeight.SemiBold,
-                    color=if(index==step) Color.White else if(index<step) SetupColors.muted else SetupColors.faint)
             }
-            if(index<3) Box(Modifier.weight(1f).padding(top=17.dp).height(2.dp).background(if(index<step) SetupColors.accent else SetupColors.border))
         }
-    }
     }
 }
 

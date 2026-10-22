@@ -748,4 +748,13 @@
     <string name="setup_mac_example">Username + password means an account on the target machine — e.g. the macOS user account when connecting to Mac Screen Sharing.</string>
     <string name="setup_which_computer">Which computer?</string>
     <string name="setup_server_lede">Give it a name you\'ll recognise in the launcher, and enter its address.</string>
+    <string name="setup_vault_lede">Sign-ins, SSH keys, PIN protection, and backup &amp; restore — stored encrypted on the headset.</string>
+    <string name="setup_app_pin_label">App PIN</string>
+    <string name="setup_pin_help">PIN-gated sign-ins and keys ask for this before they can be used.</string>
+    <string name="setup_username_required">Enter a username.</string>
+    <string name="setup_password_required">Enter a password.</string>
+    <string name="setup_change">Change</string>
+    <string name="setup_remove">Remove</string>
+    <string name="setup_public_key">Public key</string>
+    <string name="setup_sign_ins">Sign-ins</string>
 </resources>

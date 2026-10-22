@@ -43,6 +43,7 @@ fun ConnectionSetupFlow(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var step by rememberSaveable { mutableIntStateOf(0) }
+    var attempted by remember { mutableStateOf(emptySet<Int>()) }
     var type by rememberSaveable { mutableStateOf(initialProfile?.type ?: ConnectionType.RDP) }
     var auth by rememberSaveable { mutableStateOf(initialProfile?.vncAuthMode ?: VncAuthMode.MAC_USER) }
     var name by rememberSaveable { mutableStateOf(initialProfile?.name ?: "") }
@@ -70,7 +71,7 @@ fun ConnectionSetupFlow(
         val accent = Color(0xFFD0BCFF)
     MaterialTheme(colorScheme = darkColorScheme(primary=accent, background=Color(0xFF1C1B1F), surface=Color(0xFF1C1B1F), onPrimary=Color(0xFF1C1B1F))) {
         Box(Modifier.fillMaxSize().padding(16.dp), contentAlignment=Alignment.TopCenter) {
-        Surface(modifier=Modifier.widthIn(max=880.dp).fillMaxSize(),shape=RoundedCornerShape(16.dp),border=BorderStroke(2.dp,accent)) {
+        Surface(modifier=Modifier.fillMaxSize(),shape=RoundedCornerShape(16.dp),border=BorderStroke(2.dp,accent)) {
             Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement=Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment=Alignment.CenterVertically) {
                     IconButton(onClick=onCancel) { Icon(if(initialProfile==null) Icons.Default.Close else Icons.Default.ArrowBack, stringResource(R.string.back)) }
@@ -80,7 +81,15 @@ fun ConnectionSetupFlow(
                     }
                     Text(stringResource(R.string.setup_step_of, step+1),fontSize=13.sp,color=SetupColors.muted)
                 }
-                SetupStepper(step,canVisit={index -> index<2 || validServer && (index==2 || signInValid)},onStep={step=it})
+                SetupStepper(step,canVisit={true},onStep={target ->
+                    attempted=attempted+step
+                    step=when {
+                        target<=step -> target
+                        target>=2 && !validServer -> 1
+                        target>=3 && !signInValid -> 2
+                        else -> target
+                    }
+                })
                 when(step) {
                     0 -> Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement=Arrangement.spacedBy(12.dp)) {
                         Text(stringResource(R.string.setup_connecting_to), fontSize=20.sp,fontWeight=FontWeight.Bold)
@@ -108,14 +117,14 @@ fun ConnectionSetupFlow(
                     1 -> Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement=Arrangement.spacedBy(12.dp)) {
                         Text(stringResource(R.string.setup_which_computer),fontSize=20.sp,fontWeight=FontWeight.Bold)
                         Text(stringResource(R.string.setup_server_lede),fontSize=14.sp,color=SetupColors.muted)
-                        SetupServerField(name,{name=it},R.string.connection_name,if(name.isBlank()) R.string.profile_name_required else null,Modifier.fillMaxWidth())
+                        SetupServerField(name,{name=it},R.string.connection_name,if(1 in attempted && name.isBlank()) R.string.profile_name_required else null,Modifier.fillMaxWidth())
                         BoxWithConstraints {
                             if(maxWidth<600.dp) Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
-                                SetupServerField(host,{host=it},R.string.host_server,if(host.isBlank()) R.string.profile_host_required else null,Modifier.fillMaxWidth())
-                                SetupServerField(port,{port=it},R.string.setup_port,if(port.toIntOrNull() !in 1..65535) R.string.profile_port_invalid else null,Modifier.fillMaxWidth())
+                                SetupServerField(host,{host=it},R.string.host_server,if(1 in attempted && host.isBlank()) R.string.profile_host_required else null,Modifier.fillMaxWidth())
+                                SetupServerField(port,{port=it},R.string.setup_port,if(1 in attempted && port.toIntOrNull() !in 1..65535) R.string.profile_port_invalid else null,Modifier.fillMaxWidth())
                             } else Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-                                SetupServerField(host,{host=it},R.string.host_server,if(host.isBlank()) R.string.profile_host_required else null,Modifier.weight(1f))
-                                SetupServerField(port,{port=it},R.string.setup_port,if(port.toIntOrNull() !in 1..65535) R.string.profile_port_invalid else null,Modifier.width(130.dp))
+                                SetupServerField(host,{host=it},R.string.host_server,if(1 in attempted && host.isBlank()) R.string.profile_host_required else null,Modifier.weight(1f))
+                                SetupServerField(port,{port=it},R.string.setup_port,if(1 in attempted && port.toIntOrNull() !in 1..65535) R.string.profile_port_invalid else null,Modifier.width(130.dp))
                             }
                         }
                         if(type!=ConnectionType.SSH) {
@@ -144,17 +153,20 @@ fun ConnectionSetupFlow(
                         }
                     }
                     2 -> Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-                        SetupStepSignIn(base,signIn,profileManager)
+                        SetupStepSignIn(base,signIn,profileManager,showErrors=2 in attempted)
                     }
                     3 -> Column(Modifier.weight(1f).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-                        SetupReviewOptions(draft,savedProfiles,onChange={options=it},onEdit={step=it})
+                        SetupReviewOptions(draft,savedProfiles,onChange={options=it},onEdit={attempted=attempted+step;step=it},showErrors=3 in attempted)
                     }
                 }
                 Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
                     OutlinedButton(shape=RoundedCornerShape(12.dp),border=BorderStroke(1.dp,SetupColors.border),enabled=step>0,onClick={step--}) { Text(stringResource(R.string.back)) }
-                    Button(shape=RoundedCornerShape(12.dp),enabled=step==0 || validServer && (step<2 || signInValid) && (step!=3 || optionsValid),onClick={
-                        if(step==3) onSave(draft)
-                        else step++
+                    Button(shape=RoundedCornerShape(12.dp),onClick={
+                        attempted=attempted+step
+                        if((step!=1 || validServer) && (step!=2 || signInValid)) {
+                            if(step==3 && validServer && signInValid && optionsValid) onSave(draft)
+                            else if(step<3) step++
+                        }
                     }) { Text(stringResource(if(step!=3) R.string.continue_action else if(initialProfile==null) R.string.setup_save_connection else R.string.save_changes)) }
                 }
             }

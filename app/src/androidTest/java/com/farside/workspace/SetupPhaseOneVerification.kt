@@ -72,6 +72,7 @@ internal class SetupPhaseOneVerification(private val test:Instrumentation) {
         return node.isEnabled
     }
     internal fun capture(activity:MainActivity,name:String) {
+        Thread.sleep(500)
         val bitmap=android.graphics.Bitmap.createBitmap(activity.window.decorView.width,activity.window.decorView.height,android.graphics.Bitmap.Config.ARGB_8888)
         val done=java.util.concurrent.CountDownLatch(1)
         var status=-1
@@ -121,24 +122,29 @@ internal class SetupPhaseOneVerification(private val test:Instrumentation) {
                 }
                 click(type.name)
                 if(type==ConnectionType.VNC) click(label(if(accountOrKey) R.string.setup_user_password else R.string.setup_vnc_password))
-                if(type==ConnectionType.RDP) { find(label(R.string.setup_connecting_to));capture(activity,"setup-phase1-protocol.png") }
+                if(type==ConnectionType.RDP) {
+                    find(label(R.string.setup_connecting_to));capture(activity,"setup-phase1-protocol.png")
+                    click("4 "+label(R.string.setup_review))
+                } else click(label(R.string.continue_action))
+                check(nodes().none {it.text?.toString()==label(R.string.profile_name_required)}) {"Fresh server showed required error"}
+                click("3 "+label(R.string.setup_sign_in))
+                find(label(R.string.profile_name_required))
                 click(label(R.string.continue_action))
-                check(!enabled(label(R.string.continue_action))) { "Blank server allowed Continue" }
                 find(label(R.string.profile_name_required));find(label(R.string.profile_host_required))
                 if(type==ConnectionType.RDP) capture(activity,"setup-phase1-validation.png")
                 enter(R.string.connection_name,profileName)
                 enter(R.string.host_server,"127.0.0.1")
                 enter(R.string.setup_port,"65536")
-                check(!enabled(label(R.string.continue_action)))
+                click(label(R.string.continue_action))
                 find(label(R.string.profile_port_invalid))
                 enter(R.string.setup_port,"")
-                check(!enabled(label(R.string.continue_action)))
+                click(label(R.string.continue_action))
                 if(type==ConnectionType.SSH) {
                     check(nodes().none { it.text?.toString() in listOf(label(R.string.setup_find_devices),label(R.string.setup_find_pcs)) })
                     enter(R.string.setup_port,"22")
                 } else {
                     click(label(if(type==ConnectionType.RDP) R.string.setup_find_pcs else R.string.setup_find_devices))
-                    click(profileName)
+                    click("127.0.0.1:"+if(type==ConnectionType.RDP) "3389" else "5900")
                     check(scans==listOf(type)) { "Discovery requested another protocol" }
                 }
                 check(enabled(label(R.string.continue_action)))
@@ -147,7 +153,15 @@ internal class SetupPhaseOneVerification(private val test:Instrumentation) {
                 if(type==ConnectionType.SSH && accountOrKey) {
                     click(label(R.string.setup_connection_specific));enter(R.string.setup_username,"fixture")
                     click(label(R.string.setup_ssh_key));click(fixtureKey.name)
-                } else click(credential.name)
+                } else {
+                    if(type==ConnectionType.RDP) {
+                        val message=label(R.string.profile_rdp_credential_required)
+                        check(nodes().none {it.text?.toString()==message})
+                        click(label(R.string.continue_action))
+                        find(message)
+                    }
+                    click(credential.name)
+                }
                 if(type==ConnectionType.RDP) capture(activity,"setup-phase2-sign-in.png")
                 click(label(R.string.continue_action))
                 find(test.targetContext.getString(R.string.setup_edit_step,label(R.string.setup_sign_in)))

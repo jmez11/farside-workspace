@@ -50,11 +50,10 @@ internal class SetupVaultVerification(private val test:Instrumentation) {
             activity=checkNotNull(test.waitForMonitorWithTimeout(monitor,15000)) as MainActivity
             fun vault() {test.runOnMainSync {activity.setContent {CompositionLocalProvider(LocalContext provides isolated, androidx.activity.compose.LocalActivityResultRegistryOwner provides activity) {SignInVault(pm,onClose={})}}}}
             vault()
-            ui.find(text(R.string.setup_vault));ui.find(context.getString(R.string.setup_used_by,2))
+            ui.find(text(R.string.setup_vault));check(ui.nodes().none {it.contentDescription?.toString()==text(R.string.setup_vault_search)})
             Thread.sleep(500)
             ui.capture(activity,"setup-phase4-vault.png")
             if(test.arguments?.getString("vaultCaptureOnly")=="true") return "PASS settled owned vault capture"
-            ui.enter(R.string.setup_vault_search,"Owned Mac login")
             ui.click(context.getString(R.string.setup_edit_named,mac.name))
             check(ui.find(text(R.string.password),true).text.isNullOrEmpty())
             check(ui.find(text(R.string.setup_short_name),true).text.toString()=="shortfixture")
@@ -62,7 +61,6 @@ internal class SetupVaultVerification(private val test:Instrumentation) {
             ui.enter(R.string.setup_short_name,"override-fixture")
             ui.click(text(R.string.save_changes))
             check(pm.getCredentials().single {it.id==mac.id}.let {it.name=="Owned Mac edited" && it.pass==mac.pass && it.userShort=="override-fixture"})
-            ui.enter(R.string.setup_vault_search,key.name)
             ui.click(context.getString(R.string.setup_edit_named,key.name))
             check(ui.find(text(R.string.private_key),true).text.isNullOrEmpty())
             ui.enter(R.string.key_display_name,"Owned vault key edited")
@@ -76,16 +74,21 @@ internal class SetupVaultVerification(private val test:Instrumentation) {
             ui.find(public.fingerprint)
             check(ui.nodes().none {it.text?.toString()?.contains("BEGIN PRIVATE KEY")==true})
             ui.click(text(R.string.close))
-            ui.enter(R.string.setup_vault_search,"")
             ui.click(text(R.string.setup_new_sign_in))
             ui.click(text(R.string.setup_vnc_password))
             ui.enter(R.string.account_display_name,"Owned created password")
             ui.enter(R.string.setup_vnc_password,"fixture")
-            ui.click(text(R.string.save_changes))
-            check(pm.getCredentials().any {it.name=="Owned created password" && it.user.isEmpty()})
-            ui.click(text(R.string.setup_set_pin))
+            // Fresh protection is configured directly from the unsaved credential sheet.
+            check(pm.getCredentials().none {it.name=="Owned created password"})
+            ui.click(text(R.string.require_pin))
+            ui.find(text(R.string.setup_set_pin))
+            ui.click(text(R.string.cancel))
+            check(pm.getAppPinVerifier()==null)
+            ui.click(text(R.string.require_pin))
             ui.enter(R.string.enter_new_app_pin,"5827");ui.enter(R.string.setup_confirm_pin,"5827");ui.click(text(R.string.save_pin))
             check(CredentialPin.matches("5827",checkNotNull(pm.getAppPinVerifier())))
+            ui.click(text(R.string.save_changes))
+            check(pm.getCredentials().single {it.name=="Owned created password"}.requirePin)
             ui.click(text(R.string.change_app_pin));ui.enter(R.string.pin,"5827");ui.click(text(R.string.unlock))
             ui.enter(R.string.enter_new_app_pin,"6928");ui.enter(R.string.setup_confirm_pin,"6928");ui.click(text(R.string.save_pin))
             check(CredentialPin.matches("6928",checkNotNull(pm.getAppPinVerifier())))
@@ -93,6 +96,10 @@ internal class SetupVaultVerification(private val test:Instrumentation) {
             val removeDeadline=android.os.SystemClock.uptimeMillis()+7000
             while(pm.getAppPinVerifier()!=null && android.os.SystemClock.uptimeMillis()<removeDeadline) Thread.sleep(100)
             check(pm.getAppPinVerifier()==null)
+            ui.click(context.getString(R.string.setup_edit_named,"Owned vault key edited"))
+            ui.click(text(R.string.require_pin));ui.find(text(R.string.setup_set_pin))
+            ui.click(text(R.string.cancel));ui.click(text(R.string.save_changes))
+            check(pm.getAppPinVerifier()==null && !pm.getSshKeys().single().requirePin)
             // Owned URI round-trip uses the exact production exporter/importer and local Keystore.
             pm.setAppPinVerifier(CredentialPin.create("5827"))
             val photo=File(scratch,"card-backgrounds/owned.jpg").apply {
@@ -118,10 +125,10 @@ internal class SetupVaultVerification(private val test:Instrumentation) {
             test.runOnMainSync {activity.setContent {CompositionLocalProvider(LocalContext provides isolated, androidx.activity.compose.LocalActivityResultRegistryOwner provides activity) {
                 LauncherScreen(profiles=pm.getProfiles(),profileManager=pm,onAddProfile={},onDeleteProfile={},onConnectProfile={})
             }}}
-            ui.click(text(R.string.setup_vault));ui.find(text(R.string.setup_vault_search));ui.click(text(R.string.setup_close_vault))
+            ui.click(text(R.string.setup_vault));ui.find(text(R.string.setup_close_vault));ui.click(text(R.string.setup_close_vault))
             ui.click(text(R.string.setup_info));ui.find(text(R.string.about_open_source_licenses))
             check(ui.nodes().none {it.text?.toString()==text(R.string.setup_vault_protection)})
-            return "PASS vault search/edit, Mac fields and replace-only password/key, public-key view, inline VNC-password creation, real app-PIN set/change/remove dialogs, authenticated encrypted URI backup/import with profiles/short names/keys/PIN/photos/inline VNC, launcher Vault and Info entries. Isolated preferences/files only; physical headset-passcode and SAF-picker UI remain manual."
+            return "PASS compact search-free vault/edit and immediate require-PIN setup/cancel, Mac fields and replace-only password/key, public-key view, inline VNC-password creation, real app-PIN set/change/remove dialogs, authenticated encrypted URI backup/import with profiles/short names/keys/PIN/photos/inline VNC, launcher Vault and Info entries. Isolated preferences/files only; physical headset-passcode and SAF-picker UI remain manual."
         } finally {
             test.runOnMainSync {activity?.finish()};test.removeMonitor(monitor)
             context.deleteSharedPreferences(namespace)

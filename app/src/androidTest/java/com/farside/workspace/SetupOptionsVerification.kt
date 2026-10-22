@@ -58,9 +58,9 @@ internal class SetupOptionsVerification(private val test:Instrumentation) {
                         ui.capture(activity,"setup-phase3-review.png")
                         ui.click(text(R.string.setup_play_sound))
                         ui.click("HTTP")
-                        check(!ui.enabled(text(R.string.save_changes)))
+                        ui.click(text(R.string.save_changes));check(saved==null)
                         ui.enter(R.string.proxy_hostname_or_ip,"127.0.0.1");ui.enter(R.string.proxy_port,"70000")
-                        check(!ui.enabled(text(R.string.save_changes)))
+                        ui.click(text(R.string.save_changes));check(saved==null)
                         ui.enter(R.string.proxy_port,"3128")
                         check(ui.enabled(text(R.string.save_changes)))
                     }
