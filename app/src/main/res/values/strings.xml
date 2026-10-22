@@ -684,4 +684,10 @@
     <string name="setup_discovery_failed">Could not find devices. Try again.</string>
     <string name="setup_edit_sign_in_options">Edit sign-in and options</string>
     <string name="setup_save_connection">Save connection</string>
+    <string name="setup_default_port">Default port %1$d</string>
+    <string name="setup_vnc_auth_question">How does this server ask you to sign in?</string>
+    <string name="setup_vnc_auth_description">A VNC server can use a short VNC password, or a full user account on the machine.</string>
+    <string name="setup_mac_example">Username + password means an account on the target machine — e.g. the macOS user account when connecting to Mac Screen Sharing.</string>
+    <string name="setup_which_computer">Which computer?</string>
+    <string name="setup_server_lede">Give it a name you\'ll recognise in the launcher, and enter its address.</string>
 </resources>
