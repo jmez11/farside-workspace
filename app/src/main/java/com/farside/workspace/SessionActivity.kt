@@ -179,7 +179,7 @@ class SessionActivity : ComponentActivity() {
         })
         SessionWindowLauncher.forgetLegacyPositions(this)
         androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
-        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(0xAA202020.toInt()))
         
         val profileId = intent.getStringExtra("profileId")
         if (profileId == null) {

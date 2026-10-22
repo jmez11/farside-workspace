@@ -135,7 +135,7 @@ internal class VncSessionConnection(
                         instance=0L;closeMediaRelay()
                         failure=if(error is VncAuthenticationException) context.getString(R.string.vnc_mac_auth_failed)
                             else error.localizedMessage(context) ?: error.message
-                        android.util.Log.i("MacConnection","$route unavailable: ${error.javaClass.simpleName}")
+                        android.util.Log.i("MacConnection","$route unavailable: ${error.javaClass.simpleName}",error)
                     }) { route ->
                     closeMediaRelay()
                     host=directHost;port=directPort

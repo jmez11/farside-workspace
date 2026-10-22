@@ -211,6 +211,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
         )
     }
     var reconnectAttempt by remember { mutableIntStateOf(0) }
+    var surfaceHasFrame by remember(session.id, reconnectAttempt) { mutableStateOf(false) }
     val rdpBridge: DesktopSessionBridge = remember(session.id, reconnectAttempt, runtime?.bridge) {
         (monitor?.bridge ?: if (isVnc) VncBridge() else FreeRDPBridge()).also { onBridgeCreated?.invoke(it) }
     }
@@ -580,7 +581,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
 
     // Native Horizon hover may bypass Compose's touch interop path.
     val hoverMapping by rememberUpdatedState(desktopPoint)
-    val hoverBlocked by rememberUpdatedState(adjusting)
+    val hoverBlocked by rememberUpdatedState(adjusting || !surfaceHasFrame)
     DisposableEffect(rdpBridge,rdpInstance) {
         val activity=context as? SessionActivity
         if((rdpBridge as? VncBridge)?.isMacHevc==true && rdpInstance!=0L) activity?.macHover={ x,y ->
@@ -623,7 +624,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
         )
     }
 
-    LaunchedEffect(adjusting) { if (adjusting) input.cancel() }
+    LaunchedEffect(adjusting, surfaceHasFrame) { if (adjusting || !surfaceHasFrame) input.cancel() }
 
     val dragPoint by rememberUpdatedState(desktopPoint)
     DisposableEffect(monitor) {
@@ -729,12 +730,16 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                         }
 
                         override fun onSurfaceTextureDestroyed(texture: SurfaceTexture): Boolean {
+                            surfaceHasFrame = false
                             input.cancel()
                             connection.detach()
                             return true
                         }
 
-                        override fun onSurfaceTextureUpdated(texture: SurfaceTexture) { macSurfaceUpdates.incrementAndGet() }
+                        override fun onSurfaceTextureUpdated(texture: SurfaceTexture) {
+                            macSurfaceUpdates.incrementAndGet()
+                            surfaceHasFrame = true
+                        }
                     }
                 }
             }
@@ -792,6 +797,17 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                 }
         )
         
+        // Authentication and decoder configuration can precede the first displayed buffer.
+        // Keep the panel visible until TextureView confirms there is session content to show.
+        if (!surfaceHasFrame) {
+            val connectingDescription = stringResource(R.string.connecting_remote_desktop)
+            Box(Modifier.fillMaxSize().background(Color(0xAA202020))
+                .semantics { contentDescription = connectingDescription }
+                .pointerInteropFilter { true }, contentAlignment = androidx.compose.ui.Alignment.Center) {
+                CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
+            }
+        }
+
         if (adjusting || adjustmentFade.value > 0f) {
             Box(Modifier.fillMaxSize().graphicsLayer { alpha = if (adjusting) 1f else adjustmentFade.value }
                 .background(Color(0xFF15191E))

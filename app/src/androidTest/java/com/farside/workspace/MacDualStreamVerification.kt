@@ -13,6 +13,33 @@ import java.nio.ByteBuffer
 
 /** Two independent encrypted video sources over the same Apple UDP ports and two hardware decoders. */
 internal class MacDualStreamVerification(private val test:Instrumentation) {
+    /** Exercise the real bridge admission before testing encrypted packets/decoders below. */
+    private fun verifyBridgeAdmission(surfaces:List<android.view.Surface>) {
+        val endpoints=List(2) {java.net.ServerSocket(0,1,InetAddress.getByName("127.0.0.1")).apply {soTimeout=4000}}
+        val sockets=mutableListOf<java.net.Socket>()
+        val workers=java.util.concurrent.Executors.newFixedThreadPool(2)
+        val attempts=endpoints.mapIndexed {i,endpoint ->workers.submit<Throwable?> {
+            val profile=com.farside.workspace.data.ConnectionProfile("owned-$i","Owned bridge $i",
+                com.farside.workspace.data.ConnectionType.VNC,"127.0.0.1",port=endpoint.localPort,
+                user="fixture",pass="fixture",expMacHevc=true,macPreferAvc=true)
+            runCatching {VncBridge().connect(profile.host,profile.port,profile.pass,surfaces[i],profile.user,
+                com.farside.workspace.data.VncAuthMode.MAC_USER,profile)}.exceptionOrNull()
+        }}
+        try {
+            endpoints.forEach {endpoint ->sockets.add(endpoint.accept())}
+            check(sockets.size==2) {"Both production bridges must reach their own handshake concurrently"}
+            // No banner/authentication is supplied. Only our sockets are touched.
+            sockets.forEach {it.close()}
+            attempts.forEach {attempt ->
+                val failure=attempt.get(10,java.util.concurrent.TimeUnit.SECONDS)
+                check(failure is java.io.IOException) {"Expected independent truncated handshakes, got $failure"}
+            }
+        } finally {
+            endpoints.forEach {it.close()};sockets.forEach {it.close()}
+            workers.shutdownNow();check(workers.awaitTermination(10,java.util.concurrent.TimeUnit.SECONDS))
+        }
+    }
+
     fun run():String {
         check(test.targetContext.checkSelfPermission(android.Manifest.permission.ACCESS_NETWORK_STATE)==android.content.pm.PackageManager.PERMISSION_GRANTED)
         val english=test.targetContext.getString(R.string.mac_media_title)
@@ -46,6 +73,7 @@ internal class MacDualStreamVerification(private val test:Instrumentation) {
         val senders=List(2) {MacHevcSrtpSender(blobs[it],10L+it)}
         val sources=listOf(source("red"),source("blue"))
         try {
+            verifyBridgeAdmission(readers.map {it.surface})
             pipelines.forEach {it.start()}
             DatagramSocket().use {socket ->
                 fun feed(index:Int,timestamp:Long) {
@@ -72,7 +100,7 @@ internal class MacDualStreamVerification(private val test:Instrumentation) {
                 val before=pipelines[1].framesDecoded.get()
                 repeat(3) {feed(1,(it+4)*90000L);Thread.sleep(150)}
                 check(pipelines[1].framesDecoded.get()>before) {"Closing one stream stopped the other"}
-                return "PASS two independent SRTP streams on shared 5900/5901, isolated authenticated SSRCs and simultaneous hardware H.264 decoders; closing the first leaves the second decoding. ACCESS_NETWORK_STATE granted. Owned replay only; two real Macs remain wearer validation."
+                return "PASS concurrent production VncBridge Apple handshake admission; two independent SRTP streams on shared 5900/5901, isolated authenticated SSRCs and simultaneous hardware H.264 decoders; closing the first leaves the second decoding. ACCESS_NETWORK_STATE granted. Owned replay only; two real Macs remain wearer validation."
             }
         } finally {
             pipelines.forEach {it.close()};readers.forEach {it.close()};thread.quitSafely();thread.join(2000)

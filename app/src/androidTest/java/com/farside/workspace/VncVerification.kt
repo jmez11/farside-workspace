@@ -68,7 +68,9 @@ internal class VncVerification(private val test: Instrumentation,private val liv
         val clipboard = test.targetContext.getSystemService(android.content.ClipboardManager::class.java)
         val originalClip = clipboard.primaryClip
         try {
-            if(mode=="inlineFixture") {
+            if(mode=="firstFrameFixture") {
+                verifyFirstFrameCover()
+            } else if(mode=="inlineFixture") {
                 val pm=ProfileManager(test.targetContext)
                 val credentials=pm.getCredentials().map {it.id}.toSet()
                 Fixture(0).use {server ->
@@ -1042,7 +1044,69 @@ internal class VncVerification(private val test: Instrumentation,private val liv
         record("PASS: withdrawn _rfb._tcp fixture absent on next bounded browse; real Screen-Sharing-off Mac check remains pending")
     }
 
-    private class Fixture(val encoding: Int, private val auth: Int = 2, val sendCursor: Boolean = true) : AutoCloseable {
+    private fun verifyFirstFrameCover() {
+        val context=test.targetContext
+        val manager=ProfileManager(context)
+        val before=manager.getProfiles().map {it.toJson().toString()}
+        val banner=CountDownLatch(1);val frame=CountDownLatch(1)
+        val info=test.uiAutomation.serviceInfo
+        info.flags=info.flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+        test.uiAutomation.serviceInfo=info
+        Fixture(0,sendCursor=false,bannerGate=banner,frameGate=frame).use {server ->
+            val profile=ConnectionProfile(java.util.UUID.randomUUID().toString(),"Owned first frame",ConnectionType.VNC,
+                "127.0.0.1",server.port,"","testpass",vncAuthMode=VncAuthMode.VNC_PASSWORD)
+            manager.addProfile(profile)
+            var activity:SessionActivity?=null
+            fun covered():Boolean {
+                test.uiAutomation.clearCache()
+                fun find(node:android.view.accessibility.AccessibilityNodeInfo):Boolean =
+                    node.contentDescription?.toString()==context.getString(R.string.connecting_remote_desktop) ||
+                        (0 until node.childCount).any {node.getChild(it)?.let(::find)==true}
+                val windows=test.uiAutomation.windowsOnAllDisplays
+                return (0 until windows.size()).any {i ->windows.valueAt(i).any {it.root?.let(::find)==true}}
+            }
+            fun captureCover(name:String) {
+                val host=checkNotNull(activity)
+                lateinit var bitmap:Bitmap
+                main { bitmap=Bitmap.createBitmap(host.window.decorView.width,host.window.decorView.height,Bitmap.Config.ARGB_8888) }
+                val done=CountDownLatch(1);var result=-1
+                android.view.PixelCopy.request(host.window,bitmap,{result=it;done.countDown()},android.os.Handler(android.os.Looper.getMainLooper()))
+                check(done.await(5,TimeUnit.SECONDS) && result==android.view.PixelCopy.SUCCESS)
+                val pixel=bitmap.getPixel(bitmap.width/4,bitmap.height/4)
+                File(context.cacheDir,name).outputStream().use {bitmap.compress(Bitmap.CompressFormat.PNG,100,it)}
+                bitmap.recycle()
+                check(android.graphics.Color.alpha(pixel)>0 && android.graphics.Color.red(pixel) in 20..55 &&
+                    kotlin.math.abs(android.graphics.Color.red(pixel)-android.graphics.Color.green(pixel))<=2 &&
+                    kotlin.math.abs(android.graphics.Color.green(pixel)-android.graphics.Color.blue(pixel))<=2) {"Connecting cover was not visible gray: ${pixel.toUInt().toString(16)}"}
+            }
+            try {
+                activity=test.startActivitySync(Intent(context,SessionActivity::class.java).putExtra("profileId",profile.id)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as SessionActivity
+                await("Missing gray cover during handshake") {covered()}
+                captureCover("session-connecting.png")
+                banner.countDown()
+                check(server.frameRequested.await(15,TimeUnit.SECONDS))
+                await("Fixture did not authenticate") {activity.vncInstance!=0L}
+                Thread.sleep(700)
+                check(covered()) {"Connection success removed cover before a server frame"}
+                captureCover("session-authenticated-no-frame.png")
+                frame.countDown()
+                await("First displayed frame did not remove cover") {!covered()}
+                capture(activity,"session-first-frame.png").recycle()
+                server.failure?.let {throw AssertionError("First-frame fixture failed",it)}
+                record("PASS actual SessionActivity gray cover before handshake and after authentication with no framebuffer; PixelCopy confirms visible gray; first server framebuffer removes cover. Owned loopback only; physical Horizon presentation remains wearer validation.")
+            } finally {
+                banner.countDown();frame.countDown()
+                activity?.let {main {it.finish()}}
+                manager.deleteProfile(profile.id)
+            }
+        }
+        check(manager.getProfiles().map {it.toJson().toString()}==before) {"First-frame fixture changed real profiles"}
+    }
+
+    private class Fixture(val encoding: Int, private val auth: Int = 2, val sendCursor: Boolean = true,
+        private val bannerGate:CountDownLatch?=null, private val frameGate:CountDownLatch?=null) : AutoCloseable {
+        val frameRequested=CountDownLatch(1)
         private val listener = ServerSocket(0)
         val port = listener.localPort
         val pointers = CopyOnWriteArrayList<Triple<Int, Int, Int>>()
@@ -1139,6 +1203,7 @@ internal class VncVerification(private val test: Instrumentation,private val liv
                 val input = DataInputStream(socket!!.getInputStream())
                 output = DataOutputStream(socket!!.getOutputStream())
                 val out = output!!
+                check(bannerGate?.await(30,TimeUnit.SECONDS)!=false)
                 out.write("RFB 003.008\n".toByteArray()); out.flush()
                 input.readFully(ByteArray(12)); stage = "protocol read"
                 out.writeByte(1); out.writeByte(auth); out.flush()
@@ -1166,7 +1231,10 @@ internal class VncVerification(private val test: Instrumentation,private val liv
                         val incremental = input.readUnsignedByte() != 0
                         val x = input.readUnsignedShort(); val y = input.readUnsignedShort()
                         val width = input.readUnsignedShort(); val height = input.readUnsignedShort()
-                        if (!sentFrame) { sentFrame = true; check(encoding in encodings); frame() }
+                        if (!sentFrame) {
+                            frameRequested.countDown();check(frameGate?.await(30,TimeUnit.SECONDS)!=false)
+                            sentFrame = true; check(encoding in encodings); frame()
+                        }
                         else resetSize?.let { size -> if (!incremental) {
                             check(formatCount > resetFormatCount && encodingCount > resetEncodingCount) { "Framebuffer reset omitted format/encoding negotiation" }
                             check(x == 0 && y == 0 && width == size.first && height == size.second)
@@ -1183,6 +1251,6 @@ internal class VncVerification(private val test: Instrumentation,private val liv
             catch (error: Throwable) { failure = error }
             finally { socket?.close(); disconnected.countDown() }
         }
-        override fun close() { listener.close(); socket?.close(); worker.join(3000); compressor.end(); hexCompressor.end() }
+        override fun close() { bannerGate?.countDown();frameGate?.countDown();listener.close(); socket?.close(); worker.join(3000); compressor.end(); hexCompressor.end() }
     }
 }
