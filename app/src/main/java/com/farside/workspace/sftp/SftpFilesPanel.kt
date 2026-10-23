@@ -459,7 +459,7 @@ private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?, allowDisable
     edit?.let { action -> AlertDialog(onDismissRequest = { edit = null },
         title = { Text(action.first, color = Color(0xFFF1F0F4)) },
         text = {
-            OutlinedTextField(
+            com.farside.workspace.FormTextMenus { OutlinedTextField(
                 value = editName,
                 onValueChange = { editName = it },
                 label = { Text(stringResource(R.string.name)) },
@@ -472,7 +472,7 @@ private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?, allowDisable
                     focusedLabelColor = MaterialTheme.colorScheme.primary,
                     unfocusedLabelColor = Color(0xFFB9B7C0)
                 )
-            )
+            ) }
         },
         confirmButton = { TextButton(onClick = {
             val name = editName; edit = null

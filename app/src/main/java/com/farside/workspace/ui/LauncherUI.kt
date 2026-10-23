@@ -533,7 +533,7 @@ fun SettingsTextField(
 ) {
     val invalid = isError || errorMessage != null
     FormValidationField(errorMessage) {
-    TextField(
+    com.farside.workspace.FormTextMenus { TextField(
         value = value,
         onValueChange = onValueChange,
         placeholder = { Text(placeholder, color = Color.Gray) },
@@ -560,7 +560,7 @@ fun SettingsTextField(
         minLines = minLines,
         maxLines = maxLines,
         isError = invalid
-    )
+    ) }
     }
 }
 
@@ -671,7 +671,7 @@ fun ProxyTypeSelector(selectedType: com.farside.workspace.data.ProxyType, errorM
         onExpandedChange = { expanded = !expanded },
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
     ) {
-        TextField(
+        com.farside.workspace.FormTextMenus { TextField(
             value = if (selectedType in com.farside.workspace.data.ProxyType.choices) stringResource(selectedType.labelResId) else stringResource(R.string.unsupported_saved_proxy),
             onValueChange = {},
             readOnly = true,
@@ -688,7 +688,7 @@ fun ProxyTypeSelector(selectedType: com.farside.workspace.data.ProxyType, errorM
             modifier = Modifier.menuAnchor().fillMaxWidth()
                 .then(if (errorMessage != null) Modifier.border(2.dp, Color.Red, RoundedCornerShape(4.dp)) else Modifier),
             isError = errorMessage != null
-        )
+        ) }
         ExposedDropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false }
@@ -719,7 +719,7 @@ fun ResolutionDropdown(selectedRes: String, onResSelected: (String) -> Unit) {
         onExpandedChange = { expanded = !expanded },
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
     ) {
-        TextField(
+        com.farside.workspace.FormTextMenus { TextField(
             value = selectedRes,
             onValueChange = {},
             readOnly = true,
@@ -733,7 +733,7 @@ fun ResolutionDropdown(selectedRes: String, onResSelected: (String) -> Unit) {
                 unfocusedTextColor = Color.White
             ),
             modifier = Modifier.menuAnchor().fillMaxWidth()
-        )
+        ) }
         ExposedDropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false }

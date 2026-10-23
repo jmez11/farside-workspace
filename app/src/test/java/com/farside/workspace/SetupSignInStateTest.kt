@@ -8,11 +8,11 @@ import org.junit.Test
 class SetupSignInStateTest {
     private val base=ConnectionProfile("owned","Owned",ConnectionType.SSH,"127.0.0.1",user="",pass="")
     @Test fun savedPairsNeverBorrowConnectionSpecificUsernameOrPassword() {
-        val first=SavedCredential(name="First",user="full",userShort="short",pass="first")
+        val first=SavedCredential(name="First",user="account",pass="first")
         val second=SavedCredential(name="Second",user="other",pass="second")
         val all=listOf(first,second)
         val state=SetupSignInState(null).apply {credentialId=first.id;user="typed";password="typedpass"}
-        state.profile(base,all).let {assertEquals("short",it.user);assertEquals("first",it.pass)}
+        state.profile(base,all).let {assertEquals("account",it.user);assertEquals("first",it.pass)}
         state.credentialId=second.id
         state.profile(base,all).let {assertEquals("other",it.user);assertEquals("second",it.pass)}
         state.specific=true

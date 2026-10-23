@@ -188,9 +188,9 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
         title = { Text(stringResource(R.string.terminal_settings)) }, text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(stringResource(R.string.scrollback_help))
-                OutlinedTextField(scrollbackText, { scrollbackText = it; scrollbackError = null },
+                com.farside.workspace.FormTextMenus { OutlinedTextField(scrollbackText, { scrollbackText = it; scrollbackError = null },
                     label = { Text(stringResource(R.string.scrollback_lines_hint)) }, singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number))
+                    keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)) }
                 Text(stringResource(R.string.terminal_font_opacity, fontSize, (terminalAlpha * 100).roundToInt()), style = MaterialTheme.typography.bodySmall)
                 Text(stringResource(R.string.terminal_settings_saved_help), style = MaterialTheme.typography.bodySmall)
                 scrollbackError?.let { Text(it, color = MaterialTheme.colorScheme.error) }

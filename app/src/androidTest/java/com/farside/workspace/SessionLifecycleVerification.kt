@@ -65,6 +65,7 @@ internal class SessionLifecycleVerification(private val test: Instrumentation) {
                 "placement" -> placement(profiles.first { it.type == ConnectionType.RDP })
                 "launch" -> launchPlacement()
                 "manipulation" -> manipulation()
+                "lastClose" -> lastConnectionClose()
                 "back" -> launcherBack()
                 "backFixture" -> launcherBack(fixtureOnly = true)
                 "backLive" -> launcherBack(true)
@@ -81,6 +82,27 @@ internal class SessionLifecycleVerification(private val test: Instrumentation) {
             backupFile.delete()
             test.uiAutomation.dropShellPermissionIdentity()
         }
+    }
+
+    private fun lastConnectionClose() {
+        fun launchers()=context.getSystemService(android.app.ActivityManager::class.java).appTasks.filter {
+            it.taskInfo.isRunning && it.taskInfo.baseIntent.component?.className==MainActivity::class.java.name}
+        test.runOnMainSync {launchers().forEach {it.finishAndRemoveTask()}}
+        Thread.sleep(400)
+        val profile=ConnectionProfile("owned-last-close", "Owned close fixture", ConnectionType.SSH,"127.0.0.1",1,"", "")
+        ProfileManager(context).addProfile(profile)
+        val first=launch(profile.id);val second=launch(profile.id)
+        Thread.sleep(500)
+        close(first);Thread.sleep(400)
+        check(launchers().isEmpty()) {"Launcher opened while another connection remained"}
+        close(second)
+        val deadline=android.os.SystemClock.uptimeMillis()+5000
+        while(launchers().isEmpty() && android.os.SystemClock.uptimeMillis()<deadline) Thread.sleep(100)
+        check(launchers().size==1) {"Last connection did not restore one launcher"}
+        val task=launchers().single().taskInfo.taskId
+        val third=launch(profile.id);Thread.sleep(300);close(third);Thread.sleep(500)
+        check(launchers().size==1 && launchers().single().taskInfo.taskId==task) {"Existing launcher was duplicated"}
+        File(context.cacheDir,"last-close-results.txt").writeText("PASS two-session close, last close restores launcher, existing launcher reused; owned loopback SSH profiles only")
     }
 
     private fun launch(profile: String, slot: Int? = null): SessionActivity {

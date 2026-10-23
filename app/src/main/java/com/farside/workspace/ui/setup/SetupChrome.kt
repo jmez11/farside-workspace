@@ -98,13 +98,13 @@ internal fun SetupServerField(value:String,onChange:(String)->Unit,label:Int,err
     val text=stringResource(label)
     Column(modifier,verticalArrangement=Arrangement.spacedBy(7.dp)) {
         Text(text,fontSize=13.sp,fontWeight=FontWeight.SemiBold,color=SetupColors.muted)
-        OutlinedTextField(value=value,onValueChange=onChange,singleLine=true,isError=error!=null,
+        com.farside.workspace.FormTextMenus { OutlinedTextField(value=value,onValueChange=onChange,singleLine=true,isError=error!=null,
             keyboardOptions=androidx.compose.foundation.text.KeyboardOptions(autoCorrectEnabled=false,
                 keyboardType=if(label==R.string.setup_port) androidx.compose.ui.text.input.KeyboardType.Number else androidx.compose.ui.text.input.KeyboardType.Text),
             shape=RoundedCornerShape(11.dp),textStyle=LocalTextStyle.current.copy(fontSize=15.sp),
             colors=OutlinedTextFieldDefaults.colors(focusedContainerColor=SetupColors.field,unfocusedContainerColor=SetupColors.field,errorContainerColor=SetupColors.field,
                 focusedBorderColor=SetupColors.accent,unfocusedBorderColor=SetupColors.border,errorBorderColor=SetupColors.danger),
-            modifier=Modifier.fillMaxWidth().semantics { contentDescription=text })
+            modifier=Modifier.fillMaxWidth().semantics { contentDescription=text }) }
         if(error!=null) Text(stringResource(error),fontSize=13.sp,color=SetupColors.danger)
     }
 }

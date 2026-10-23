@@ -84,10 +84,10 @@ private fun ForwardEditor(original: SshForward, onCancel: () -> Unit, onSave: (S
                 ForwardKind.REMOTE -> stringResource(R.string.remote_forward_help)
                 ForwardKind.DYNAMIC -> stringResource(R.string.dynamic_forward_help)
             })
-            OutlinedTextField(source, { source = it }, label = { Text(stringResource(R.string.source_port)) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
+            com.farside.workspace.FormTextMenus { OutlinedTextField(source, { source = it }, label = { Text(stringResource(R.string.source_port)) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth()) }
             if (kind != ForwardKind.DYNAMIC) {
-                OutlinedTextField(host, { host = it }, label = { Text(stringResource(R.string.destination_host)) }, supportingText = { Text(if (kind == ForwardKind.LOCAL) stringResource(R.string.local_forward_localhost_help) else stringResource(R.string.remote_forward_localhost_help)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(port, { port = it }, label = { Text(stringResource(R.string.destination_port)) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
+                com.farside.workspace.FormTextMenus { OutlinedTextField(host, { host = it }, label = { Text(stringResource(R.string.destination_host)) }, supportingText = { Text(if (kind == ForwardKind.LOCAL) stringResource(R.string.local_forward_localhost_help) else stringResource(R.string.remote_forward_localhost_help)) }, singleLine = true, modifier = Modifier.fillMaxWidth()) }
+                com.farside.workspace.FormTextMenus { OutlinedTextField(port, { port = it }, label = { Text(stringResource(R.string.destination_port)) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth()) }
             }
             Text(stringResource(R.string.listener_address_family), style = MaterialTheme.typography.labelLarge)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

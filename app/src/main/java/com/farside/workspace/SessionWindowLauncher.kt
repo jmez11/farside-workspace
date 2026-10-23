@@ -23,6 +23,14 @@ internal object SessionWindowSlots {
 }
 
 internal object SessionWindowLauncher {
+    fun restoreLauncherAfterLastConnection(activity: Activity) {
+        val tasks=activity.getSystemService(ActivityManager::class.java).appTasks.map {it.taskInfo}
+            .filter {it.taskId!=activity.taskId && it.isRunning}
+        if(tasks.any {it.baseIntent.component?.className==SessionActivity::class.java.name}) return
+        if(tasks.any {it.baseIntent.component?.className==MainActivity::class.java.name}) return
+        activity.startActivity(Intent(activity,MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
     fun forgetLegacyPositions(context: Context) {
         context.deleteSharedPreferences("session_window_positions")
     }

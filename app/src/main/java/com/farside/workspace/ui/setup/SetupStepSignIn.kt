@@ -1,5 +1,7 @@
 package com.farside.workspace.ui.setup
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Key
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.BorderStroke
@@ -16,6 +18,12 @@ import com.farside.workspace.R
 import com.farside.workspace.data.*
 import com.farside.workspace.ui.profileCredentialErrorRes
 
+internal fun credentialMatchesConnection(credential:SavedCredential,base:ConnectionProfile):Boolean = when {
+    credential.user.isBlank() -> base.type==ConnectionType.VNC && base.vncAuthMode==VncAuthMode.VNC_PASSWORD
+    credential.userShort!=null -> base.type==ConnectionType.VNC && base.vncAuthMode==VncAuthMode.MAC_USER
+    else -> base.type!=ConnectionType.VNC
+}
+
 /** A saved credential is indivisible. Specific fields never borrow one of its components. */
 internal class SetupSignInState(initial:ConnectionProfile?) {
     private val originalCredentialId=initial?.credentialId
@@ -30,7 +38,7 @@ internal class SetupSignInState(initial:ConnectionProfile?) {
     var keyId by mutableStateOf(initial?.sshKeyId)
     var revision by mutableIntStateOf(0)
     fun profile(base:ConnectionProfile,credentials:List<SavedCredential>):ConnectionProfile {
-        val stored=if(specific) null else credentials.find {it.id==credentialId}
+        val stored=if(specific) null else credentials.find {it.id==credentialId && credentialMatchesConnection(it,base)}
         return base.copy(credentialId=stored?.id,
             user=if(specific) (if(base.type==ConnectionType.VNC && base.vncAuthMode==VncAuthMode.VNC_PASSWORD) "" else user) else
                 (if(base.type==ConnectionType.SSH) stored?.userShort ?: stored?.user else stored?.user).orEmpty(),
@@ -41,7 +49,7 @@ internal class SetupSignInState(initial:ConnectionProfile?) {
     fun error(base:ConnectionProfile,credentials:List<SavedCredential>):Int? {
         if(base.type==ConnectionType.SSH) return null
         val resolved=profile(base,credentials)
-        val credential=if(specific) SavedCredential(name="",user=resolved.user,pass=resolved.pass) else credentials.find {it.id==credentialId}
+        val credential=if(specific) SavedCredential(name="",user=resolved.user,pass=resolved.pass) else credentials.find {it.id==credentialId && credentialMatchesConnection(it,base)}
         return profileCredentialErrorRes(base.type,base.vncAuthMode,credential,"")
 
     }
@@ -65,7 +73,7 @@ internal fun SetupStepSignIn(base:ConnectionProfile,state:SetupSignInState,pm:Pr
             }
         }
         if(!state.specific) {
-            credentials.forEach { credential ->
+            credentials.filter {credentialMatchesConnection(it,base)}.forEach { credential ->
                 Surface(modifier=Modifier.fillMaxWidth().selectable(selected=state.credentialId==credential.id,role=Role.RadioButton,onClick={state.credentialId=credential.id}),shape=RoundedCornerShape(12.dp),
                     color=if(state.credentialId==credential.id) SetupColors.accent.copy(alpha=.13f) else SetupColors.card,
                     border=BorderStroke(1.dp,if(state.credentialId==credential.id) SetupColors.accent else SetupColors.border)) {
@@ -100,11 +108,15 @@ internal fun SetupStepSignIn(base:ConnectionProfile,state:SetupSignInState,pm:Pr
                             runCatching {deriveSshPublicKey(key.privateKey,key.passphrase,key.name).line.substringBefore(' ')}.getOrDefault("SSH")
                         }
                     }
-                    OutlinedCard(onClick={state.keyId=key.id},modifier=Modifier.fillMaxWidth(),border=BorderStroke(1.dp,if(state.keyId==key.id) SetupColors.accent else SetupColors.border)) {
-                        Column(Modifier.padding(14.dp)) {
+                    OutlinedCard(onClick={state.keyId=key.id},modifier=Modifier.fillMaxWidth().selectable(selected=state.keyId==key.id,role=Role.RadioButton,onClick={state.keyId=key.id}),border=BorderStroke(1.dp,if(state.keyId==key.id) SetupColors.accent else SetupColors.border)) {
+                        Row(Modifier.fillMaxWidth().padding(14.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+                        VaultIcon(Icons.Default.Key)
+                        Column(Modifier.weight(1f)) {
                             Text(key.name)
                             Text(keyType,fontSize=12.sp,color=SetupColors.muted)
                             if(key.requirePin) Text(stringResource(R.string.pin_required),fontSize=12.sp,color=SetupColors.accent)
+                        }
+                        RadioButton(selected=state.keyId==key.id,onClick=null)
                         }
                     }
                 }
@@ -119,7 +131,7 @@ internal fun SetupStepSignIn(base:ConnectionProfile,state:SetupSignInState,pm:Pr
         if(base.type==ConnectionType.VNC && !passwordOnly) Text(stringResource(R.string.setup_mac_sign_in_hint),fontSize=13.sp,color=SetupColors.muted)
         error?.takeIf {showErrors}?.let {Text(stringResource(it),color=SetupColors.danger)}
     }
-    if(sheet=="credential") CredentialSheet(pm,vncPassword=passwordOnly,allowMac=base.type!=ConnectionType.RDP,allowEmptyPassword=base.type!=ConnectionType.VNC,
+    if(sheet=="credential") CredentialSheet(pm,vncPassword=passwordOnly,allowMac=false,macAccount=base.type==ConnectionType.VNC && !passwordOnly,allowEmptyPassword=base.type!=ConnectionType.VNC,
         onDismiss={sheet=null},onSaved={state.credentialId=it.id;state.specific=false;state.revision++;sheet=null})
     if(sheet=="key") SshKeySheet(pm,onDismiss={sheet=null},onSaved={state.keyId=it.id;state.revision++;sheet=null})
 }

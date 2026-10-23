@@ -22,7 +22,10 @@ import java.io.File
 internal class KeyboardMotionVerification(private val test: Instrumentation) {
     fun run(): String {
         val context=test.targetContext
-        val activity=test.startActivitySync(Intent(context,MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)) as MainActivity
+        val monitor=test.addMonitor(MainActivity::class.java.name,null,false)
+        context.startActivity(Intent(context,MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
+        val activity=checkNotNull(test.waitForMonitorWithTimeout(monitor,15000)) {"Horizon did not place the fixture window"} as MainActivity
+        test.removeMonitor(monitor)
         val visible=mutableStateOf(false)
         val motion=KeyboardPanelMotion()
         lateinit var state:WindowState
@@ -39,14 +42,19 @@ internal class KeyboardMotionVerification(private val test: Instrumentation) {
                     Box(Modifier.fillMaxSize().background(Color.White))
                 }
             }}}}
-            Thread.sleep(300)
+            val layoutDeadline=SystemClock.uptimeMillis()+3000
+            while((content.width==0 || content.height==0) && SystemClock.uptimeMillis()<layoutDeadline) Thread.sleep(50)
+            Thread.sleep(500)
             val parentSize=content.width to content.height
             fun transition(open:Boolean) {
                 val start=SystemClock.uptimeMillis()
-                main {visible.value=open}
+                var initialRoll=0f
+                main {initialRoll=motion.roll.value;visible.value=open}
                 var finished=false
                 val poses=mutableSetOf<String>()
+                val buffers=mutableSetOf<Pair<Int,Int>>()
                 val sizes=mutableSetOf<Pair<Int,Int>>()
+                var firstHeight:Int?=null
                 var intermediateAlpha=false
                 var intermediateRoll=false
                 while(SystemClock.uptimeMillis()-start<1800) {
@@ -55,9 +63,14 @@ internal class KeyboardMotionVerification(private val test: Instrumentation) {
                         val roll=motion.roll.value
                         val token=(state.javaClass.methods.single {it.name.startsWith("getToken")}.invoke(state) as kotlinx.coroutines.flow.StateFlow<*>).value
                         val native=token?.let(geometry::read)
-                        native?.let {poses+=it.pose;sizes+=it.width to it.height}
+                        state.hostedView?.let {buffers+=it.width to it.height}
+                        native?.let {
+                            if(firstHeight==null) firstHeight=it.height
+                            poses+=it.pose+it.bounds;sizes+=it.width to it.height
+                        }
+                        if(alpha>0f) check(state.hostedView?.height==kotlin.math.round(251.2f*context.resources.displayMetrics.density).toInt()) {"Opening revealed an unfinished backing buffer"}
                         samples.put(JSONObject().put("open",open).put("ms",SystemClock.uptimeMillis()-start)
-                            .put("alpha",alpha).put("roll",roll).put("native",native?.toString()))
+                            .put("parent", "${content.width}x${content.height}").put("alpha",alpha).put("roll",roll).put("native",native?.toString()))
                         intermediateAlpha=intermediateAlpha || alpha>0f && alpha<1f
                         intermediateRoll=intermediateRoll || roll>0f && roll<1f
                         // Fades may only paint the fully deployed keyboard.
@@ -68,19 +81,21 @@ internal class KeyboardMotionVerification(private val test: Instrumentation) {
                     Thread.sleep(8)
                 }
                 val elapsed=SystemClock.uptimeMillis()-start
-                durations.put(JSONObject().put("open",open).put("ms",elapsed).put("nativePoses",poses.size).put("sizes",sizes.toString()))
+                durations.put(JSONObject().put("open",open).put("ms",elapsed).put("nativePoses",poses.size).put("sizes",sizes.toString()).put("firstHeight",firstHeight))
                 check(finished && elapsed<1000) {"Keyboard transition exceeded one second: open=$open elapsed=$elapsed"}
                 check(intermediateRoll && intermediateAlpha) {"Keyboard transition snapped instead of animating"}
                 check(poses.size>=3) {"Native attachment did not move smoothly: ${poses.size} observed poses"}
-                check(sizes.size==1) {"Backing surface resized during travel: $sizes"}
-                check(content.width to content.height==parentSize) {"Desktop resized during keyboard animation"}
+                if(!open) check(buffers.size==1) {"Closing backing surface resized during travel: $buffers"}
+                if(open && initialRoll==0f) check(firstHeight in 1..2) {"Opening initially created full footprint: $firstHeight"}
+                check(sizes.size>=3) {"Native footprint did not animate: $sizes"}
+                check(content.width to content.height==parentSize) {"Desktop resized during keyboard animation: $parentSize -> ${content.width to content.height}"}
                 Thread.sleep(150)
             }
             repeat(3) {transition(true);transition(false)}
             // Reverse in mid-travel and in mid-fade; cancellation must resume current values.
             main {visible.value=true};Thread.sleep(180);main {visible.value=false};Thread.sleep(100)
             transition(true);transition(false)
-            return "PASS native keyboard roll/fade under one second, ordered opacity, intermediate poses, fixed buffer/desktop size, repeated toggles and interrupted reopening; synthetic fixture, physical Horizon handle appearance/IME remains manual. Durations: $durations"
+            return "PASS native keyboard roll/fade under one second, ordered opacity, intermediate poses, collapsed first footprint, invisible opening-buffer sizing, full buffer before paint, fixed closing buffer/desktop size, repeated toggles and interrupted reopening; synthetic fixture, physical Horizon handle appearance/IME remains manual. Durations: $durations"
         } finally {
             File(context.cacheDir,"keyboard-motion.json").writeText(JSONObject().put("durations",durations).put("samples",samples).toString(2))
             main {visible.value=false;geometry.close();activity.finish()}

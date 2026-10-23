@@ -118,6 +118,16 @@ class RdpResizeInstrumentation : Instrumentation() {
     override fun onStart() {
         val results = Bundle()
         try {
+            if (jumpArgs?.getString("vncFailureOnly") == "true") {
+                results.putString("stream", ConnectionUiFollowupVerification(this).vncFailure())
+                finish(0, results)
+                return
+            }
+            if (jumpArgs?.getString("connectionUiFollowupOnly") == "true") {
+                results.putString("stream", ConnectionUiFollowupVerification(this).run())
+                finish(0, results)
+                return
+            }
             if (jumpArgs?.getString("keyboardMotionOnly") == "true") {
                 results.putString("stream", KeyboardMotionVerification(this).run())
                 finish(0, results)

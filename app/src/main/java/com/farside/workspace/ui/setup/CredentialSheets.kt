@@ -29,7 +29,7 @@ internal fun SetupInput(label:Int,value:String,onChange:(String)->Unit,secret:Bo
     Column(verticalArrangement=Arrangement.spacedBy(if(compact) 4.dp else 6.dp)) {
         Text(text,fontSize=if(compact) 12.sp else 13.sp,color=SetupColors.muted)
         if (label == R.string.private_key) PrivateKeyField(value, onChange, error != null)
-        else OutlinedTextField(value=value,onValueChange=onChange,singleLine=!multiline,minLines=if(multiline) 3 else 1,
+        else com.farside.workspace.FormTextMenus { OutlinedTextField(value=value,onValueChange=onChange,singleLine=!multiline,minLines=if(multiline) 3 else 1,
             keyboardOptions=androidx.compose.foundation.text.KeyboardOptions(autoCorrectEnabled=false,
                 keyboardType=when {
                     label==R.string.enter_new_app_pin || label==R.string.setup_confirm_pin -> androidx.compose.ui.text.input.KeyboardType.NumberPassword
@@ -42,7 +42,7 @@ internal fun SetupInput(label:Int,value:String,onChange:(String)->Unit,secret:Bo
             isError=error!=null,shape=androidx.compose.foundation.shape.RoundedCornerShape(11.dp),
             colors=OutlinedTextFieldDefaults.colors(focusedContainerColor=SetupColors.field,unfocusedContainerColor=SetupColors.field,
                 focusedBorderColor=SetupColors.accent,unfocusedBorderColor=SetupColors.border),
-            modifier=Modifier.fillMaxWidth().then(if(compact) Modifier.heightIn(min=48.dp) else Modifier).semantics { contentDescription=text })
+            modifier=Modifier.fillMaxWidth().then(if(compact) Modifier.heightIn(min=48.dp) else Modifier).semantics { contentDescription=text }) }
         error?.let { Text(it,color=SetupColors.danger,fontSize=13.sp) }
     }
 }
@@ -50,7 +50,7 @@ internal fun SetupInput(label:Int,value:String,onChange:(String)->Unit,secret:Bo
 /** Shared by setup and the vault. Existing secrets are never inserted into editor fields. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun CredentialSheet(pm:ProfileManager,vncPassword:Boolean=false,allowMac:Boolean=true,allowPasswordOnly:Boolean=false,allowEmptyPassword:Boolean=true,
+internal fun CredentialSheet(pm:ProfileManager,vncPassword:Boolean=false,allowMac:Boolean=true,macAccount:Boolean=false,allowPasswordOnly:Boolean=false,allowEmptyPassword:Boolean=true,
     existing:SavedCredential?=null,onDismiss:()->Unit,onSaved:(SavedCredential)->Unit) {
     var passwordOnly by remember {mutableStateOf(vncPassword)}
     var name by remember { mutableStateOf(existing?.name.orEmpty()) }
@@ -58,7 +58,7 @@ internal fun CredentialSheet(pm:ProfileManager,vncPassword:Boolean=false,allowMa
     var user by remember { mutableStateOf(existing?.user.orEmpty()) }
     var short by remember { mutableStateOf(existing?.userShort.orEmpty()) }
     var shortEdited by remember { mutableStateOf(!existing?.userShort.isNullOrEmpty()) }
-    var mac by remember { mutableStateOf(existing?.userShort!=null) }
+    var mac by remember { mutableStateOf(existing?.userShort!=null || macAccount) }
     var pass by remember { mutableStateOf("") }
     var pin by remember { mutableStateOf(existing?.requirePin ?: false) }
     var pinSetup by remember { mutableStateOf(false) }

@@ -164,11 +164,7 @@ internal class VncSessionConnection(
                 if (instance == 0L) {
                     closeMediaRelay()
                     ended.set(true)
-                    val fallback = if (isMacAuth) {
-                        context.getString(R.string.protocol_connection_failed, "VNC")
-                    } else {
-                        context.getString(R.string.vnc_connection_failed_help)
-                    }
+                    val fallback = context.getString(R.string.protocol_connection_failed, "VNC")
                     main.post { if (!closed.get()) onDisconnected(
                         failure?.takeIf { it.isNotBlank() } ?: fallback, false) }
                 }

@@ -6,6 +6,7 @@ import android.view.View
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
@@ -16,7 +17,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.coroutines.CompletableDeferred
 import metavr.app.volumetricwindow.VolumetricWindowTransaction
 import metavr.app.volumetricwindow.VolumetricWindowLayoutParams
 import metavrx.layout.window.compose.SpatialWindow
@@ -24,9 +24,8 @@ import metavrx.layout.window.compose.layout.*
 import metavrx.layout.window.compose.state.*
 
 internal const val KEYBOARD_MIN_WIDTH_DP = 512
-internal const val KEYBOARD_FADE_MS = 140
+internal const val KEYBOARD_FADE_MS = 200
 internal const val KEYBOARD_ROLL_MS = 260
-internal const val KEYBOARD_PREPARE_MS = 180L
 
 /** Separate native travel from painted opacity, so the fixed-size keys never stretch. */
 internal class KeyboardPanelMotion {
@@ -51,14 +50,27 @@ internal fun RemoteKeyboardPanel(visible: Boolean, state: WindowState,
     var parentHeight by remember(parent) { mutableIntStateOf(parent.height) }
     val panelWidth = with(density) { parentWidth.toDp() }.coerceAtLeast(KEYBOARD_MIN_WIDTH_DP.dp)
     var displayedWidth by remember { mutableStateOf(panelWidth) }
-    fun place(progress: Float) {
+    var openingHeight by remember { mutableStateOf(1.dp) }
+    val geometry = remember(parent) { KeyboardWindowGeometry(parent.context) }
+    DisposableEffect(geometry) { onDispose { geometry.close() } }
+    suspend fun awaitExtent(open: Boolean) {
+        val height=if(open) with(density) {251.2.dp.roundToPx()} else 1
+        withTimeoutOrNull(100) {
+            while(token?.let(geometry::read)?.height!=height) withFrameNanos { }
+        }
+        repeat(2) {withFrameNanos { }}
+    }
+    fun place(progress: Float, resizeNative: Boolean = true) {
         val t = token ?: return
+        val fullHeight = with(density) { 251.2.dp.roundToPx() }
+        val width = with(density) { displayedWidth.roundToPx() }
         val params = VolumetricWindowLayoutParams.Builder().setAttachFrom(48L).setAttachTo(80L)
-            // Native attachment coordinates point upward. Tuck the invisible fixed-size
-            // panel behind the desktop, then move its lower handle to the open position.
-            .setTranslationOverride(Point(0, ((1f-progress)*with(density) { 251.2.dp.toPx() }-96f).toInt())).build()
-        state.attachedWindowManager?.applyTransaction(VolumetricWindowTransaction.Builder()
-            .setLayoutParams(t, params).build())
+            .setTranslationOverride(Point(0, (-96f*progress).toInt())).build()
+        // Animate only the invisible native footprint. The Android backing buffer stays
+        // full-sized; reveal it only after the full native extent has been submitted.
+        val transaction=VolumetricWindowTransaction.Builder().setLayoutParams(t, params)
+        if(resizeNative) transaction.setSize(t, android.util.Size(width, (fullHeight*progress).toInt().coerceAtLeast(1)))
+        state.attachedWindowManager?.applyTransaction(transaction.build())
     }
     DisposableEffect(parent) {
         val listener = View.OnLayoutChangeListener { _, l, t, r, b, _, _, _, _ ->
@@ -68,34 +80,44 @@ internal fun RemoteKeyboardPanel(visible: Boolean, state: WindowState,
         parent.addOnLayoutChangeListener(listener)
         onDispose { parent.removeOnLayoutChangeListener(listener) }
     }
-    LaunchedEffect(visible) { if (visible) emitted = true }
+    LaunchedEffect(visible) { if (visible) {
+        if(motion.roll.value==0f) openingHeight=1.dp
+        emitted = true
+    } }
     LaunchedEffect(visible, lifecycle, token) {
         if (lifecycle != WindowLifecycle.Active || token == null) {
             if (!visible) {
                 opacity.snapTo(0f)
                 motion.roll.snapTo(0f)
                 emitted = false
+                openingHeight = 1.dp
             }
             return@LaunchedEffect
         }
         if (!visible) {
-            opacity.animateTo(0f, tween(KEYBOARD_FADE_MS))
+            opacity.animateTo(0f, tween(KEYBOARD_FADE_MS, easing=LinearEasing))
             motion.roll.animateTo(0f, tween(KEYBOARD_ROLL_MS, easing=FastOutSlowInEasing)) { place(value) }
-            repeat(2) { withFrameNanos { } }
+            awaitExtent(false)
             emitted = false
+            openingHeight = 1.dp
             return@LaunchedEffect
         }
-        place(motion.roll.value)
-        // Bound initial layout preparation; the former four-second geometry wait and
-        // 400ms stable-pose delay made every opening noticeably lag behind the button.
-        withTimeoutOrNull(KEYBOARD_PREPARE_MS) {
-            val height = with(density) { 251.2.dp.roundToPx() }
-            while (state.hostedView?.height != height) withFrameNanos { }
-            awaitKeyboardFrame(state)
+        // Create at the collapsed height. Creating full-sized and shrinking after Active
+        // exposed the fully extended handle before the opening animation even started.
+        place(motion.roll.value, resizeNative=false)
+        withFrameNanos { }
+        motion.roll.animateTo(1f, tween(KEYBOARD_ROLL_MS, easing=FastOutSlowInEasing)) {
+            openingHeight=(251.2f*value).dp.coerceAtLeast(1.dp)
+            place(value, resizeNative=false)
         }
-        place(motion.roll.value)
-        motion.roll.animateTo(1f, tween(KEYBOARD_ROLL_MS, easing=FastOutSlowInEasing)) { place(value) }
-        opacity.animateTo(1f, tween(KEYBOARD_FADE_MS))
+        // SDK owns opening buffer/extent sizing while invisible; closing keeps its
+        // accepted fixed-buffer native-collapse path.
+        withTimeoutOrNull(100) {
+            val fullHeight=with(density) {251.2.dp.roundToPx()}
+            while(state.hostedView?.height!=fullHeight) withFrameNanos { }
+        }
+        awaitExtent(true)
+        opacity.animateTo(1f, tween(KEYBOARD_FADE_MS, easing=LinearEasing))
     }
     LaunchedEffect(parentWidth, parentHeight) {
         displayedWidth = panelWidth
@@ -103,30 +125,12 @@ internal fun RemoteKeyboardPanel(visible: Boolean, state: WindowState,
         if (lifecycle == WindowLifecycle.Active) place(motion.roll.value)
     }
     if (emitted) SpatialWindow(key = "remote-shortcuts", windowState = state, fallbackStrategy = WindowFallback.Drop,
-        modifier = WindowModifier.width(displayedWidth).height(251.2.dp).anchor(WindowAnchor.Bottom)) {
+        modifier = WindowModifier.width(displayedWidth).height(openingHeight).anchor(WindowAnchor.Bottom)) {
         Box(Modifier.fillMaxSize().graphicsLayer { alpha = opacity.value }.pointerInput(visible) {
             awaitPointerEventScope { while (true) {
                 val event = awaitPointerEvent(PointerEventPass.Initial)
                 if (visible && event.type == PointerEventType.Press) interaction()
             } }
         }) { currentContent() }
-    }
-}
-
-private suspend fun awaitKeyboardFrame(state: WindowState): Boolean {
-    repeat(2) { withFrameNanos { } }
-    val view = state.hostedView ?: return false
-    val observer = view.viewTreeObserver
-    val submitted = CompletableDeferred<Unit>()
-    val callback = Runnable { submitted.complete(Unit) }
-    observer.registerFrameCommitCallback(callback)
-    return try {
-        view.invalidate()
-        if (withTimeoutOrNull(120) { submitted.await(); true } != true) {
-            android.util.Log.w("KeyboardFade", "Frame commit timed out")
-            false
-        } else true
-    } finally {
-        if (observer.isAlive) observer.unregisterFrameCommitCallback(callback)
     }
 }

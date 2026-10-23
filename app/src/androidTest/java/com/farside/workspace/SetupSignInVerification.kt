@@ -100,7 +100,6 @@ internal class SetupSignInVerification(private val test:Instrumentation) {
                 check(ui.find(text(R.string.account_display_name),true).text.isNullOrEmpty())
                 ui.enter(R.string.account_display_name,"Setup credential $index")
                 if(index==2) {
-                    ui.click(text(R.string.setup_macos_account))
                     ui.enter(R.string.setup_full_name,"Englebert Rumplestiltskin")
                     check(ui.find(text(R.string.setup_short_name),true).text.toString()=="englebertrumplestiltskin")
                     ui.enter(R.string.setup_short_name,"my_override")
@@ -132,7 +131,7 @@ internal class SetupSignInVerification(private val test:Instrumentation) {
                     check(kotlin.math.abs(a.centerY()-b.centerY())<=2) {"Popup switch is not centered with its label: $label"}
                 }
                 checkSwitchAlignment(R.string.require_pin)
-                if(!passwordOnly && mode.first!=ConnectionType.RDP) checkSwitchAlignment(R.string.setup_macos_account)
+                check(ui.nodes().none {it.contentDescription?.toString()==text(R.string.setup_macos_account)})
                 ui.nodes().filter {it.isScrollable && !it.isEditable}.forEach {it.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)}
                 Thread.sleep(200)
                 capturePopup("credential-popup-$index.png")

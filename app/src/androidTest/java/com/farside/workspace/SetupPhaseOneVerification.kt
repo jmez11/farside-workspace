@@ -146,6 +146,8 @@ internal class SetupPhaseOneVerification(private val test:Instrumentation) {
             for((index,mode) in modes.withIndex()) {
                 val type=mode.first
                 val accountOrKey=mode.second
+                pm.updateCredential(credential.copy(user=if(type==ConnectionType.VNC && !accountOrKey) "" else "fixture",
+                    userShort=if(type==ConnectionType.VNC && accountOrKey) "fixture" else null))
                 val profileName="Setup fixture ${type.name} $index"
                 var saved:ConnectionProfile?=null
                 val scans=mutableListOf<ConnectionType>()
@@ -201,6 +203,10 @@ internal class SetupPhaseOneVerification(private val test:Instrumentation) {
                 if(type==ConnectionType.SSH && accountOrKey) {
                     click(label(R.string.setup_connection_specific));enter(R.string.setup_username,"fixture")
                     click(label(R.string.setup_ssh_key));click(fixtureKey.name)
+                    var keyRow:AccessibilityNodeInfo?=find(fixtureKey.name)
+                    while(keyRow!=null && !keyRow.isCheckable) keyRow=keyRow.parent
+                    check(keyRow?.isChecked==true) {"SSH key row lacks selected radio semantics"}
+                    capture(activity,"setup-ssh-key-radio.png")
                 } else {
                     if(type==ConnectionType.RDP) {
                         val message=label(R.string.profile_rdp_credential_required)

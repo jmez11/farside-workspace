@@ -155,6 +155,7 @@ class SessionActivity : ComponentActivity() {
         if (rdpMonitor == null) displayCapture.close()
         movementObserver.close()
         if (!isChangingConfigurations) sessionProfile?.let { SessionWindowSlots.release(it, sessionSlot) }
+        if (!isChangingConfigurations && isFinishing && sessionProfile!=null) SessionWindowLauncher.restoreLauncherAfterLastConnection(this)
         super.onDestroy()
     }
 
