@@ -55,8 +55,9 @@ fun ConnectionSetupFlow(
     var options by remember(id) {mutableStateOf((initialProfile ?: ConnectionProfile(id=id,name=name,type=type,host=host,user="",pass="",macAudioEnabled=true)).let {
         if(it.useCloudflare) it.copy(proxyType=ProxyType.CLOUDFLARED,useCloudflare=false) else it
     })}
+    val displayName = name.ifBlank { if (initialProfile == null) host.trim() else "" }
     val base=options.copy(
-        name=name,type=type,host=host,port=port.toIntOrNull() ?: 0,vncAuthMode=auth,
+        name=displayName,type=type,host=host,port=port.toIntOrNull() ?: 0,vncAuthMode=auth,
         expMacHevc=type==ConnectionType.VNC && auth==VncAuthMode.MAC_USER,
         enableSftp=if(initialProfile==null && type==ConnectionType.SSH && options.type!=ConnectionType.SSH) true else options.enableSftp)
     val signInValid=signIn.error(base,credentials)==null
@@ -67,19 +68,20 @@ fun ConnectionSetupFlow(
     var scanError by remember { mutableStateOf(false) }
     var scan by remember { mutableStateOf<Job?>(null) }
     DisposableEffect(Unit) { onDispose { scan?.cancel() } }
-    val validServer = name.isNotBlank() && host.isNotBlank() && port.toIntOrNull() in 1..65535
+    val validServer = displayName.isNotBlank() && host.isNotBlank() && port.toIntOrNull() in 1..65535
         val accent = Color(0xFFD0BCFF)
     MaterialTheme(colorScheme = darkColorScheme(primary=accent, background=Color(0xFF1C1B1F), surface=Color(0xFF1C1B1F), onPrimary=Color(0xFF1C1B1F))) {
         Box(Modifier.fillMaxSize().padding(16.dp), contentAlignment=Alignment.TopCenter) {
         Surface(modifier=Modifier.fillMaxSize(),shape=RoundedCornerShape(16.dp),border=BorderStroke(2.dp,accent)) {
             Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement=Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment=Alignment.CenterVertically) {
-                    IconButton(onClick=onCancel) { Icon(if(initialProfile==null) Icons.Default.Close else Icons.Default.ArrowBack, stringResource(R.string.back)) }
+                    if (initialProfile != null) IconButton(onClick=onCancel) { Icon(Icons.Default.ArrowBack, stringResource(R.string.back)) }
                     Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(2.dp)) {
                         Text(stringResource(if(initialProfile==null) R.string.setup_new_connection else R.string.edit_connection),fontSize=17.sp,fontWeight=FontWeight.Bold)
                         Text(type.name+" \u00b7 "+stringResource(when(type) {ConnectionType.RDP->R.string.setup_rdp_description;ConnectionType.SSH->R.string.setup_ssh_description;ConnectionType.VNC->R.string.setup_vnc_description}),fontSize=13.sp,color=SetupColors.muted)
                     }
                     Text(stringResource(R.string.setup_step_of, step+1),fontSize=13.sp,color=SetupColors.muted)
+                    if (initialProfile == null) IconButton(onClick=onCancel) { Icon(Icons.Default.Close, stringResource(R.string.close)) }
                 }
                 SetupStepper(step,canVisit={true},onStep={target ->
                     attempted=attempted+step
@@ -117,7 +119,7 @@ fun ConnectionSetupFlow(
                     1 -> Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement=Arrangement.spacedBy(12.dp)) {
                         Text(stringResource(R.string.setup_which_computer),fontSize=20.sp,fontWeight=FontWeight.Bold)
                         Text(stringResource(R.string.setup_server_lede),fontSize=14.sp,color=SetupColors.muted)
-                        SetupServerField(name,{name=it},R.string.connection_name,if(1 in attempted && name.isBlank()) R.string.profile_name_required else null,Modifier.fillMaxWidth())
+                        SetupServerField(displayName,{name=it},R.string.connection_name,if(1 in attempted && displayName.isBlank()) R.string.profile_name_required else null,Modifier.fillMaxWidth())
                         BoxWithConstraints {
                             if(maxWidth<600.dp) Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
                                 SetupServerField(host,{host=it},R.string.host_server,if(1 in attempted && host.isBlank()) R.string.profile_host_required else null,Modifier.fillMaxWidth())

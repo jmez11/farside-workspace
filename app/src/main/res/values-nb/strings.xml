@@ -779,4 +779,13 @@
     <string name="mac_quality_rtcp_auth">RTCP godkjent / ubekreftet</string>
     <string name="mac_quality_rtcp_rejected">RTCP ugyldig / duplikat</string>
     <string name="mac_quality_age_value">%1$.1f s</string>
+    <string name="ssh_host_key_new">Lagre SSH-vertsnøkkel?</string>
+    <string name="ssh_host_key_changed">SSH-vertsnøkkelen er endret</string>
+    <string name="ssh_host_key_new_help">Bekreft fingeravtrykket for %1$s:%2$d før du lagrer.</string>
+    <string name="ssh_host_key_changed_help">Nøkkelen for %1$s:%2$d er endret. Bekreft det nye fingeravtrykket med serverens eier før du erstatter den.</string>
+    <string name="ssh_host_key_previous">Forrige fingeravtrykk: %1$s</string>
+    <string name="ssh_host_key_save">Lagre og koble til</string>
+    <string name="ssh_host_key_replace">Erstatt og koble til</string>
+    <string name="ssh_host_keys_clear">Slett lagrede SSH-vertsnøkler</string>
+    <string name="ssh_host_keys_cleared">Lagrede SSH-vertsnøkler slettet.</string>
 </resources>

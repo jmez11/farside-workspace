@@ -779,4 +779,13 @@
     <string name="mac_quality_rtcp_auth">RTCP verifierade / overifierade</string>
     <string name="mac_quality_rtcp_rejected">RTCP felaktiga / dubbletter</string>
     <string name="mac_quality_age_value">%1$.1f s</string>
+    <string name="ssh_host_key_new">Spara SSH-värdnyckel?</string>
+    <string name="ssh_host_key_changed">SSH-värdnyckeln har ändrats</string>
+    <string name="ssh_host_key_new_help">Kontrollera fingeravtrycket för %1$s:%2$d innan du sparar.</string>
+    <string name="ssh_host_key_changed_help">Nyckeln för %1$s:%2$d har ändrats. Kontrollera det nya fingeravtrycket med serverns ägare innan du ersätter den.</string>
+    <string name="ssh_host_key_previous">Tidigare fingeravtryck: %1$s</string>
+    <string name="ssh_host_key_save">Spara och anslut</string>
+    <string name="ssh_host_key_replace">Ersätt och anslut</string>
+    <string name="ssh_host_keys_clear">Rensa sparade SSH-värdnycklar</string>
+    <string name="ssh_host_keys_cleared">Sparade SSH-värdnycklar har rensats.</string>
 </resources>

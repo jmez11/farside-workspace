@@ -109,7 +109,8 @@ fun LauncherScreen(
     starredIds: Set<String> = emptySet(),
     onToggleStar: (String) -> Unit = {},
     onMoveProfile: (String, String) -> Unit = { _, _ -> },
-    onCaptureProfile: (String) -> Unit = {}
+    onCaptureProfile: (String) -> Unit = {},
+    backRequest: Int = 0
 ) {
     var isAdding by rememberSaveable { mutableStateOf(false) }
     var editingProfile by remember { mutableStateOf<ConnectionProfile?>(null) }
@@ -124,6 +125,16 @@ fun LauncherScreen(
     val context = LocalContext.current
     val windowManagerAvailable = remember(context) { QuestWindowManager.isAvailable(context) }
     val placementAvailable = remember { WindowPlacementSupport.isAvailable() }
+    fun returnToLauncher() {
+        isAdding = false
+        editingProfile = null
+        isSettingsOpen = false
+        isVaultOpen = false
+        filesOpen = false
+        credentialRevision++
+    }
+    LaunchedEffect(backRequest) { if (backRequest > 0) returnToLauncher() }
+
     DisposableEffect(dragView) {
         val detach = ConnectionSpatialDrag.attach(dragView)
         onDispose { detach() }
@@ -255,6 +266,10 @@ fun LauncherScreen(
             )
         }
         if (filesOpen) com.farside.workspace.sftp.SftpFilesEntry(onClose = { filesOpen = false })
+        androidx.activity.compose.BackHandler(isAdding || editingProfile != null || isSettingsOpen || isVaultOpen || filesOpen) {
+            returnToLauncher()
+        }
+
     }
 }
 
@@ -268,6 +283,7 @@ fun ProfileCard(profile: ConnectionProfile, onEdit: () -> Unit, onDelete: () -> 
     val view = LocalView.current
     val latestProfile by rememberUpdatedState(profile)
     val placementAvailable = remember { WindowPlacementSupport.isAvailable() }
+
     val context = LocalContext.current
     val background = remember(profile.cardBackground) {
         profile.cardBackground?.let { name ->

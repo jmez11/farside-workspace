@@ -96,6 +96,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 @Composable
 fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, onClose: () -> Unit) {
     val context = LocalContext.current
+    com.farside.workspace.ssh.SshHostKeyDialogHost(remember(session, context) { com.farside.workspace.ssh.sshHostKeyScope(context, session) })
     val scrollbackValidationMsg = stringResource(R.string.scrollback_lines_validation)
     val sshClipboardLabel = stringResource(R.string.ssh_clipboard_label)
     val windowManagerAvailable = remember(context) { QuestWindowManager.isAvailable(context) }

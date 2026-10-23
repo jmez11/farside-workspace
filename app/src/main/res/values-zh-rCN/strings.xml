@@ -781,4 +781,13 @@
     <string name="mac_quality_rtcp_auth">RTCP 已认证 / 未验证</string>
     <string name="mac_quality_rtcp_rejected">RTCP 格式错误 / 重复</string>
     <string name="mac_quality_age_value">%1$.1f s</string>
+    <string name="ssh_host_key_new">保存 SSH 主机密钥？</string>
+    <string name="ssh_host_key_changed">SSH 主机密钥已更改</string>
+    <string name="ssh_host_key_new_help">保存前请验证 %1$s:%2$d 的指纹。</string>
+    <string name="ssh_host_key_changed_help">%1$s:%2$d 的密钥已更改。替换前请向服务器所有者验证新指纹。</string>
+    <string name="ssh_host_key_previous">以前的指纹：%1$s</string>
+    <string name="ssh_host_key_save">保存并连接</string>
+    <string name="ssh_host_key_replace">替换并连接</string>
+    <string name="ssh_host_keys_clear">清除已保存的 SSH 主机密钥</string>
+    <string name="ssh_host_keys_cleared">已清除保存的 SSH 主机密钥。</string>
 </resources>

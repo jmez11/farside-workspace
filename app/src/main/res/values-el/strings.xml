@@ -780,4 +780,13 @@
     <string name="mac_quality_rtcp_auth">RTCP επικυρωμένα / ανεπιβεβαίωτα</string>
     <string name="mac_quality_rtcp_rejected">RTCP εσφαλμένα / διπλότυπα</string>
     <string name="mac_quality_age_value">%1$.1f s</string>
+    <string name="ssh_host_key_new">Αποθήκευση κλειδιού διακομιστή SSH;</string>
+    <string name="ssh_host_key_changed">Το κλειδί διακομιστή SSH άλλαξε</string>
+    <string name="ssh_host_key_new_help">Επαληθεύστε το αποτύπωμα για %1$s:%2$d πριν από την αποθήκευση.</string>
+    <string name="ssh_host_key_changed_help">Το κλειδί για %1$s:%2$d άλλαξε. Επαληθεύστε το νέο αποτύπωμα με τον ιδιοκτήτη του διακομιστή πριν το αντικαταστήσετε.</string>
+    <string name="ssh_host_key_previous">Προηγούμενο αποτύπωμα: %1$s</string>
+    <string name="ssh_host_key_save">Αποθήκευση και σύνδεση</string>
+    <string name="ssh_host_key_replace">Αντικατάσταση και σύνδεση</string>
+    <string name="ssh_host_keys_clear">Εκκαθάριση αποθηκευμένων κλειδιών SSH</string>
+    <string name="ssh_host_keys_cleared">Τα αποθηκευμένα κλειδιά διακομιστών SSH διαγράφηκαν.</string>
 </resources>

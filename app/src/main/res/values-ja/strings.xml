@@ -781,4 +781,13 @@
     <string name="mac_quality_rtcp_auth">RTCP 認証済み / 未検証</string>
     <string name="mac_quality_rtcp_rejected">RTCP 不正 / 重複</string>
     <string name="mac_quality_age_value">%1$.1f s</string>
+    <string name="ssh_host_key_new">SSHホスト鍵を保存しますか？</string>
+    <string name="ssh_host_key_changed">SSHホスト鍵が変更されました</string>
+    <string name="ssh_host_key_new_help">保存する前に %1$s:%2$d のフィンガープリントを確認してください。</string>
+    <string name="ssh_host_key_changed_help">%1$s:%2$d の鍵が変更されました。置き換える前にサーバー所有者に新しいフィンガープリントを確認してください。</string>
+    <string name="ssh_host_key_previous">以前のフィンガープリント: %1$s</string>
+    <string name="ssh_host_key_save">保存して接続</string>
+    <string name="ssh_host_key_replace">置き換えて接続</string>
+    <string name="ssh_host_keys_clear">保存済みSSHホスト鍵を削除</string>
+    <string name="ssh_host_keys_cleared">保存済みSSHホスト鍵を削除しました。</string>
 </resources>

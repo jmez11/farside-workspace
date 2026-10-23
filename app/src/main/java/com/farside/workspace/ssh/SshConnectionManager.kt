@@ -10,7 +10,6 @@ import com.farside.workspace.data.ProfileManager
 import com.farside.workspace.data.ProxyType
 import com.farside.workspace.tunnel.CloudflaredTunnel
 import net.schmizz.sshj.SSHClient
-import net.schmizz.sshj.transport.verification.PromiscuousVerifier
 import net.schmizz.sshj.userauth.method.AuthKeyboardInteractive
 import net.schmizz.sshj.userauth.method.ChallengeResponseProvider
 import net.schmizz.sshj.userauth.password.Resource
@@ -160,7 +159,12 @@ class SshConnectionManager private constructor(private val context: Context?, pr
 
                 val ssh = SSHClient()
                 sshClient = ssh
-                ssh.addHostKeyVerifier(PromiscuousVerifier())
+                val hostKeyContext = checkNotNull(context) { "SSH host-key verification requires application context" }
+                ssh.addHostKeyVerifier(SavedSshHostKeyVerifier(SshHostKeyStore(hostKeyContext), profile.host, profile.port, profile.id) {
+                    closed.get() || lease.closed.get()
+                })
+                val normalTimeout = ssh.timeout
+                ssh.timeout = 120_000
                 ssh.connectTimeout = 10_000
                 if (via == null && profile.proxyType in listOf(ProxyType.HTTP, ProxyType.SOCKS5) && !profile.useCloudflare) {
                     val proxyHost = profile.proxyHost?.trim()?.takeIf { it.isNotEmpty() }
@@ -195,6 +199,7 @@ class SshConnectionManager private constructor(private val context: Context?, pr
                 } else ssh.connect(targetHost, targetPort)
 
 
+                ssh.timeout = normalTimeout
                 var user = profile.user.trim()
                 if (user.isEmpty() && profile.host.contains("@")) {
                     user = profile.host.substringBefore("@").trim()

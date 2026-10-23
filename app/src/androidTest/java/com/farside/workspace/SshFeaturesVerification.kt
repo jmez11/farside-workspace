@@ -94,6 +94,8 @@ class SshFeaturesVerification(private val test: Instrumentation, private val ime
             }
         }
         server.start()
+        val hostKeys=com.farside.workspace.ssh.SshHostKeyStore(test.targetContext)
+        check(hostKeys.save("127.0.0.1",server.port,com.farside.workspace.ssh.SshHostKey.from(pair.public)))
         val echo = ServerSocket(0, 20, InetAddress.getByName("127.0.0.1"))
         thread(isDaemon = true) {
             while (!echo.isClosed) {
@@ -109,7 +111,7 @@ class SshFeaturesVerification(private val test: Instrumentation, private val ime
             client.connect("127.0.0.1", server.port); client.authPassword("fixture", "fixture")
             forwarding(client, echo.localPort)
             terminalUi(server.port, echo.localPort)
-        } finally { client.close(); echo.close(); server.stop(true); fixtureKeyId?.let(pm::deleteSshKey) }
+        } finally { client.close(); echo.close(); hostKeys.remove("127.0.0.1",server.port); server.stop(true); fixtureKeyId?.let(pm::deleteSshKey) }
         record("PASS: all SSH feature checks complete; fixture SSH server and profiles removed")
     }
     private fun forwarding(client: SSHClient, destination: Int) {

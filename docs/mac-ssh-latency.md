@@ -23,7 +23,7 @@ Evidence: `build/verification/mac-latency/` (ignored). The original device logs 
 
 ## Remaining manual checks
 
-Further remote-host investigation is shelved at the user's request. Initial login visibility, sustained text selection/dragging, thumbstick scrolling feel and audible remote playback remain wearer acceptance checks. Fixture results establish recovery/input logic and stream isolation; missing login controls and silent remote capture are unresolved limitations.
+Further remote-host investigation is shelved at the user's request. The wearer confirmed thumbstick scrolling satisfactory Oct23. Initial login visibility, sustained text selection/dragging and audible remote playback remain wearer acceptance checks. Fixture results establish recovery/input logic and stream isolation; missing login controls and silent remote capture are unresolved limitations.
 
 ## Follow-up: alternating desktops (2026-10-22)
 

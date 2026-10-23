@@ -63,8 +63,12 @@ class AdbTunnelVerification(private val instrumentation: Instrumentation) {
             Thread.sleep(3500)
             check(find("Wireless ADB Cloudflare Tunnel") == null) { "Tunnel setup visible with developer mode off" }
             sample.set(AdbState(true, false))
-            waitFor("Enable wireless debugging on the headset to set up the tunnel.")
+            Thread.sleep(3500)
+            check(find("Wireless ADB Cloudflare Tunnel") == null) { "Tunnel section visible with wireless debugging off" }
             check(find("Save & start tunnel") == null) { "Setup available with wireless debugging off" }
+            sample.set(AdbState(true, true))
+            Thread.sleep(3500)
+            check(find("Wireless ADB Cloudflare Tunnel") == null) { "Tunnel section visible without a detected endpoint" }
             sample.set(real)
             val start = waitFor("Save & start tunnel")
             check(start.isEnabled) { "Start disabled with actual ADB discovered" }

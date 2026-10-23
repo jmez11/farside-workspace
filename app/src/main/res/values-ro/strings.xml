@@ -791,4 +791,13 @@
     <string name="mac_quality_rtcp_auth">RTCP autentificate / neverificate</string>
     <string name="mac_quality_rtcp_rejected">RTCP incorecte / duplicate</string>
     <string name="mac_quality_age_value">%1$.1f s</string>
+    <string name="ssh_host_key_new">Salvați cheia gazdei SSH?</string>
+    <string name="ssh_host_key_changed">Cheia gazdei SSH s-a schimbat</string>
+    <string name="ssh_host_key_new_help">Verificați amprenta pentru %1$s:%2$d înainte de salvare.</string>
+    <string name="ssh_host_key_changed_help">Cheia pentru %1$s:%2$d s-a schimbat. Verificați noua amprentă cu proprietarul serverului înainte de înlocuire.</string>
+    <string name="ssh_host_key_previous">Amprenta anterioară: %1$s</string>
+    <string name="ssh_host_key_save">Salvați și conectați</string>
+    <string name="ssh_host_key_replace">Înlocuiți și conectați</string>
+    <string name="ssh_host_keys_clear">Ștergeți cheile SSH salvate ale gazdelor</string>
+    <string name="ssh_host_keys_cleared">Cheile SSH salvate ale gazdelor au fost șterse.</string>
 </resources>

@@ -779,4 +779,13 @@
     <string name="mac_quality_rtcp_auth">RTCP todennetut / tarkistamattomat</string>
     <string name="mac_quality_rtcp_rejected">RTCP virheelliset / kaksoiskappaleet</string>
     <string name="mac_quality_age_value">%1$.1f s</string>
+    <string name="ssh_host_key_new">Tallennetaanko SSH-palvelimen avain?</string>
+    <string name="ssh_host_key_changed">SSH-palvelimen avain on muuttunut</string>
+    <string name="ssh_host_key_new_help">Vahvista kohteen %1$s:%2$d sormenjälki ennen tallennusta.</string>
+    <string name="ssh_host_key_changed_help">Kohteen %1$s:%2$d avain on muuttunut. Vahvista uusi sormenjälki palvelimen omistajalta ennen korvaamista.</string>
+    <string name="ssh_host_key_previous">Edellinen sormenjälki: %1$s</string>
+    <string name="ssh_host_key_save">Tallenna ja yhdistä</string>
+    <string name="ssh_host_key_replace">Korvaa ja yhdistä</string>
+    <string name="ssh_host_keys_clear">Poista tallennetut SSH-palvelinavaimet</string>
+    <string name="ssh_host_keys_cleared">Tallennetut SSH-palvelinavaimet poistettu.</string>
 </resources>

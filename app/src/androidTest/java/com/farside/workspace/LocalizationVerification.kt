@@ -183,6 +183,8 @@ class LocalizationVerification(private val test: Instrumentation) {
             passwordAuthenticator = org.apache.sshd.server.auth.password.PasswordAuthenticator { _, _, _ -> false }
         }
         server.start()
+        val hostKeys=com.farside.workspace.ssh.SshHostKeyStore(context)
+        check(hostKeys.save("127.0.0.1",server.port,com.farside.workspace.ssh.SshHostKey.from(pair.public)))
         val profile = a.copy(id = "l10n-${java.util.UUID.randomUUID()}", host = "127.0.0.1", port = server.port, pass = "bad")
         pm.addProfile(profile)
         var session: SessionActivity? = null
@@ -223,7 +225,7 @@ class LocalizationVerification(private val test: Instrumentation) {
             test.waitForIdleSync()
             pm.deleteProfile(profile.id)
             check(context.getSharedPreferences("farside_profiles", 0).edit().commit())
-            server.stop(true)
+            hostKeys.remove("127.0.0.1",server.port); server.stop(true)
         }
         return evidence.readText()
     }

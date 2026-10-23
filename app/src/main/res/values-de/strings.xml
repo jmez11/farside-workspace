@@ -779,4 +779,13 @@
     <string name="mac_quality_rtcp_auth">RTCP bestätigt / ungeprüft</string>
     <string name="mac_quality_rtcp_rejected">RTCP fehlerhaft / doppelt</string>
     <string name="mac_quality_age_value">%1$.1f s</string>
+    <string name="ssh_host_key_new">SSH-Hostschlüssel speichern?</string>
+    <string name="ssh_host_key_changed">SSH-Hostschlüssel geändert</string>
+    <string name="ssh_host_key_new_help">Prüfen Sie vor dem Speichern den Fingerabdruck für %1$s:%2$d.</string>
+    <string name="ssh_host_key_changed_help">Der Schlüssel für %1$s:%2$d wurde geändert. Prüfen Sie den neuen Fingerabdruck beim Serverbetreiber, bevor Sie ihn ersetzen.</string>
+    <string name="ssh_host_key_previous">Vorheriger Fingerabdruck: %1$s</string>
+    <string name="ssh_host_key_save">Speichern und verbinden</string>
+    <string name="ssh_host_key_replace">Ersetzen und verbinden</string>
+    <string name="ssh_host_keys_clear">Gespeicherte SSH-Hostschlüssel löschen</string>
+    <string name="ssh_host_keys_cleared">Gespeicherte SSH-Hostschlüssel gelöscht.</string>
 </resources>

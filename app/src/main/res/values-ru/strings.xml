@@ -796,4 +796,13 @@
     <string name="mac_quality_rtcp_auth">RTCP проверенные / непроверенные</string>
     <string name="mac_quality_rtcp_rejected">RTCP некорректные / повторные</string>
     <string name="mac_quality_age_value">%1$.1f s</string>
+    <string name="ssh_host_key_new">Сохранить ключ сервера SSH?</string>
+    <string name="ssh_host_key_changed">Ключ сервера SSH изменился</string>
+    <string name="ssh_host_key_new_help">Проверьте отпечаток %1$s:%2$d перед сохранением.</string>
+    <string name="ssh_host_key_changed_help">Ключ %1$s:%2$d изменился. Перед заменой проверьте новый отпечаток у владельца сервера.</string>
+    <string name="ssh_host_key_previous">Предыдущий отпечаток: %1$s</string>
+    <string name="ssh_host_key_save">Сохранить и подключиться</string>
+    <string name="ssh_host_key_replace">Заменить и подключиться</string>
+    <string name="ssh_host_keys_clear">Удалить сохранённые ключи серверов SSH</string>
+    <string name="ssh_host_keys_cleared">Сохранённые ключи серверов SSH удалены.</string>
 </resources>

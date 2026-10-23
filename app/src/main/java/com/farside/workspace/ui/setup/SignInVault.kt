@@ -71,7 +71,7 @@ fun SignInVault(profileManager:ProfileManager,onClose:()->Unit) {
                                 Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(5.dp)) {
                                     androidx.compose.foundation.layout.FlowRow(horizontalArrangement=Arrangement.spacedBy(7.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
                                         Text(entry.name,fontSize=14.sp,fontWeight=androidx.compose.ui.text.font.FontWeight.Bold)
-                                        VaultBadge(if(entry.user.isBlank()) "VNC" else used.map {it.type}.distinct().singleOrNull()?.name ?: "Login")
+                                        used.map { it.type }.distinct().sortedBy { it.ordinal }.forEach { VaultBadge(it.name) }
                                         if(entry.userShort!=null) VaultBadge("Mac")
                                         if(entry.requirePin) VaultBadge("PIN",androidx.compose.ui.graphics.Color(0xFFE3AD65))
                                     }

@@ -779,4 +779,13 @@
     <string name="mac_quality_rtcp_auth">RTCP autenticados / sin verificar</string>
     <string name="mac_quality_rtcp_rejected">RTCP incorrectos / duplicados</string>
     <string name="mac_quality_age_value">%1$.1f s</string>
+    <string name="ssh_host_key_new">¿Guardar clave del servidor SSH?</string>
+    <string name="ssh_host_key_changed">La clave del servidor SSH cambió</string>
+    <string name="ssh_host_key_new_help">Verifica la huella de %1$s:%2$d antes de guardar.</string>
+    <string name="ssh_host_key_changed_help">La clave de %1$s:%2$d cambió. Verifica la nueva huella con el propietario del servidor antes de reemplazarla.</string>
+    <string name="ssh_host_key_previous">Huella anterior: %1$s</string>
+    <string name="ssh_host_key_save">Guardar y conectar</string>
+    <string name="ssh_host_key_replace">Reemplazar y conectar</string>
+    <string name="ssh_host_keys_clear">Borrar claves de servidores SSH guardadas</string>
+    <string name="ssh_host_keys_cleared">Se borraron las claves de servidores SSH guardadas.</string>
 </resources>

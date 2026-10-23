@@ -780,4 +780,13 @@
     <string name="mac_quality_rtcp_auth">RTCP doğrulanan / doğrulanmayan</string>
     <string name="mac_quality_rtcp_rejected">RTCP bozuk / yinelenen</string>
     <string name="mac_quality_age_value">%1$.1f s</string>
+    <string name="ssh_host_key_new">SSH sunucu anahtarı kaydedilsin mi?</string>
+    <string name="ssh_host_key_changed">SSH sunucu anahtarı değişti</string>
+    <string name="ssh_host_key_new_help">Kaydetmeden önce %1$s:%2$d parmak izini doğrulayın.</string>
+    <string name="ssh_host_key_changed_help">%1$s:%2$d anahtarı değişti. Değiştirmeden önce yeni parmak izini sunucu sahibiyle doğrulayın.</string>
+    <string name="ssh_host_key_previous">Önceki parmak izi: %1$s</string>
+    <string name="ssh_host_key_save">Kaydet ve bağlan</string>
+    <string name="ssh_host_key_replace">Değiştir ve bağlan</string>
+    <string name="ssh_host_keys_clear">Kayıtlı SSH sunucu anahtarlarını temizle</string>
+    <string name="ssh_host_keys_cleared">Kayıtlı SSH sunucu anahtarları temizlendi.</string>
 </resources>

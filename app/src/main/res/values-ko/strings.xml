@@ -779,4 +779,13 @@
     <string name="mac_quality_rtcp_auth">RTCP 인증됨 / 미확인</string>
     <string name="mac_quality_rtcp_rejected">RTCP 잘못됨 / 중복</string>
     <string name="mac_quality_age_value">%1$.1f s</string>
+    <string name="ssh_host_key_new">SSH 호스트 키를 저장할까요?</string>
+    <string name="ssh_host_key_changed">SSH 호스트 키가 변경됨</string>
+    <string name="ssh_host_key_new_help">저장하기 전에 %1$s:%2$d의 지문을 확인하세요.</string>
+    <string name="ssh_host_key_changed_help">%1$s:%2$d의 키가 변경되었습니다. 교체하기 전에 서버 소유자에게 새 지문을 확인하세요.</string>
+    <string name="ssh_host_key_previous">이전 지문: %1$s</string>
+    <string name="ssh_host_key_save">저장 후 연결</string>
+    <string name="ssh_host_key_replace">교체 후 연결</string>
+    <string name="ssh_host_keys_clear">저장된 SSH 호스트 키 지우기</string>
+    <string name="ssh_host_keys_cleared">저장된 SSH 호스트 키를 지웠습니다.</string>
 </resources>

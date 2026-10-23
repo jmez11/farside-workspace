@@ -37,12 +37,9 @@ fun AdbTunnelSection(compact:Boolean=false,discovery: (suspend () -> AdbState)? 
             delay(3000)
         }
     }
-    if (!state.developer) return
-    if(!compact) {Spacer(Modifier.height(16.dp));SettingsHeader(stringResource(R.string.wireless_adb_cloudflare_tunnel))}
-    if (!state.wireless) {
-        Text(stringResource(R.string.enable_wireless_debugging_help), color = Color.Gray, modifier = if(compact) Modifier else Modifier.padding(16.dp))
-    }
-    if(state.wireless || compact) {
+    if (!state.developer || !state.wireless || state.port == null) return
+    val content: @Composable () -> Unit = {
+        if(!compact) {Spacer(Modifier.height(16.dp));SettingsHeader(stringResource(R.string.wireless_adb_cloudflare_tunnel))}
         Text(state.port?.let { stringResource(R.string.wireless_adb_detected, it) } ?: stringResource(R.string.discovering_wireless_adb),
             color = Color.White, modifier = if(compact) Modifier else Modifier.padding(horizontal = 16.dp))
         if(compact) com.farside.workspace.ui.setup.SetupInput(if(saved==null) R.string.cloudflare_tunnel_token else R.string.new_tunnel_token,token,{token=it;error=null},secret=true)
@@ -78,7 +75,11 @@ fun AdbTunnelSection(compact:Boolean=false,discovery: (suspend () -> AdbState)? 
             }
         }
         error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = if(compact) Modifier else Modifier.padding(16.dp)) }
+        Text(if (status.isEmpty()) stringResource(R.string.stopped) else status, color = Color.White, modifier = if(compact) Modifier else Modifier.padding(16.dp))
     }
-    Text(if (status.isEmpty()) stringResource(R.string.stopped) else status, color = Color.White, modifier = if(compact) Modifier else Modifier.padding(16.dp))
-    if (active && !state.wireless) OutlinedButton(onClick = { AdbTunnelService.stop(context); active = false }) { Text(stringResource(R.string.stop_tunnel)) }
+    if (compact) {
+        Text(stringResource(R.string.wireless_adb_cloudflare_tunnel), color = Color.Gray)
+        com.farside.workspace.ui.setup.VaultCard { content() }
+    } else content()
+
 }

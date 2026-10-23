@@ -175,6 +175,9 @@ private fun SftpFilesPanel(onClose: () -> Unit, profileId: String?, allowDisable
     var profiles by remember { mutableStateOf<List<ConnectionProfile>>(emptyList()) }
     var session by remember { mutableStateOf<SftpSession?>(null) }
     var selectedId by remember { mutableStateOf<String?>(null) }
+    com.farside.workspace.ssh.SshHostKeyDialogHost(remember(selectedId, profiles) {
+        profiles.find { it.id == selectedId }?.let { com.farside.workspace.ssh.sshHostKeyScope(context, it) } ?: emptySet()
+    })
     var path by remember { mutableStateOf("") }
     var entries by remember { mutableStateOf<List<SftpEntry>>(emptyList()) }
     val listingCache = remember { HashMap<String, List<SftpEntry>>() }

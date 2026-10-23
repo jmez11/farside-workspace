@@ -779,4 +779,13 @@
     <string name="mac_quality_rtcp_auth">RTCP geverifieerd / ongeverifieerd</string>
     <string name="mac_quality_rtcp_rejected">RTCP ongeldig / dubbel</string>
     <string name="mac_quality_age_value">%1$.1f s</string>
+    <string name="ssh_host_key_new">SSH-hostsleutel opslaan?</string>
+    <string name="ssh_host_key_changed">SSH-hostsleutel gewijzigd</string>
+    <string name="ssh_host_key_new_help">Controleer de vingerafdruk voor %1$s:%2$d voordat u opslaat.</string>
+    <string name="ssh_host_key_changed_help">De sleutel voor %1$s:%2$d is gewijzigd. Controleer de nieuwe vingerafdruk bij de serverbeheerder voordat u deze vervangt.</string>
+    <string name="ssh_host_key_previous">Vorige vingerafdruk: %1$s</string>
+    <string name="ssh_host_key_save">Opslaan en verbinden</string>
+    <string name="ssh_host_key_replace">Vervangen en verbinden</string>
+    <string name="ssh_host_keys_clear">Opgeslagen SSH-hostsleutels wissen</string>
+    <string name="ssh_host_keys_cleared">Opgeslagen SSH-hostsleutels gewist.</string>
 </resources>

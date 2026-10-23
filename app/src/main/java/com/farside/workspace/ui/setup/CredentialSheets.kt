@@ -25,7 +25,8 @@ internal fun SetupInput(label:Int,value:String,onChange:(String)->Unit,secret:Bo
     val text=stringResource(label)
     Column(verticalArrangement=Arrangement.spacedBy(6.dp)) {
         Text(text,fontSize=13.sp,color=SetupColors.muted)
-        OutlinedTextField(value=value,onValueChange=onChange,singleLine=!multiline,minLines=if(multiline) 3 else 1,
+        if (label == R.string.private_key) PrivateKeyField(value, onChange, error != null)
+        else OutlinedTextField(value=value,onValueChange=onChange,singleLine=!multiline,minLines=if(multiline) 3 else 1,
             keyboardOptions=androidx.compose.foundation.text.KeyboardOptions(autoCorrectEnabled=false,
                 keyboardType=when {
                     label==R.string.enter_new_app_pin || label==R.string.setup_confirm_pin -> androidx.compose.ui.text.input.KeyboardType.NumberPassword

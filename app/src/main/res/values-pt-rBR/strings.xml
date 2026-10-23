@@ -779,4 +779,13 @@
     <string name="mac_quality_rtcp_auth">RTCP autenticados / não verificados</string>
     <string name="mac_quality_rtcp_rejected">RTCP inválidos / duplicados</string>
     <string name="mac_quality_age_value">%1$.1f s</string>
+    <string name="ssh_host_key_new">Salvar chave do servidor SSH?</string>
+    <string name="ssh_host_key_changed">A chave do servidor SSH mudou</string>
+    <string name="ssh_host_key_new_help">Verifique a impressão digital de %1$s:%2$d antes de salvar.</string>
+    <string name="ssh_host_key_changed_help">A chave de %1$s:%2$d mudou. Verifique a nova impressão digital com o proprietário do servidor antes de substituí-la.</string>
+    <string name="ssh_host_key_previous">Impressão digital anterior: %1$s</string>
+    <string name="ssh_host_key_save">Salvar e conectar</string>
+    <string name="ssh_host_key_replace">Substituir e conectar</string>
+    <string name="ssh_host_keys_clear">Limpar chaves de servidores SSH salvas</string>
+    <string name="ssh_host_keys_cleared">Chaves de servidores SSH salvas removidas.</string>
 </resources>

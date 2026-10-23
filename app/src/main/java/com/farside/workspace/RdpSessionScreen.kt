@@ -219,6 +219,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
     }
     var rdpInstance by (runtime?.instance ?: remember { mutableStateOf<Long>(0L) })
     val context = LocalContext.current
+    com.farside.workspace.ssh.SshHostKeyDialogHost(remember(session, context) { com.farside.workspace.ssh.sshHostKeyScope(context, session) })
     val rdpClipboardLabel = stringResource(R.string.rdp_clipboard_label)
     val pairedSshId = remember(session.sftpPairProfileId) {
         if (isVnc) com.farside.workspace.data.ProfileManager(context).getProfiles()

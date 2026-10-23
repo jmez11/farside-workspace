@@ -89,6 +89,13 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 
 
 class MainActivity : ComponentActivity() {
+    private val launcherBackRequest = androidx.compose.runtime.mutableIntStateOf(0)
+
+    override fun onNavigateUp(): Boolean {
+        launcherBackRequest.intValue++
+        return true
+    }
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -117,6 +124,7 @@ class MainActivity : ComponentActivity() {
                 ) {
                     LauncherScreen(
                         profiles = arrangement.arrange(profiles),
+                        backRequest = launcherBackRequest.intValue,
                         onAddProfile = {
                             profileManager.addProfile(it)
                             refreshProfiles()
@@ -144,6 +152,7 @@ class MainActivity : ComponentActivity() {
                         }
                     )
                 }
+                com.farside.workspace.ssh.SshHostKeyDialogHost()
             }
         }
     }

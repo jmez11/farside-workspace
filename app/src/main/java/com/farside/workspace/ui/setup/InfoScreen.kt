@@ -26,6 +26,7 @@ import com.farside.workspace.ui.ClearCloudflareLoginsButton
 fun InfoScreen(onClose:()->Unit) {
     val context=LocalContext.current
     val certificatesCleared=stringResource(R.string.trusted_certificates_cleared)
+    val hostKeysCleared=stringResource(R.string.ssh_host_keys_cleared)
     val permissionsScheduled=stringResource(R.string.permissions_revoke_scheduled)
     val permissionsUnsupported=stringResource(R.string.permissions_revoke_requires_android_13)
     var status by remember {mutableStateOf<String?>(null)}
@@ -51,9 +52,8 @@ fun InfoScreen(onClose:()->Unit) {
                     }
                 }
                 Spacer(Modifier.height(8.dp))
-                Text(stringResource(R.string.wireless_adb_cloudflare_tunnel),fontSize=13.sp,color=SetupColors.muted,fontWeight=FontWeight.SemiBold)
-                VaultCard {ProvideTextStyle(MaterialTheme.typography.bodySmall) {AdbTunnelSection(compact=true)}}
-                if(context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+                AdbTunnelSection(compact=true)
+                run {
                     Spacer(Modifier.height(8.dp))
                     Text(stringResource(R.string.debug_actions),fontSize=13.sp,color=SetupColors.muted,fontWeight=FontWeight.SemiBold)
                     VaultCard {
@@ -68,6 +68,11 @@ fun InfoScreen(onClose:()->Unit) {
                                     status=permissionsScheduled
                                 } else status=permissionsUnsupported
                             }) {Text(stringResource(R.string.revoke_granted_permissions),fontSize=12.sp)}
+                            Button(shape=RoundedCornerShape(8.dp),colors=actionColors,contentPadding=PaddingValues(12.dp,8.dp),onClick={
+                                com.farside.workspace.ssh.SshHostKeyPrompts.cancelAll()
+                                com.farside.workspace.ssh.SshHostKeyStore(context).clear()
+                                status=hostKeysCleared
+                            }) {Text(stringResource(R.string.ssh_host_keys_clear),fontSize=12.sp)}
                             ClearCloudflareLoginsButton(compact=true) {status=it}
                         }
                         status?.let {Text(it,color=SetupColors.muted,fontSize=13.sp)}

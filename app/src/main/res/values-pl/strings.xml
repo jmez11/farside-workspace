@@ -794,4 +794,13 @@
     <string name="mac_quality_rtcp_auth">RTCP uwierzytelnione / niezweryfikowane</string>
     <string name="mac_quality_rtcp_rejected">RTCP błędne / powielone</string>
     <string name="mac_quality_age_value">%1$.1f s</string>
+    <string name="ssh_host_key_new">Zapisać klucz hosta SSH?</string>
+    <string name="ssh_host_key_changed">Klucz hosta SSH uległ zmianie</string>
+    <string name="ssh_host_key_new_help">Przed zapisaniem zweryfikuj odcisk dla %1$s:%2$d.</string>
+    <string name="ssh_host_key_changed_help">Klucz dla %1$s:%2$d uległ zmianie. Przed zastąpieniem zweryfikuj nowy odcisk u właściciela serwera.</string>
+    <string name="ssh_host_key_previous">Poprzedni odcisk: %1$s</string>
+    <string name="ssh_host_key_save">Zapisz i połącz</string>
+    <string name="ssh_host_key_replace">Zastąp i połącz</string>
+    <string name="ssh_host_keys_clear">Usuń zapisane klucze hostów SSH</string>
+    <string name="ssh_host_keys_cleared">Zapisane klucze hostów SSH zostały usunięte.</string>
 </resources>

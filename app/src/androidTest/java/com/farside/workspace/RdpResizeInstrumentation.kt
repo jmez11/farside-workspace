@@ -118,6 +118,16 @@ class RdpResizeInstrumentation : Instrumentation() {
     override fun onStart() {
         val results = Bundle()
         try {
+            if (jumpArgs?.getString("launcherPolishOnly") == "true") {
+                results.putString("stream", LauncherPolishVerification(this).run())
+                finish(0, results)
+                return
+            }
+            if (jumpArgs?.getString("sshHostKeysOnly") == "true") {
+                results.putString("stream", SshHostKeyVerification(this).run())
+                finish(0, results)
+                return
+            }
             if (jumpArgs?.getString("setupVaultOnly") == "true") {
                 results.putString("stream", SetupVaultVerification(this).run()+"\n")
                 finish(0, results)

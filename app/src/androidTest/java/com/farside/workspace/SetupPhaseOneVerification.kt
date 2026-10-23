@@ -20,7 +20,7 @@ internal class SetupPhaseOneVerification(private val test:Instrumentation) {
         val result=mutableListOf<AccessibilityNodeInfo>()
         fun visit(n:AccessibilityNodeInfo) { result+=n;repeat(n.childCount) { n.getChild(it)?.let(::visit) } }
         val windows=test.uiAutomation.windowsOnAllDisplays
-        for(i in 0 until windows.size()) windows.valueAt(i).forEach { it.root?.let(::visit) }
+        for(i in 0 until windows.size()) windows.valueAt(i).forEach { it.root?.takeIf { root -> root.packageName?.toString() == test.targetContext.packageName }?.let(::visit) }
         return result
     }
     internal fun find(text:String,editable:Boolean=false):AccessibilityNodeInfo {
