@@ -41,7 +41,7 @@ try {
     $env:CC = Join-Path $prebuiltBase "$prebuilt/bin/$clangName"
     $env:GOCACHE = Join-Path $build 'go-cache'
     Set-Location $source
-    & $Go build -mod=$ModMode -trimpath -buildvcs=false -ldflags "-s -w -X main.Version=$Version-farside -X main.BuildType=android" -o $output ./cmd/cloudflared
+    & $Go build "-mod=$ModMode" -trimpath -buildvcs=false -ldflags "-s -w -X main.Version=$Version-farside -X main.BuildType=android" -o $output ./cmd/cloudflared
     if ($LASTEXITCODE -ne 0) { throw 'Cloudflared Android build failed' }
     Get-FileHash $output -Algorithm SHA256
 } finally {
