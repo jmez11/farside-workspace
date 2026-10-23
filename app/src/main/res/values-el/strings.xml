@@ -789,4 +789,6 @@
     <string name="ssh_host_key_replace">Αντικατάσταση και σύνδεση</string>
     <string name="ssh_host_keys_clear">Εκκαθάριση αποθηκευμένων κλειδιών SSH</string>
     <string name="ssh_host_keys_cleared">Τα αποθηκευμένα κλειδιά διακομιστών SSH διαγράφηκαν.</string>
+    <string name="show_connection_info">Εμφάνιση πληροφοριών σύνδεσης</string>
+    <string name="hide_connection_info">Απόκρυψη πληροφοριών σύνδεσης</string>
 </resources>

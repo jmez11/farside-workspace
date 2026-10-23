@@ -118,6 +118,11 @@ class RdpResizeInstrumentation : Instrumentation() {
     override fun onStart() {
         val results = Bundle()
         try {
+            if (jumpArgs?.getString("keyboardMotionOnly") == "true") {
+                results.putString("stream", KeyboardMotionVerification(this).run())
+                finish(0, results)
+                return
+            }
             if (jumpArgs?.getString("launcherPolishOnly") == "true") {
                 results.putString("stream", LauncherPolishVerification(this).run())
                 finish(0, results)

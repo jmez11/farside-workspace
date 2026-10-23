@@ -6,6 +6,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PersonOutline
@@ -67,18 +69,18 @@ fun SignInVault(profileManager:ProfileManager,onClose:()->Unit) {
                         val used=profiles.filter {it.credentialId==entry.id}
                         VaultCard {
                             Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-                                VaultIcon(if(entry.user.isBlank()) Icons.Default.Lock else Icons.Default.PersonOutline)
+                                VaultCredentialIcon(entry)
                                 Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(5.dp)) {
                                     androidx.compose.foundation.layout.FlowRow(horizontalArrangement=Arrangement.spacedBy(7.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
                                         Text(entry.name,fontSize=14.sp,fontWeight=androidx.compose.ui.text.font.FontWeight.Bold)
-                                        used.map { it.type }.distinct().sortedBy { it.ordinal }.forEach { VaultBadge(it.name) }
-                                        if(entry.userShort!=null) VaultBadge("Mac")
+                                        used.map { it.type }.distinct().sortedBy { it.ordinal }.forEach { VaultBadge(if(it==ConnectionType.VNC) "VNC/Mac" else it.name) }
                                         if(entry.requirePin) VaultBadge("PIN",androidx.compose.ui.graphics.Color(0xFFE3AD65))
                                     }
                                     Text((if(entry.user.isBlank()) stringResource(R.string.setup_vnc_password) else if(entry.userShort!=null)
                                         entry.user+" \u00b7 "+stringResource(R.string.setup_vault_short,entry.userShort!!) else "Username · "+entry.user)+" · "+stringResource(R.string.setup_used_by,used.size),fontSize=12.sp,color=SetupColors.muted)
                                 }
-                                VaultButton(stringResource(R.string.edit),{gated(entry.requirePin) {credential=entry;credentialSheet=true}},description=stringResource(R.string.setup_edit_named,entry.name))
+                                VaultActionIcon(Icons.Default.Edit,{gated(entry.requirePin) {credential=entry;credentialSheet=true}},description=stringResource(R.string.setup_edit_named,entry.name))
+                                VaultActionIcon(Icons.Default.Delete,{deletion={gated(entry.requirePin) {profileManager.deleteCredential(entry.id);revision++}}},description=stringResource(R.string.delete_named_item,entry.name),danger=true)
                             }
                         }
                     }
@@ -101,7 +103,7 @@ fun SignInVault(profileManager:ProfileManager,onClose:()->Unit) {
                                 VaultButton(stringResource(R.string.setup_public_key),{gated(entry.requirePin) {
                                     scope.launch {try {publicKey=withContext(Dispatchers.Default) {deriveSshPublicKey(entry.privateKey,entry.passphrase,entry.name)}} catch(_:Exception) {keyError=true}}
                                 }},description=stringResource(R.string.ssh_public_key_title))
-                                VaultButton(stringResource(R.string.edit),{gated(entry.requirePin) {key=entry;keySheet=true}},description=stringResource(R.string.setup_edit_named,entry.name))
+                                VaultActionIcon(Icons.Default.Edit,{gated(entry.requirePin) {key=entry;keySheet=true}},description=stringResource(R.string.setup_edit_named,entry.name))
                             }
                         }
                     }
@@ -111,7 +113,7 @@ fun SignInVault(profileManager:ProfileManager,onClose:()->Unit) {
             }
         }
         }
-        if(credentialSheet) CredentialSheet(profileManager,allowPasswordOnly=credential==null,existing=credential,vncPassword=credential?.user?.isBlank()==true,onDelete=credential?.let {entry -> {credentialSheet=false;deletion={gated(entry.requirePin) {profileManager.deleteCredential(entry.id);revision++}}}},onDismiss={credentialSheet=false},onSaved={revision++;credentialSheet=false})
+        if(credentialSheet) CredentialSheet(profileManager,allowPasswordOnly=credential==null,existing=credential,vncPassword=credential?.user?.isBlank()==true,onDismiss={credentialSheet=false},onSaved={revision++;credentialSheet=false})
         if(keySheet) SshKeySheet(profileManager,existing=key,onDelete=key?.let {entry -> {keySheet=false;deletion={gated(entry.requirePin) {profileManager.deleteSshKey(entry.id);revision++}}}},onDismiss={keySheet=false},onSaved={revision++;keySheet=false})
         authenticate?.let {action ->VaultAuthentication(profileManager,onUnlocked={authenticate=null;action()},onCancel={authenticate=null})}
         deletion?.let {action ->AlertDialog(onDismissRequest={deletion=null},title={Text(stringResource(R.string.delete))},
@@ -149,4 +151,18 @@ internal fun VaultButton(label:String,onClick:()->Unit,description:String=label,
     OutlinedButton(onClick=onClick,enabled=enabled,modifier=Modifier.heightIn(min=36.dp).semantics {contentDescription=description},
         shape=androidx.compose.foundation.shape.RoundedCornerShape(9.dp),border=BorderStroke(1.dp,if(danger) SetupColors.danger.copy(alpha=.5f) else SetupColors.border),
         colors=ButtonDefaults.outlinedButtonColors(contentColor=if(danger) SetupColors.danger else androidx.compose.ui.graphics.Color.White),contentPadding=PaddingValues(horizontal=14.dp,vertical=8.dp)) {Text(label,fontSize=12.sp)}
+}
+
+@Composable
+internal fun VaultActionIcon(icon:androidx.compose.ui.graphics.vector.ImageVector,onClick:()->Unit,description:String,danger:Boolean=false) {
+    OutlinedIconButton(onClick=onClick,modifier=Modifier.size(36.dp),
+        shape=androidx.compose.foundation.shape.RoundedCornerShape(9.dp),
+        border=BorderStroke(1.dp,if(danger) SetupColors.danger.copy(alpha=.5f) else SetupColors.border)) {
+        Icon(icon,description,Modifier.size(18.dp),tint=if(danger) SetupColors.danger else androidx.compose.ui.graphics.Color.White)
+    }
+}
+
+@Composable
+internal fun VaultCredentialIcon(credential:SavedCredential) {
+    VaultIcon(if(credential.user.isBlank()) Icons.Default.Lock else Icons.Default.PersonOutline)
 }

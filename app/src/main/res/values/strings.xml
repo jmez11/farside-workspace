@@ -788,4 +788,6 @@
     <string name="ssh_host_key_replace">Replace and connect</string>
     <string name="ssh_host_keys_clear">Clear saved SSH host keys</string>
     <string name="ssh_host_keys_cleared">Saved SSH host keys cleared.</string>
+    <string name="show_connection_info">Show connection info</string>
+    <string name="hide_connection_info">Hide connection info</string>
 </resources>

@@ -788,4 +788,6 @@
     <string name="ssh_host_key_replace">Ersätt och anslut</string>
     <string name="ssh_host_keys_clear">Rensa sparade SSH-värdnycklar</string>
     <string name="ssh_host_keys_cleared">Sparade SSH-värdnycklar har rensats.</string>
+    <string name="show_connection_info">Visa anslutningsinformation</string>
+    <string name="hide_connection_info">Dölj anslutningsinformation</string>
 </resources>

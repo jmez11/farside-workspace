@@ -800,4 +800,6 @@
     <string name="ssh_host_key_replace">Înlocuiți și conectați</string>
     <string name="ssh_host_keys_clear">Ștergeți cheile SSH salvate ale gazdelor</string>
     <string name="ssh_host_keys_cleared">Cheile SSH salvate ale gazdelor au fost șterse.</string>
+    <string name="show_connection_info">Arată informațiile conexiunii</string>
+    <string name="hide_connection_info">Ascunde informațiile conexiunii</string>
 </resources>

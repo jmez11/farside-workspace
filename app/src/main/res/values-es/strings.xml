@@ -788,4 +788,6 @@
     <string name="ssh_host_key_replace">Reemplazar y conectar</string>
     <string name="ssh_host_keys_clear">Borrar claves de servidores SSH guardadas</string>
     <string name="ssh_host_keys_cleared">Se borraron las claves de servidores SSH guardadas.</string>
+    <string name="show_connection_info">Mostrar información de conexión</string>
+    <string name="hide_connection_info">Ocultar información de conexión</string>
 </resources>

@@ -788,4 +788,6 @@
     <string name="ssh_host_key_replace">Vervangen en verbinden</string>
     <string name="ssh_host_keys_clear">Opgeslagen SSH-hostsleutels wissen</string>
     <string name="ssh_host_keys_cleared">Opgeslagen SSH-hostsleutels gewist.</string>
+    <string name="show_connection_info">Verbindingsinformatie tonen</string>
+    <string name="hide_connection_info">Verbindingsinformatie verbergen</string>
 </resources>

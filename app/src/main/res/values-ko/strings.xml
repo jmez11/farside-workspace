@@ -788,4 +788,6 @@
     <string name="ssh_host_key_replace">교체 후 연결</string>
     <string name="ssh_host_keys_clear">저장된 SSH 호스트 키 지우기</string>
     <string name="ssh_host_keys_cleared">저장된 SSH 호스트 키를 지웠습니다.</string>
+    <string name="show_connection_info">연결 정보 표시</string>
+    <string name="hide_connection_info">연결 정보 숨기기</string>
 </resources>

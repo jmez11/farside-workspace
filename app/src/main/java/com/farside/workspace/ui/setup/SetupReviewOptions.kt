@@ -132,7 +132,11 @@ internal fun SetupReviewOptions(profile:ConnectionProfile,profiles:List<Connecti
                 OutlinedButton(onClick={forwardsOpen=true}) {Text(stringResource(R.string.setup_forwards,profile.sshForwards.size))}
                 SetupToggle(R.string.auto_copy_selection_to_clipboard,profile.autoCopySelection,{onChange(profile.copy(autoCopySelection=it))})
             }
-            ConnectionType.VNC -> SetupOptionGroup(R.string.files) {
+            ConnectionType.VNC -> Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
+                SetupOptionGroup(R.string.general) {
+                    SetupToggle(R.string.redirect_clipboard,profile.redirectClipboard,{onChange(profile.copy(redirectClipboard=it))})
+                }
+                SetupOptionGroup(R.string.files) {
                 SetupProfilePicker(R.string.setup_pair_ssh,profile.sftpPairProfileId,profiles.filter {it.type==ConnectionType.SSH && (it.enableSftp || it.id==profile.sftpPairProfileId)}) {
                     onChange(profile.copy(sftpPairProfileId=it,enableMacSshRelay=it!=null && profile.enableMacSshRelay))
                 }
@@ -140,6 +144,7 @@ internal fun SetupReviewOptions(profile:ConnectionProfile,profiles:List<Connecti
                     SetupToggle(R.string.mac_ssh_relay_toggle,profile.enableMacSshRelay,{
                         if(it && profiles.none {p->p.enableMacSshRelay}) relayConfirm=true else onChange(profile.copy(enableMacSshRelay=it))
                     })
+                }
                 }
             }
         }

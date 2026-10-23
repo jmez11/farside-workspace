@@ -789,4 +789,6 @@
     <string name="ssh_host_key_replace">Değiştir ve bağlan</string>
     <string name="ssh_host_keys_clear">Kayıtlı SSH sunucu anahtarlarını temizle</string>
     <string name="ssh_host_keys_cleared">Kayıtlı SSH sunucu anahtarları temizlendi.</string>
+    <string name="show_connection_info">Bağlantı bilgilerini göster</string>
+    <string name="hide_connection_info">Bağlantı bilgilerini gizle</string>
 </resources>

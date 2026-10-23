@@ -788,4 +788,6 @@
     <string name="ssh_host_key_replace">Korvaa ja yhdistä</string>
     <string name="ssh_host_keys_clear">Poista tallennetut SSH-palvelinavaimet</string>
     <string name="ssh_host_keys_cleared">Tallennetut SSH-palvelinavaimet poistettu.</string>
+    <string name="show_connection_info">Näytä yhteystiedot</string>
+    <string name="hide_connection_info">Piilota yhteystiedot</string>
 </resources>

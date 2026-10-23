@@ -788,4 +788,6 @@
     <string name="ssh_host_key_replace">Erstatt og koble til</string>
     <string name="ssh_host_keys_clear">Slett lagrede SSH-vertsnøkler</string>
     <string name="ssh_host_keys_cleared">Lagrede SSH-vertsnøkler slettet.</string>
+    <string name="show_connection_info">Vis tilkoblingsinformasjon</string>
+    <string name="hide_connection_info">Skjul tilkoblingsinformasjon</string>
 </resources>

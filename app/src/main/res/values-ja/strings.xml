@@ -790,4 +790,6 @@
     <string name="ssh_host_key_replace">置き換えて接続</string>
     <string name="ssh_host_keys_clear">保存済みSSHホスト鍵を削除</string>
     <string name="ssh_host_keys_cleared">保存済みSSHホスト鍵を削除しました。</string>
+    <string name="show_connection_info">接続情報を表示</string>
+    <string name="hide_connection_info">接続情報を非表示</string>
 </resources>

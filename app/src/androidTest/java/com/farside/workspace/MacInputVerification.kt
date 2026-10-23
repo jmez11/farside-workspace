@@ -33,6 +33,9 @@ internal class MacInputVerification(private val test:Instrumentation) {
             check(display.awaitConnection())
             val bridge=checkNotNull(display.bridge);val handle=display.handle
             if(test.arguments?.getString("macQualityOnly")=="true") {
+                val oldInfo=ConnectionInfoVisibility.get(context)
+                ConnectionInfoVisibility.set(context,true)
+                try {
                 val q=checkNotNull(bridge.connectionQuality())
                 val now=SystemClock.uptimeMillis()
                 display.touch(.5f,.04f,true,now);Thread.sleep(80);display.touch(.5f,.04f,false,now)
@@ -63,6 +66,7 @@ internal class MacInputVerification(private val test:Instrumentation) {
                 check(find(expected)!=null) {"Actual connection popup omitted media quality"}
                 display.captureWindow("mac-quality-live-window.png")
                 record("PASS actual SessionActivity toolbar Info quality state=${q.state} packets=${q.videoPackets} frames=${q.frames} missing=${q.missing} gaps=${q.gaps}; fallback diagnostics retained")
+                } finally {ConnectionInfoVisibility.set(context,oldInfo)}
                 return report.readText()
             }
             check(bridge.isMacHevc)

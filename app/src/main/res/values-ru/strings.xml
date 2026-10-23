@@ -805,4 +805,6 @@
     <string name="ssh_host_key_replace">Заменить и подключиться</string>
     <string name="ssh_host_keys_clear">Удалить сохранённые ключи серверов SSH</string>
     <string name="ssh_host_keys_cleared">Сохранённые ключи серверов SSH удалены.</string>
+    <string name="show_connection_info">Показать сведения о подключении</string>
+    <string name="hide_connection_info">Скрыть сведения о подключении</string>
 </resources>

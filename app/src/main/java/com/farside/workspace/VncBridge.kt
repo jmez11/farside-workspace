@@ -73,6 +73,7 @@ class VncBridge : DesktopSessionBridge {
                 shareConsole = httpProxy.expMacShareConsole, sessionUsername = macSessionUsername,
                 mediaDatagramSender = macDatagramSender,
                 preferAvc = httpProxy.macPreferAvc, audioEnabled = httpProxy.macAudioEnabled,
+                clipboardEnabled = httpProxy.redirectClipboard,
                 authenticationGate = macAuthenticationGate,onAuthenticated={ isConfirmedMac=true },
                 controlSocketFactory=if(httpProxy.proxyType in listOf(ProxyType.HTTP,ProxyType.SOCKS5)) ({openSocket(host,port,httpProxy)}) else null) { line ->
                 Log.i("MacHevcBridge", line)
@@ -81,16 +82,27 @@ class VncBridge : DesktopSessionBridge {
             session.onResolutionChanged = { w, h ->
                 Log.i("MacHevcBridge", "Resolution changed to ${w}x${h}")
             }
+            session.onClipboardText = { text ->
+                callbacks.post {
+                    if (macHevcSession === session && active != 0L) clipboardListener?.invoke(text)
+                }
+            }
             try {
                 session.start()
                 session.initStreamingLayer()
+                synchronized(stateLock) {
+                    macHevcSession = session
+                    active = 0xCAFE0001L
+                }
                 session.startStreaming(surface) { error ->
                     callbacks.post { if(macHevcSession===session && active!=0L) disconnectListener?.invoke(R.string.vnc_server_disconnected, true) }
                 }
-            } catch(e: Exception) { runCatching { session.close() }; throw e }
-            synchronized(stateLock) {
-                macHevcSession = session
-                active = 0xCAFE0001L
+            } catch(e: Exception) {
+                synchronized(stateLock) {
+                    if (macHevcSession === session) { macHevcSession = null; active = 0L }
+                }
+                runCatching { session.close() }
+                throw e
             }
             return 0xCAFE0001L
         }
@@ -266,7 +278,7 @@ class VncBridge : DesktopSessionBridge {
     override fun sendClipboardText(instance: Long, text: String): Boolean {
         if (instance == 0L || instance != active) return false
         val mac = macHevcSession
-        return if (mac != null) true
+        return if (mac != null) mac.sendClipboardText(text)
         else nativeClipboard(instance, text.toByteArray(Charsets.UTF_8), text.toByteArray(Charsets.ISO_8859_1))
     }
     override fun getDesktopWidth(instance: Long): Int {

@@ -790,4 +790,6 @@
     <string name="ssh_host_key_replace">替换并连接</string>
     <string name="ssh_host_keys_clear">清除已保存的 SSH 主机密钥</string>
     <string name="ssh_host_keys_cleared">已清除保存的 SSH 主机密钥。</string>
+    <string name="show_connection_info">显示连接信息</string>
+    <string name="hide_connection_info">隐藏连接信息</string>
 </resources>

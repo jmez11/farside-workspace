@@ -82,7 +82,7 @@ private fun SetupProtocolCard(type:ConnectionType,selected:Boolean,onClick:()->U
         Column(Modifier.padding(horizontal=16.dp,vertical=18.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {
             Box(Modifier.size(42.dp).background(SetupColors.field,RoundedCornerShape(11.dp))
                 .border(1.dp,if(selected) SetupColors.accent else SetupColors.border,RoundedCornerShape(11.dp)),contentAlignment=Alignment.Center) {
-                Icon(when(type) { ConnectionType.RDP->Icons.Default.Computer;ConnectionType.SSH->Icons.Default.Code;ConnectionType.VNC->Icons.Default.ScreenShare },null,tint=SetupColors.accent,modifier=Modifier.size(22.dp))
+                Icon(setupProtocolIcon(type),null,tint=SetupColors.accent,modifier=Modifier.size(22.dp))
             }
             Spacer(Modifier.height(3.dp))
             Text(type.name,fontSize=17.sp,fontWeight=FontWeight.Bold,color=Color.White)
@@ -107,4 +107,10 @@ internal fun SetupServerField(value:String,onChange:(String)->Unit,label:Int,err
             modifier=Modifier.fillMaxWidth().semantics { contentDescription=text })
         if(error!=null) Text(stringResource(error),fontSize=13.sp,color=SetupColors.danger)
     }
+}
+
+internal fun setupProtocolIcon(type:ConnectionType):androidx.compose.ui.graphics.vector.ImageVector = when(type) {
+    ConnectionType.RDP -> Icons.Default.Computer
+    ConnectionType.SSH -> Icons.Default.Code
+    ConnectionType.VNC -> Icons.Default.ScreenShare
 }

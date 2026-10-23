@@ -790,4 +790,6 @@
     <string name="ssh_host_key_replace">取代並連線</string>
     <string name="ssh_host_keys_clear">清除已儲存的 SSH 主機金鑰</string>
     <string name="ssh_host_keys_cleared">已清除儲存的 SSH 主機金鑰。</string>
+    <string name="show_connection_info">顯示連線資訊</string>
+    <string name="hide_connection_info">隱藏連線資訊</string>
 </resources>

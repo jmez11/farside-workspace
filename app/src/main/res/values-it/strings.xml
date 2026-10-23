@@ -788,4 +788,6 @@
     <string name="ssh_host_key_replace">Sostituisci e connetti</string>
     <string name="ssh_host_keys_clear">Cancella chiavi host SSH salvate</string>
     <string name="ssh_host_keys_cleared">Chiavi host SSH salvate cancellate.</string>
+    <string name="show_connection_info">Mostra informazioni connessione</string>
+    <string name="hide_connection_info">Nascondi informazioni connessione</string>
 </resources>

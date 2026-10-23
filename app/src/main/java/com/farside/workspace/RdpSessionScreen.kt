@@ -274,61 +274,10 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
 
     LaunchedEffect(rdpInstance, runtime?.bridge) { if (runtime != null) onInstanceCreated(rdpInstance) }
 
-    // Bidirectional RDP Clipboard Synchronization
     if (session.redirectClipboard && runtime == null) {
-        DisposableEffect(context, rdpInstance) {
-            val clipboardManager = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-            var lastSentClipText: String? = null
-            var lastReceivedClipText: String? = null
-
-            val clipListener = android.content.ClipboardManager.OnPrimaryClipChangedListener {
-                if (rdpInstance != 0L) {
-                    try {
-                        val clip = clipboardManager?.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)
-                        val text = clip?.coerceToText(context)?.toString()
-                        if (!text.isNullOrEmpty() && text != lastReceivedClipText && text != lastSentClipText) {
-                            lastSentClipText = text
-                            rdpBridge.sendClipboardText(rdpInstance, text)
-                        }
-                    } catch (e: Exception) {
-                        Log.e("RdpClipboard", "Failed to send clipboard text: ${e.message}")
-                    }
-                }
-            }
-
-            rdpBridge.clipboardListener = { remoteText ->
-                if (remoteText.isNotEmpty() && remoteText != lastSentClipText) {
-                    lastReceivedClipText = remoteText
-                    android.os.Handler(android.os.Looper.getMainLooper()).post {
-                        try {
-                            clipboardManager?.setPrimaryClip(android.content.ClipData.newPlainText(rdpClipboardLabel, remoteText))
-                        } catch (e: Exception) {
-                            Log.e("RdpClipboard", "Failed to set primary clip: ${e.message}")
-                        }
-                    }
-                }
-            }
-
-            clipboardManager?.addPrimaryClipChangedListener(clipListener)
-
-            // Send initial clip if available
-            if (rdpInstance != 0L) {
-                try {
-                    val initialClip = clipboardManager?.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)
-                    val initialText = initialClip?.coerceToText(context)?.toString()
-                    if (!initialText.isNullOrEmpty()) {
-                        lastSentClipText = initialText
-                        rdpBridge.sendClipboardText(rdpInstance, initialText)
-                    }
-                } catch (e: Exception) {
-                    Log.e("RdpClipboard", "Failed to send initial clip: ${e.message}")
-                }
-            }
-
-            onDispose {
-                clipboardManager?.removePrimaryClipChangedListener(clipListener)
-                rdpBridge.clipboardListener = null
-            }
+        DisposableEffect(context, rdpInstance, rdpBridge) {
+            val clipboard = DesktopClipboardSync(context, rdpBridge, rdpInstance, rdpClipboardLabel)
+            onDispose { clipboard.close() }
         }
     }
     if (monitor == null || runtime!!.isOwner(monitor)) {
@@ -408,6 +357,8 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
     var offsetY by remember { mutableStateOf(with(density) { 16.dp.toPx() }) }
     var showZoomSlider by remember { mutableStateOf(false) }
     var showDebugInfo by remember { mutableStateOf(false) }
+    val connectionInfoVisible by ConnectionInfoVisibility.observe(context)
+    LaunchedEffect(connectionInfoVisible) { if (!connectionInfoVisible) showDebugInfo=false }
     var speakerMuted by (runtime?.speakerMuted ?: remember { mutableStateOf<Boolean>(false) })
     var micMuted by (runtime?.micMuted ?: remember { mutableStateOf<Boolean>(false) })
     var micRecording by remember { mutableStateOf(false) }
@@ -937,7 +888,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                     IconButton(onClick = { showZoomSlider = !showZoomSlider }, modifier = Modifier.size(buttonSize)) {
                         Icon(Icons.Default.Search, stringResource(R.string.zoom), modifier = Modifier.size(iconSize), tint = if (showZoomSlider) MaterialTheme.colorScheme.primary else Color.White)
                     }
-                    IconButton(onClick = { showDebugInfo = !showDebugInfo; revealToolbar() }, modifier = Modifier.size(buttonSize)) {
+                    if (connectionInfoVisible) IconButton(onClick = { showDebugInfo = !showDebugInfo; revealToolbar() }, modifier = Modifier.size(buttonSize)) {
                         Icon(Icons.Default.Info, stringResource(R.string.debug_actions), modifier = Modifier.size(iconSize),
                             tint = if (showDebugInfo) MaterialTheme.colorScheme.primary else Color.White)
                     }

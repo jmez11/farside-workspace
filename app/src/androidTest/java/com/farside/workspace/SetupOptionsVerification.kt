@@ -42,12 +42,20 @@ internal class SetupOptionsVerification(private val test:Instrumentation) {
             activity=checkNotNull(test.waitForMonitorWithTimeout(monitor,15000)) as MainActivity
             for(fixture in fixtures) {
                 var saved:ConnectionProfile?=null
+                var cancelled=0
                 test.runOnMainSync {
                     activity.setContent {key(fixture.id) {
-                        ConnectionSetupFlow(initialProfile=fixture,profileManager=pm,savedProfiles=fixtures,onCancel={},onSave={saved=it;pm.addProfile(it)})
+                        ConnectionSetupFlow(initialProfile=fixture,profileManager=pm,savedProfiles=fixtures,onCancel={cancelled++},onSave={saved=it;pm.addProfile(it)})
                     }}
                 }
                 ui.find(text(R.string.edit_connection))
+                val title=android.graphics.Rect().also {ui.find(text(R.string.edit_connection)).getBoundsInScreen(it)}
+                val close=android.graphics.Rect().also {ui.find(text(R.string.close)).getBoundsInScreen(it)}
+                check(close.centerX()>title.right)
+                ui.click(text(R.string.close));check(cancelled==1 && saved==null)
+                check(ui.enabled(text(R.string.back)))
+                ui.click(text(R.string.back));check(cancelled==2 && saved==null)
+                check(pm.getProfiles().single {it.id==fixture.id}==fixture)
                 ui.click("2 "+text(R.string.setup_server))
                 check(ui.find(text(R.string.connection_name),true).text.toString()==fixture.name)
                 check(ui.find(text(R.string.host_server),true).text.toString()==fixture.host)
@@ -65,7 +73,11 @@ internal class SetupOptionsVerification(private val test:Instrumentation) {
                         check(ui.enabled(text(R.string.save_changes)))
                     }
                     ConnectionType.SSH -> ui.click(text(R.string.auto_copy_selection_to_clipboard))
-                    ConnectionType.VNC -> {ui.click(text(R.string.setup_none));ui.click(ssh.name)}
+                    ConnectionType.VNC -> {
+                        check(fixture.redirectClipboard)
+                        ui.click(text(R.string.redirect_clipboard))
+                        ui.click(text(R.string.setup_none));ui.click(ssh.name)
+                    }
                 }
                 ui.click(text(R.string.save_changes))
                 val result=checkNotNull(saved)
@@ -75,7 +87,7 @@ internal class SetupOptionsVerification(private val test:Instrumentation) {
                     ConnectionType.RDP -> check(loaded.soundRedirection==SoundRedirection.DO_NOT_PLAY && loaded.proxyType==ProxyType.HTTP && loaded.proxyPort==3128 && loaded.resolutionScaling==125)
                     ConnectionType.SSH -> check(!loaded.autoCopySelection && loaded.sshKeyId==fixture.sshKeyId &&
                         (if(fixture.credentialId==null) loaded.pass.isEmpty() else loaded.credentialId==fixture.credentialId && loaded.pass==fixture.pass))
-                    ConnectionType.VNC -> check(loaded.sftpPairProfileId==ssh.id && loaded.pass==fixture.pass)
+                    ConnectionType.VNC -> check(loaded.sftpPairProfileId==ssh.id && loaded.pass==fixture.pass && !loaded.redirectClipboard && !ConnectionProfile.fromJson(loaded.toJson()).redirectClipboard)
                 }
             }
             test.runOnMainSync {activity.setContent {androidx.compose.material3.MaterialTheme {SshKeySheet(pm,existing=key,onDismiss={},onSaved={})}}}

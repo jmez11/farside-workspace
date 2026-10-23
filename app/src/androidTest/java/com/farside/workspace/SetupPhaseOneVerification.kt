@@ -71,6 +71,47 @@ internal class SetupPhaseOneVerification(private val test:Instrumentation) {
         while(!node.isClickable && node.parent!=null) node=checkNotNull(node.parent)
         return node.isEnabled
     }
+    internal fun verifyCredentialPopup(saveId:Int,allowDelete:Boolean=false) {
+        Thread.sleep(300)
+        val all=nodes()
+        val close=checkNotNull(all.firstOrNull {it.isVisibleToUser && it.contentDescription?.toString()==label(R.string.close)}) {"Credential popup Close missing"}
+        var save=checkNotNull(all.firstOrNull {it.isVisibleToUser && it.text?.toString()==label(saveId)}) {"Save is not visible without scrolling"}
+        while(!save.isClickable && save.parent!=null) save=checkNotNull(save.parent)
+        val a=android.graphics.Rect().also(close::getBoundsInScreen)
+        val b=android.graphics.Rect().also(save::getBoundsInScreen)
+        check(save.windowId==close.windowId && b.height()>=40 && a.centerX()>b.centerX() && a.bottom<=b.top) {"Credential popup Close/Save layout is clipped or misplaced"}
+        val forbidden=listOf(R.string.edit_credential,R.string.edit_ssh_key,R.string.setup_import_key).map(::label) + if(allowDelete) emptyList() else listOf(label(R.string.delete))
+        check(all.none {it.windowId==close.windowId && it.isVisibleToUser && it.text?.toString() in forbidden}) {"Popup retained title or unexpected Delete"}
+    }
+
+    internal fun verifyCredentialSelectorHeader() {
+        val all=nodes()
+        val close=all.first {it.isVisibleToUser && it.contentDescription?.toString()==label(R.string.close)}
+        val x=android.graphics.Rect().also(close::getBoundsInScreen)
+        for(id in listOf(R.string.setup_user_password,R.string.setup_vnc_password)) {
+            var chip=all.first {it.windowId==close.windowId && it.isVisibleToUser && it.text?.toString()==label(id)}
+            while(!chip.isClickable && chip.parent!=null) chip=checkNotNull(chip.parent)
+            val b=android.graphics.Rect().also(chip::getBoundsInScreen)
+            check(kotlin.math.abs(b.centerY()-x.centerY())<=2 && b.right<=x.left) {"Credential selector is not beside Close"}
+        }
+    }
+
+    internal fun capturePopup(saveId:Int,name:String) {
+        val id=find(label(saveId)).windowId
+        var image:android.graphics.Bitmap?=null
+        test.runOnMainSync {
+            val root=android.view.inspector.WindowInspector.getGlobalWindowViews().firstOrNull {it.createAccessibilityNodeInfo().windowId==id}
+            if(root!=null && root.width>0 && root.height>0) {
+                image=android.graphics.Bitmap.createBitmap(root.width,root.height,android.graphics.Bitmap.Config.ARGB_8888)
+                root.draw(android.graphics.Canvas(checkNotNull(image)))
+            }
+        }
+        image?.let {bitmap ->
+            File(test.targetContext.cacheDir,name).outputStream().use {bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)}
+            bitmap.recycle()
+        }
+    }
+
     internal fun capture(activity:MainActivity,name:String) {
         Thread.sleep(500)
         val bitmap=android.graphics.Bitmap.createBitmap(activity.window.decorView.width,activity.window.decorView.height,android.graphics.Bitmap.Config.ARGB_8888)
@@ -115,11 +156,12 @@ internal class SetupPhaseOneVerification(private val test:Instrumentation) {
                                 saved=profile;owned+=profile.id;pm.addProfile(profile)
                             },discovery={ requested ->
                                 scans+=requested
-                                listOf(DiscoveredHost("127.0.0.1",profileName,if(requested==ConnectionType.RDP) 3389 else 5900))
+                                List(12) { machine -> DiscoveredHost("127.0.0.${machine+1}",if(machine==0) profileName else "Discovered machine $machine",if(requested==ConnectionType.RDP) 3389 else 5900) }
                             })
                         }
                     }
                 }
+                check(nodes().none {it.text?.toString()==test.targetContext.getString(R.string.setup_step_of,1)})
                 click(type.name)
                 if(type==ConnectionType.VNC) click(label(if(accountOrKey) R.string.setup_user_password else R.string.setup_vnc_password))
                 if(type==ConnectionType.RDP) {
@@ -144,11 +186,17 @@ internal class SetupPhaseOneVerification(private val test:Instrumentation) {
                     enter(R.string.setup_port,"22")
                 } else {
                     click(label(if(type==ConnectionType.RDP) R.string.setup_find_pcs else R.string.setup_find_devices))
-                    click("127.0.0.1:"+if(type==ConnectionType.RDP) "3389" else "5900")
+                    Thread.sleep(800)
+                    val firstAddress="127.0.0.1:"+if(type==ConnectionType.RDP) "3389" else "5900"
+                    check(nodes().any {it.isVisibleToUser && it.text?.toString()?.contains(firstAddress)==true}) {"Discovery did not reveal the first machine automatically"}
+                    check(nodes().none {it.isVisibleToUser && it.text?.toString()?.contains("127.0.0.12:")==true}) {"Discovery scrolled to the end"}
+                    click(firstAddress)
+                    check(nodes().any {(it.isChecked || it.isSelected)}) {"Selected machine radio missing"}
                     check(scans==listOf(type)) { "Discovery requested another protocol" }
                 }
                 check(enabled(label(R.string.continue_action)))
                 if(type==ConnectionType.RDP) capture(activity,"setup-phase1-server.png")
+                if(type==ConnectionType.VNC) capture(activity,"setup-phase1-mac-server.png")
                 click(label(R.string.continue_action))
                 if(type==ConnectionType.SSH && accountOrKey) {
                     click(label(R.string.setup_connection_specific));enter(R.string.setup_username,"fixture")
@@ -161,6 +209,7 @@ internal class SetupPhaseOneVerification(private val test:Instrumentation) {
                         find(message)
                     }
                     click(credential.name)
+                    check(nodes().any {(it.isChecked || it.isSelected)}) {"Selected credential radio missing"}
                 }
                 if(type==ConnectionType.RDP) capture(activity,"setup-phase2-sign-in.png")
                 click(label(R.string.continue_action))

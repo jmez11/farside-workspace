@@ -9,6 +9,6 @@ import com.farside.workspace.data.SoundRedirection
 fun VncSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Unit, onClose: () -> Unit,
     windowInteraction: Long = 0L, onBridgeCreated: ((VncBridge) -> Unit)? = null) {
     DesktopSessionScreen(session.copy(enableCamera = false, redirectMicrophone = false,
-        redirectStorage = false, redirectClipboard = true, soundRedirection = if(session.expMacHevc && session.macAudioEnabled) SoundRedirection.PLAY_ON_DEVICE else SoundRedirection.DO_NOT_PLAY, remoteApp = null),
+        redirectStorage = false, soundRedirection = if(session.expMacHevc && session.macAudioEnabled) SoundRedirection.PLAY_ON_DEVICE else SoundRedirection.DO_NOT_PLAY, remoteApp = null),
         onInstanceCreated, onClose, windowInteraction, { onBridgeCreated?.invoke(it as VncBridge) })
 }

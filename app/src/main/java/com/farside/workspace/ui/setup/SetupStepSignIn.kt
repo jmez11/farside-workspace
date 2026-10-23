@@ -1,10 +1,13 @@
 package com.farside.workspace.ui.setup
 
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -63,16 +66,20 @@ internal fun SetupStepSignIn(base:ConnectionProfile,state:SetupSignInState,pm:Pr
         }
         if(!state.specific) {
             credentials.forEach { credential ->
-                Surface(onClick={state.credentialId=credential.id},modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(12.dp),
+                Surface(modifier=Modifier.fillMaxWidth().selectable(selected=state.credentialId==credential.id,role=Role.RadioButton,onClick={state.credentialId=credential.id}),shape=RoundedCornerShape(12.dp),
                     color=if(state.credentialId==credential.id) SetupColors.accent.copy(alpha=.13f) else SetupColors.card,
                     border=BorderStroke(1.dp,if(state.credentialId==credential.id) SetupColors.accent else SetupColors.border)) {
-                    Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(5.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(14.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+                    VaultCredentialIcon(credential)
+                    Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(5.dp)) {
                         Text(credential.name,style=MaterialTheme.typography.titleMedium)
                         if(!passwordOnly) Text(if(base.type==ConnectionType.SSH) credential.userShort ?: credential.user else credential.user,color=SetupColors.muted)
                         credential.userShort?.let {
                             Text(stringResource(R.string.setup_mac_names_summary,credential.user,it),fontSize=13.sp,color=SetupColors.muted)
                         }
                         if(credential.requirePin) Text(stringResource(R.string.pin_required),fontSize=12.sp,color=SetupColors.accent)
+                    }
+                    RadioButton(selected=state.credentialId==credential.id,onClick=null)
                     }
                 }
             }

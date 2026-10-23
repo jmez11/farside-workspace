@@ -25,6 +25,7 @@ import com.farside.workspace.ui.ClearCloudflareLoginsButton
 @Composable
 fun InfoScreen(onClose:()->Unit) {
     val context=LocalContext.current
+    val showConnectionInfo by com.farside.workspace.ConnectionInfoVisibility.observe(context)
     val certificatesCleared=stringResource(R.string.trusted_certificates_cleared)
     val hostKeysCleared=stringResource(R.string.ssh_host_keys_cleared)
     val permissionsScheduled=stringResource(R.string.permissions_revoke_scheduled)
@@ -73,6 +74,9 @@ fun InfoScreen(onClose:()->Unit) {
                                 com.farside.workspace.ssh.SshHostKeyStore(context).clear()
                                 status=hostKeysCleared
                             }) {Text(stringResource(R.string.ssh_host_keys_clear),fontSize=12.sp)}
+                            Button(shape=RoundedCornerShape(8.dp),colors=actionColors,contentPadding=PaddingValues(12.dp,8.dp),onClick={
+                                com.farside.workspace.ConnectionInfoVisibility.set(context,!showConnectionInfo)
+                            }) {Text(stringResource(if(showConnectionInfo) R.string.hide_connection_info else R.string.show_connection_info),fontSize=12.sp)}
                             ClearCloudflareLoginsButton(compact=true) {status=it}
                         }
                         status?.let {Text(it,color=SetupColors.muted,fontSize=13.sp)}

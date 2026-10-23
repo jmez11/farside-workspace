@@ -8,11 +8,16 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.Role
+import kotlin.math.roundToInt
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -42,6 +47,9 @@ fun ConnectionSetupFlow(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val focus = LocalFocusManager.current
+    val serverScroll = rememberScrollState()
+    var resultsTop by remember { mutableIntStateOf(0) }
     var step by rememberSaveable { mutableIntStateOf(0) }
     var attempted by remember { mutableStateOf(emptySet<Int>()) }
     var type by rememberSaveable { mutableStateOf(initialProfile?.type ?: ConnectionType.RDP) }
@@ -67,6 +75,12 @@ fun ConnectionSetupFlow(
     var scanning by remember { mutableStateOf(false) }
     var scanError by remember { mutableStateOf(false) }
     var scan by remember { mutableStateOf<Job?>(null) }
+    LaunchedEffect(found, step, resultsTop) {
+        if (step == 1 && found.isNotEmpty()) {
+            withFrameNanos { }
+            serverScroll.animateScrollTo(resultsTop)
+        }
+    }
     DisposableEffect(Unit) { onDispose { scan?.cancel() } }
     val validServer = displayName.isNotBlank() && host.isNotBlank() && port.toIntOrNull() in 1..65535
         val accent = Color(0xFFD0BCFF)
@@ -75,13 +89,11 @@ fun ConnectionSetupFlow(
         Surface(modifier=Modifier.fillMaxSize(),shape=RoundedCornerShape(16.dp),border=BorderStroke(2.dp,accent)) {
             Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement=Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment=Alignment.CenterVertically) {
-                    if (initialProfile != null) IconButton(onClick=onCancel) { Icon(Icons.Default.ArrowBack, stringResource(R.string.back)) }
                     Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(2.dp)) {
                         Text(stringResource(if(initialProfile==null) R.string.setup_new_connection else R.string.edit_connection),fontSize=17.sp,fontWeight=FontWeight.Bold)
                         Text(type.name+" \u00b7 "+stringResource(when(type) {ConnectionType.RDP->R.string.setup_rdp_description;ConnectionType.SSH->R.string.setup_ssh_description;ConnectionType.VNC->R.string.setup_vnc_description}),fontSize=13.sp,color=SetupColors.muted)
                     }
-                    Text(stringResource(R.string.setup_step_of, step+1),fontSize=13.sp,color=SetupColors.muted)
-                    if (initialProfile == null) IconButton(onClick=onCancel) { Icon(Icons.Default.Close, stringResource(R.string.close)) }
+                    IconButton(onClick=onCancel) { Icon(Icons.Default.Close, stringResource(R.string.close)) }
                 }
                 SetupStepper(step,canVisit={true},onStep={target ->
                     attempted=attempted+step
@@ -116,7 +128,7 @@ fun ConnectionSetupFlow(
                             }
                         }
                     }
-                    1 -> Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement=Arrangement.spacedBy(12.dp)) {
+                    1 -> Column(Modifier.weight(1f).verticalScroll(serverScroll), verticalArrangement=Arrangement.spacedBy(12.dp)) {
                         Text(stringResource(R.string.setup_which_computer),fontSize=20.sp,fontWeight=FontWeight.Bold)
                         Text(stringResource(R.string.setup_server_lede),fontSize=14.sp,color=SetupColors.muted)
                         SetupServerField(displayName,{name=it},R.string.connection_name,if(1 in attempted && displayName.isBlank()) R.string.profile_name_required else null,Modifier.fillMaxWidth())
@@ -131,6 +143,7 @@ fun ConnectionSetupFlow(
                         }
                         if(type!=ConnectionType.SSH) {
                             OutlinedButton(shape=RoundedCornerShape(12.dp),border=BorderStroke(1.dp,SetupColors.border),enabled=!scanning,onClick={
+                                focus.clearFocus(force=true)
                                 val requested=type
                                 scanError=false;found=emptyList();scanning=true
                                 scan=scope.launch {
@@ -147,9 +160,18 @@ fun ConnectionSetupFlow(
                                 }
                             }) { Text(stringResource(if(scanning) R.string.setup_finding else if(type==ConnectionType.RDP) R.string.setup_find_pcs else R.string.setup_find_devices)) }
                             if(scanError) Text(stringResource(R.string.setup_discovery_failed),color=MaterialTheme.colorScheme.error)
-                            found.forEach { device ->
-                                OutlinedCard(onClick={name=device.name;host=device.ip;port=device.port.toString()},modifier=Modifier.fillMaxWidth()) {
-                                    Column(Modifier.padding(16.dp)) { Text(device.name);Text("${device.ip}:${device.port}") }
+                            Column(Modifier.fillMaxWidth().onGloballyPositioned { resultsTop=it.positionInParent().y.roundToInt() },verticalArrangement=Arrangement.spacedBy(12.dp)) {
+                                found.forEach { device ->
+                                    val selected=host==device.ip && port.toIntOrNull()==device.port
+                                    OutlinedCard(modifier=Modifier.fillMaxWidth().selectable(selected=selected,role=Role.RadioButton,onClick={
+                                        focus.clearFocus(force=true);name=device.name;host=device.ip;port=device.port.toString()
+                                    })) {
+                                        Row(Modifier.fillMaxWidth().padding(16.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+                                            VaultIcon(setupProtocolIcon(type))
+                                            Column(Modifier.weight(1f)) { Text(device.name);Text("${device.ip}:${device.port}") }
+                                            RadioButton(selected=selected,onClick=null)
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -162,7 +184,7 @@ fun ConnectionSetupFlow(
                     }
                 }
                 Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
-                    OutlinedButton(shape=RoundedCornerShape(12.dp),border=BorderStroke(1.dp,SetupColors.border),enabled=step>0,onClick={step--}) { Text(stringResource(R.string.back)) }
+                    OutlinedButton(shape=RoundedCornerShape(12.dp),border=BorderStroke(1.dp,SetupColors.border),onClick={if(step==0) onCancel() else step--}) { Text(stringResource(R.string.back)) }
                     Button(shape=RoundedCornerShape(12.dp),onClick={
                         attempted=attempted+step
                         if((step!=1 || validServer) && (step!=2 || signInValid)) {

@@ -68,7 +68,11 @@ internal class VncVerification(private val test: Instrumentation,private val liv
         val clipboard = test.targetContext.getSystemService(android.content.ClipboardManager::class.java)
         val originalClip = clipboard.primaryClip
         try {
-            if(mode=="macPorts") {
+            if(mode=="macClipboardFixture") {
+                record(MacClipboardVerification(test).run())
+            } else if(mode=="macClipboardLive") {
+                record(MacClipboardVerification(test).live(requireNotNull(profileId)))
+            } else if(mode=="macPorts") {
                 record(MacPortVerification(test).run(requireNotNull(profileId)))
             } else if(mode=="macCapture") {
                 record(MacCaptureVerification(test).run(requireNotNull(profileId)))
@@ -610,6 +614,17 @@ internal class VncVerification(private val test: Instrumentation,private val liv
                 var pin = toolbarNodes().first { it.contentDescription?.toString() == "Keep toolbar visible" }
                 while (!pin.isClickable) pin = checkNotNull(pin.parent)
                 check(pin.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK))
+                val oldInfo=ConnectionInfoVisibility.get(test.targetContext)
+                try {
+                    main { ConnectionInfoVisibility.set(test.targetContext,false) }
+                    await("Hidden connection info toolbar icon still present") {toolbarNodes().none {it.contentDescription?.toString()==test.targetContext.getString(R.string.debug_actions)}}
+                    main { ConnectionInfoVisibility.set(test.targetContext,true) }
+                    await("Enabled connection info toolbar icon missing") {toolbarNodes().any {it.contentDescription?.toString()==test.targetContext.getString(R.string.debug_actions)}}
+                    click(test.targetContext.getString(R.string.debug_actions))
+                    await("Info popup missing") {toolbarNodes().any {it.text?.toString()=="Protocol"}}
+                    main { ConnectionInfoVisibility.set(test.targetContext,false) }
+                    await("Hiding info did not remove icon/popup") {toolbarNodes().none {it.contentDescription?.toString()==test.targetContext.getString(R.string.debug_actions) || it.text?.toString()=="Protocol"}}
+                } finally {main {ConnectionInfoVisibility.set(test.targetContext,oldInfo)}}
                 await("VNC toolbar Window Manager missing") {
                     toolbarNodes().any { it.contentDescription?.toString() == "Window Manager" }
                 }

@@ -42,6 +42,10 @@ internal class LauncherPolishVerification(private val test: Instrumentation) {
         fun up() { test.runOnMainSync { activity.onNavigateUp() }; ui.find(text(R.string.add_connection)) }
         try {
             ui.click(text(R.string.add_connection))
+            ui.click(text(R.string.back));ui.find(text(R.string.add_connection))
+            ui.click(text(R.string.add_connection))
+            ui.click(text(R.string.close));ui.find(text(R.string.add_connection))
+            ui.click(text(R.string.add_connection))
             val closeNode = ui.nodes().first { it.packageName?.toString() == context.packageName && it.contentDescription?.toString() == text(R.string.close) && it.isVisibleToUser }
             val close = android.graphics.Rect().also(closeNode::getBoundsInScreen)
             val title = android.graphics.Rect().also { ui.find(text(R.string.setup_new_connection)).getBoundsInScreen(it) }
@@ -72,7 +76,7 @@ internal class LauncherPolishVerification(private val test: Instrumentation) {
                 MaterialTheme(colorScheme=darkColorScheme()) { SignInVault(pm) {} }
             } } }
             ui.find("Owned shared sign-in")
-            listOf("RDP", "SSH", "VNC").forEach { ui.find(it) }
+            listOf("RDP", "SSH", "VNC/Mac").forEach { ui.find(it) }
             check(ui.nodes().none { it.text?.toString() == "Login" })
             ui.click(text(R.string.setup_import_key))
             clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Owned paste fixture", "owned-private-key-paste"))
@@ -112,6 +116,13 @@ internal class LauncherPolishVerification(private val test: Instrumentation) {
             test.runOnMainSync { activity.setContent { CompositionLocalProvider(LocalContext provides isolated, androidx.activity.compose.LocalActivityResultRegistryOwner provides activity) {
                 MaterialTheme(colorScheme=darkColorScheme()) { InfoScreen {} }
             } } }
+            check(!ConnectionInfoVisibility.get(isolated))
+            ui.click(text(R.string.show_connection_info))
+            ui.find(text(R.string.hide_connection_info));check(ConnectionInfoVisibility.get(isolated))
+            test.runOnMainSync {activity.setContent {CompositionLocalProvider(LocalContext provides isolated) {InfoScreen {}}}}
+            ui.find(text(R.string.hide_connection_info))
+            ui.click(text(R.string.hide_connection_info))
+            ui.find(text(R.string.show_connection_info));check(!ConnectionInfoVisibility.get(isolated))
             ui.find(text(R.string.clear_trusted_certificates))
             ui.find(text(R.string.revoke_granted_permissions))
             ui.click(text(R.string.ssh_host_keys_clear))
@@ -125,6 +136,7 @@ internal class LauncherPolishVerification(private val test: Instrumentation) {
             test.uiAutomation.dropShellPermissionIdentity()
             context.deleteSharedPreferences(namespace + "farside_profiles")
             context.deleteSharedPreferences(namespace + "ssh_host_keys")
+            context.deleteSharedPreferences(namespace + "debug_options")
         }
     }
 }

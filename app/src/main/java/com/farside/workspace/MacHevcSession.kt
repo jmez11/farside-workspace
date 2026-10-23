@@ -72,6 +72,7 @@ class MacHevcSession(
     private val selectVirtualDisplayByIndex:Boolean=false,
     private val onAuthenticated:()->Unit={},
     private val controlSocketFactory:(()->Socket)?=null,
+    private val clipboardEnabled:Boolean=true,
     private val logCallback: (String) -> Unit = {}
 ) : Closeable {
 
@@ -108,6 +109,8 @@ class MacHevcSession(
     @Volatile var currentSurface: Surface? = null
     var onResolutionChanged: ((Int, Int) -> Unit)? = null
     var onDisconnected: ((String) -> Unit)? = null
+    @Volatile var onClipboardText: ((String) -> Unit)? = null
+    @Volatile internal var clipboardPayload: MacClipboard.Payload? = null; private set
     private var frameBitmap: Bitmap? = null
     private var framePixels: IntArray? = null
 
@@ -716,6 +719,10 @@ class MacHevcSession(
         recordIn = DataInputStream(inStream)
         recordOut = DataOutputStream(layer.createOutputStream(rOut))
         stage = "S9"
+        if (clipboardEnabled) {
+            enqueueClipboard { MacClipboard.enable() }
+            requestClipboard()
+        }
         requestUpdate(incremental=false)
         log("S9: Reached steady-state (S9) on the control path with record layer active")
     }
@@ -841,6 +848,7 @@ class MacHevcSession(
                 stream.readFully(body)
                 val cmd = if (bodyLen >= 4) (((body[2].toInt() and 0xff) shl 8) or (body[3].toInt() and 0xff)) else -1
                 log("S9: Received MiscStatus (0x14) bodyLen=$bodyLen cmd=$cmd")
+                if (cmd == 2) requestClipboard()
             }
             0x1c -> { // MediaStreamOptions answer
                 val pad = stream.readByte()
@@ -857,21 +865,61 @@ class MacHevcSession(
                 }
             }
             0x1f -> { // ClipboardSend
-                val pad1 = stream.readByte()
-                val promise = stream.readByte()
-                val pad2 = stream.readByte()
-                val reserved = stream.readInt()
-                val uncompressedSize = stream.readInt()
-                val compressedSize = stream.readInt()
-                val compressed = ByteArray(compressedSize)
-                stream.readFully(compressed)
-                log("S9: Received ClipboardSend (0x1f): uncompressed=$uncompressedSize compressed=$compressedSize")
+                val payload = MacClipboard.read(stream)
+                clipboardPayload = payload
+                log("S9: Clipboard archive bytes=${payload.archive?.size ?: -1}, text=${payload.text != null}")
+                if (clipboardEnabled) payload.text?.let { onClipboardText?.invoke(it) }
+            }
+            3 -> { // Standard ServerCutText, when used instead of Apple's archive.
+                stream.skipBytes(3)
+                val length = stream.readInt()
+                if (length !in 0..MacClipboard.MAX_TEXT_BYTES)
+                    throw MacHevcProtocolException("Invalid clipboard text size")
+                val text = ByteArray(length).also(stream::readFully).toString(Charsets.ISO_8859_1)
+                if (clipboardEnabled) onClipboardText?.invoke(text)
             }
             else -> {
                 log("S9: Other RFB message type $msgType, ignoring per §12")
             }
         }
         return FramebufferUpdateResult(msgType, encodingsSeen, decompressedBytes, zlibRectCount, lastW, lastH)
+    }
+
+    internal fun requestClipboard(): Boolean = enqueueClipboard { MacClipboard.fetch() }
+
+    internal fun sendClipboardPayload(payload: MacClipboard.Payload): Boolean {
+        val archive = payload.archive ?: return false
+        return enqueueClipboard { MacClipboard.sendArchive(archive) }
+    }
+
+    fun sendClipboardText(text: String): Boolean {
+        if (text.length > MacClipboard.MAX_TEXT_BYTES) return false
+        val bytes = text.toByteArray(Charsets.UTF_8)
+        if (bytes.size > MacClipboard.MAX_TEXT_BYTES) return false
+        return enqueueClipboard { MacClipboard.send(bytes) }
+    }
+
+    private fun enqueueClipboard(message: () -> ByteArray): Boolean {
+        if (!clipboardEnabled || stage != "S9" || recordOut == null || writerExecutor.isShutdown) return false
+        return try {
+            writerExecutor.execute {
+                try {
+                    if (stage == "CLOSED") return@execute
+                    val out = recordOut ?: return@execute
+                    val bytes = message()
+                    // One archive may exceed a record's u16 length. Keep all chunks
+                    // together on the same writer as key/pointer/media messages.
+                    var offset = 0
+                    while (offset < bytes.size) {
+                        val size = minOf(MacClipboard.RECORD_CHUNK_BYTES, bytes.size - offset)
+                        out.write(bytes, offset, size)
+                        offset += size
+                    }
+                    out.flush()
+                } catch (_: Exception) { log("Clipboard output stopped") }
+            }
+            true
+        } catch (_: RejectedExecutionException) { false }
     }
 
     internal val pointerEventsSent=java.util.concurrent.atomic.AtomicLong()
@@ -1103,6 +1151,8 @@ class MacHevcSession(
 
     override fun close() {
         stopStreaming()
+        onClipboardText = null
+        clipboardPayload = null
         try {
             pointerQueue.close()
             writerExecutor.shutdownNow()

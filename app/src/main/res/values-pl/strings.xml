@@ -803,4 +803,6 @@
     <string name="ssh_host_key_replace">Zastąp i połącz</string>
     <string name="ssh_host_keys_clear">Usuń zapisane klucze hostów SSH</string>
     <string name="ssh_host_keys_cleared">Zapisane klucze hostów SSH zostały usunięte.</string>
+    <string name="show_connection_info">Pokaż informacje o połączeniu</string>
+    <string name="hide_connection_info">Ukryj informacje o połączeniu</string>
 </resources>

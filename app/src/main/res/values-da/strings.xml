@@ -788,4 +788,6 @@
     <string name="ssh_host_key_replace">Erstat og forbind</string>
     <string name="ssh_host_keys_clear">Ryd gemte SSH-værtsnøgler</string>
     <string name="ssh_host_keys_cleared">Gemte SSH-værtsnøgler er ryddet.</string>
+    <string name="show_connection_info">Vis forbindelsesinfo</string>
+    <string name="hide_connection_info">Skjul forbindelsesinfo</string>
 </resources>
