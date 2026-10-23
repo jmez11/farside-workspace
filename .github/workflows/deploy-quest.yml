@@ -22,12 +22,11 @@ name: Deploy to Quest
 # Farside must be running on the headset with its tunnel started — reaching
 # the headset this way IS the test. Manual trigger only.
 #
-# NOTE: `pm install -r` requires the same signing cert every time. A debug
-# APK will NOT install over a differently-signed (release) build, and a
-# release APK will NOT install over a debug build — uninstall Farside from
-# the headset once first when switching between the two. Try-build APKs are
-# debug-signed with the CI ephemeral key, which differs per run, so a newer
-# try-build also needs the old one uninstalled first.
+# NOTE: `pm install -r` requires the same signing cert every time. Debug and
+# trybuild APKs share the committed debug keystore (app/debug.keystore), so
+# they install over each other freely. A release APK will NOT install over a
+# debug/trybuild build and vice versa — uninstall Farside from the headset
+# once when switching between release and the debug line.
 
 on:
   workflow_dispatch:

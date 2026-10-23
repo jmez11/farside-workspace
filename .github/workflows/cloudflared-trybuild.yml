@@ -4,8 +4,9 @@ name: Cloudflared try-build
 # Android adaptations, swaps the binary into jniLibs, and builds a debug APK
 # for on-device testing. Runs on the branch it is dispatched from; never
 # touches master. The APK is uploaded as its own artifact (debug-signed with
-# the CI ephemeral key, so uninstall any existing debug build before
-# installing it on the Quest).
+# the committed shared debug keystore, so it installs over any CI debug
+# build with `pm install -r`; uninstall first only when switching from/to a
+# release build).
 #
 # NOTE: this intentionally does NOT run lint — it is for testing the
 # cloudflared binary, not for validating the tree.

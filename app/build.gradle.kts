@@ -31,6 +31,17 @@ android {
                 storePassword = keystoreProperties.getProperty("storePassword")
             }
         }
+        // Shared debug keystore (committed at app/debug.keystore): every CI,
+        // local, and try-build debug APK signs with the same cert, so
+        // `pm install -r` works between them — including over the Quest tunnel
+        // with no uninstall. Well-known android/android credentials: this is a
+        // debug cert, never trusted for anything release.
+        create("sharedDebug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     configurations.all {
@@ -77,6 +88,9 @@ android {
     }
 
     buildTypes {
+        getByName("debug") {
+            signingConfig = signingConfigs.getByName("sharedDebug")
+        }
         getByName("release") {
             // Signed only when key.properties is present (CI release job); otherwise the
             // default debug key is used so local release builds don't fail.
