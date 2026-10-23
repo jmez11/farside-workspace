@@ -16,7 +16,8 @@ internal class MacCaptureVerification(private val test:Instrumentation) {
         val profile=ProfileManager(context).getProfiles().single {it.id==id && it.type==ConnectionType.VNC}
         val evidence=File(context.cacheDir,"mac-capture-results.txt").apply {writeText("")}
         fun record(line:String) {evidence.appendText("$line\n")}
-        record(MacNativeBaseline(test).run(id))
+        if(test.arguments?.getString("macCaptureBaselineBefore")!="false") record(MacNativeBaseline(test).run(id))
+        else record("Cold startup: no preliminary native VNC connection")
         MacMediaSurface(test).use {displayed ->
             val bridge=VncBridge();val ready=CountDownLatch(1)
             var handle=0L;var failure:String?=null
@@ -53,6 +54,13 @@ internal class MacCaptureVerification(private val test:Instrumentation) {
                     record("$stage ${pipeline.avcAssemblyDiagnostics}")
                 }
                 sample("initial")
+                // Request again after startup has settled; an initial encoder burst is not a feedback response.
+                val settledIdr=idr.get()
+                val recoveryAt=SystemClock.uptimeMillis()
+                pipeline.requestKeyframe()
+                while(idr.get()<=settledIdr && SystemClock.uptimeMillis()<recoveryAt+5000) Thread.sleep(50)
+                record("Settled video keyframe request additionalIdr=${idr.get()-settledIdr} elapsedMs=${SystemClock.uptimeMillis()-recoveryAt}")
+                check(idr.get()>settledIdr) {"Settled stream did not answer recovery request"}
                 bridge.updateDisplay(handle,1280,800,1f)
                 val deadline=SystemClock.uptimeMillis()+10000
                 while((pipeline.decodedWidth!=1280 || pipeline.decodedHeight!=800) && SystemClock.uptimeMillis()<deadline) Thread.sleep(50)

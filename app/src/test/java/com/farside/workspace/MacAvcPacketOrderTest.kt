@@ -17,12 +17,30 @@ class MacAvcPacketOrderTest {
     @Test fun missingPacketsHaveBoundedWaitAndRecovery() {
         val order=MacAvcPacketOrder();order.reset(10)
         assertTrue(order.accept(packet(12),5).isEmpty())
-        assertTrue(order.drain(104).isEmpty())
-        assertEquals(listOf(12),order.drain(105).map { it.sequence })
+        assertTrue(order.drain(304).isEmpty())
+        assertEquals(listOf(12),order.drain(305).map { it.sequence })
         assertTrue(order.takeLoss());assertFalse(order.takeLoss())
-        assertTrue(order.accept(packet(11),106).isEmpty())
+        assertEquals(2L,order.missingPackets)
+        assertEquals(305L,order.lastGapAt)
+        assertTrue(order.accept(packet(11),306).isEmpty())
         order.reset(20)
-        assertEquals(listOf(20),order.accept(packet(20),107).map { it.sequence })
+        assertEquals(listOf(20),order.accept(packet(20),307).map { it.sequence })
+    }
+    @Test fun overlayJitterCanArriveAfterTheOldHundredMillisecondWindow() {
+        val order=MacAvcPacketOrder();order.reset(10)
+        assertTrue(order.accept(packet(11),0).isEmpty())
+        assertTrue(order.drain(150).isEmpty())
+        assertEquals(listOf(10,11),order.accept(packet(10),240).map {it.sequence})
+        assertFalse(order.takeLoss())
+        assertEquals(1L,order.outOfOrder)
+    }
+    @Test fun packetsQueuedBehindLossAreNotActualReordering() {
+        val order=MacAvcPacketOrder();order.reset(10)
+        order.accept(packet(12),0);order.accept(packet(13),10);order.accept(packet(14),20)
+        assertEquals(0L,order.outOfOrder)
+        assertEquals(3L,order.repaired)
+        order.drain(300)
+        assertEquals(2L,order.missingPackets)
     }
     @Test fun memoryLimitForcesProgressWithoutUnboundedBuffering() {
         val order=MacAvcPacketOrder();order.reset(1)

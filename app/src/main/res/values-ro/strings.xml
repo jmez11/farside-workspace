@@ -773,4 +773,22 @@
     <string name="setup_remove">Îndepărtați</string>
     <string name="setup_public_key">Cheie publică</string>
     <string name="setup_sign_ins">Conectări</string>
+    <string name="mac_quality_starting">Se așteaptă video codificat</string>
+    <string name="mac_quality_receiving">Se primește video</string>
+    <string name="mac_quality_degraded">Video cu goluri de pachete</string>
+    <string name="mac_quality_stalled">Nicio imagine recentă — se verifică</string>
+    <string name="mac_quality_fallback">Alternativă VNC — fără audio</string>
+    <string name="mac_quality_health">Starea conexiunii</string>
+    <string name="mac_quality_video">Pachete video / cadre</string>
+    <string name="mac_quality_missing">Pachete întârziate / goluri</string>
+    <string name="mac_quality_reordered">Ordine greșită / duplicate</string>
+    <string name="mac_quality_drops">Eliminări buffer / decodor</string>
+    <string name="mac_quality_skipped">Cadre în așteptarea recuperării</string>
+    <string name="mac_quality_recovery">Încercări de recuperare</string>
+    <string name="mac_quality_age">Ultimul cadru</string>
+    <string name="mac_quality_totals">Totaluri de sesiune; pachetele întârziate pot fi numărate ca lipsă.</string>
+    <string name="mac_quality_rtcp_rx">Candidați RTCP (5900 / 5901)</string>
+    <string name="mac_quality_rtcp_auth">RTCP autentificate / neverificate</string>
+    <string name="mac_quality_rtcp_rejected">RTCP incorecte / duplicate</string>
+    <string name="mac_quality_age_value">%1$.1f s</string>
 </resources>

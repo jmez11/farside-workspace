@@ -762,4 +762,22 @@
     <string name="setup_remove">Αφαιρέστε</string>
     <string name="setup_public_key">Δημόσιο κλειδί</string>
     <string name="setup_sign_ins">Είσοδοι</string>
+    <string name="mac_quality_starting">Αναμονή κωδικοποιημένου βίντεο</string>
+    <string name="mac_quality_receiving">Λήψη βίντεο</string>
+    <string name="mac_quality_degraded">Κενά πακέτων στο βίντεο</string>
+    <string name="mac_quality_stalled">Χωρίς πρόσφατο βίντεο — έλεγχος</string>
+    <string name="mac_quality_fallback">Εφεδρικό VNC — χωρίς ήχο</string>
+    <string name="mac_quality_health">Κατάσταση σύνδεσης</string>
+    <string name="mac_quality_video">Πακέτα βίντεο / καρέ</string>
+    <string name="mac_quality_missing">Καθυστερημένα πακέτα / κενά</string>
+    <string name="mac_quality_reordered">Εκτός σειράς / διπλότυπα</string>
+    <string name="mac_quality_drops">Απορρίψεις buffer / αποκωδικοποιητή</string>
+    <string name="mac_quality_skipped">Καρέ σε αναμονή ανάκτησης</string>
+    <string name="mac_quality_recovery">Προσπάθειες ανάκτησης</string>
+    <string name="mac_quality_age">Τελευταίο καρέ</string>
+    <string name="mac_quality_totals">Σύνολα συνεδρίας· καθυστερημένα πακέτα μπορεί να μετρηθούν ως ελλείποντα.</string>
+    <string name="mac_quality_rtcp_rx">Πιθανά RTCP (5900 / 5901)</string>
+    <string name="mac_quality_rtcp_auth">RTCP επικυρωμένα / ανεπιβεβαίωτα</string>
+    <string name="mac_quality_rtcp_rejected">RTCP εσφαλμένα / διπλότυπα</string>
+    <string name="mac_quality_age_value">%1$.1f s</string>
 </resources>

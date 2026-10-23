@@ -8,15 +8,22 @@ internal class MacAvcPacketOrder {
     private var blockedSince:Long?=null
     private var bytes=0
     var repaired=0L; private set
+    var outOfOrder=0L; private set
+    private var highestSequence:Int?=null
     var duplicates=0L; private set
     var expiredGaps=0L; private set
+    var missingPackets=0L; private set
+    var lastGapAt:Long?=null; private set
     private var loss=false
     fun takeLoss()=loss.also { loss=false }
-    fun reset(next:Int?=null) { pending.clear();bytes=0;expected=next;blockedSince=null;loss=false }
+    fun reset(next:Int?=null) { pending.clear();bytes=0;expected=next;blockedSince=null;highestSequence=null;loss=false }
     fun accept(packet:Packet,now:Long):List<Packet> {
         val next=expected ?: packet.sequence.also { expected=it }
         val distance=(packet.sequence-next) and 65535
         if(distance>=32768 || pending.containsKey(packet.sequence)) { duplicates++;return drain(now) }
+        val highest=highestSequence
+        if(highest==null || ((packet.sequence-highest) and 65535) in 1..32767) highestSequence=packet.sequence
+        else if(packet.sequence!=highest) outOfOrder++
         if(distance!=0) repaired++
         pending[packet.sequence]=packet;bytes+=packet.payload.size
         return drain(now)
@@ -31,8 +38,11 @@ internal class MacAvcPacketOrder {
                 continue
             }
             val since=blockedSince ?: now.also { blockedSince=it }
-            if(now-since<100 && pending.size<4096 && bytes<8*1024*1024) break
-            expected=pending.keys.minBy { (it-next) and 65535 }
+            if(now-since<300 && pending.size<4096 && bytes<8*1024*1024) break
+            val nearest=pending.keys.minBy { (it-next) and 65535 }
+            missingPackets+=(nearest-next) and 65535
+            lastGapAt=now
+            expected=nearest
             expiredGaps++;loss=true;blockedSince=null
         }
         return output

@@ -23,6 +23,8 @@ internal fun mapScreenToDesktop(
     actualWidth: Int,
     actualHeight: Int
 ): Pair<Int, Int> {
+    // Hover can arrive while startup/disconnect temporarily reports no desktop geometry.
+    if (actualWidth <= 0 || actualHeight <= 0) return 0 to 0
     val w = viewWidth.coerceAtLeast(1f)
     val h = viewHeight.coerceAtLeast(1f)
     val z = zoom.coerceAtLeast(0.01f)

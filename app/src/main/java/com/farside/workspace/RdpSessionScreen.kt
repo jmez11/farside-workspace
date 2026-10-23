@@ -7,6 +7,8 @@ import android.os.Bundle
 import android.util.Log
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import android.graphics.SurfaceTexture
@@ -1056,6 +1058,10 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                 profileId = pairedSshId, allowDisabledPairedProfile = true)
         }
         if (showDebugInfo) {
+            var quality by remember(rdpBridge) { mutableStateOf<MacConnectionQuality?>(null) }
+            LaunchedEffect(rdpBridge,rdpInstance) {
+                while(true) {quality=(rdpBridge as? VncBridge)?.connectionQuality();delay(1000)}
+            }
             Surface(
                 modifier = Modifier
                     .align(androidx.compose.ui.Alignment.TopEnd)
@@ -1065,7 +1071,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                 color = Color(0xEE141414),
                 border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x44FFFFFF))
             ) {
-                Column(modifier = Modifier.padding(14.dp)) {
+                Column(modifier = Modifier.heightIn(max=600.dp).verticalScroll(rememberScrollState()).padding(14.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -1113,6 +1119,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                     ConnectionInfoRow("Protocol", protocolLabel)
                     ConnectionInfoRow("Decoder", decoderLabel)
                     ConnectionInfoRow("Transport", transportLabel)
+                    quality?.let {MacConnectionQualityPanel(it)}
                     ConnectionInfoRow("Server Canvas", "${serverW} × ${serverH}")
                     ConnectionInfoRow("Window Surface", "${windowW} × ${windowH}")
                     ConnectionInfoRow("Scale / Zoom", "${scaleFactor}x (${scalePct}%)")
@@ -1130,7 +1137,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
 }
 
 @Composable
-private fun ConnectionInfoRow(label: String, value: String) {
+internal fun ConnectionInfoRow(label: String, value: String, valueColor:Color=Color.White) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1146,7 +1153,7 @@ private fun ConnectionInfoRow(label: String, value: String) {
         )
         Text(
             value,
-            color = Color.White,
+            color = valueColor,
             style = MaterialTheme.typography.bodySmall,
             fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
             maxLines = 2,

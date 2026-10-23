@@ -763,4 +763,22 @@
     <string name="setup_remove">刪除</string>
     <string name="setup_public_key">公鑰</string>
     <string name="setup_sign_ins">登入</string>
+    <string name="mac_quality_starting">正在等待編碼視訊</string>
+    <string name="mac_quality_receiving">正在接收視訊</string>
+    <string name="mac_quality_degraded">視訊封包有缺口</string>
+    <string name="mac_quality_stalled">暫無新畫面 — 正在檢查</string>
+    <string name="mac_quality_fallback">改用 VNC — 無音訊</string>
+    <string name="mac_quality_health">連線狀態</string>
+    <string name="mac_quality_video">視訊封包 / 畫格</string>
+    <string name="mac_quality_missing">逾時封包 / 缺口</string>
+    <string name="mac_quality_reordered">次序錯亂 / 重複</string>
+    <string name="mac_quality_drops">緩衝區 / 解碼器捨棄</string>
+    <string name="mac_quality_skipped">等待復原的畫面</string>
+    <string name="mac_quality_recovery">復原嘗試</string>
+    <string name="mac_quality_age">最後畫格</string>
+    <string name="mac_quality_totals">工作階段累計值；遲到的封包可能計為遺失。</string>
+    <string name="mac_quality_rtcp_rx">RTCP候選封包 (5900 / 5901)</string>
+    <string name="mac_quality_rtcp_auth">RTCP 已認證 / 未驗證</string>
+    <string name="mac_quality_rtcp_rejected">RTCP 格式錯誤 / 重複</string>
+    <string name="mac_quality_age_value">%1$.1f s</string>
 </resources>

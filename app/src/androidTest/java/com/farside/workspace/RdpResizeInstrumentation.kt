@@ -670,6 +670,9 @@ class RdpResizeInstrumentation : Instrumentation() {
 
 
     private fun verifyZoomedPointerMapping() {
+        for ((width,height) in listOf(0 to 0,0 to 800,1280 to 0)) {
+            check(mapScreenToDesktop(640f,400f,1280f,800f,1f,0f,0f,width,height)==0 to 0)
+        }
         val viewW = 1280f
         val viewH = 800f
         val actualW = 1280

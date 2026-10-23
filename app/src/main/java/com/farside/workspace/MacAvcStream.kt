@@ -109,7 +109,11 @@ internal class MacAvcStream(private val log: (String)->Unit, private val frame: 
     val activeSsrc:Long? get()=sources.active
     @Volatile var accessUnitObserver:((ByteArray)->Unit)?=null
     @Volatile var packetObserver:((ByteArray,Int,Long,Boolean,Long)->Unit)?=null
-    @Synchronized fun assemblyDiagnostics():String="${assembler.diagnostics} skippedUntilIdr=${recovery.skipped} reordered=${packetOrder.repaired} duplicates=${packetOrder.duplicates} expiredGaps=${packetOrder.expiredGaps}"
+    @Synchronized fun assemblyDiagnostics():String="${assembler.diagnostics} skippedUntilIdr=${recovery.skipped} reordered=${packetOrder.outOfOrder} bufferedAfterGap=${packetOrder.repaired} duplicates=${packetOrder.duplicates} expiredGaps=${packetOrder.expiredGaps}"
+    @Synchronized internal fun quality(now:Long)=MacConnectionQuality(
+        missing=packetOrder.missingPackets,gaps=packetOrder.expiredGaps,reordered=packetOrder.outOfOrder,
+        duplicates=packetOrder.duplicates,skipped=recovery.skipped,
+        recentGap=packetOrder.lastGapAt?.let {now-it<5000} ?: false)
     val inputDrops=java.util.concurrent.atomic.AtomicLong()
     var onRecovery:()->Unit={}
     var onRecoveryComplete:()->Unit={}

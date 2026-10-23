@@ -763,4 +763,22 @@
     <string name="setup_remove">削除</string>
     <string name="setup_public_key">公開鍵</string>
     <string name="setup_sign_ins">サインイン</string>
+    <string name="mac_quality_starting">エンコード映像を待機中</string>
+    <string name="mac_quality_receiving">映像を受信中</string>
+    <string name="mac_quality_degraded">映像パケットに欠落あり</string>
+    <string name="mac_quality_stalled">最近の映像なし — 確認中</string>
+    <string name="mac_quality_fallback">VNCに切り替え — 音声なし</string>
+    <string name="mac_quality_health">接続状態</string>
+    <string name="mac_quality_video">映像パケット / フレーム</string>
+    <string name="mac_quality_missing">期限超過パケット / 欠落箇所</string>
+    <string name="mac_quality_reordered">順序違い / 重複</string>
+    <string name="mac_quality_drops">バッファ / デコーダー破棄</string>
+    <string name="mac_quality_skipped">復旧待ちの映像</string>
+    <string name="mac_quality_recovery">復旧試行</string>
+    <string name="mac_quality_age">最終フレーム</string>
+    <string name="mac_quality_totals">セッション合計。遅延パケットも欠落として数える場合があります。</string>
+    <string name="mac_quality_rtcp_rx">RTCP候補 (5900 / 5901)</string>
+    <string name="mac_quality_rtcp_auth">RTCP 認証済み / 未検証</string>
+    <string name="mac_quality_rtcp_rejected">RTCP 不正 / 重複</string>
+    <string name="mac_quality_age_value">%1$.1f s</string>
 </resources>

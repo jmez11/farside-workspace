@@ -761,4 +761,22 @@
     <string name="setup_remove">Supprimer</string>
     <string name="setup_public_key">Clé publique</string>
     <string name="setup_sign_ins">Connexions</string>
+    <string name="mac_quality_starting">En attente de vidéo encodée</string>
+    <string name="mac_quality_receiving">Réception vidéo</string>
+    <string name="mac_quality_degraded">La vidéo présente des paquets manquants</string>
+    <string name="mac_quality_stalled">Aucune image récente — vérification</string>
+    <string name="mac_quality_fallback">Repli VNC — sans audio</string>
+    <string name="mac_quality_health">État de la connexion</string>
+    <string name="mac_quality_video">Paquets vidéo / images</string>
+    <string name="mac_quality_missing">Paquets en retard / lacunes</string>
+    <string name="mac_quality_reordered">Hors ordre / doublons</string>
+    <string name="mac_quality_drops">Rejets du tampon / décodeur</string>
+    <string name="mac_quality_skipped">Images en attente de récupération</string>
+    <string name="mac_quality_recovery">Tentatives de récupération</string>
+    <string name="mac_quality_age">Dernière image</string>
+    <string name="mac_quality_totals">Totaux de session ; les paquets tardifs peuvent compter comme manquants.</string>
+    <string name="mac_quality_rtcp_rx">Candidats RTCP (5900 / 5901)</string>
+    <string name="mac_quality_rtcp_auth">RTCP authentifiés / non vérifiés</string>
+    <string name="mac_quality_rtcp_rejected">RTCP malformés / doublons</string>
+    <string name="mac_quality_age_value">%1$.1f s</string>
 </resources>

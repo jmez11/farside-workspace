@@ -38,6 +38,11 @@ class VncBridge : DesktopSessionBridge {
     private val heldPrintable = mutableMapOf<Int, Int>()
     private var boundAudioSession=0
     @Volatile internal var audioSpatialBound=false; private set
+    @Volatile private var failedMediaQuality:MacConnectionQuality?=null
+    internal fun connectionQuality():MacConnectionQuality?=macMediaPipeline?.qualitySnapshot() ?: failedMediaQuality
+    internal fun recordMediaFallback() {
+        failedMediaQuality=(macMediaPipeline?.qualitySnapshot() ?: failedMediaQuality ?: MacConnectionQuality()).copy(fallback=true)
+    }
 
     @Synchronized internal fun bindAudioWindow(activity:android.app.Activity) {
         val session=getAudioPlaybackSessionId(active)
@@ -300,8 +305,9 @@ class VncBridge : DesktopSessionBridge {
     internal fun awaitMacVideo(timeoutMs:Long=3500,cancelled:()->Boolean={false}):Boolean {
         return MacVideoStartup.await(
             frame={ (macMediaPipeline?.framesDecoded?.get() ?: 0)>0 },
-            progress={ (macMediaPipeline?.authenticatedPackets?.get() ?: 0)>0 },
-            initialMs=timeoutMs,progressMs=maxOf(timeoutMs,10000),cancelled=cancelled)
+            progress={ (macMediaPipeline?.authenticatedPackets?.get() ?: 0)>0 ||
+                (macMediaPipeline?.audio?.authenticated?.get() ?: 0)>0 },
+            initialMs=timeoutMs,progressMs=maxOf(timeoutMs,20000),cancelled=cancelled)
     }
     override fun getAudioPlaybackSessionId(instance:Long):Int =
         if(instance!=0L && instance==active) macHevcSession?.videoPipeline?.audio?.playbackSessionId ?: 0 else 0

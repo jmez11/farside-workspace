@@ -17,7 +17,7 @@ class MacVideoStartupTest {
     @Test fun partialMediaCannotExtendTheDeadlineForever() {
         var time=0L
         assertFalse(MacVideoStartup.await(frame={false},progress={true},now={time},pause={time+=it}))
-        assertEquals(10000L,time)
+        assertEquals(20000L,time)
     }
     @Test fun closingTheWindowCancelsTheLongerWarmup() {
         var time=0L

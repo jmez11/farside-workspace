@@ -46,6 +46,8 @@ class MacHevcVideoPipeline(
     private val audioObserver: ((ByteArray) -> Unit)? = null,
     private val preferAvc: Boolean = false,
     private val encodedVideoObserver:((Long,ByteArray)->Unit)?=null,
+    private val onMediaRefresh: () -> Unit = {},
+    private val onDisplayRefresh: () -> Unit = {},
     private val onFrameDecoded: () -> Unit = {},
     private val logCallback: (String) -> Unit = {}
 ) : Closeable {
@@ -84,10 +86,13 @@ class MacHevcVideoPipeline(
     private val srtcpEncryptor = videoKeyBlobV?.takeIf { it.size == 46 }?.let {
         MacHevcSrtcpEncryptor(it.copyOfRange(0, 32), it.copyOfRange(32, 46))
     }
+    internal val rtcpDiagnostics=MacRtcpDiagnostics(listOfNotNull(videoKeyBlob,audioKeyBlob))
     private val rtpParser = MacHevcRtpParser()
 
     private val isRunning = AtomicBoolean(false)
     val framesDecoded = AtomicLong(0)
+    private val lastFrameAt=AtomicLong(0)
+    private val recoveryAttempts=AtomicLong(0)
     val packetsReceived = AtomicLong(0)
     val authenticatedPackets = AtomicLong(0)
     val nalUnits = AtomicLong(0)
@@ -97,7 +102,7 @@ class MacHevcVideoPipeline(
     var audio: MacScreenAudio? = null
         private set
     private val needsRecovery=AtomicBoolean(false)
-    private val avc = if(preferAvc) MacAvcStream(::log) { framesDecoded.incrementAndGet(); onFrameDecoded() }.also { stream ->
+    private val avc = if(preferAvc) MacAvcStream(::log) { lastFrameAt.set(System.nanoTime()/1_000_000);framesDecoded.incrementAndGet(); onFrameDecoded() }.also { stream ->
         stream.onRecovery={ needsRecovery.set(true) }
         stream.onRecoveryComplete={ needsRecovery.set(false) }
         if(encodedVideoObserver!=null) stream.accessUnitObserver={ bytes -> encodedVideoObserver.invoke(stream.activeSsrc ?: 0,bytes) }
@@ -112,6 +117,14 @@ class MacHevcVideoPipeline(
     val avcInputDrops:Long get()=avc?.inputDrops?.get() ?: 0L
     val avcAssemblyDiagnostics:String get()=avc?.assemblyDiagnostics() ?: "not AVC"
     internal fun requestKeyframe() { needsRecovery.set(true) }
+    internal fun qualitySnapshot():MacConnectionQuality {
+        val now=System.nanoTime()/1_000_000
+        return (avc?.quality(now) ?: MacConnectionQuality()).copy(
+            videoPackets=authenticatedPackets.get(),frames=framesDecoded.get(),
+            localDrops=udpSocket?.droppedPackets?.get() ?: 0,decoderDrops=avcInputDrops,
+            rtcp=rtcpDiagnostics.snapshot(),recoveries=recoveryAttempts.get(),frameAgeMs=lastFrameAt.get().takeIf {it>0}?.let {now-it})
+    }
+    internal val socketReceiveBufferBytes:Int get()=udpSocket?.receiveBufferSize ?: 0
     var avcPacketObserver:((ByteArray,Int,Long,Boolean,Long)->Unit)?
         get()=avc?.packetObserver
         set(value) { avc?.packetObserver=value }
@@ -251,6 +264,7 @@ class MacHevcVideoPipeline(
         log("Started active UDP pinhole punch loop to $host:$videoPort and $host:$ctrlPort")
 
         val keyframeRequests=MacKeyframeRequests()
+        val recovery=MacMediaRecovery()
         while (isRunning.get()) {
             try {
                 val vSock = udpSocket
@@ -272,20 +286,38 @@ class MacHevcVideoPipeline(
                     }
                 }
 
+                when(val action=recovery.poll(System.nanoTime()/1_000_000,framesDecoded.get(),
+                    authenticatedPackets.get()>0 || (audio?.authenticated?.get() ?: 0)>0)) {
+                    MacMediaRecovery.Action.KEYFRAME -> {
+                        recoveryAttempts.incrementAndGet()
+                        needsRecovery.set(true)
+                        if(framesDecoded.get()==0L) {onMediaRefresh();log("Stall recovery: refreshing media offer before first decoded frame")}
+                        else log("Stall recovery: requesting keyframe after 3s without decoded frames")
+                    }
+                    MacMediaRecovery.Action.MEDIA_OFFER -> {
+                        recoveryAttempts.incrementAndGet()
+                        needsRecovery.set(true)
+                        if(framesDecoded.get()==0L) onDisplayRefresh() else onMediaRefresh()
+                        log("Stall recovery: refreshing ${if(framesDecoded.get()==0L) "startup display and media" else "media offer"} ($action)")
+                    }
+                    MacMediaRecovery.Action.DISPLAY -> {recoveryAttempts.incrementAndGet();needsRecovery.set(true);onDisplayRefresh();log("Stall recovery: refreshing current display and media")}
+                    null -> {}
+                }
                 // Do not wait two seconds to repair a damaged text/drag update.
                 val ssrc = serverVideoSsrc.get()
-                val needFir = ssrc != 0L && vSock != null && !vSock.isClosed && srtcpEncryptor != null &&
+                val needFir = ssrc != 0L && cSock != null && !cSock.isClosed && srtcpEncryptor != null &&
                     keyframeRequests.due(System.nanoTime()/1_000_000,framesDecoded.get()>0,needsRecovery.get())
-                if (needFir && vSock != null && srtcpEncryptor != null) {
+                if (needFir && cSock != null && srtcpEncryptor != null) {
                     // AVC recovery remains pending until a clean IDR is submitted, not merely sent.
                     if(!preferAvc) needsRecovery.set(false)
                     try {
                         val firPkt = MacHevcRtcp.buildCompoundFir(ourVideoSsrc, targetSsrc = ssrc)
                         val protected = srtcpEncryptor.protect(firPkt)
-                        val rtcpDatagram = DatagramPacket(protected, protected.size, targetAddr, videoPort)
-                        if (datagramSender != null) datagramSender.invoke(videoPort, protected) else vSock.send(rtcpDatagram)
+                        // Apple's viewer feedback uses the control destination even for video-key SRTCP.
+                        val rtcpDatagram = DatagramPacket(protected, protected.size, targetAddr, ctrlPort)
+                        if (datagramSender != null) datagramSender.invoke(ctrlPort, protected) else cSock.send(rtcpDatagram)
                         if (tick % 20 == 0) {
-                            log("Sent SRTCP Compound FIR keyframe trigger for SSRC 0x${java.lang.Long.toHexString(ssrc)} to $host:$videoPort (seq=$tick)")
+                            log("Sent SRTCP Compound FIR keyframe trigger for SSRC 0x${java.lang.Long.toHexString(ssrc)} to $host:$ctrlPort (seq=$tick)")
                         }
                     } catch (e: Exception) {
                         needsRecovery.set(true)
@@ -293,7 +325,7 @@ class MacHevcVideoPipeline(
                     }
                 }
 
-                if(tick%50==0) log("Media health relayed=${datagramSender!=null} authenticated=${authenticatedPackets.get()} decoded=${framesDecoded.get()} udpDrops=${vSock?.droppedPackets?.get() ?: 0} decoderDrops=$avcInputDrops $avcAssemblyDiagnostics")
+                if(tick%50==0) log("Media health relayed=${datagramSender!=null} authenticated=${authenticatedPackets.get()} decoded=${framesDecoded.get()} udpDrops=${vSock?.droppedPackets?.get() ?: 0} decoderDrops=$avcInputDrops $avcAssemblyDiagnostics ${rtcpDiagnostics.snapshot()}")
                 tick++
                 Thread.sleep(100)
             } catch (e: InterruptedException) {
@@ -301,6 +333,8 @@ class MacHevcVideoPipeline(
             } catch (e: Exception) {
                 if (isRunning.get()) {
                     log("Pinhole punch loop error: ${e.message}")
+                    // A broken SSH writer must not turn this loop into a CPU/log flood.
+                    try {Thread.sleep(100)} catch (_:InterruptedException) {break}
                 }
             }
         }
@@ -314,7 +348,8 @@ class MacHevcVideoPipeline(
             try {
                 packet.length = buffer.size
                 sock.receive(packet)
-                audio?.receive(packet.data, packet.offset, packet.length)
+                if(!rtcpDiagnostics.receive(ctrlPort,packet.data,packet.offset,packet.length))
+                    audio?.receive(packet.data, packet.offset, packet.length)
             } catch (e: java.net.SocketTimeoutException) {
                 // Timeout expected
             } catch (e: Exception) {
@@ -334,6 +369,7 @@ class MacHevcVideoPipeline(
             try {
                 packet.length = buffer.size
                 sock.receive(packet)
+                if(rtcpDiagnostics.receive(videoPort,packet.data,packet.offset,packet.length)) continue
                 val count = packetsReceived.incrementAndGet()
                 if (count == 1L) {
                     log("First UDP SRTP media packet received from ${packet.address}:${packet.port} (len=${packet.length})")
@@ -438,6 +474,7 @@ class MacHevcVideoPipeline(
             }
             if (outIdx >= 0) {
                 codec.releaseOutputBuffer(outIdx, true) // renders directly to Surface
+                lastFrameAt.set(System.nanoTime()/1_000_000)
                 val f = framesDecoded.incrementAndGet()
                 if (f == 1L || f % 300L == 0L) {
                     log("Decoded and rendered $f HEVC frames to Surface")

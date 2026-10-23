@@ -48,6 +48,8 @@ internal class MacDualStreamVerification(private val test:Instrumentation) {
             val localized=test.targetContext.createConfigurationContext(config)
             check(localized.getString(R.string.mac_media_title)!=english) {"Missing compiled locale $tag"}
             check(localized.getString(R.string.about_version,"fixture").contains("fixture"))
+            val age=localized.getString(R.string.mac_quality_age_value,4.5)
+            check(age.endsWith(" s") && !age.contains("%")) {"Invalid compiled frame-age format $tag"}
         }
         fun source(name:String)=DataInputStream(test.context.assets.open("mac-avc-source-$name.bin")).use {input ->
             List(input.readInt()) {ByteArray(input.readInt()).also(input::readFully)}
@@ -69,21 +71,35 @@ internal class MacDualStreamVerification(private val test:Instrumentation) {
         }}
         val blobs=List(2) {i ->ByteArray(46) {(it+i*75).toByte()}}
         val feedback=List(2) {java.util.concurrent.CopyOnWriteArrayList<Int>()}
+        val refreshes=List(2) {java.util.concurrent.atomic.AtomicInteger()}
+        val displays=List(2) {java.util.concurrent.atomic.AtomicInteger()}
         val pipelines=List(2) {i ->MacHevcVideoPipeline(host="127.0.0.1",videoKeyBlob=blobs[i],videoKeyBlobV=blobs[i],surface=readers[i].surface,
-            context=test.targetContext,datagramSender={port,bytes ->if(bytes.size>1) feedback[i].add(port)},preferAvc=true)}
+            context=test.targetContext,datagramSender={port,bytes ->if(bytes.size>1) feedback[i].add(port)},preferAvc=true,
+            onMediaRefresh={refreshes[i].incrementAndGet()},onDisplayRefresh={displays[i].incrementAndGet()})}
         val senders=List(2) {MacHevcSrtpSender(blobs[it],10L+it)}
         val sources=listOf(source("red"),source("blue"))
         try {
             verifyBridgeAdmission(readers.map {it.surface})
             pipelines.forEach {it.start()}
             DatagramSocket().use {socket ->
-                fun feed(index:Int,timestamp:Long) {
+                blobs.forEachIndexed {i,blob ->
+                    val packet=MacHevcSrtcpEncryptor(blob.copyOfRange(0,32),blob.copyOfRange(32,46)).protect(MacHevcRtcp.buildRr(100L+i))
+                    socket.send(DatagramPacket(packet,packet.size,InetAddress.getByName("127.0.0.1"),5900+i))
+                }
+                val rtcpUntil=android.os.SystemClock.uptimeMillis()+3000
+                while(pipelines.any {it.rtcpDiagnostics.snapshot().authenticated!=1L} && android.os.SystemClock.uptimeMillis()<rtcpUntil) Thread.sleep(50)
+                pipelines.forEach {p ->
+                    val r=p.rtcpDiagnostics.snapshot()
+                    check(r.control==1L && r.video==1L && r.authenticated==1L && r.unverified==1L && r.rr==1L) {"Shared-port RTCP attribution failed: $r"}
+                    check(p.authenticatedPackets.get()==0L && p.packetsReceived.get()==0L) {"RTCP leaked into video decoder"}
+                }
+                fun feed(index:Int,timestamp:Long,includeConfig:Boolean=true) {
                     fun send(bytes:ByteArray,last:Boolean=false) {
                         val packet=senders[index].protect(bytes,if(last) 224 else 96,timestamp)
                         socket.send(DatagramPacket(packet,packet.size,InetAddress.getByName("127.0.0.1"),5901))
                         Thread.sleep(2)
                     }
-                    send(config(sources[index]))
+                    if(includeConfig) send(config(sources[index]))
                     val nals=sources[index].filter {it[0].toInt() and 31 in 1..5}
                     nals.forEachIndexed {n,nal ->
                         val chunks=nal.copyOfRange(1,nal.size).asList().chunked(900)
@@ -93,7 +109,14 @@ internal class MacDualStreamVerification(private val test:Instrumentation) {
                         }
                     }
                 }
-                repeat(4) {feed(0,it*90000L);feed(1,it*90000L);Thread.sleep(150)}
+                feed(0,0,includeConfig=false)
+                val startupUntil=android.os.SystemClock.uptimeMillis()+6000
+                var startupStep=1L
+                while(refreshes[0].get()==0 && android.os.SystemClock.uptimeMillis()<startupUntil) {
+                    feed(1,startupStep++*90000L);Thread.sleep(150)
+                }
+                check(refreshes[0].get()==1 && pipelines[0].framesDecoded.get()==0L) {"Partial startup did not request a media offer"}
+                repeat(4) {feed(0,(it+startupStep)*90000L);feed(1,(it+startupStep)*90000L);Thread.sleep(150)}
                 val until=android.os.SystemClock.uptimeMillis()+10000
                 while(pipelines.any {it.framesDecoded.get()<2} && android.os.SystemClock.uptimeMillis()<until) Thread.sleep(50)
                 pipelines.forEachIndexed {i,p ->check(p.framesDecoded.get()>=2 && p.videoStreamSummary.startsWith((10L+i).toString(16)+":")) {"Dual decoder $i failed: ${p.decoderDescription}, frames=${p.framesDecoded.get()}, streams=${p.videoStreamSummary}"}}
@@ -101,7 +124,7 @@ internal class MacDualStreamVerification(private val test:Instrumentation) {
                 pipelines.forEach {it.requestKeyframe()}
                 val feedbackDeadline=android.os.SystemClock.uptimeMillis()+2000
                 while(feedback.indices.any {feedback[it].size<feedbackBefore[it]+2} && android.os.SystemClock.uptimeMillis()<feedbackDeadline) Thread.sleep(50)
-                feedback.forEachIndexed {i,ports ->check(ports.size>=feedbackBefore[i]+2 && ports.all {it==5901}) {"Video FIR used wrong media port: $ports"}}
+                feedback.forEachIndexed {i,ports ->check(ports.size>=feedbackBefore[i]+2 && ports.all {it==5900}) {"Video FIR used wrong media port: $ports"}}
                 val recoveredBefore=pipelines.map {it.framesDecoded.get()}
                 repeat(2) {step ->feed(0,(step+4)*90000L);feed(1,(step+4)*90000L);Thread.sleep(150)}
                 val recoveredDeadline=android.os.SystemClock.uptimeMillis()+5000
@@ -110,11 +133,29 @@ internal class MacDualStreamVerification(private val test:Instrumentation) {
                 val settledFeedback=feedback.map {it.size}
                 Thread.sleep(700)
                 check(feedback.map {it.size}==settledFeedback) {"Video feedback continued after clean IDRs"}
+                // Withhold stream0 entirely (no loss event), while stream1 stays healthy.
+                val stalledFeedback=feedback[0].size
+                val previousRefreshes=refreshes[0].get()
+                val stallUntil=android.os.SystemClock.uptimeMillis()+16000
+                var step=100L
+                while(android.os.SystemClock.uptimeMillis()<stallUntil) {feed(1,step++*90000L);Thread.sleep(150)}
+                check(feedback[0].size>stalledFeedback && refreshes[0].get()==previousRefreshes+1 && displays[0].get()==1) {
+                    "Silent stall did not escalate: FIR=${feedback[0].size-stalledFeedback} offer=${refreshes[0].get()} display=${displays[0].get()}"
+                }
+                check(refreshes[1].get()==0 && displays[1].get()==0) {"Healthy neighboring stream refreshed"}
+                val resumed=pipelines[0].framesDecoded.get()
+                repeat(2) {feed(0,step++*90000L);Thread.sleep(150)}
+                val resumeUntil=android.os.SystemClock.uptimeMillis()+3000
+                while(pipelines[0].framesDecoded.get()<=resumed && android.os.SystemClock.uptimeMillis()<resumeUntil) Thread.sleep(50)
+                check(pipelines[0].framesDecoded.get()>resumed) {"Stalled decoder did not resume after IDR"}
+                val resumedFeedback=feedback[0].size
+                Thread.sleep(700)
+                check(feedback[0].size==resumedFeedback && refreshes[0].get()==previousRefreshes+1 && displays[0].get()==1) {"Recovery continued after frames resumed"}
                 pipelines[0].close()
                 val before=pipelines[1].framesDecoded.get()
                 repeat(3) {feed(1,(it+6)*90000L);Thread.sleep(150)}
                 check(pipelines[1].framesDecoded.get()>before) {"Closing one stream stopped the other"}
-                return "PASS concurrent production VncBridge Apple handshake admission; two independent SRTP streams on shared 5900/5901, isolated authenticated SSRCs and simultaneous hardware H.264 decoders; video feedback retries on5901 until clean IDRs then stops, and closing the first leaves the second decoding. ACCESS_NETWORK_STATE granted. Owned replay only; two real Macs remain wearer validation."
+                return "PASS concurrent production VncBridge admission and hardware streams; silent16s stall automatically requests keyframes, media offer and display refresh, healthy neighbor untouched, fresh IDR resumes and stops recovery; feedback on5900, closing first preserves survivor. ACCESS_NETWORK_STATE granted. Owned replay; live recovery remains separate."
             }
         } finally {
             pipelines.forEach {it.close()};readers.forEach {it.close()};thread.quitSafely();thread.join(2000)

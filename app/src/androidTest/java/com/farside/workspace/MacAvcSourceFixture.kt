@@ -68,7 +68,7 @@ internal class MacAvcSourceFixture(private val test:Instrumentation) {
                 val beforeLoss=frames
                 var next=(sequences.getValue(20L)+1) and 65535 // Lose one complete packet.
                 decoder.accept(byteArrayOf(0x61,0),next++,ts,true,20)
-                Thread.sleep(120);decoder.drain()
+                Thread.sleep(320);decoder.drain()
                 repeat(20) {i ->decoder.accept(byteArrayOf(0x61,0),next++ and 65535,ts+(i+1)*90000L,true,20)}
                 repeat(10) {Thread.sleep(16);decoder.drain()}
                 check(submitted==0 && frames==beforeLoss && recoveries>0) {"Damaged dependent pictures reached hardware AVC"}

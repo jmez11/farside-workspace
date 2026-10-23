@@ -140,7 +140,6 @@ internal fun SetupReviewOptions(profile:ConnectionProfile,profiles:List<Connecti
                     SetupToggle(R.string.mac_ssh_relay_toggle,profile.enableMacSshRelay,{
                         if(it && profiles.none {p->p.enableMacSshRelay}) relayConfirm=true else onChange(profile.copy(enableMacSshRelay=it))
                     })
-                    if(profile.enableMacSshRelay) SetupToggle(R.string.mac_ssh_relay_same_mac,profile.macSshRelaySameMac,{onChange(profile.copy(macSshRelaySameMac=it))})
                 }
             }
         }

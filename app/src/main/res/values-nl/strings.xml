@@ -761,4 +761,22 @@
     <string name="setup_remove">Verwijderen</string>
     <string name="setup_public_key">Publieke sleutel</string>
     <string name="setup_sign_ins">Aanmeldingen</string>
+    <string name="mac_quality_starting">Wachten op gecodeerde video</string>
+    <string name="mac_quality_receiving">Video wordt ontvangen</string>
+    <string name="mac_quality_degraded">Video bevat pakketgaten</string>
+    <string name="mac_quality_stalled">Geen recente video — controleren</string>
+    <string name="mac_quality_fallback">VNC-terugval — geen audio</string>
+    <string name="mac_quality_health">Verbindingsstatus</string>
+    <string name="mac_quality_video">Videopakketten / beelden</string>
+    <string name="mac_quality_missing">Verlate pakketten / gaten</string>
+    <string name="mac_quality_reordered">Verkeerde volgorde / duplicaten</string>
+    <string name="mac_quality_drops">Buffer- / decoderverwerpingen</string>
+    <string name="mac_quality_skipped">Beelden wachten op herstel</string>
+    <string name="mac_quality_recovery">Herstelpogingen</string>
+    <string name="mac_quality_age">Laatste beeld</string>
+    <string name="mac_quality_totals">Sessietotalen; late pakketten kunnen als ontbrekend tellen.</string>
+    <string name="mac_quality_rtcp_rx">RTCP-kandidaten (5900 / 5901)</string>
+    <string name="mac_quality_rtcp_auth">RTCP geverifieerd / ongeverifieerd</string>
+    <string name="mac_quality_rtcp_rejected">RTCP ongeldig / dubbel</string>
+    <string name="mac_quality_age_value">%1$.1f s</string>
 </resources>

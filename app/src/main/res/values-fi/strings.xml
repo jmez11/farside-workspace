@@ -761,4 +761,22 @@
     <string name="setup_remove">Poista</string>
     <string name="setup_public_key">Julkinen avain</string>
     <string name="setup_sign_ins">Kirjautumiset</string>
+    <string name="mac_quality_starting">Odotetaan koodattua videota</string>
+    <string name="mac_quality_receiving">Videota vastaanotetaan</string>
+    <string name="mac_quality_degraded">Videossa on pakettiaukkoja</string>
+    <string name="mac_quality_stalled">Ei uutta videota — tarkistetaan</string>
+    <string name="mac_quality_fallback">VNC-varayhteys — ei ääntä</string>
+    <string name="mac_quality_health">Yhteyden tila</string>
+    <string name="mac_quality_video">Videopaketit / kuvat</string>
+    <string name="mac_quality_missing">Myöhästyneet paketit / aukot</string>
+    <string name="mac_quality_reordered">Väärässä järjestyksessä / kaksoiskappaleet</string>
+    <string name="mac_quality_drops">Puskurin / dekooderin hylkäykset</string>
+    <string name="mac_quality_skipped">Palautusta odottavat kuvat</string>
+    <string name="mac_quality_recovery">Palautusyritykset</string>
+    <string name="mac_quality_age">Viimeisin kuva</string>
+    <string name="mac_quality_totals">Istunnon summat; myöhäiset paketit voidaan laskea puuttuviksi.</string>
+    <string name="mac_quality_rtcp_rx">RTCP-ehdokkaat (5900 / 5901)</string>
+    <string name="mac_quality_rtcp_auth">RTCP todennetut / tarkistamattomat</string>
+    <string name="mac_quality_rtcp_rejected">RTCP virheelliset / kaksoiskappaleet</string>
+    <string name="mac_quality_age_value">%1$.1f s</string>
 </resources>

@@ -68,7 +68,9 @@ internal class VncVerification(private val test: Instrumentation,private val liv
         val clipboard = test.targetContext.getSystemService(android.content.ClipboardManager::class.java)
         val originalClip = clipboard.primaryClip
         try {
-            if(mode=="macCapture") {
+            if(mode=="macPorts") {
+                record(MacPortVerification(test).run(requireNotNull(profileId)))
+            } else if(mode=="macCapture") {
                 record(MacCaptureVerification(test).run(requireNotNull(profileId)))
             } else if(mode=="firstFrameFixture") {
                 verifyFirstFrameCover()
@@ -99,6 +101,12 @@ internal class VncVerification(private val test: Instrumentation,private val liv
                 results.appendText(MacRelayDiagnosis(test).run(requireNotNull(profileId)))
             } else if(mode=="macInput") {
                 results.appendText(MacInputVerification(test).run(requireNotNull(profileId)))
+            } else if(mode=="macQualityFixture") {
+                results.appendText(MacQualityVerification(test).run())
+            } else if(mode=="macZerotierUdpProbe") {
+                results.appendText(MacZerotierUdpProbe(test).run(requireNotNull(profileId)))
+            } else if(mode=="macAudioComparison") {
+                results.appendText(MacAudioComparisonVerification(test).run(requireNotNull(profileId)))
             } else if(mode=="macRelayToggle") {
                 results.appendText(MacRelayToggleUiVerification(test).run(requireNotNull(profileId)))
             } else if(mode=="macUdpDiag") {

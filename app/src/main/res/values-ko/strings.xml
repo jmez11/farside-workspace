@@ -761,4 +761,22 @@
     <string name="setup_remove">제거</string>
     <string name="setup_public_key">공개 키</string>
     <string name="setup_sign_ins">로그인</string>
+    <string name="mac_quality_starting">인코딩 영상 대기 중</string>
+    <string name="mac_quality_receiving">영상 수신 중</string>
+    <string name="mac_quality_degraded">영상 패킷 누락 있음</string>
+    <string name="mac_quality_stalled">최근 영상 없음 — 확인 중</string>
+    <string name="mac_quality_fallback">VNC로 전환 — 오디오 없음</string>
+    <string name="mac_quality_health">연결 상태</string>
+    <string name="mac_quality_video">영상 패킷 / 프레임</string>
+    <string name="mac_quality_missing">기한 초과 패킷 / 누락 구간</string>
+    <string name="mac_quality_reordered">순서 어긋남 / 중복</string>
+    <string name="mac_quality_drops">버퍼 / 디코더 폐기</string>
+    <string name="mac_quality_skipped">복구 대기 영상</string>
+    <string name="mac_quality_recovery">복구 시도</string>
+    <string name="mac_quality_age">마지막 프레임</string>
+    <string name="mac_quality_totals">세션 합계입니다. 늦은 패킷도 누락으로 계산될 수 있습니다.</string>
+    <string name="mac_quality_rtcp_rx">RTCP 후보 (5900 / 5901)</string>
+    <string name="mac_quality_rtcp_auth">RTCP 인증됨 / 미확인</string>
+    <string name="mac_quality_rtcp_rejected">RTCP 잘못됨 / 중복</string>
+    <string name="mac_quality_age_value">%1$.1f s</string>
 </resources>

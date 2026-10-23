@@ -759,4 +759,24 @@
     <string name="setup_sign_ins">Sign-ins</string>
     <string name="open_source_licenses">Open source licenses</string>
     <string name="about_version">Version %1$s</string>
+    <string name="mac_quality_starting">Waiting for encoded video</string>
+    <string name="mac_quality_receiving">Video arriving</string>
+    <string name="mac_quality_degraded">Video has packet gaps</string>
+    <string name="mac_quality_stalled">No recent video — checking</string>
+    <string name="mac_quality_fallback">VNC fallback — no audio</string>
+    <string name="mac_quality_health">Connection health</string>
+    <string name="mac_quality_video">Video packets / frames</string>
+    <string name="mac_quality_missing">Overdue packets / gaps</string>
+    <string name="mac_quality_reordered">Out of order / duplicates</string>
+    <string name="mac_quality_drops">Buffer / decoder drops</string>
+    <string name="mac_quality_skipped">Pictures held for recovery</string>
+    <string name="mac_quality_recovery">Recovery attempts</string>
+    <string name="mac_quality_age">Last frame</string>
+    <string name="mac_quality_totals">Session totals; late packets may count as missing.</string>
+    <string name="mac_quality_rtcp_rx">RTCP candidates (5900 / 5901)</string>
+    <string name="mac_quality_rtcp_auth">RTCP authenticated / unverified</string>
+    <string name="mac_quality_rtcp_rejected">RTCP malformed / duplicate</string>
+    <string name="mac_quality_age_value">%1$.1f s</string>
+    <!-- Standard RTCP report acronyms: sender / receiver / feedback. -->
+    <string name="mac_quality_rtcp_reports" translatable="false">RTCP SR / RR / FB</string>
 </resources>

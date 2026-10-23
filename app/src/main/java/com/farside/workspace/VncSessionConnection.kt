@@ -110,6 +110,7 @@ internal class VncSessionConnection(
                     cancelled={ closed.get() },
                     terminal={ MacConnectionPolicy.isTerminal(it) || closed.get() },
                     failed={ route,error ->
+                        if(route!=MacConnectionPolicy.Route.VNC) bridge.recordMediaFallback()
                         if(instance!=0L) bridge.disconnect(instance)
                         instance=0L;closeMediaRelay()
                         failure=if(error is VncAuthenticationException) context.getString(R.string.vnc_mac_auth_failed)
@@ -139,10 +140,8 @@ internal class VncSessionConnection(
                         mediaLease=lease
                         gate?.await()
                         val client=lease.connect(ssh.copy(reconnectAutomatically=false))
-                        if(profile.macSshRelaySameMac) {
-                            sessionUsername=MacSessionIdentity.resolve(client,credential.user)
-                        }
-                        mediaRelay=MacHevcSshRelay(context,client,if(tunnel==null) directHost else profile.host,{ android.util.Log.i("MacMediaRelay",it) },profile.port,profile.macSshRelaySameMac)
+                        sessionUsername=MacSessionIdentity.resolve(client,credential.user)
+                        mediaRelay=MacHevcSshRelay(context,client,if(tunnel==null) directHost else profile.host,{ android.util.Log.i("MacMediaRelay",it) },profile.port,sameMac=true)
                         host="127.0.0.1";port=checkNotNull(mediaRelay).port
                     }
                     val streaming=route!=MacConnectionPolicy.Route.VNC
@@ -152,6 +151,9 @@ internal class VncSessionConnection(
                         macSessionUsername=sessionUsername,macDatagramSender=mediaRelay?.let { relay -> { p,b -> relay.send(p,b) } },
                         macAuthenticationGate=gate?.let { { it.await() } })
                     if(streaming && !bridge.awaitMacVideo(cancelled={closed.get()})) {
+                        bridge.recordMediaFallback()
+                        val media=bridge.macMediaPipeline
+                        android.util.Log.w("MacConnection","$route media timeout: videoPackets=${media?.packetsReceived?.get()} authenticated=${media?.authenticatedPackets?.get()} frames=${media?.framesDecoded?.get()} audioPackets=${media?.audio?.authenticated?.get()} audioPeak=${media?.audio?.peak?.get()}")
                         bridge.disconnect(instance);instance=0L
                         throw java.io.IOException("Mac media did not arrive")
                     }

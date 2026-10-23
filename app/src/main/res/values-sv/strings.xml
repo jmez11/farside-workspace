@@ -761,4 +761,22 @@
     <string name="setup_remove">Ta bort</string>
     <string name="setup_public_key">Offentlig nyckel</string>
     <string name="setup_sign_ins">Inloggningar</string>
+    <string name="mac_quality_starting">Väntar på kodad video</string>
+    <string name="mac_quality_receiving">Tar emot video</string>
+    <string name="mac_quality_degraded">Videon har paketluckor</string>
+    <string name="mac_quality_stalled">Ingen ny video — kontrollerar</string>
+    <string name="mac_quality_fallback">VNC-reserv — inget ljud</string>
+    <string name="mac_quality_health">Anslutningens status</string>
+    <string name="mac_quality_video">Videopaket / bildrutor</string>
+    <string name="mac_quality_missing">Försenade paket / luckor</string>
+    <string name="mac_quality_reordered">Fel ordning / dubbletter</string>
+    <string name="mac_quality_drops">Buffert- / avkodarkasseringar</string>
+    <string name="mac_quality_skipped">Bildrutor väntar på återställning</string>
+    <string name="mac_quality_recovery">Återställningsförsök</string>
+    <string name="mac_quality_age">Senaste bildruta</string>
+    <string name="mac_quality_totals">Sessionstotaler; sena paket kan räknas som saknade.</string>
+    <string name="mac_quality_rtcp_rx">RTCP-kandidater (5900 / 5901)</string>
+    <string name="mac_quality_rtcp_auth">RTCP verifierade / overifierade</string>
+    <string name="mac_quality_rtcp_rejected">RTCP felaktiga / dubbletter</string>
+    <string name="mac_quality_age_value">%1$.1f s</string>
 </resources>

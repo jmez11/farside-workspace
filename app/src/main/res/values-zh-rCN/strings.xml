@@ -763,4 +763,22 @@
     <string name="setup_remove">删除</string>
     <string name="setup_public_key">公钥</string>
     <string name="setup_sign_ins">登录</string>
+    <string name="mac_quality_starting">正在等待编码视频</string>
+    <string name="mac_quality_receiving">正在接收视频</string>
+    <string name="mac_quality_degraded">视频数据包有缺口</string>
+    <string name="mac_quality_stalled">暂无新画面 — 正在检查</string>
+    <string name="mac_quality_fallback">回退到 VNC — 无音频</string>
+    <string name="mac_quality_health">连接状态</string>
+    <string name="mac_quality_video">视频数据包 / 帧</string>
+    <string name="mac_quality_missing">超时数据包 / 缺口</string>
+    <string name="mac_quality_reordered">乱序 / 重复</string>
+    <string name="mac_quality_drops">缓冲区 / 解码器丢弃</string>
+    <string name="mac_quality_skipped">等待恢复的画面</string>
+    <string name="mac_quality_recovery">恢复尝试</string>
+    <string name="mac_quality_age">最后一帧</string>
+    <string name="mac_quality_totals">会话累计值；迟到的数据包可能计为缺失。</string>
+    <string name="mac_quality_rtcp_rx">RTCP候选包 (5900 / 5901)</string>
+    <string name="mac_quality_rtcp_auth">RTCP 已认证 / 未验证</string>
+    <string name="mac_quality_rtcp_rejected">RTCP 格式错误 / 重复</string>
+    <string name="mac_quality_age_value">%1$.1f s</string>
 </resources>

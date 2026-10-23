@@ -11,15 +11,60 @@ internal class MacInputVerification(private val test:Instrumentation) {
     fun run(id:String):String {
         val context=test.targetContext
         val pm=ProfileManager(context)
-        val profile=pm.getProfiles().single { it.id==id && it.type==ConnectionType.VNC }
+        val savedProfile=pm.getProfiles().single { it.id==id && it.type==ConnectionType.VNC }
+        test.arguments?.getString("macInputCleanupProfile")?.let {ownedId ->
+            check(ownedId!=savedProfile.id)
+            val owned=pm.getProfiles().single {it.id==ownedId}
+            check(owned==savedProfile.copy(id=ownedId,cardBackground=null,reconnectAutomatically=false))
+            pm.deleteProfile(ownedId)
+            check(context.getSharedPreferences("farside_profiles",0).edit().commit())
+            if(test.arguments?.getString("macInputCleanupOnly")=="true") return "PASS removed only explicitly identified interrupted Mac fixture copy; no connection opened"
+        }
+        val profile=if(test.arguments?.getString("macVirtualSession")=="true")
+            savedProfile.copy(expMacShareConsole=false) else if(test.arguments?.getString("macConsoleSession")=="true") savedProfile.copy(expMacShareConsole=true) else savedProfile
         require(profile.proxyType in listOf(ProxyType.NONE,ProxyType.CLOUDFLARED))
         val report=File(context.cacheDir,"mac-input-results.txt").apply { writeText("") }
         fun record(message:String) { report.appendText("${SystemClock.uptimeMillis()}: $message\n") }
+        record("Session policy savedConsole=${savedProfile.expMacShareConsole} testConsole=${profile.expMacShareConsole}; saved profile unchanged")
         val action=File(context.cacheDir,"mac-input-action.json").apply { delete() }
-        record(MacNativeBaseline(test).run(id))
+        if(test.arguments?.getString("macInputBaselineBefore")!="false") record(MacNativeBaseline(test).run(id))
+        else record("Cold production window: no preliminary native VNC connection")
         MacMediaSurface(test,profile.copy(reconnectAutomatically=false),realSessionWindow=true).use { display ->
             check(display.awaitConnection())
             val bridge=checkNotNull(display.bridge);val handle=display.handle
+            if(test.arguments?.getString("macQualityOnly")=="true") {
+                val q=checkNotNull(bridge.connectionQuality())
+                val now=SystemClock.uptimeMillis()
+                display.touch(.5f,.04f,true,now);Thread.sleep(80);display.touch(.5f,.04f,false,now)
+                val info=test.uiAutomation.serviceInfo
+                info.flags=info.flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+                test.uiAutomation.serviceInfo=info
+                fun find(label:String):android.view.accessibility.AccessibilityNodeInfo? {
+                    test.uiAutomation.clearCache()
+                    fun visit(n:android.view.accessibility.AccessibilityNodeInfo):android.view.accessibility.AccessibilityNodeInfo? {
+                        if(n.text?.toString()==label || n.contentDescription?.toString()==label) return n
+                        repeat(n.childCount) {n.getChild(it)?.let {c ->visit(c)?.let {return it}}};return null
+                    }
+                    val windows=test.uiAutomation.windowsOnAllDisplays
+                    for(i in 0 until windows.size()) for(w in windows.valueAt(i)) {
+                        w.root?.takeIf {it.packageName==context.packageName}?.let {visit(it)?.let {return it}}
+                    }
+                    return null
+                }
+                val until=SystemClock.uptimeMillis()+10000
+                var icon=find(context.getString(R.string.debug_actions))
+                while(icon==null && SystemClock.uptimeMillis()<until) {Thread.sleep(100);icon=find(context.getString(R.string.debug_actions))}
+                var action=checkNotNull(icon) {"Info toolbar action missing"}
+                while(!action.isClickable && action.parent!=null) action=checkNotNull(action.parent)
+                check(action.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK))
+                val expected=context.getString(if(q.fallback) R.string.mac_quality_fallback else R.string.mac_quality_health)
+                val deadline=SystemClock.uptimeMillis()+10000
+                while(find(expected)==null && SystemClock.uptimeMillis()<deadline) Thread.sleep(100)
+                check(find(expected)!=null) {"Actual connection popup omitted media quality"}
+                display.captureWindow("mac-quality-live-window.png")
+                record("PASS actual SessionActivity toolbar Info quality state=${q.state} packets=${q.videoPackets} frames=${q.frames} missing=${q.missing} gaps=${q.gaps}; fallback diagnostics retained")
+                return report.readText()
+            }
             check(bridge.isMacHevc)
             // Give the real initial resize and its fade time to complete.
             Thread.sleep(8000)
@@ -27,7 +72,20 @@ internal class MacInputVerification(private val test:Instrumentation) {
             if(test.arguments?.getString("macInspectOnly")!="true") check(initialColored)
             if(test.arguments?.getString("macInspectOnly")=="true") {
                 display.captureWindow("mac-input-initial-window.png")
+                if(test.arguments?.getString("macInspectSeries")=="true") {
+                    repeat(12) {i ->
+                        display.capture("mac-input-startup-$i.png")
+                        record("production startup/$i frames=${bridge.macMediaPipeline?.framesDecoded?.get()} ${bridge.macMediaPipeline?.videoStreamSummary}")
+                        Thread.sleep(1000)
+                    }
+                }
+                record("Incoming RTCP diagnostics: ${bridge.macMediaPipeline?.rtcpDiagnostics?.snapshot()}")
                 record("Initial production window captured without physical resize or typed input; colored=$initialColored hardware frames=${bridge.macMediaPipeline?.framesDecoded?.get()}")
+                if(test.arguments?.getString("macInspectWakeKey")=="true") {
+                    bridge.sendKeyEvent(handle,0x2a,true);Thread.sleep(80);bridge.sendKeyEvent(handle,0x2a,false)
+                    Thread.sleep(2000);display.capture("mac-input-after-wake-key.png")
+                    record("Captured one Shift press/release wake comparison; no character or password sent")
+                }
                 if(test.arguments?.getString("macInspectWake")=="true") {
                     display.hover(.5f,.5f);Thread.sleep(1500)
                     display.capture("mac-input-after-hover.png")

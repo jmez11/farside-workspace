@@ -776,4 +776,22 @@
     <string name="setup_remove">Usuń</string>
     <string name="setup_public_key">Klucz publiczny</string>
     <string name="setup_sign_ins">Logowania</string>
+    <string name="mac_quality_starting">Oczekiwanie na kodowane wideo</string>
+    <string name="mac_quality_receiving">Odbieranie wideo</string>
+    <string name="mac_quality_degraded">Braki pakietów wideo</string>
+    <string name="mac_quality_stalled">Brak nowych klatek — sprawdzanie</string>
+    <string name="mac_quality_fallback">Tryb awaryjny VNC — bez dźwięku</string>
+    <string name="mac_quality_health">Stan połączenia</string>
+    <string name="mac_quality_video">Pakiety wideo / klatki</string>
+    <string name="mac_quality_missing">Spóźnione pakiety / luki</string>
+    <string name="mac_quality_reordered">Poza kolejnością / duplikaty</string>
+    <string name="mac_quality_drops">Odrzucone przez bufor / dekoder</string>
+    <string name="mac_quality_skipped">Klatki oczekujące na odzyskanie</string>
+    <string name="mac_quality_recovery">Próby odzyskiwania</string>
+    <string name="mac_quality_age">Ostatnia klatka</string>
+    <string name="mac_quality_totals">Sumy sesji; spóźnione pakiety mogą być liczone jako brakujące.</string>
+    <string name="mac_quality_rtcp_rx">Kandydaci RTCP (5900 / 5901)</string>
+    <string name="mac_quality_rtcp_auth">RTCP uwierzytelnione / niezweryfikowane</string>
+    <string name="mac_quality_rtcp_rejected">RTCP błędne / powielone</string>
+    <string name="mac_quality_age_value">%1$.1f s</string>
 </resources>

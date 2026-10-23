@@ -45,6 +45,7 @@ internal class MacRelayToggleUiVerification(private val test: Instrumentation) {
                 }
             }
 
+            click("4 "+test.targetContext.getString(R.string.setup_review))
             val toggleLabel = test.targetContext.getString(R.string.mac_ssh_relay_toggle)
             val dialogTitle = test.targetContext.getString(R.string.mac_ssh_relay_dialog_title)
             val enableBtn = test.targetContext.getString(R.string.enable)
@@ -65,9 +66,9 @@ internal class MacRelayToggleUiVerification(private val test: Instrumentation) {
             check(nodes().any { it.text?.toString() == dialogTitle }) { "Unsaved approval suppressed warning" }
             click(enableBtn)
 
-            click(test.targetContext.getString(R.string.mac_ssh_relay_same_mac))
+            check(nodes().none { it.text?.toString()==test.targetContext.getString(R.string.mac_ssh_relay_same_mac) })
             // Click save
-            click(test.targetContext.getString(R.string.save_uppercase))
+            click(test.targetContext.getString(R.string.save_changes))
             val result = checkNotNull(saved) { "Profile was not saved" }
             check(result.enableMacSshRelay) { "enableMacSshRelay was not true in saved profile" }
             check(result.macSshRelaySameMac) { "Same-Mac selection was not saved" }
@@ -80,9 +81,10 @@ internal class MacRelayToggleUiVerification(private val test: Instrumentation) {
                     }
                 }
             }
+            click("4 "+test.targetContext.getString(R.string.setup_review))
             click(toggleLabel)
             check(nodes().none { it.text?.toString() == dialogTitle }) { "Saved enabled profile did not suppress warning" }
-            return "PASS warning repeats without saved opt-in; saved enabled profile suppresses it; same-Mac control saves true; no acceptance preference written"
+            return "PASS warning repeats without saved opt-in; saved enabled profile suppresses it; same-Mac choice absent, assumed true; no acceptance preference written"
         } finally {
             pm.deleteCredential(credential.id)
             test.removeMonitor(monitor)

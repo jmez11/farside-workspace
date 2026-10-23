@@ -778,4 +778,22 @@
     <string name="setup_remove">Удалить</string>
     <string name="setup_public_key">Открытый ключ</string>
     <string name="setup_sign_ins">Вход в систему</string>
+    <string name="mac_quality_starting">Ожидание кодированного видео</string>
+    <string name="mac_quality_receiving">Видео принимается</string>
+    <string name="mac_quality_degraded">Пропуски пакетов видео</string>
+    <string name="mac_quality_stalled">Нет новых кадров — проверка</string>
+    <string name="mac_quality_fallback">Резервный VNC — без звука</string>
+    <string name="mac_quality_health">Состояние соединения</string>
+    <string name="mac_quality_video">Видеопакеты / кадры</string>
+    <string name="mac_quality_missing">Просроченные пакеты / пропуски</string>
+    <string name="mac_quality_reordered">Не по порядку / дубликаты</string>
+    <string name="mac_quality_drops">Сбросы буфера / декодера</string>
+    <string name="mac_quality_skipped">Кадры ожидают восстановления</string>
+    <string name="mac_quality_recovery">Попытки восстановления</string>
+    <string name="mac_quality_age">Последний кадр</string>
+    <string name="mac_quality_totals">Итоги сеанса; поздние пакеты могут считаться пропущенными.</string>
+    <string name="mac_quality_rtcp_rx">Кандидаты RTCP (5900 / 5901)</string>
+    <string name="mac_quality_rtcp_auth">RTCP проверенные / непроверенные</string>
+    <string name="mac_quality_rtcp_rejected">RTCP некорректные / повторные</string>
+    <string name="mac_quality_age_value">%1$.1f s</string>
 </resources>

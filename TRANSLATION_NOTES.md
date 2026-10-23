@@ -1,5 +1,7 @@
 # Translation notes
 
+- `mac_quality_*`: Session counters are totals, not loss percentages. “No recent video” can describe a quiet desktop; avoid translating it as a proven disconnection. RTCP SR/RR/FB are standard report acronyms. Preserve the positional floating-point placeholder in `mac_quality_age_value`; `s` is the SI seconds symbol.
+
 - `setup_*`: Connection wizard and credential vault labels. The 92 formerly English-only entries now have machine-assisted translations in all 22 locales, with technical names, regional labels and positional placeholders checked. Native-language wording/layout review remains manual.
 - `setup_full_name` / `setup_short_name`: Mac Screen Sharing account display name versus the Unix account name used by SSH; both belong to one complete saved sign-in. Preserve `Mac`, `macOS`, `VNC`, `SSH`, `RDP`, and `Cloudflare` product/protocol names.
 

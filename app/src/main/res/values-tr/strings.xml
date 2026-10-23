@@ -762,4 +762,22 @@
     <string name="setup_remove">Kaldır</string>
     <string name="setup_public_key">Genel anahtar</string>
     <string name="setup_sign_ins">Oturum açma işlemleri</string>
+    <string name="mac_quality_starting">Kodlanmış video bekleniyor</string>
+    <string name="mac_quality_receiving">Video alınıyor</string>
+    <string name="mac_quality_degraded">Videoda paket boşlukları var</string>
+    <string name="mac_quality_stalled">Yeni video yok — kontrol ediliyor</string>
+    <string name="mac_quality_fallback">VNC yedeği — ses yok</string>
+    <string name="mac_quality_health">Bağlantı durumu</string>
+    <string name="mac_quality_video">Video paketleri / kareler</string>
+    <string name="mac_quality_missing">Geciken paketler / boşluklar</string>
+    <string name="mac_quality_reordered">Sıra dışı / yinelenen</string>
+    <string name="mac_quality_drops">Tampon / kod çözücü atımları</string>
+    <string name="mac_quality_skipped">Kurtarma bekleyen kareler</string>
+    <string name="mac_quality_recovery">Kurtarma denemeleri</string>
+    <string name="mac_quality_age">Son kare</string>
+    <string name="mac_quality_totals">Oturum toplamları; geç paketler eksik sayılabilir.</string>
+    <string name="mac_quality_rtcp_rx">RTCP adayları (5900 / 5901)</string>
+    <string name="mac_quality_rtcp_auth">RTCP doğrulanan / doğrulanmayan</string>
+    <string name="mac_quality_rtcp_rejected">RTCP bozuk / yinelenen</string>
+    <string name="mac_quality_age_value">%1$.1f s</string>
 </resources>

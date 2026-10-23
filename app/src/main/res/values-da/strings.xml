@@ -761,4 +761,22 @@
     <string name="setup_remove">Fjern</string>
     <string name="setup_public_key">Offentlig nøgle</string>
     <string name="setup_sign_ins">Tilmeldinger</string>
+    <string name="mac_quality_starting">Venter på kodet video</string>
+    <string name="mac_quality_receiving">Video modtages</string>
+    <string name="mac_quality_degraded">Video har pakkehuller</string>
+    <string name="mac_quality_stalled">Ingen ny video — kontrollerer</string>
+    <string name="mac_quality_fallback">VNC-reserve — ingen lyd</string>
+    <string name="mac_quality_health">Forbindelsens tilstand</string>
+    <string name="mac_quality_video">Videopakker / billeder</string>
+    <string name="mac_quality_missing">Forsinkede pakker / huller</string>
+    <string name="mac_quality_reordered">Ude af rækkefølge / dubletter</string>
+    <string name="mac_quality_drops">Tab i buffer / dekoder</string>
+    <string name="mac_quality_skipped">Billeder afventer gendannelse</string>
+    <string name="mac_quality_recovery">Gendannelsesforsøg</string>
+    <string name="mac_quality_age">Seneste billede</string>
+    <string name="mac_quality_totals">Sessionens totaler; sene pakker kan tælles som manglende.</string>
+    <string name="mac_quality_rtcp_rx">RTCP-kandidater (5900 / 5901)</string>
+    <string name="mac_quality_rtcp_auth">RTCP godkendt / ubekræftet</string>
+    <string name="mac_quality_rtcp_rejected">RTCP ugyldig / dublet</string>
+    <string name="mac_quality_age_value">%1$.1f s</string>
 </resources>

@@ -25,7 +25,7 @@ internal class MacMediaSurface(private val test: Instrumentation, profile: Conne
     private val transientProfile=if(realSessionWindow) requireNotNull(profile).copy(id=java.util.UUID.randomUUID().toString(),cardBackground=null) else null
     private val activity:androidx.activity.ComponentActivity=run {
         val pm=com.farside.workspace.data.ProfileManager(test.targetContext)
-        if(transientProfile!=null) { pm.addProfile(transientProfile);check(test.targetContext.getSharedPreferences("farside_profiles",0).edit().commit()) }
+        if(transientProfile!=null) { File(test.targetContext.cacheDir,"mac-media-owned-profile-id.txt").writeText(transientProfile.id);pm.addProfile(transientProfile);check(test.targetContext.getSharedPreferences("farside_profiles",0).edit().commit()) }
         val component=if(transientProfile!=null) SessionActivity::class.java else MainActivity::class.java
         val monitor=test.addMonitor(component.name,null,false)
         try {

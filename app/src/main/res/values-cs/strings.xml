@@ -778,4 +778,22 @@
     <string name="setup_remove">Odebrat</string>
     <string name="setup_public_key">Veřejný klíč</string>
     <string name="setup_sign_ins">Přihlášení</string>
+    <string name="mac_quality_starting">Čekání na kódované video</string>
+    <string name="mac_quality_receiving">Video přichází</string>
+    <string name="mac_quality_degraded">Ve videu chybí pakety</string>
+    <string name="mac_quality_stalled">Žádné nové video — kontrola</string>
+    <string name="mac_quality_fallback">Záložní VNC — bez zvuku</string>
+    <string name="mac_quality_health">Stav připojení</string>
+    <string name="mac_quality_video">Video pakety / snímky</string>
+    <string name="mac_quality_missing">Opožděné pakety / mezery</string>
+    <string name="mac_quality_reordered">Mimo pořadí / duplicity</string>
+    <string name="mac_quality_drops">Zahozené v bufferu / dekodéru</string>
+    <string name="mac_quality_skipped">Snímky čekající na obnovu</string>
+    <string name="mac_quality_recovery">Pokusy o obnovu</string>
+    <string name="mac_quality_age">Poslední snímek</string>
+    <string name="mac_quality_totals">Součty relace; pozdní pakety mohou být započteny jako chybějící.</string>
+    <string name="mac_quality_rtcp_rx">RTCP kandidáti (5900 / 5901)</string>
+    <string name="mac_quality_rtcp_auth">RTCP ověřené / neověřené</string>
+    <string name="mac_quality_rtcp_rejected">RTCP chybné / duplicitní</string>
+    <string name="mac_quality_age_value">%1$.1f s</string>
 </resources>

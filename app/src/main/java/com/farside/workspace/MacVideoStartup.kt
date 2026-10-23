@@ -1,8 +1,8 @@
 package com.farside.workspace
 
-/** Allow a bounded decoder warmup only after authenticated video has arrived. */
+/** Allow bounded decoder warmup after authenticated media (video or audio) has arrived. */
 internal object MacVideoStartup {
-    fun await(frame:()->Boolean, progress:()->Boolean, initialMs:Long=3500, progressMs:Long=10000,
+    fun await(frame:()->Boolean, progress:()->Boolean, initialMs:Long=3500, progressMs:Long=20000,
         now:()->Long={System.nanoTime()/1_000_000}, pause:(Long)->Unit={Thread.sleep(it)},
         cancelled:()->Boolean={false}):Boolean {
         require(initialMs>0 && progressMs>=initialMs)

@@ -521,6 +521,14 @@ class MacHevcSession(
                 audioObserver = audioObserver,
                 preferAvc = preferAvc,
                 encodedVideoObserver=encodedVideoObserver,
+                onMediaRefresh={ reofferMediaStream();requestUpdate(incremental=false) },
+                onDisplayRefresh={
+                    if(!shareConsole) {
+                        val size=lastDisplayRequest ?: (width to height)
+                        sendDisplayConfiguration(size.first,size.second,displayType=4)
+                    }
+                    reofferMediaStream();requestUpdate(incremental=false)
+                },
                 onFrameDecoded = {
                     // Decoded hardware frame rendered directly to Surface
                 },
@@ -915,8 +923,10 @@ class MacHevcSession(
         } catch (ignored: RejectedExecutionException) {}
     }
 
+    @Volatile private var lastDisplayRequest:Pair<Int,Int>?=null
     fun sendDisplayConfiguration(w: Int = width, h: Int = height, displayType: Int = 0) {
         if (stage == "CLOSED" || writerExecutor.isShutdown) return
+        lastDisplayRequest=w to h
         try {
             writerExecutor.execute {
                 try {

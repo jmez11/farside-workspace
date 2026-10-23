@@ -12,7 +12,8 @@ internal object MacDefaultsFixture {
         val mac=ConnectionProfile("mac","Fixture",ConnectionType.VNC,"fixture.invalid",
             user="",pass="",vncAuthMode=VncAuthMode.MAC_USER,macSshRelayProfileId=ssh.id)
         val json=mac.toJson().apply { remove("sftpPairProfileId") }
-        check(!ConnectionProfile.fromJson(mac.toJson().apply { remove("macSshRelaySameMac") }).macSshRelaySameMac)
+        check(ConnectionProfile.fromJson(mac.toJson().apply { remove("macSshRelaySameMac") }).macSshRelaySameMac)
+        check(ConnectionProfile.fromJson(mac.copy(macSshRelaySameMac=false).toJson()).macSshRelaySameMac)
         check(ConnectionProfile.fromJson(mac.copy(macSshRelaySameMac=true).toJson()).macSshRelaySameMac)
         check(ConnectionProfile.fromJson(json).sftpPairProfileId==ssh.id)
         check(!ConnectionProfile.fromJson(mac.copy(sftpPairProfileId="other").toJson()).sftpPairProfileId.isNullOrBlank())
