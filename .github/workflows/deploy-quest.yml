@@ -10,12 +10,14 @@ name: Deploy to Quest
 # adbd's cgroup — not inside Farside's app process — so the nohup'd script
 # survives the package replacement that kills the app.
 #
-# Two modes (chosen at dispatch); both take an already-built APK, nothing is
+# Three modes (chosen at dispatch); both take an already-built APK, nothing is
 # compiled here:
-#   debug   — downloads the `farside-debug-apk` artifact from the latest
-#             successful CI run on master.
-#   release — downloads `app-release.apk` from the newest GitHub Release
-#             (including prereleases, e.g. v0.1.0-rc1).
+#   debug    — downloads the `farside-debug-apk` artifact from the latest
+#              successful CI run on master.
+#   release  — downloads `app-release.apk` from the newest GitHub Release
+#              (including prereleases, e.g. v0.1.0-rc1).
+#   trybuild — downloads the `farside-cloudflared-trybuild-apk` artifact from
+#              the latest successful Cloudflared try-build run.
 #
 # Farside must be running on the headset with its tunnel started — reaching
 # the headset this way IS the test. Manual trigger only.
@@ -23,7 +25,9 @@ name: Deploy to Quest
 # NOTE: `pm install -r` requires the same signing cert every time. A debug
 # APK will NOT install over a differently-signed (release) build, and a
 # release APK will NOT install over a debug build — uninstall Farside from
-# the headset once first when switching between the two.
+# the headset once first when switching between the two. Try-build APKs are
+# debug-signed with the CI ephemeral key, which differs per run, so a newer
+# try-build also needs the old one uninstalled first.
 
 on:
   workflow_dispatch:
@@ -36,6 +40,7 @@ on:
         options:
           - debug
           - release
+          - trybuild
       hostname:
         description: 'Tunnel hostname publishing the Quest adbd (defaults to the ADB_TUNNEL_HOSTNAME secret)'
         required: false
@@ -89,6 +94,25 @@ jobs:
           mkdir -p /tmp/farside-deploy
           gh release download "$TAG" --repo "${{ github.repository }}" --pattern 'app-release.apk' --dir /tmp/farside-deploy
           echo "apk=/tmp/farside-deploy/app-release.apk" >> "$GITHUB_OUTPUT"
+
+      - name: Download latest cloudflared try-build APK artifact
+        id: apk-trybuild
+        if: inputs.build_type == 'trybuild'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Latest successful Cloudflared try-build run (manual dispatch, any branch).
+          RUN_JSON="$(gh run list --repo "${{ github.repository }}" --workflow cloudflared-trybuild.yml --status success --limit 1 --json databaseId,headSha,displayTitle --jq '.[0]')"
+          RUN_ID="$(echo "$RUN_JSON" | jq -r '.databaseId')"
+          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+            echo "No successful cloudflared try-build run found." >&2
+            exit 1
+          fi
+          echo "using try-build run $RUN_ID: $(echo "$RUN_JSON" | jq -r '.displayTitle') ($(echo "$RUN_JSON" | jq -r '.headSha' | cut -c1-7))"
+          mkdir -p /tmp/farside-deploy
+          gh run download "$RUN_ID" --repo "${{ github.repository }}" --name farside-cloudflared-trybuild-apk --dir /tmp/farside-deploy
+          echo "apk=/tmp/farside-deploy/app-debug.apk" >> "$GITHUB_OUTPUT"
 
       - name: Install cloudflared, adb and build-tools
         run: |
@@ -177,7 +201,7 @@ jobs:
             exit 1
           fi
           adb -s 127.0.0.1:5555 wait-for-device
-          adb -s 127.0.0.1:5555 push "${{ steps.apk-debug.outputs.apk || steps.apk-release.outputs.apk }}" /data/local/tmp/farside-update.apk
+          adb -s 127.0.0.1:5555 push "${{ steps.apk-debug.outputs.apk || steps.apk-release.outputs.apk || steps.apk-trybuild.outputs.apk }}" /data/local/tmp/farside-update.apk
           # Detached reinstall: the shell is parented to adbd (uid 2000), so it
           # survives `pm install -r` killing Farside, finishes the install,
           # cleans up, and restarts AdbTunnelService so the tunnel reconnects
@@ -224,7 +248,7 @@ jobs:
           # confirm the installed versionCode matches the APK we just pushed.
           AAPT="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name aapt -type f 2>/dev/null | head -1)"
           if [ -n "$AAPT" ]; then
-            WANT_VERCODE="$("$AAPT" dump badging "${{ steps.apk-debug.outputs.apk || steps.apk-release.outputs.apk }}" | sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p")"
+            WANT_VERCODE="$("$AAPT" dump badging "${{ steps.apk-debug.outputs.apk || steps.apk-release.outputs.apk || steps.apk-trybuild.outputs.apk }}" | sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p")"
             GOT_VERCODE="$(adb -s 127.0.0.1:5555 shell dumpsys package com.farside.workspace | sed -n 's/.*versionCode=\([0-9]*\).*/\1/p' | head -1 | tr -d '\r')"
             echo "apk versionCode=$WANT_VERCODE installed versionCode=$GOT_VERCODE"
             if [ -n "$WANT_VERCODE" ] && [ "$WANT_VERCODE" != "$GOT_VERCODE" ]; then
