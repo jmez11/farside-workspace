@@ -1,0 +1,72 @@
+name: Cloudflared try-build
+
+# Manual try-build: compiles cloudflared at an unpinned upstream tag with the
+# Android adaptations, swaps the binary into jniLibs, and builds a debug APK
+# for on-device testing. Runs on the branch it is dispatched from; never
+# touches master. The APK is uploaded as its own artifact (debug-signed with
+# the CI ephemeral key, so uninstall any existing debug build before
+# installing it on the Quest).
+#
+# NOTE: this intentionally does NOT run lint — it is for testing the
+# cloudflared binary, not for validating the tree.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "cloudflared upstream tag (e.g. 2026.10.3)"
+        required: true
+        default: "2026.10.3"
+      sha256:
+        description: "Expected SHA-256 of the source archive (empty skips verification)"
+        required: false
+        default: "a6e8f67e33d68c5f5eb30bf480f5e59b487035eb488897bb6e6f390e76dfc8f2"
+      go_version:
+        description: "Go toolchain version (must satisfy the tag's go.mod)"
+        required: true
+        default: "1.27.3"
+
+jobs:
+  trybuild:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout with submodules
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ inputs.go_version }}
+
+      - name: Install Android SDK components
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "ndk;26.1.10909125" "cmake;3.22.1"
+
+      - name: Build cloudflared for Android
+        shell: pwsh
+        run: |
+          ./tools/build-cloudflared.ps1 -Version '${{ inputs.version }}' -ExpectedSha256 '${{ inputs.sha256 }}' -ModMode 'mod'
+
+      - name: Verify the new binary is packaged
+        run: |
+          strings app/src/main/jniLibs/arm64-v8a/libcloudflared.so | grep -m1 "${{ inputs.version }}-farside"
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Upload try-build APK
+        uses: actions/upload-artifact@v5
+        with:
+          name: farside-cloudflared-trybuild-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14

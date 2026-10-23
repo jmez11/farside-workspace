@@ -1,12 +1,16 @@
-"""Apply narrowly scoped Android adaptations to pinned upstream cloudflared.
+"""Apply narrowly scoped Android adaptations to upstream cloudflared.
 
-Run with the unpacked 2026.5.1 source directory. Emits a reviewable unified diff.
+Run with the unpacked source directory and the upstream version tag, e.g.
+    python tools/prepare-cloudflared.py <source-dir> 2026.10.3
+The version defaults to 2026.5.1 (the pinned release). Emits a reviewable
+unified diff.
 """
 import difflib
 import pathlib
 import sys
 
 root = pathlib.Path(sys.argv[1])
+version = sys.argv[2] if len(sys.argv) > 2 else "2026.5.1"
 patches = []
 
 def edit(path, transform):
@@ -70,14 +74,49 @@ edit("cmd/cloudflared/access/cmd.go", login)
 # Android launches the validated URL through ACTION_VIEW in the parent app.
 edit("token/shell.go", lambda s: s.replace('package token', 'package token\n\nimport "errors"').replace('return getBrowserCmd(url).Start()', 'return errors.New("browser delegated to Android app")'))
 edit("carrier/carrier.go", lambda s: s.replace('return Serve(conn, listener, shutdownC, options)', 'fmt.Fprintln(os.Stderr, "FARSIDE_LISTENER_READY", listener.Addr().String())\n\treturn Serve(conn, listener, shutdownC, options)'))
-# Access responses can omit CF-Access-Domain. The original TLS-verified application
-# hostname is the correct cache namespace; an audience is still mandatory above this.
-edit("token/token.go", lambda s: s.replace('return nil, errors.New("Empty app domain")', 'domain = reqURL.Hostname()'))
+def token_app_domain_legacy(source):
+    # 2026.5.1 flow: the auth domain arrives in the CF-Access-Domain
+    # response header.
+    return source.replace('return nil, errors.New("Empty app domain")', 'domain = reqURL.Hostname()')
+
+def token_app_domain_metadata_jwt(source):
+    # Newer flow: the auth domain arrives in the signed metadata JWT.
+    anchor = (
+        '\t// Parse auth_domain into the canonical hostname used for JWKS lookup.\n'
+        '\tauthDomain, err := parseAuthDomain(unverified.AuthDomain)\n'
+        '\tif err != nil {\n'
+        '\t\treturn nil, fmt.Errorf("metadata JWT auth_domain validation failed: %w", err)\n'
+        '\t}'
+    )
+    assert anchor in source, "metadata-JWT auth_domain anchor not found"
+    return source.replace(anchor, (
+        '\t// Parse auth_domain into the canonical hostname used for JWKS lookup.\n'
+        '\t// Android adaptation: Access responses can omit the auth domain. The\n'
+        '\t// original TLS-verified application hostname is the correct namespace;\n'
+        '\t// an audience is still mandatory below.\n'
+        '\tvar authDomain url.URL\n'
+        '\tif unverified.AuthDomain == "" {\n'
+        '\t\tauthDomain = url.URL{Scheme: httpsScheme, Host: reqURL.Hostname()}\n'
+        '\t} else {\n'
+        '\t\tauthDomain, err = parseAuthDomain(unverified.AuthDomain)\n'
+        '\t\tif err != nil {\n'
+        '\t\t\treturn nil, fmt.Errorf("metadata JWT auth_domain validation failed: %w", err)\n'
+        '\t\t}\n'
+        '\t}'
+    ), 1)
+
+# Access responses can omit the auth domain. The original TLS-verified
+# application hostname is the correct cache namespace; an audience is still
+# mandatory. Tries the legacy header flow first, then the metadata-JWT flow.
+try:
+    edit("token/token.go", token_app_domain_legacy)
+except RuntimeError:
+    edit("token/token.go", token_app_domain_metadata_jwt)
 pathlib.Path("tools/cloudflared-android.patch").write_text("".join(patches), encoding="utf-8", newline="\n")
 licenses = pathlib.Path("app/src/main/assets/licenses")
 licenses.mkdir(parents=True, exist_ok=True)
 (licenses / "cloudflared-LICENSE").write_text((root / "LICENSE").read_text(encoding="utf-8"), encoding="utf-8")
-notices = ["cloudflared vendored dependency licenses and notices (2026.5.1)\n"]
+notices = [f"cloudflared vendored dependency licenses and notices ({version})\n"]
 for file in sorted((root / "vendor").rglob("*")):
     if file.is_file() and any(word in file.name.upper() for word in ("LICENSE", "NOTICE", "COPYING")):
         notices.append(f"\n=== {file.relative_to(root).as_posix()} ===\n")
