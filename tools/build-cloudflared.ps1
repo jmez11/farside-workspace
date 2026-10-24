@@ -1,8 +1,8 @@
 param(
     [string]$Go = 'go',
     [string]$Sdk = $env:ANDROID_SDK_ROOT,
-    [string]$Version = '2026.5.1',
-    [string]$ExpectedSha256 = '4618A12A8C4EA77954C8048E5EAFF0E9B7BCB16711253F84BD03440D6843A07F',
+    [string]$Version = '2026.10.3',
+    [string]$ExpectedSha256 = 'A6E8F67E33D68C5F5EB30BF480F5E59B487035EB488897BB6E6F390E76DFC8F2',
     [string]$ModMode = 'vendor'
 )
 $ErrorActionPreference = 'Stop'

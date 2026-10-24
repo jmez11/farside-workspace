@@ -4,7 +4,7 @@
 legacy native-library extraction so Android permits `exec` from nativeLibraryDir.
 Do not copy executables to writable app storage (Android 10+ blocks execution there).
 
-Upstream: https://github.com/cloudflare/cloudflared/tree/2026.5.1 (Apache-2.0).
+Upstream: https://github.com/cloudflare/cloudflared/tree/2026.10.3 (Apache-2.0).
 Pinned source archive SHA-256:
 `4618a12a8c4ea77954c8048e5eaff0e9b7bcb16711253f84bd03440d6843a07f`.
 Build: Go 1.26.1, NDK 26.1.10909125, Android API 32, CGO enabled for Android DNS.

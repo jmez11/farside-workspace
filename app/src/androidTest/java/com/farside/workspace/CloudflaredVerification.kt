@@ -142,7 +142,7 @@ class CloudflaredVerification(private val instrumentation: Instrumentation) {
         val work = File(context.cacheDir, "cloudflared-verification").apply { mkdirs() }
         try {
             val version = invoke(work, listOf("--version"))
-            check(version.first == 0 && version.second.contains("2026.5.1-farside")) { "Wrong bundled executable" }
+            check(version.first == 0 && version.second.contains("2026.10.3-farside")) { "Wrong bundled executable" }
             val port = ServerSocket(0, 0, InetAddress.getLoopbackAddress()).use { it.localPort }
             for (command in listOf("rdp", "tcp")) {
             val listener = launch(work, listOf("access", command, "--hostname", "rdp.example.com", "--url", "127.0.0.1:$port"))
