@@ -18,7 +18,7 @@ import java.util.UUID
 
 /** Actual controls with owned data; physical trigger/Horizon presentation still need wearer checks. */
 internal class LauncherPolishVerification(private val test: Instrumentation) {
-    fun run(): String {
+    fun run(privateKeyPasteOnly:Boolean=false): String {
         val context = test.targetContext
         val flags = test.uiAutomation.serviceInfo
         flags.flags = flags.flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
@@ -108,8 +108,17 @@ internal class LauncherPolishVerification(private val test: Instrumentation) {
             touch(android.view.MotionEvent.ACTION_UP)
             val pasteVisible = ui.nodes().any { it.text?.toString() == context.getString(android.R.string.paste) }
             check(pasteVisible) { "Held-touch did not open Paste in the selected field window" }
+            val paste=ui.find(context.getString(android.R.string.paste))
+            test.runOnMainSync {
+                val popup=checkNotNull(android.view.inspector.WindowInspector.getGlobalWindowViews().firstOrNull {it.createAccessibilityNodeInfo().windowId==paste.windowId})
+                val image=android.graphics.Bitmap.createBitmap(popup.width,popup.height,android.graphics.Bitmap.Config.ARGB_8888)
+                popup.draw(android.graphics.Canvas(image))
+                java.io.File(context.cacheDir,"private-key-paste-capsule.png").outputStream().use {image.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)}
+                image.recycle()
+            }
             ui.click(context.getString(android.R.string.paste))
             check(ui.find(text(R.string.private_key), true).text.toString() == "owned-private-key-paste")
+            if(privateKeyPasteOnly) return "PASS private-key held-touch oval Paste popup and exact text insertion; owned clipboard/preferences restored. Physical Horizon pointer/highlight remains manual."
             // Release-like context: no FLAG_DEBUGGABLE, but all About debug actions remain available.
             val keys = SshHostKeyStore(isolated)
             keys.save("fixture.invalid", 22, SshHostKey("ssh-ed25519", "SHA256:owned"))

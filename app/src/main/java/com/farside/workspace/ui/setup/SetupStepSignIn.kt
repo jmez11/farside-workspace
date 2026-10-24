@@ -20,7 +20,7 @@ import com.farside.workspace.ui.profileCredentialErrorRes
 
 internal fun credentialMatchesConnection(credential:SavedCredential,base:ConnectionProfile):Boolean = when {
     credential.user.isBlank() -> base.type==ConnectionType.VNC && base.vncAuthMode==VncAuthMode.VNC_PASSWORD
-    credential.userShort!=null -> base.type==ConnectionType.VNC && base.vncAuthMode==VncAuthMode.MAC_USER
+    credential.userShort!=null -> base.type==ConnectionType.SSH || base.type==ConnectionType.VNC && base.vncAuthMode==VncAuthMode.MAC_USER
     else -> base.type!=ConnectionType.VNC
 }
 
@@ -131,7 +131,7 @@ internal fun SetupStepSignIn(base:ConnectionProfile,state:SetupSignInState,pm:Pr
         if(base.type==ConnectionType.VNC && !passwordOnly) Text(stringResource(R.string.setup_mac_sign_in_hint),fontSize=13.sp,color=SetupColors.muted)
         error?.takeIf {showErrors}?.let {Text(stringResource(it),color=SetupColors.danger)}
     }
-    if(sheet=="credential") CredentialSheet(pm,vncPassword=passwordOnly,allowMac=false,macAccount=base.type==ConnectionType.VNC && !passwordOnly,allowEmptyPassword=base.type!=ConnectionType.VNC,
+    if(sheet=="credential") CredentialSheet(pm,vncPassword=passwordOnly,allowMac=base.type==ConnectionType.SSH,macAccount=base.type==ConnectionType.VNC && !passwordOnly,allowEmptyPassword=base.type!=ConnectionType.VNC,
         onDismiss={sheet=null},onSaved={state.credentialId=it.id;state.specific=false;state.revision++;sheet=null})
     if(sheet=="key") SshKeySheet(pm,onDismiss={sheet=null},onSaved={state.keyId=it.id;state.revision++;sheet=null})
 }

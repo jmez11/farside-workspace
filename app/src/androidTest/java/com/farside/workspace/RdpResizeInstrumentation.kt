@@ -133,6 +133,11 @@ class RdpResizeInstrumentation : Instrumentation() {
                 finish(0, results)
                 return
             }
+            if (jumpArgs?.getString("privateKeyPasteOnly") == "true") {
+                results.putString("stream", LauncherPolishVerification(this).run(privateKeyPasteOnly=true))
+                finish(0, results)
+                return
+            }
             if (jumpArgs?.getString("launcherPolishOnly") == "true") {
                 results.putString("stream", LauncherPolishVerification(this).run())
                 finish(0, results)

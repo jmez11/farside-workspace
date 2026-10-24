@@ -57,14 +57,34 @@ internal class ConnectionUiFollowupVerification(private val test:Instrumentation
                 test.runOnMainSync {activity.setContent {MaterialTheme {SetupStepSignIn(base,state,pm)}}}
                 ui.find(credentials[if(type!=ConnectionType.VNC) 0 else if(auth==VncAuthMode.VNC_PASSWORD) 1 else 2].name)
                 credentials.forEachIndexed {index,credential ->
-                    val expected=when(type) {ConnectionType.VNC -> index==if(auth==VncAuthMode.VNC_PASSWORD) 1 else 2;else -> index==0}
+                    val expected=when(type) {ConnectionType.VNC -> index==if(auth==VncAuthMode.VNC_PASSWORD) 1 else 2;ConnectionType.SSH -> index==0 || index==2;else -> index==0}
                     check(credentialMatchesConnection(credential,base)==expected)
                     check(ui.nodes().any {it.text?.toString()==credential.name}==expected) {"Incorrect credential filter for $type/$auth/${credential.name}; shown="+ui.nodes().mapNotNull {it.text?.toString()}.filter {it.startsWith("Owned")}}
                     state.credentialId=credential.id
                     check((state.profile(base,credentials).credentialId==credential.id)==expected) {"Filtered stale credential still resolved"}
                 }
             }
-            // Exercise all offered actions together; empty fields only offer Paste.
+            val sshBase=ConnectionProfile(id="owned-mac-ssh",name="Owned Mac SSH",type=ConnectionType.SSH,host="127.0.0.1",port=22,user="",pass="")
+            val sshState=SetupSignInState(null)
+            test.runOnMainSync {activity.setContent {MaterialTheme {SetupStepSignIn(sshBase,sshState,pm)}}}
+            ui.click("Owned Mac")
+            check(sshState.profile(sshBase,pm.getCredentials()).let {it.credentialId==credentials[2].id && it.user=="fixture" && it.pass=="fixture"}) {"SSH Mac selection must use short username and saved password"}
+            ui.click(context.getString(R.string.setup_new_sign_in))
+            ui.click(context.getString(R.string.setup_macos_account))
+            ui.enter(R.string.account_display_name,"Owned created Mac SSH")
+            ui.enter(R.string.setup_full_name,"Owned Full Name")
+            ui.enter(R.string.setup_short_name,"owned_short")
+            ui.enter(R.string.password,"owned-password")
+            ui.capturePopup(R.string.save,"ssh-mac-credential-popup.png")
+            ui.click(context.getString(R.string.save))
+            ui.find("Owned created Mac SSH")
+            val created=pm.getCredentials().single {it.name=="Owned created Mac SSH"}
+            check(created.user=="Owned Full Name" && created.userShort=="owned_short")
+            val resolved=sshState.profile(sshBase,pm.getCredentials())
+            check(resolved.credentialId==created.id && resolved.user=="owned_short" && resolved.pass=="owned-password")
+            pm.addProfile(resolved)
+            check(ProfileManager(isolated).getProfiles().single {it.id==sshBase.id}.let {it.credentialId==created.id && it.user=="owned_short"}) {"Saved SSH must retain Mac credential and short username"}
+                        // Exercise all offered actions together; empty fields only offer Paste.
             val invoked=mutableListOf<Int>()
             fun showActionRow() {
                 var toolbar:androidx.compose.ui.platform.TextToolbar?=null
@@ -156,7 +176,7 @@ internal class ConnectionUiFollowupVerification(private val test:Instrumentation
                 val value=ui.find(context.getString(label),true).text.toString()
                 check(if(label==R.string.password) value.length==11 else value=="paste-owned") {"Paste failed in field $label: length=${value.length}"}
             }
-            return "PASS actual credential filtering for all protocol/auth combinations, stale selections rejected, single horizontal nonoverlapping four-action capsule with all callbacks, compact anchored held-touch Paste at varied field heights into username/password/host/display-name fields and credential dialog. Owned clipboard/preferences restored; physical Horizon gestures remain manual."
+            return "PASS actual credential filtering for all protocol/auth combinations, SSH existing/new Mac sign-ins and persisted short username, stale selections rejected, single horizontal nonoverlapping four-action capsule with all callbacks, compact anchored held-touch Paste at varied field heights into username/password/host/display-name fields and credential dialog. Owned clipboard/preferences restored; physical Horizon gestures remain manual."
         } finally {
             if(original!=null) clipboard.setPrimaryClip(original) else clipboard.clearPrimaryClip()
             test.runOnMainSync {activity.finish()};context.deleteSharedPreferences(namespace)

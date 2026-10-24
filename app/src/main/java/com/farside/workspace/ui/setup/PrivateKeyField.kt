@@ -10,6 +10,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
+import com.farside.workspace.FieldTextMenuPosition
+import com.farside.workspace.TextActionCapsule
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -31,9 +39,11 @@ internal fun PrivateKeyField(value: String, onChange: (String) -> Unit, error: B
     val pasteLabel = stringResource(android.R.string.paste)
     var editor by remember { mutableStateOf(TextFieldValue(value)) }
     var showPaste by remember { mutableStateOf(false) }
+    var fieldBounds by remember { mutableStateOf(Rect.Zero) }
+    val gap=with(LocalDensity.current) {8.dp.roundToPx()}
     val current = if (editor.text == value) editor else TextFieldValue(value)
     LaunchedEffect(value) { if (editor.text != value) editor = TextFieldValue(value) }
-    Box(Modifier.fillMaxWidth().pointerInput(Unit) {
+    Box(Modifier.fillMaxWidth().onGloballyPositioned {fieldBounds=it.boundsInRoot()}.pointerInput(Unit) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
             val held = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
@@ -57,8 +67,9 @@ internal fun PrivateKeyField(value: String, onChange: (String) -> Unit, error: B
                     contentDescription = label
                     onLongClick(pasteLabel) { showPaste = true; true }
                 })
-        DropdownMenu(expanded = showPaste, onDismissRequest = { showPaste = false }) {
-            DropdownMenuItem(text = { Text(pasteLabel) }, onClick = {
+        if(showPaste) Popup(popupPositionProvider=remember(fieldBounds,gap) {FieldTextMenuPosition(fieldBounds,gap)},
+            onDismissRequest={showPaste=false},properties=PopupProperties(focusable=false)) {
+            TextActionCapsule(listOf(android.R.string.paste to {
                 showPaste = false
                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                 val text = clipboard.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(context)?.toString()
@@ -68,7 +79,7 @@ internal fun PrivateKeyField(value: String, onChange: (String) -> Unit, error: B
                     editor = TextFieldValue(replacement, TextRange(range.min + text.length))
                     onChange(replacement)
                 }
-            })
+            }))
         }
     }
 }

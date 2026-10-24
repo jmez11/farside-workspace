@@ -43,20 +43,26 @@ internal fun FormTextMenus(content:@Composable ()->Unit) {
     val gap=with(LocalDensity.current) {8.dp.roundToPx()}
     if(toolbar.status==TextToolbarStatus.Shown) Popup(popupPositionProvider=remember(toolbar.rect,gap) {FieldTextMenuPosition(toolbar.rect,gap)},
         onDismissRequest={toolbar.hide()},properties=PopupProperties(focusable=false)) {
+        TextActionCapsule(toolbar.actions.map {(label,action)->label to {toolbar.hide();action()}})
+    }
+}
+
+/** Shared capsule keeps single-action private-key menus identical to selection menus. */
+@Composable
+internal fun TextActionCapsule(actions:List<Pair<Int,()->Unit>>) {
         Surface(shape=RoundedCornerShape(percent=50),shadowElevation=6.dp) {
             Row(Modifier.horizontalScroll(rememberScrollState())) {
-                toolbar.actions.forEachIndexed {index,(label,action) ->
+                actions.forEachIndexed {index,(label,action) ->
                     Box(Modifier.widthIn(min=48.dp).heightIn(min=48.dp)
-                        .clickable(role=Role.Button) {toolbar.hide();action()}
+                        .clickable(role=Role.Button) {action()}
                         .padding(start=if(index==0) 24.dp else 16.dp,
-                            end=if(index==toolbar.actions.lastIndex) 24.dp else 16.dp,
+                            end=if(index==actions.lastIndex) 24.dp else 16.dp,
                             top=12.dp,bottom=12.dp),contentAlignment=Alignment.Center) {
                         Text(stringResource(label),maxLines=1,softWrap=false)
                     }
                 }
             }
         }
-    }
 }
 
 private class FormTextToolbar(private val clipboard:ClipboardManager):TextToolbar {
@@ -81,7 +87,7 @@ private class FormTextToolbar(private val clipboard:ClipboardManager):TextToolba
 
 /** TextToolbar supplies root coordinates. Popup's default anchor is after the field,
  * so adding those coordinates as an offset positioned the old menu twice as far down. */
-private class FieldTextMenuPosition(private val field:Rect,private val gap:Int):PopupPositionProvider {
+internal class FieldTextMenuPosition(private val field:Rect,private val gap:Int):PopupPositionProvider {
     override fun calculatePosition(anchorBounds:IntRect,windowSize:IntSize,layoutDirection:LayoutDirection,popupContentSize:IntSize):IntOffset {
         val x=field.left.toInt().coerceIn(0,(windowSize.width-popupContentSize.width).coerceAtLeast(0))
         val above=field.top.toInt()-popupContentSize.height-gap
