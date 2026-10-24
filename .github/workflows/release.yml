@@ -65,14 +65,14 @@ jobs:
         run: rm -f app/upload-keystore.jks key.properties
 
       - name: Upload release APK artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: farside-release-apk
           path: app/build/outputs/apk/release/app-release.apk
           retention-days: 90
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: app/build/outputs/apk/release/app-release.apk
           generate_release_notes: true
