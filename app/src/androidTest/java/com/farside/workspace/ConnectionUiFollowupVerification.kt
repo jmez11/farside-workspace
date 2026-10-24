@@ -64,6 +64,50 @@ internal class ConnectionUiFollowupVerification(private val test:Instrumentation
                     check((state.profile(base,credentials).credentialId==credential.id)==expected) {"Filtered stale credential still resolved"}
                 }
             }
+            // Exercise all offered actions together; empty fields only offer Paste.
+            val invoked=mutableListOf<Int>()
+            fun showActionRow() {
+                var toolbar:androidx.compose.ui.platform.TextToolbar?=null
+                test.runOnMainSync {activity.setContent {MaterialTheme {FormTextMenus {
+                    Box(Modifier.fillMaxSize()) {Text("Owned toolbar fixture")}
+                    toolbar=androidx.compose.ui.platform.LocalTextToolbar.current
+                }}}}
+                ui.find("Owned toolbar fixture")
+                test.runOnMainSync {
+                    checkNotNull(toolbar).showMenu(androidx.compose.ui.geometry.Rect(40f,400f,400f,460f),
+                        onCopyRequested={invoked.add(android.R.string.copy)},
+                        onPasteRequested={invoked.add(android.R.string.paste)},
+                        onCutRequested={invoked.add(android.R.string.cut)},
+                        onSelectAllRequested={invoked.add(android.R.string.selectAll)})
+                }
+            }
+            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Owned","row-fixture"))
+            for(action in listOf(android.R.string.copy,android.R.string.paste,android.R.string.cut,android.R.string.selectAll)) {
+                showActionRow()
+                val labels=listOf(android.R.string.paste,android.R.string.copy,android.R.string.cut,android.R.string.selectAll)
+                val nodes=labels.map {ui.find(context.getString(it))}
+                val rectangles=nodes.map {node->android.graphics.Rect().also(node::getBoundsInScreen)}
+                check(rectangles.all {kotlin.math.abs(it.exactCenterY()-rectangles.first().exactCenterY())<2}) {"Text actions must share one horizontal row: $rectangles"}
+                check(rectangles.zipWithNext().all {(a,b)->a.right<=b.left}) {"Text actions overlap: $rectangles"}
+                if(action==android.R.string.copy) test.runOnMainSync {
+                    val popup=checkNotNull(android.view.inspector.WindowInspector.getGlobalWindowViews().firstOrNull {it.createAccessibilityNodeInfo().windowId==nodes.first().windowId})
+                    val origin=IntArray(2).also(popup::getLocationOnScreen)
+                    val actionBounds=nodes.map {node->
+                        var target=node
+                        while(!target.isClickable && target.parent!=null) target=target.parent
+                        android.graphics.Rect().also(target::getBoundsInScreen)
+                    }
+                    check(kotlin.math.abs(actionBounds.first().left-origin[0])<=1 &&
+                        kotlin.math.abs(actionBounds.last().right-origin[0]-popup.width)<=1) {"Action highlights must reach the capsule edges: $actionBounds popup=${popup.width}"}
+                    val image=android.graphics.Bitmap.createBitmap(popup.width,popup.height,android.graphics.Bitmap.Config.ARGB_8888)
+                    popup.draw(android.graphics.Canvas(image))
+                    java.io.File(context.cacheDir,"form-actions-capsule.png").outputStream().use {image.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)}
+                    image.recycle()
+                }
+                ui.click(context.getString(action))
+                check(invoked.lastOrNull()==action) {"Wrong text action callback"}
+                test.runOnMainSync {activity.setContent {}}
+            }
             for(label in listOf(R.string.setup_username,R.string.password,R.string.host_server,R.string.connection_name,R.string.account_display_name)) {
                 android.util.Log.i("FollowupVerification","Paste field $label")
                 test.runOnMainSync {activity.setContent {FormTextMenus {MaterialTheme {key(label) {
@@ -112,7 +156,7 @@ internal class ConnectionUiFollowupVerification(private val test:Instrumentation
                 val value=ui.find(context.getString(label),true).text.toString()
                 check(if(label==R.string.password) value.length==11 else value=="paste-owned") {"Paste failed in field $label: length=${value.length}"}
             }
-            return "PASS actual credential filtering for all protocol/auth combinations, stale selections rejected, compact anchored held-touch Paste at varied field heights into username/password/host/display-name fields and credential dialog. Owned clipboard/preferences restored; physical Horizon gestures remain manual."
+            return "PASS actual credential filtering for all protocol/auth combinations, stale selections rejected, single horizontal nonoverlapping four-action capsule with all callbacks, compact anchored held-touch Paste at varied field heights into username/password/host/display-name fields and credential dialog. Owned clipboard/preferences restored; physical Horizon gestures remain manual."
         } finally {
             if(original!=null) clipboard.setPrimaryClip(original) else clipboard.clearPrimaryClip()
             test.runOnMainSync {activity.finish()};context.deleteSharedPreferences(namespace)
