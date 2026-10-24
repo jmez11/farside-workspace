@@ -37,7 +37,7 @@ internal class MacMediaUdpSocket private constructor(private val hub:Hub,private
         if(!closed) {
             closed=true;packets.clear();packets.offer(DatagramPacket(ByteArray(0),0))
             hub.subscribers.remove(this)
-            if(hub.subscribers.isEmpty()) {hubs.remove(hub.port);hub.socket.close()}
+            if(hub.subscribers.isEmpty()) {hubs.remove(hub.port);hub.socket.close();if(Thread.currentThread()!==hub.thread) hub.thread.join(1000)}
         }
     }
     private class Hub(val port:Int,bindNetwork:(DatagramSocket)->Unit) {
@@ -46,7 +46,7 @@ internal class MacMediaUdpSocket private constructor(private val hub:Hub,private
             catch(e:Exception) {close();throw e}
         }
         val subscribers=CopyOnWriteArrayList<MacMediaUdpSocket>()
-        fun start() {Thread({
+        val thread=Thread({
             val data=ByteArray(65536)
             while(!socket.isClosed) {
                 try {
@@ -55,7 +55,7 @@ internal class MacMediaUdpSocket private constructor(private val hub:Hub,private
                     subscribers.forEach {it.offer(copy)}
                 } catch(e:Exception) {if(socket.isClosed) break}
             }
-        },"MacMediaUdp-$port").apply {isDaemon=true;start()}}
+        },"MacMediaUdp-$port").apply {isDaemon=true};fun start() {thread.start()}
     }
     companion object {
         private val hubs=mutableMapOf<Int,Hub>()
