@@ -37,6 +37,9 @@ class SshConnectionManager private constructor(private val context: Context?, pr
     }
     class Lease internal constructor(private val owner: SshConnectionManager) : AutoCloseable {
         internal val closed = AtomicBoolean(false)
+        val forwarding: com.farside.workspace.SshForwarding get() = owner.forwarding
+        var onForwardStatus: ((Map<String, String>) -> Unit)? = null
+            set(value) { field=value; value?.invoke(owner.forwardStatuses) }
         internal var onExit: () -> Unit = {}
         fun connect(profile: ConnectionProfile, onStatus: (String) -> Unit = {},
                     interactive: ((Boolean) -> String?)? = null, onExit: () -> Unit = {}): SSHClient {
@@ -60,6 +63,11 @@ class SshConnectionManager private constructor(private val context: Context?, pr
         }
     }
     private val leases = java.util.concurrent.CopyOnWriteArraySet<Lease>()
+    @Volatile private var forwardStatuses = emptyMap<String, String>()
+    private val forwarding = com.farside.workspace.SshForwarding(context) { statuses ->
+        forwardStatuses=statuses
+        leases.forEach { if(!it.closed.get()) runCatching { it.onForwardStatus?.invoke(statuses) } }
+    }
     private val closed = AtomicBoolean(false)
     private val connectLock = Any()
     @Volatile private var sshClient: SSHClient? = null
@@ -72,6 +80,7 @@ class SshConnectionManager private constructor(private val context: Context?, pr
         toClose.asReversed().forEach { runCatching { it.close() } }
     }
     private fun disconnect() {
+        if(closed.get()) forwarding.close() else forwarding.detach()
         runCatching { tunnel?.close() }
         runCatching { sshClient?.disconnect() }
         runCatching { sshClient?.close() }
@@ -300,6 +309,7 @@ class SshConnectionManager private constructor(private val context: Context?, pr
 
             check(!closed.get() && !lease.closed.get()) { text(R.string.ssh_connection_closed, "SSH connection closed") }
             connectedProfile = profile
+            if(resolveJumps) { forwarding.update(profile.sshForwards); forwarding.attach(ssh) }
             chain?.takeIf { it.jumpHosts.isNotEmpty() }?.let {
                 val route = it.hops.joinToString(text(R.string.jump_route_separator, " → ")) { h ->
                     val state = text(R.string.ssh_hop_success, "✓")

@@ -1,5 +1,7 @@
 # Translation notes
 
+- `mac_through_ssh*`: All22 locales translate the full-Mac SSH option, help and summary. The selected SSH profile supplies the destination; the saved VNC hostname is ignored while its Screen Sharing port still applies. Summary placeholders are the SSH profile name (`%1$s`) and numeric service port (`%2$d`). Disabling the option restores separate VNC/SSH routing.
+
 - `ssh_host_key_*` / `ssh_host_keys_*`: These are the remote server’s identity keys, distinct from the user’s vault sign-in/private keys. A changed-key prompt requires verification before replacement; preserve the hostname/port and fingerprint placeholders.
 
 - `mac_quality_*`: Session counters are totals, not loss percentages. “No recent video” can describe a quiet desktop; avoid translating it as a proven disconnection. RTCP SR/RR/FB are standard report acronyms. Preserve the positional floating-point placeholder in `mac_quality_age_value`; `s` is the SI seconds symbol.

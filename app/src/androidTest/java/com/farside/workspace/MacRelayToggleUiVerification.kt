@@ -37,6 +37,7 @@ internal class MacRelayToggleUiVerification(private val test: Instrumentation) {
         try {
             test.targetContext.startActivity(Intent(test.targetContext, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
             activity = checkNotNull(test.waitForMonitorWithTimeout(monitor, 15000)) as MainActivity
+            test.waitForIdleSync()
             test.runOnMainSync {
                 activity.setContent {
                     MaterialTheme {
@@ -67,11 +68,30 @@ internal class MacRelayToggleUiVerification(private val test: Instrumentation) {
             click(enableBtn)
 
             check(nodes().none { it.text?.toString()==test.targetContext.getString(R.string.mac_ssh_relay_same_mac) })
+            val throughLabel=test.targetContext.getString(R.string.mac_through_ssh)
+            click(throughLabel)
+            val sshSummary=test.targetContext.getString(R.string.mac_through_ssh_summary,ssh.name,fixture.port)
+            repeat(6) {
+                nodes().filter {it.isScrollable && it.className?.toString()!="android.widget.EditText"}
+                    .forEach {it.performAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)}
+                Thread.sleep(150)
+            }
+            check(nodes().any {it.isVisibleToUser && it.text?.toString()==sshSummary}) {"SSH summary missing"}
+            check(nodes().none {it.isVisibleToUser && it.text?.toString()=="VNC · ${fixture.host}:${fixture.port}"})
+            test.runOnMainSync {
+                val root=activity.window.decorView
+                val bitmap=android.graphics.Bitmap.createBitmap(root.width,root.height,android.graphics.Bitmap.Config.ARGB_8888)
+                root.draw(android.graphics.Canvas(bitmap))
+                File(test.targetContext.cacheDir,"mac-through-ssh-options.png").outputStream().use {bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)}
+                bitmap.recycle()
+            }
             // Click save
             click(test.targetContext.getString(R.string.save_changes))
             val result = checkNotNull(saved) { "Profile was not saved" }
             check(result.enableMacSshRelay) { "enableMacSshRelay was not true in saved profile" }
             check(result.macSshRelaySameMac) { "Same-Mac selection was not saved" }
+            check(result.macThroughSsh) { "Single SSH route was not saved" }
+            check(ConnectionProfile.fromJson(result.toJson()).macThroughSsh)
 
             test.runOnMainSync {
                 activity.setContent {
@@ -82,9 +102,12 @@ internal class MacRelayToggleUiVerification(private val test: Instrumentation) {
                 }
             }
             click("4 "+test.targetContext.getString(R.string.setup_review))
+            check(nodes().any {it.text?.toString()=="VNC · ${fixture.host}:${fixture.port}"}) {"Separate-route endpoint missing"}
             click(toggleLabel)
             check(nodes().none { it.text?.toString() == dialogTitle }) { "Saved enabled profile did not suppress warning" }
-            return "PASS warning repeats without saved opt-in; saved enabled profile suppresses it; same-Mac choice absent, assumed true; no acceptance preference written"
+            click(test.targetContext.getString(R.string.save_changes))
+            check(checkNotNull(saved).enableMacSshRelay && !checkNotNull(saved).macThroughSsh)
+            return "PASS saved single SSH route/JSON and unchanged separate-route default; warning repeats without saved opt-in; saved opt-in suppresses warning; same-Mac assumed true"
         } finally {
             pm.deleteCredential(credential.id)
             test.removeMonitor(monitor)
@@ -97,7 +120,9 @@ internal class MacRelayToggleUiVerification(private val test: Instrumentation) {
         val result = mutableListOf<AccessibilityNodeInfo>()
         fun visit(n: AccessibilityNodeInfo) { result += n; repeat(n.childCount) { n.getChild(it)?.let(::visit) } }
         val windows = test.uiAutomation.windowsOnAllDisplays
-        for (i in 0 until windows.size()) windows.valueAt(i).forEach { it.root?.let(::visit) }
+        for (i in 0 until windows.size()) windows.valueAt(i).forEach {
+            it.root?.takeIf {root->root.packageName==test.targetContext.packageName}?.let(::visit)
+        }
         return result
     }
 
@@ -117,6 +142,9 @@ internal class MacRelayToggleUiVerification(private val test: Instrumentation) {
             }?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
             Thread.sleep(300)
         }
+        File(test.targetContext.cacheDir,"mac-through-ssh-ui-failure.txt").writeText(nodes().joinToString("\n") {
+            "${it.className} visible=${it.isVisibleToUser} clickable=${it.isClickable} text=${it.text} description=${it.contentDescription}"
+        })
         error("Missing control: $label")
     }
 }

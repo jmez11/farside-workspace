@@ -48,7 +48,7 @@ fixture_path = None
 script_args = [args.script]
 if args.loopback_fixture:
     source = Path(args.script).read_text(encoding="utf-8")
-    guard = "die 'Loopback media target would loop relay packets' if inet_ntoa($target) =~ /^127\\./;"
+    guard = "die 'Loopback media target would loop relay packets' if $media_enabled && inet_ntoa($target) =~ /^127\\./;"
     assert guard in source
     with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", suffix=".pl", delete=False) as fixture:
         fixture.write(source.replace(guard, "# Only the owned harness allows a loopback encoder."))

@@ -790,4 +790,7 @@
     <string name="ssh_host_keys_cleared">Gemte SSH-værtsnøgler er ryddet.</string>
     <string name="show_connection_info">Vis forbindelsesinfo</string>
     <string name="hide_connection_info">Skjul forbindelsesinfo</string>
+    <string name="mac_through_ssh">Brug SSH til hele Mac-forbindelsen</string>
+    <string name="mac_through_ssh_help">Skærmdeling, video og lyd bruger den valgte SSH-forbindelse til Mac. Kun dens Cloudflare-rute er nødvendig. Brug porten til skærmdeling på Mac. Slå fra for at bevare separate VNC- og SSH-ruter.</string>
+    <string name="mac_through_ssh_summary">VNC via SSH: %1$s · Port: %2$d. Det gemte værtsnavn ignoreres, fordi hele Mac-forbindelsen bruger SSH.</string>
 </resources>

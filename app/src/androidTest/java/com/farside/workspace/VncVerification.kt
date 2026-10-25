@@ -68,7 +68,28 @@ internal class VncVerification(private val test: Instrumentation,private val liv
         val clipboard = test.targetContext.getSystemService(android.content.ClipboardManager::class.java)
         val originalClip = clipboard.primaryClip
         try {
-            if(mode=="macClipboardFixture") {
+            if(mode=="macSshPathsCleanup") {
+                val prefs=test.targetContext.getSharedPreferences("farside_profiles",0)
+                val profiles=org.json.JSONArray(prefs.getString("profiles","[]"))
+                // Interrupted fixtures can be unreadable through the normal credential resolver.
+                // Preserve every unrelated raw entry, including encrypted credential fields.
+                for(index in profiles.length()-1 downTo 0) {
+                    val profile=profiles.getJSONObject(index)
+                    val ssh=profile.optString("name")=="Owned Mac SSH" && profile.optString("type")=="SSH" &&
+                        profile.optString("host")=="127.0.0.1" && profile.optInt("port")>1024
+                    val vnc=profile.optString("name") in listOf("Owned Mac route","Owned rejected route") &&
+                        profile.optString("type")=="VNC" && profile.optString("host") in listOf("unused.invalid","127.0.0.1") &&
+                        profile.optString("cloudflaredParameters")=="--invalid-owned-test-option"
+                    if(ssh || vnc) {
+                        if(ssh) com.farside.workspace.ssh.SshHostKeyStore(test.targetContext).remove("127.0.0.1",profile.getInt("port"))
+                        profiles.remove(index)
+                    }
+                }
+                check(prefs.edit().putString("profiles",profiles.toString()).commit())
+                record("PASS removed interrupted owned Mac route fixtures only")
+            } else if(mode=="macSshPathsFixture") {
+                verifySshPaths()
+            } else if(mode=="macClipboardFixture") {
                 record(MacClipboardVerification(test).run())
             } else if(mode=="macClipboardLive") {
                 record(MacClipboardVerification(test).live(requireNotNull(profileId)))
@@ -591,7 +612,7 @@ internal class VncVerification(private val test: Instrumentation,private val liv
     }
     private fun session(profile: ConnectionProfile, server: Fixture?, probePointer: Boolean = false,
         loginPassword: String? = null, loginAccountX: Int = 400, verifyFinder: Boolean = true,
-        expectedFiles: Boolean? = null) {
+        expectedFiles: Boolean? = null, onReady: (() -> Unit)? = null) {
         val activity = test.startActivitySync(Intent(test.targetContext, SessionActivity::class.java)
             .putExtra("profileId", profile.id).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as SessionActivity
         var instance = 0L
@@ -675,6 +696,7 @@ internal class VncVerification(private val test: Instrumentation,private val liv
                 check(hasFiles == expectedFiles) { "Unexpected paired Files toolbar action: $hasFiles" }
             }
             check(bridge!!.getDesktopWidth(instance) > 0 && bridge!!.getDesktopHeight(instance) > 0)
+            onReady?.invoke()
             // Opt-in diagnostic for this Mac's known login screen. The account password
             // is a transient instrumentation argument, never saved or included in results.
             if (loginPassword != null) {
@@ -875,6 +897,58 @@ internal class VncVerification(private val test: Instrumentation,private val liv
             }
             record("PASS: None/ARD-only security and wrong VNC password rejected")
         } finally { surface.release(); image.release() }
+    }
+    private fun verifySshPaths() {
+        val pm=ProfileManager(test.targetContext)
+        Fixture(0).use { server -> OwnedMacSshServer(test.targetContext,server.port).use { ssh ->
+            pm.updateProfile(ssh.profile.copy(pass="wrong"))
+            val profile=ConnectionProfile(java.util.UUID.randomUUID().toString(),"Owned rejected route",ConnectionType.VNC,
+                "unused.invalid",server.port,"","testpass",macThroughSsh=true,enableMacSshRelay=true,
+                macSshRelayProfileId=ssh.profile.id,proxyType=ProxyType.CLOUDFLARED,cloudflaredParameters="--invalid-owned-test-option")
+            val image=android.graphics.SurfaceTexture(0).apply {setDefaultBufferSize(64,48)}
+            val ready=CountDownLatch(1);var handle=-1L;var failure:String?=null
+            val connection=VncSessionConnection(test.targetContext,profile,VncBridge(),{reason,_->failure=reason},
+                onConnected={handle=it;ready.countDown()})
+            try {
+                connection.attach(android.view.Surface(image))
+                check(ready.await(15,TimeUnit.SECONDS) && handle==0L && failure!=null)
+                check(ssh.authenticationAttempts.get()==1 && ssh.commands.isEmpty() && server.stage=="waiting") {
+                    "Rejected route attempts=${ssh.authenticationAttempts.get()} commands=${ssh.commands} VNC=${server.stage}"
+                }
+            } finally {connection.close();check(connection.awaitClosed());image.release()}
+            record("PASS rejected SSH login stops without VNC/proxy/direct escape or repeated authentication")
+        } }
+        for(single in listOf(true,false)) {
+            Fixture(0).use { server -> OwnedMacSshServer(test.targetContext,server.port).use { ssh ->
+                Socks5Fixture(server.port).use { proxy ->
+                    val keeper=com.farside.workspace.ssh.SshConnectionManager.acquire(test.targetContext,ssh.profile.id)
+                    val profile=ConnectionProfile(java.util.UUID.randomUUID().toString(),"Owned Mac route",ConnectionType.VNC,
+                        if(single) "unused.invalid" else "127.0.0.1",server.port,"","testpass",
+                        expMacHevc=true,macThroughSsh=single,enableMacSshRelay=true,macSshRelayProfileId=ssh.profile.id,
+                        proxyType=if(single) ProxyType.CLOUDFLARED else ProxyType.SOCKS5,
+                        cloudflaredParameters="--invalid-owned-test-option",proxyHost="127.0.0.1",proxyPort=proxy.port,
+                        proxyUser="proxy-fixture",proxyPass="secret")
+                    pm.addProfile(profile)
+                    try {
+                        check(ssh.authentications.get()==0)
+                        session(profile,server,expectedFiles=false,onReady={
+                            ssh.verifyDynamic()
+                            check(ssh.authentications.get()==1)
+                            check(ssh.commands.toList()==if(single) listOf("media","control") else listOf("media"))
+                            check(proxy.authenticated==!single)
+                        })
+                        // A second owner survives the desktop close, including its dynamic listener.
+                        keeper.connect(ssh.profile)
+                        ssh.verifyDynamic()
+                        check(ssh.authentications.get()==1)
+                    } finally {pm.deleteProfile(profile.id);keeper.close()}
+                    await("Last SSH owner did not release dynamic port") {
+                        runCatching {Socket().use {it.connect(java.net.InetSocketAddress("127.0.0.1",ssh.socksPort),100)}}.isFailure
+                    }
+                    record("PASS ${if(single) "single SSH control fallback without Cloudflare VNC/proxy access" else "separate SOCKS VNC fallback after SSH media failure"}; automatic SSH dynamic forwarding, one authentication, shared lifetime and last-owner cleanup; native frame/input/clipboard")
+                }
+            } }
+        }
     }
     private fun proxyFixture() {
         val image = android.graphics.SurfaceTexture(0).apply { setDefaultBufferSize(64, 48) }

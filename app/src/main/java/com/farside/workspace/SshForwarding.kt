@@ -41,6 +41,12 @@ class SshForwarding(context: android.content.Context? = null, private val status
     @Synchronized fun attach(client: SSHClient) {
         if (!closed) executor.execute { ssh = client; reconcile() }
     }
+    @Synchronized fun detach() {
+        if (!closed) executor.execute {
+            active.values.forEach { runCatching { it.close() } }; active.clear()
+            ssh = null; reconcile()
+        }
+    }
     private fun publish() { status(statuses.toMap()) }
     private fun reconcile() {
         if (closed) return

@@ -81,7 +81,7 @@ class LocalizationVerification(private val test: Instrumentation) {
     @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
     fun run(): String {
         evidence.writeText("")
-        val setupStrings = R.string::class.java.fields.filter { it.name.startsWith("setup_") }
+        val setupStrings = R.string::class.java.fields.filter { it.name.startsWith("setup_") || it.name.startsWith("mac_through_ssh") }
         listOf("cs", "da", "de", "el", "es", "fi", "fr", "it", "ja", "ko", "nb", "nl", "pl", "pt-BR", "pt-PT", "ro", "ru", "sv", "tr", "zh-CN", "zh-HK", "zh-TW").forEach { tag ->
             val configuration = android.content.res.Configuration(context.resources.configuration).apply {
                 setLocale(java.util.Locale.forLanguageTag(tag))
@@ -91,6 +91,7 @@ class LocalizationVerification(private val test: Instrumentation) {
             setupStrings.forEach { field ->
                 val id = field.getInt(null)
                 val source = context.getString(id)
+                if(field.name.startsWith("mac_through_ssh")) check(localized.getString(id)!=source) {"Mac SSH locale fell back: $tag/${field.name}"}
                 val arguments = Regex("%(\\d+)\\$([ds])").findAll(source).associate {
                     it.groupValues[1].toInt() to if (it.groupValues[2] == "d") 42 else "fixture"
                 }

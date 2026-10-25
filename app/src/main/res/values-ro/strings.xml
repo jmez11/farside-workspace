@@ -802,4 +802,7 @@
     <string name="ssh_host_keys_cleared">Cheile SSH salvate ale gazdelor au fost șterse.</string>
     <string name="show_connection_info">Arată informațiile conexiunii</string>
     <string name="hide_connection_info">Ascunde informațiile conexiunii</string>
+    <string name="mac_through_ssh">Folosește SSH pentru întreaga conexiune la Mac</string>
+    <string name="mac_through_ssh_help">Partajarea ecranului, imaginea și sunetul folosesc conexiunea SSH selectată a Macului. Este necesară doar ruta sa Cloudflare. Folosește portul de partajare a ecranului de pe Mac. Dezactivează pentru a păstra rute VNC și SSH separate.</string>
+    <string name="mac_through_ssh_summary">VNC prin SSH: %1$s · Port: %2$d. Numele gazdei salvat este ignorat deoarece întreaga conexiune la Mac folosește SSH.</string>
 </resources>

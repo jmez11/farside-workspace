@@ -790,4 +790,7 @@
     <string name="ssh_host_keys_cleared">저장된 SSH 호스트 키를 지웠습니다.</string>
     <string name="show_connection_info">연결 정보 표시</string>
     <string name="hide_connection_info">연결 정보 숨기기</string>
+    <string name="mac_through_ssh">전체 Mac 연결에 SSH 사용</string>
+    <string name="mac_through_ssh_help">화면 공유, 영상 및 오디오에 선택한 Mac SSH 연결을 사용합니다. 해당 Cloudflare 경로만 필요합니다. Mac의 화면 공유 포트를 사용하세요. 끄면 별도의 VNC 및 SSH 경로를 유지합니다.</string>
+    <string name="mac_through_ssh_summary">SSH를 통한 VNC: %1$s · 포트: %2$d. 전체 Mac 연결에 SSH를 사용하므로 저장된 호스트 이름은 무시됩니다.</string>
 </resources>

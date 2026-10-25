@@ -790,4 +790,7 @@
     <string name="ssh_host_keys_cleared">Tallennetut SSH-palvelinavaimet poistettu.</string>
     <string name="show_connection_info">Näytä yhteystiedot</string>
     <string name="hide_connection_info">Piilota yhteystiedot</string>
+    <string name="mac_through_ssh">Käytä SSH:ta koko Mac-yhteyteen</string>
+    <string name="mac_through_ssh_help">Näytönjako, video ja ääni käyttävät valittua Macin SSH-yhteyttä. Vain sen Cloudflare-reitti tarvitaan. Käytä Macin näytönjaon porttia. Poista käytöstä säilyttääksesi erilliset VNC- ja SSH-reitit.</string>
+    <string name="mac_through_ssh_summary">VNC SSH:n kautta: %1$s · Portti: %2$d. Tallennettua palvelinnimeä ei käytetä, koska koko Mac-yhteys käyttää SSH:ta.</string>
 </resources>

@@ -790,4 +790,7 @@
     <string name="ssh_host_keys_cleared">Sparade SSH-värdnycklar har rensats.</string>
     <string name="show_connection_info">Visa anslutningsinformation</string>
     <string name="hide_connection_info">Dölj anslutningsinformation</string>
+    <string name="mac_through_ssh">Använd SSH för hela Mac-anslutningen</string>
+    <string name="mac_through_ssh_help">Skärmdelning, video och ljud använder den valda SSH-anslutningen till Mac. Bara dess Cloudflare-väg behövs. Använd porten för skärmdelning på Mac. Stäng av för att behålla separata VNC- och SSH-vägar.</string>
+    <string name="mac_through_ssh_summary">VNC via SSH: %1$s · Port: %2$d. Det sparade värdnamnet ignoreras eftersom hela Mac-anslutningen använder SSH.</string>
 </resources>

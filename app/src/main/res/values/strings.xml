@@ -661,6 +661,8 @@
     <string name="key_mac_forward_delete">⌦ Delete</string>
     <string name="enable">Enable</string>
     <string name="mac_ssh_relay_toggle">SSH media relay (experimental)</string>
+    <string name="mac_through_ssh">Use SSH for the full Mac connection</string>
+    <string name="mac_through_ssh_help">Use the selected Mac SSH connection for screen sharing, video and audio. Only its Cloudflare route is needed. The server port must be the Screen Sharing port on the Mac. Turn off to keep separate VNC and SSH routes.</string>
     <string name="mac_ssh_relay_dialog_title">Experimental!</string>
     <string name="mac_ssh_relay_dialog_desc">Remote video may be blocked by your network. This option runs a small Perl script on the Mac, over your SSH login, to relay video. It lasts only for the session and installs nothing. Enable?</string>
     <string name="remove_connection_photo">Remove photo for %1$s</string>
@@ -790,4 +792,5 @@
     <string name="ssh_host_keys_cleared">Saved SSH host keys cleared.</string>
     <string name="show_connection_info">Show connection info</string>
     <string name="hide_connection_info">Hide connection info</string>
+    <string name="mac_through_ssh_summary">VNC via SSH: %1$s · Port: %2$d. The saved hostname is ignored because SSH is enabled for the full Mac connection.</string>
 </resources>

@@ -790,4 +790,7 @@
     <string name="ssh_host_keys_cleared">Gespeicherte SSH-Hostschlüssel gelöscht.</string>
     <string name="show_connection_info">Verbindungsinformationen anzeigen</string>
     <string name="hide_connection_info">Verbindungsinformationen ausblenden</string>
+    <string name="mac_through_ssh">SSH für die gesamte Mac-Verbindung verwenden</string>
+    <string name="mac_through_ssh_help">Bildschirmfreigabe, Video und Audio verwenden die ausgewählte SSH-Verbindung zum Mac. Nur deren Cloudflare-Route wird benötigt. Verwende den Bildschirmfreigabe-Port auf dem Mac. Deaktivieren behält getrennte VNC- und SSH-Routen bei.</string>
+    <string name="mac_through_ssh_summary">VNC über SSH: %1$s · Port: %2$d. Der gespeicherte Hostname wird ignoriert, da die gesamte Mac-Verbindung SSH verwendet.</string>
 </resources>

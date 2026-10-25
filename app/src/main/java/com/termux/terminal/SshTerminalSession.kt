@@ -18,9 +18,7 @@ class SshTerminalSession(
     context: Context? = null
 ) : TerminalSession("dummy", "/", emptyArray(), emptyArray(), sshSessionInfo.terminalScrollback, client) {
     val context: Context? = context?.applicationContext
-    val forwarding = com.farside.workspace.SshForwarding(this.context) { statuses ->
-        Handler(Looper.getMainLooper()).post { onForwardStatus?.invoke(statuses) }
-    }
+    val forwarding get() = connectionLease.forwarding
     var onForwardStatus: ((Map<String, String>) -> Unit)? = null
     /** Invoked on the connection thread after the shell starts; must not block the terminal. */
     var onConnected: (() -> Unit)? = null
@@ -38,7 +36,7 @@ class SshTerminalSession(
     }
 
     private var sshOut: OutputStream? = null
-    @Volatile private var connectionLease: com.farside.workspace.ssh.SshConnectionManager.Lease? = null
+    private val connectionLease = com.farside.workspace.ssh.SshConnectionManager.acquire(this.context, sshSessionInfo.id)
     private var sshSession: net.schmizz.sshj.connection.channel.direct.Session? = null
     private var sshShell: net.schmizz.sshj.connection.channel.direct.Session.Shell? = null
     @Volatile
@@ -54,7 +52,9 @@ class SshTerminalSession(
 
     init {
         mShellPid = -1
-        forwarding.update(sshSessionInfo.sshForwards)
+        connectionLease.onForwardStatus = { statuses ->
+            Handler(Looper.getMainLooper()).post { if(!isFinished) onForwardStatus?.invoke(statuses) }
+        }
     }
 
     override fun isRunning(): Boolean {
@@ -105,8 +105,7 @@ class SshTerminalSession(
         
         thread {
             try {
-                val lease = com.farside.workspace.ssh.SshConnectionManager.acquire(context, sshSessionInfo.id)
-                connectionLease = lease
+                val lease = connectionLease
                 if (isFinished) { lease.close(); return@thread }
                 val ssh = lease.connect(sshSessionInfo, ::printToTerminal,
                     interactive = { echo -> readInteractiveLine(echo) },
@@ -119,7 +118,6 @@ class SshTerminalSession(
                     })
                 if (isFinished) return@thread
 
-                forwarding.attach(ssh)
                 val session = ssh.startSession()
                 sshSession = session
                 session.allocateDefaultPTY()
@@ -167,10 +165,9 @@ class SshTerminalSession(
                 }
             } finally {
                 outputWriter.shutdownNow()
-                forwarding.close()
                 runCatching { sshShell?.close() }
                 runCatching { sshSession?.close() }
-                connectionLease?.close()
+                connectionLease.close()
             }
         }
     }
@@ -192,14 +189,13 @@ class SshTerminalSession(
         if (isFinished) return
         isFinished = true
         outputWriter.shutdownNow()
-        forwarding.close()
         mShellPid = -1
         inputQueue.offer(3.toByte())
         thread {
             try { sshOut?.close() } catch (e: Exception) {}
             try { sshShell?.close() } catch (e: Exception) {}
             try { sshSession?.close() } catch (e: Exception) {}
-            connectionLease?.close()
+            connectionLease.close()
         }
     }
 

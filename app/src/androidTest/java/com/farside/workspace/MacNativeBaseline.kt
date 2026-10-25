@@ -10,7 +10,7 @@ import java.util.concurrent.atomic.AtomicLong
 
 /** Explicit ordinary VNC baseline; bypasses the production automatic streaming policy. */
 internal class MacNativeBaseline(private val test:Instrumentation) {
-    fun run(id:String):String {
+    fun run(id:String,throughSsh:Boolean=test.arguments?.getString("macThroughSsh")=="true"):String {
         val pm=ProfileManager(test.targetContext)
         val profile=pm.getProfiles().single { it.id==id && it.type==ConnectionType.VNC }
         val credential=pm.getCredentials().single { it.id==profile.credentialId }
@@ -20,12 +20,20 @@ internal class MacNativeBaseline(private val test:Instrumentation) {
         val frames=AtomicLong()
         images.setOnImageAvailableListener({ reader -> reader.acquireLatestImage()?.use { frames.incrementAndGet() } },Handler(thread.looper))
         val bridge=VncBridge();var handle=0L
-        val tunnel=if(profile.useCloudflare || profile.proxyType==ProxyType.CLOUDFLARED)
+        var lease:com.farside.workspace.ssh.SshConnectionManager.Lease?=null
+        var relay:MacHevcSshRelay?=null
+        val tunnel=if(!throughSsh && (profile.useCloudflare || profile.proxyType==ProxyType.CLOUDFLARED))
             com.farside.workspace.tunnel.CloudflaredTunnel(test.targetContext) else null
         try {
-            val port=tunnel?.start(profile.host,profile.cloudflaredParameters,{},{},accessSubcommand="tcp") ?: profile.port
-            handle=bridge.connect(if(tunnel!=null) "127.0.0.1" else profile.host,port,credential.pass,images.surface,credential.user,
-                VncAuthMode.MAC_USER,profile.copy(expMacHevc=false),macAuthenticationGate={gate.await()})
+            if(throughSsh) {
+                val ssh=pm.getProfiles().single {it.id==(profile.macSshRelayProfileId ?: profile.sftpPairProfileId) && it.type==ConnectionType.SSH}
+                lease=com.farside.workspace.ssh.SshConnectionManager.acquire(test.targetContext,ssh.id)
+                val client=lease.connect(ssh)
+                relay=MacHevcSshRelay(test.targetContext,client,profile.host,{},profile.port,sameMac=true,mediaEnabled=false)
+            }
+            val port=relay?.port ?: tunnel?.start(profile.host,profile.cloudflaredParameters,{},{},accessSubcommand="tcp") ?: profile.port
+            handle=bridge.connect(if(tunnel!=null || relay!=null) "127.0.0.1" else profile.host,port,credential.pass,images.surface,credential.user,
+                VncAuthMode.MAC_USER,profile.copy(expMacHevc=false,proxyType=if(throughSsh) ProxyType.NONE else profile.proxyType),macAuthenticationGate={gate.await()})
             check(handle!=0L && bridge.isConfirmedMac && !bridge.isMacHevc)
             check(bridge.canSubmitSavedMacPassword(handle)) { "Standard Mac VNC lost saved-password unlock" }
             val deadline=android.os.SystemClock.uptimeMillis()+5000
@@ -35,6 +43,7 @@ internal class MacNativeBaseline(private val test:Instrumentation) {
         } finally {
             if(handle!=0L) bridge.disconnect(handle)
             tunnel?.close()
+            relay?.close();lease?.close()
             images.close();thread.quitSafely();thread.join(1000)
         }
     }

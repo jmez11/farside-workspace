@@ -790,4 +790,7 @@
     <string name="ssh_host_keys_cleared">Opgeslagen SSH-hostsleutels gewist.</string>
     <string name="show_connection_info">Verbindingsinformatie tonen</string>
     <string name="hide_connection_info">Verbindingsinformatie verbergen</string>
+    <string name="mac_through_ssh">SSH gebruiken voor de volledige Mac-verbinding</string>
+    <string name="mac_through_ssh_help">Schermdeling, video en audio gebruiken de geselecteerde SSH-verbinding met de Mac. Alleen de bijbehorende Cloudflare-route is nodig. Gebruik de poort voor schermdeling op de Mac. Schakel uit om aparte VNC- en SSH-routes te behouden.</string>
+    <string name="mac_through_ssh_summary">VNC via SSH: %1$s · Poort: %2$d. De opgeslagen hostnaam wordt genegeerd omdat de volledige Mac-verbinding SSH gebruikt.</string>
 </resources>

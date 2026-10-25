@@ -790,4 +790,7 @@
     <string name="ssh_host_keys_cleared">Chiavi host SSH salvate cancellate.</string>
     <string name="show_connection_info">Mostra informazioni connessione</string>
     <string name="hide_connection_info">Nascondi informazioni connessione</string>
+    <string name="mac_through_ssh">Usa SSH per tutta la connessione al Mac</string>
+    <string name="mac_through_ssh_help">Condivisione schermo, video e audio usano la connessione SSH del Mac selezionata. Serve solo il suo percorso Cloudflare. Usa la porta di Condivisione schermo sul Mac. Disattiva per mantenere percorsi VNC e SSH separati.</string>
+    <string name="mac_through_ssh_summary">VNC tramite SSH: %1$s · Porta: %2$d. Il nome host salvato viene ignorato perché tutta la connessione al Mac usa SSH.</string>
 </resources>

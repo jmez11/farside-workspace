@@ -791,4 +791,7 @@
     <string name="ssh_host_keys_cleared">Τα αποθηκευμένα κλειδιά διακομιστών SSH διαγράφηκαν.</string>
     <string name="show_connection_info">Εμφάνιση πληροφοριών σύνδεσης</string>
     <string name="hide_connection_info">Απόκρυψη πληροφοριών σύνδεσης</string>
+    <string name="mac_through_ssh">Χρήση SSH για ολόκληρη τη σύνδεση Mac</string>
+    <string name="mac_through_ssh_help">Η κοινή χρήση οθόνης, το βίντεο και ο ήχος χρησιμοποιούν την επιλεγμένη σύνδεση SSH στο Mac. Αρκεί η διαδρομή Cloudflare της. Χρησιμοποιήστε τη θύρα κοινής χρήσης οθόνης του Mac. Απενεργοποιήστε για ξεχωριστές διαδρομές VNC και SSH.</string>
+    <string name="mac_through_ssh_summary">VNC μέσω SSH: %1$s · Θύρα: %2$d. Το αποθηκευμένο όνομα κεντρικού υπολογιστή αγνοείται, επειδή ολόκληρη η σύνδεση Mac χρησιμοποιεί SSH.</string>
 </resources>

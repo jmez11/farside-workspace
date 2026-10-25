@@ -790,4 +790,7 @@
     <string name="ssh_host_keys_cleared">Chaves de servidores SSH guardadas removidas.</string>
     <string name="show_connection_info">Mostrar informações da ligação</string>
     <string name="hide_connection_info">Ocultar informações da ligação</string>
+    <string name="mac_through_ssh">Usar SSH para toda a ligação ao Mac</string>
+    <string name="mac_through_ssh_help">A partilha de ecrã, vídeo e áudio usam a ligação SSH do Mac selecionada. Só é necessária a respetiva rota Cloudflare. Use a porta de Partilha de Ecrã do Mac. Desative para manter rotas VNC e SSH separadas.</string>
+    <string name="mac_through_ssh_summary">VNC por SSH: %1$s · Porta: %2$d. O nome de anfitrião guardado é ignorado porque toda a ligação ao Mac usa SSH.</string>
 </resources>

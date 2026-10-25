@@ -791,4 +791,7 @@
     <string name="ssh_host_keys_cleared">Kayıtlı SSH sunucu anahtarları temizlendi.</string>
     <string name="show_connection_info">Bağlantı bilgilerini göster</string>
     <string name="hide_connection_info">Bağlantı bilgilerini gizle</string>
+    <string name="mac_through_ssh">Mac bağlantısının tamamı için SSH kullan</string>
+    <string name="mac_through_ssh_help">Ekran paylaşımı, video ve ses seçilen Mac SSH bağlantısını kullanır. Yalnızca bu bağlantının Cloudflare yolu gerekir. Mac ekran paylaşımı portunu kullanın. Ayrı VNC ve SSH yollarını korumak için kapatın.</string>
+    <string name="mac_through_ssh_summary">SSH üzerinden VNC: %1$s · Bağlantı noktası: %2$d. Mac bağlantısının tamamı SSH kullandığından kayıtlı ana makine adı yok sayılır.</string>
 </resources>

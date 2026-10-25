@@ -807,4 +807,7 @@
     <string name="ssh_host_keys_cleared">Uložené klíče hostitelů SSH byly vymazány.</string>
     <string name="show_connection_info">Zobrazit informace o připojení</string>
     <string name="hide_connection_info">Skrýt informace o připojení</string>
+    <string name="mac_through_ssh">Použít SSH pro celé připojení k Macu</string>
+    <string name="mac_through_ssh_help">Sdílení obrazovky, video a zvuk používají vybrané SSH připojení k Macu. Stačí jeho trasa Cloudflare. Použijte port sdílení obrazovky na Macu. Vypnutím zachováte samostatné trasy VNC a SSH.</string>
+    <string name="mac_through_ssh_summary">VNC přes SSH: %1$s · Port: %2$d. Uložený název hostitele se nepoužívá, protože celé připojení k Macu používá SSH.</string>
 </resources>

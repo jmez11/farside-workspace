@@ -14,11 +14,14 @@ import java.util.concurrent.atomic.AtomicLong
 
 /** Session-owned in-memory relay. No installation or remote files. */
 internal class MacHevcSshRelay(context: Context, client: SSHClient, host: String,
-    private val log: (String) -> Unit, targetPort: Int = 5900, sameMac: Boolean = false) : Closeable {
+    private val log: (String) -> Unit, targetPort: Int = 5900, sameMac: Boolean = false,
+    mediaEnabled: Boolean = true) : Closeable {
     private val channel = client.startSession()
     private val script = context.assets.open("mac-hevc-relay.pl").bufferedReader().use { it.readText() }
     private fun quote(s: String) = "'" + s.replace("'", "'\"'\"'") + "'"
-    private val command = channel.exec("exec /usr/bin/perl -e ${quote(script)} ${quote(host)} ${targetPort.also { require(it in 1..65535) }} ${if(sameMac) "local" else "target"}")
+    private val command = try {
+        channel.exec("exec /usr/bin/perl -e ${quote(script)} ${quote(host)} ${targetPort.also { require(it in 1..65535) }} ${if(sameMac) "local" else "target"} ${if(mediaEnabled) "media" else "control"}")
+    } catch (error: Exception) { channel.close(); throw error }
     private val input = DataInputStream(command.inputStream)
     private val output = DataOutputStream(command.outputStream)
     private val diagnostics=Thread({
@@ -47,11 +50,18 @@ internal class MacHevcSshRelay(context: Context, client: SSHClient, host: String
             } catch (e: Exception) { log("SSH media relay reader ended: ${e.javaClass.simpleName}") }
         }
     }, "MacRelayMedia").apply { isDaemon=true; start() }
+    private val keepAlive = if(mediaEnabled) null else java.util.concurrent.Executors.newSingleThreadScheduledExecutor { task ->
+        Thread(task,"MacRelayKeepAlive").apply {isDaemon=true}
+    }.apply {
+        scheduleWithFixedDelay({runCatching {send(0,byteArrayOf(0))}.onFailure {runCatching {channel.close()}}},
+            30,30,java.util.concurrent.TimeUnit.SECONDS)
+    }
     init { log("Owned SSH media relay ready; target-filtered UDP; 600s idle expiry") }
     fun send(port: Int, bytes: ByteArray) = synchronized(output) {
         output.writeShort(port); output.writeShort(bytes.size); output.write(bytes); output.flush()
     }
     override fun close() {
+        keepAlive?.shutdownNow()
         runCatching { synchronized(output) { output.writeInt(0); output.flush() } }
         runCatching { forwarder.close() }
         runCatching { listener.close() }

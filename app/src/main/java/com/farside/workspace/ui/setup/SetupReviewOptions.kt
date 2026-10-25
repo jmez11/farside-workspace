@@ -24,6 +24,12 @@ import com.farside.workspace.tunnel.CloudflaredOptions
 import com.farside.workspace.ui.SshForwardingDialog
 
 internal fun setupOptionsError(context:android.content.Context,profile:ConnectionProfile,all:List<ConnectionProfile>):String? {
+    if(profile.type==ConnectionType.VNC && profile.macThroughSsh) {
+        val sshId=profile.macSshRelayProfileId ?: profile.sftpPairProfileId
+        if(!profile.enableMacSshRelay || all.none { it.id==sshId && it.type==ConnectionType.SSH })
+            return context.getString(R.string.mac_media_ssh_required)
+        return null // The selected SSH profile owns its proxy; saved VNC proxy settings are inactive.
+    }
     if(profile.proxyType !in ProxyType.choices) return context.getString(R.string.profile_proxy_type_invalid)
     if(profile.proxyType in listOf(ProxyType.HTTP,ProxyType.SOCKS5)) {
         if(profile.proxyHost.isNullOrBlank()) return context.getString(R.string.profile_proxy_host_required)
@@ -91,7 +97,10 @@ internal fun SetupReviewOptions(profile:ConnectionProfile,profiles:List<Connecti
         Text(stringResource(R.string.setup_review),fontSize=20.sp,fontWeight=FontWeight.Bold)
         SetupOptionGroup(R.string.setup_summary) {
             Text(profile.name,fontWeight=FontWeight.Bold)
-            Text("${profile.type.name} \u00b7 ${profile.host}:${profile.port}",fontSize=14.sp,color=SetupColors.muted)
+            val fullMacSsh=profile.type==ConnectionType.VNC && profile.macThroughSsh
+            val sshName=profiles.firstOrNull {it.id==(profile.macSshRelayProfileId ?: profile.sftpPairProfileId)}?.name.orEmpty()
+            Text(if(fullMacSsh) stringResource(R.string.mac_through_ssh_summary,sshName,profile.port)
+                else "${profile.type.name} \u00b7 ${profile.host}:${profile.port}",fontSize=14.sp,color=SetupColors.muted)
             Text(if(profile.type==ConnectionType.VNC && profile.vncAuthMode==VncAuthMode.VNC_PASSWORD) stringResource(R.string.setup_using_vnc_password)
                 else stringResource(R.string.setup_signed_in_as,profile.user.ifBlank {askAtConnect}),fontSize=13.sp,color=SetupColors.muted)
             Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
@@ -138,17 +147,30 @@ internal fun SetupReviewOptions(profile:ConnectionProfile,profiles:List<Connecti
                 }
                 SetupOptionGroup(R.string.files) {
                 SetupProfilePicker(R.string.setup_pair_ssh,profile.sftpPairProfileId,profiles.filter {it.type==ConnectionType.SSH && (it.enableSftp || it.id==profile.sftpPairProfileId)}) {
-                    onChange(profile.copy(sftpPairProfileId=it,enableMacSshRelay=it!=null && profile.enableMacSshRelay))
+                    onChange(profile.copy(sftpPairProfileId=it))
                 }
-                if(profile.sftpPairProfileId!=null) {
+                }
+                SetupOptionGroup(R.string.companion_remote_login) {
+                SetupProfilePicker(R.string.mac_media_ssh,profile.macSshRelayProfileId ?: profile.sftpPairProfileId,
+                    profiles.filter {it.type==ConnectionType.SSH}) {
+                    onChange(profile.copy(macSshRelayProfileId=it,enableMacSshRelay=it!=null && profile.enableMacSshRelay,
+                        macThroughSsh=it!=null && profile.macThroughSsh))
+                }
+                if(profile.macSshRelayProfileId!=null || profile.sftpPairProfileId!=null) {
                     SetupToggle(R.string.mac_ssh_relay_toggle,profile.enableMacSshRelay,{
-                        if(it && profiles.none {p->p.enableMacSshRelay}) relayConfirm=true else onChange(profile.copy(enableMacSshRelay=it))
+                        if(it && profiles.none {p->p.enableMacSshRelay}) relayConfirm=true
+                        else onChange(profile.copy(enableMacSshRelay=it,macThroughSsh=it && profile.macThroughSsh))
                     })
+                    if(profile.enableMacSshRelay) SetupToggle(R.string.mac_through_ssh,profile.macThroughSsh,
+                        {onChange(profile.copy(macThroughSsh=it))},R.string.mac_through_ssh_help)
                 }
                 }
             }
         }
         SetupOptionGroup(R.string.setup_network) {
+            if(profile.type==ConnectionType.VNC && profile.macThroughSsh) {
+                Text(stringResource(R.string.mac_through_ssh_help),fontSize=13.sp,color=SetupColors.muted)
+            } else {
             Row(horizontalArrangement=Arrangement.spacedBy(5.dp)) {
                 listOf(ProxyType.NONE,ProxyType.CLOUDFLARED,ProxyType.SOCKS5,ProxyType.HTTP).forEach { proxy ->
                     FilterChip(selected=profile.proxyType==proxy,onClick={onChange(profile.copy(proxyType=proxy,useCloudflare=false))},
@@ -165,6 +187,7 @@ internal fun SetupReviewOptions(profile:ConnectionProfile,profiles:List<Connecti
                 SetupInput(R.string.proxy_port,profile.proxyPort?.toString().orEmpty(),{onChange(profile.copy(proxyPort=it.toIntOrNull()))})
                 SetupInput(R.string.proxy_username_optional,profile.proxyUser.orEmpty(),{onChange(profile.copy(proxyUser=it))})
                 SetupInput(R.string.proxy_password_optional,profile.proxyPass.orEmpty(),{onChange(profile.copy(proxyPass=it))},secret=true)
+            }
             }
             SetupToggle(R.string.reconnect_automatically,profile.reconnectAutomatically,{onChange(profile.copy(reconnectAutomatically=it))})
             setupOptionsError(context,profile,profiles)?.takeIf {showErrors}?.let {Text(it,color=SetupColors.danger,fontSize=13.sp)}

@@ -790,4 +790,7 @@
     <string name="ssh_host_keys_cleared">Clés des serveurs SSH enregistrées effacées.</string>
     <string name="show_connection_info">Afficher les informations de connexion</string>
     <string name="hide_connection_info">Masquer les informations de connexion</string>
+    <string name="mac_through_ssh">Utiliser SSH pour toute la connexion au Mac</string>
+    <string name="mac_through_ssh_help">Le partage d’écran, la vidéo et le son utilisent la connexion SSH du Mac sélectionnée. Seule sa route Cloudflare est nécessaire. Utilisez le port de partage d’écran du Mac. Désactivez pour conserver des routes VNC et SSH séparées.</string>
+    <string name="mac_through_ssh_summary">VNC via SSH : %1$s · Port : %2$d. Le nom d’hôte enregistré est ignoré, car toute la connexion au Mac utilise SSH.</string>
 </resources>

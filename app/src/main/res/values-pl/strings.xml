@@ -805,4 +805,7 @@
     <string name="ssh_host_keys_cleared">Zapisane klucze hostów SSH zostały usunięte.</string>
     <string name="show_connection_info">Pokaż informacje o połączeniu</string>
     <string name="hide_connection_info">Ukryj informacje o połączeniu</string>
+    <string name="mac_through_ssh">Używaj SSH dla całego połączenia z Makiem</string>
+    <string name="mac_through_ssh_help">Udostępnianie ekranu, obraz i dźwięk korzystają z wybranego połączenia SSH z Makiem. Wystarczy jego trasa Cloudflare. Użyj portu udostępniania ekranu na Macu. Wyłącz, aby zachować osobne trasy VNC i SSH.</string>
+    <string name="mac_through_ssh_summary">VNC przez SSH: %1$s · Port: %2$d. Zapisana nazwa hosta jest ignorowana, ponieważ całe połączenie z Makiem używa SSH.</string>
 </resources>

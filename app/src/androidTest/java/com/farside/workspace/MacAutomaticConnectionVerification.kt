@@ -17,13 +17,14 @@ import java.util.concurrent.atomic.AtomicLong
 internal class MacAutomaticConnectionVerification(private val test:Instrumentation) {
     fun run(id:String):String {
         val context=test.targetContext;val pm=ProfileManager(context)
-        val profile=pm.getProfiles().single { it.id==id && it.type==ConnectionType.VNC }
+        val saved=pm.getProfiles().single { it.id==id && it.type==ConnectionType.VNC }
+        val profile=saved.copy(macThroughSsh=test.arguments?.getString("macThroughSsh")?.toBooleanStrictOrNull() ?: saved.macThroughSsh)
         val cloudflare=profile.useCloudflare || profile.proxyType==ProxyType.CLOUDFLARED
         require(profile.proxyType==ProxyType.NONE || cloudflare)
-        val companionId=profile.sftpPairProfileId ?: profile.macSshRelayProfileId
+        val companionId=profile.macSshRelayProfileId ?: profile.sftpPairProfileId
         val ssh=if(companionId!=null) pm.getProfiles().single { it.id==companionId && it.type==ConnectionType.SSH }
             else pm.getProfiles().single { it.host==profile.host && it.type==ConnectionType.SSH }
-        val expectedRoute=if(cloudflare) MacConnectionPolicy.Route.COMPANION else MacConnectionPolicy.Route.DIRECT
+        val expectedRoute=if(cloudflare || profile.macThroughSsh) MacConnectionPolicy.Route.COMPANION else MacConnectionPolicy.Route.DIRECT
         val gate=MacAuthenticationGate { false }
         val lease=SshConnectionManager.acquire(context,ssh.id)
         gate.await()
@@ -71,7 +72,7 @@ internal class MacAutomaticConnectionVerification(private val test:Instrumentati
             { reason,_ -> disconnected=reason;ready.countDown() },{}, { handle=it;ready.countDown() })
         var pipeline:MacHevcVideoPipeline?=null
         try {
-            check(MacNativeBaseline(test).run(id).startsWith("PASS"))
+            check(MacNativeBaseline(test).run(id,profile.macThroughSsh).startsWith("PASS"))
             val start=SystemClock.uptimeMillis()
             connection.attach(images.surface)
             check(ready.await(60,TimeUnit.SECONDS)) { "Automatic Mac connection timed out" }
@@ -117,7 +118,7 @@ internal class MacAutomaticConnectionVerification(private val test:Instrumentati
                 restoreMute(originalMute)
                 check(restoreFile.delete())
                 if(handle!=0L && disconnected==null) {
-                    check(MacNativeBaseline(test).run(id).startsWith("PASS"))
+                    check(MacNativeBaseline(test).run(id,profile.macThroughSsh).startsWith("PASS"))
                     MacHevcSshRelay(context,client,profile.host,{ android.util.Log.i("MacRelayFixture",it) },profile.port,profile.macSshRelaySameMac).use { relay ->
                         java.net.Socket().use { socket ->
                             socket.connect(java.net.InetSocketAddress("127.0.0.1",relay.port),2000)

@@ -807,4 +807,7 @@
     <string name="ssh_host_keys_cleared">Сохранённые ключи серверов SSH удалены.</string>
     <string name="show_connection_info">Показать сведения о подключении</string>
     <string name="hide_connection_info">Скрыть сведения о подключении</string>
+    <string name="mac_through_ssh">Использовать SSH для всего подключения к Mac</string>
+    <string name="mac_through_ssh_help">Общий экран, видео и звук используют выбранное SSH-подключение к Mac. Нужен только его маршрут Cloudflare. Укажите порт общего экрана на Mac. Отключите, чтобы сохранить отдельные маршруты VNC и SSH.</string>
+    <string name="mac_through_ssh_summary">VNC через SSH: %1$s · Порт: %2$d. Сохранённое имя хоста игнорируется, поскольку всё подключение к Mac использует SSH.</string>
 </resources>

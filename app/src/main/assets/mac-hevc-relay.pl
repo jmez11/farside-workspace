@@ -12,11 +12,16 @@ alarm 600;
 my $host = shift @ARGV;
 my $rfb_port = shift @ARGV;
 my $mode = shift(@ARGV) // 'target';
+my $transport = shift(@ARGV) // 'media';
+die 'Invalid transport' unless $transport eq 'media' || $transport eq 'control';
+my $media_enabled = $transport eq 'media';
 die 'Invalid RFB port' unless defined $rfb_port && $rfb_port =~ /^\d+$/ && $rfb_port>0 && $rfb_port<65536;
 die 'Invalid target mode' unless $mode eq 'local' || $mode eq 'target';
 # Explicit same-Mac selection: never resolve the public Access hostname as an origin.
 # Keep the encoder's interface address distinct from our loopback UDP listeners.
-if ($mode eq 'local') {
+if ($mode eq 'local' && !$media_enabled) {
+    $host='127.0.0.1'; # Standard VNC needs neither an encoder interface nor UDP binds.
+} elsif ($mode eq 'local') {
     open(my $route_info, '-|', '/sbin/route', '-n', 'get', 'default') or die 'No Mac route';
     my $interface;
     while (<$route_info>) { $interface=$1 if /^\s*interface:\s*([a-zA-Z0-9]+)\s*$/; }
@@ -30,7 +35,7 @@ if ($mode eq 'local') {
     die 'Invalid Mac IPv4 address' unless $host =~ /^(?:\d{1,3}\.){3}\d{1,3}$/;
 }
 my $target = inet_aton($host) or die "Invalid owned target";
-die 'Loopback media target would loop relay packets' if inet_ntoa($target) =~ /^127\./;
+die 'Loopback media target would loop relay packets' if $media_enabled && inet_ntoa($target) =~ /^127\./;
 my $route = IO::Socket::INET->new(PeerAddr=>$host, PeerPort=>$rfb_port, Proto=>'udp') or die 'No target route';
 my $same_host = $route->sockhost eq inet_ntoa($target) || inet_ntoa($target) =~ /^127\./;
 close $route;
@@ -40,7 +45,7 @@ my $listener = IO::Socket::INET->new(LocalAddr=>'127.0.0.1', LocalPort=>0,
 my $select = IO::Select->new($listener, \*STDIN);
 my (%udp, %peer, %handles, %udp_port);
 my %reported_drop;
-for my $port (5900, 5901) {
+for my $port ($media_enabled ? (5900, 5901) : ()) {
     socket(my $socket, PF_INET, SOCK_DGRAM, 0) or die "UDP socket: $!";
     bind($socket, sockaddr_in($port, inet_aton($same_host ? '127.0.0.1' : '0.0.0.0'))) or die "UDP port unavailable: $!";
     setsockopt($socket,SOL_SOCKET,SO_RCVBUF,pack('i',4*1024*1024));
@@ -140,6 +145,11 @@ while (1) {
             while (length($stdin_buffer)>=4) {
                 my ($port,$length)=unpack('nn',substr($stdin_buffer,0,4));
                 exit 0 if $port==0 && $length==0;
+                if ($port==0 && $length==1) {
+                    last if length($stdin_buffer)<5;
+                    substr($stdin_buffer,0,5,''); # Owner heartbeat for an idle TCP-only desktop.
+                    next;
+                }
                 die 'Unexpected port' unless exists $udp{$port};
                 last if length($stdin_buffer)<4+$length;
                 substr($stdin_buffer,0,4,'');
@@ -162,6 +172,7 @@ while (1) {
             my $id=fileno($socket);
             my $count=sysread($socket,my $data,65536);
             if (defined $count && $count>0) {
+                alarm 600; # Control-only fallback also renews its owned session.
                 my $other=$peer{$id};
                 my $other_id=fileno($other);
                 $tcp_output{$other_id}.=$data;
@@ -196,7 +207,7 @@ while (1) {
         $last_report=time;
     }
     # Responses from the encoder are local; the SSH channel carries the resulting media to Quest.
-    if (time-$last_punch>=0.1) {
+    if ($media_enabled && time-$last_punch>=0.1) {
         for my $port (5900,5901) { send($udp{$port},"\0",0,sockaddr_in($port,$target)); }
         $last_punch=time;
     }

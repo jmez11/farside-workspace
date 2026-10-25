@@ -792,4 +792,7 @@
     <string name="ssh_host_keys_cleared">已清除保存的 SSH 主机密钥。</string>
     <string name="show_connection_info">显示连接信息</string>
     <string name="hide_connection_info">隐藏连接信息</string>
+    <string name="mac_through_ssh">通过 SSH 连接整个 Mac 会话</string>
+    <string name="mac_through_ssh_help">屏幕共享、视频和音频均使用所选的 Mac SSH 连接，只需该连接的 Cloudflare 路由。请使用 Mac 上的屏幕共享端口。关闭后将保留独立的 VNC 和 SSH 路由。</string>
+    <string name="mac_through_ssh_summary">通过 SSH 连接 VNC：%1$s · 端口：%2$d。由于整个 Mac 连接使用 SSH，已保存的主机名会被忽略。</string>
 </resources>

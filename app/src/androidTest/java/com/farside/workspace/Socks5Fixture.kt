@@ -49,7 +49,11 @@ internal class Socks5Fixture(private val targetPort: Int? = null,
                     upstream = target
                     output.write(byteArrayOf(5, 0, 0, 1, 127, 0, 0, 1, 0, 0)); output.flush()
                     downstream.soTimeout = 0
-                    thread(isDaemon = true) { runCatching { downstream.getInputStream().copyTo(target.getOutputStream()) } }
+                    thread(isDaemon = true) {
+                        try { downstream.getInputStream().copyTo(target.getOutputStream()) }
+                        catch (_: Exception) {}
+                        finally { runCatching { target.shutdownOutput() } }
+                    }
                     runCatching { target.getInputStream().copyTo(output) }
                 }
             }

@@ -95,7 +95,8 @@ data class ConnectionProfile(
     val macAudioEnabled: Boolean = false,
     val macSshRelayProfileId: String? = null,
     val enableMacSshRelay: Boolean = false,
-    val macSshRelaySameMac: Boolean = true
+    val macSshRelaySameMac: Boolean = true,
+    val macThroughSsh: Boolean = false
 ) {
     fun toJson(): JSONObject {
         val json = JSONObject()
@@ -115,7 +116,7 @@ data class ConnectionProfile(
         json.put("enableSftp", type == ConnectionType.SSH && enableSftp)
         if (type == ConnectionType.VNC) {
             json.put("vncAuthMode", vncAuthMode.name)
-            json.put("sftpPairProfileId", sftpPairProfileId)
+            json.put("sftpPairProfileId", sftpPairProfileId ?: JSONObject.NULL)
         }
         json.put("remoteApp", remoteApp)
         json.put("useCloudflare", useCloudflare)
@@ -160,6 +161,7 @@ data class ConnectionProfile(
         json.put("macSshRelayProfileId", macSshRelayProfileId)
         json.put("enableMacSshRelay", enableMacSshRelay)
         json.put("macSshRelaySameMac", macSshRelaySameMac)
+        json.put("macThroughSsh", macThroughSsh)
         return json
     }
 
@@ -183,8 +185,9 @@ data class ConnectionProfile(
                 vncAuthMode = if (json.getString("type") == "VNC")
                     runCatching { VncAuthMode.valueOf(json.optString("vncAuthMode", VncAuthMode.VNC_PASSWORD.name)) }.getOrDefault(VncAuthMode.VNC_PASSWORD)
                     else VncAuthMode.VNC_PASSWORD,
-                sftpPairProfileId = if (json.getString("type") == "VNC" && json.has("sftpPairProfileId") && !json.isNull("sftpPairProfileId"))
-                    json.getString("sftpPairProfileId") else if (json.getString("type") == "VNC") json.optString("macSshRelayProfileId").takeIf { it.isNotBlank() && it != "null" } else null,
+                sftpPairProfileId = if (json.getString("type") != "VNC") null
+                    else if (json.has("sftpPairProfileId")) json.optString("sftpPairProfileId").takeIf { it.isNotBlank() && it != "null" }
+                    else json.optString("macSshRelayProfileId").takeIf { it.isNotBlank() && it != "null" },
                 remoteApp = if (json.has("remoteApp") && !json.isNull("remoteApp")) json.getString("remoteApp") else null,
                 useCloudflare = if (json.has("useCloudflare")) json.getBoolean("useCloudflare") else false,
                 enableCamera = if (json.has("enableCamera")) json.getBoolean("enableCamera") else false,
@@ -226,9 +229,12 @@ data class ConnectionProfile(
                 expMacShareConsole = json.optBoolean("expMacShareConsole", false),
                 macPreferAvc = json.optBoolean("macPreferAvc", true),
                 macAudioEnabled = json.optBoolean("macAudioEnabled", false),
-                macSshRelayProfileId = json.optString("macSshRelayProfileId").takeIf { it.isNotBlank() && it != "null" },
+                macSshRelayProfileId = (if(!json.has("macThroughSsh"))
+                    json.optString("sftpPairProfileId").takeIf { it.isNotBlank() && it != "null" } else null)
+                    ?: json.optString("macSshRelayProfileId").takeIf { it.isNotBlank() && it != "null" },
                 enableMacSshRelay = json.optBoolean("enableMacSshRelay", false),
-                macSshRelaySameMac = true // Companion SSH always ends on the viewed Mac; migrate legacy false.
+                macSshRelaySameMac = true, // Companion SSH always ends on the viewed Mac; migrate legacy false.
+                macThroughSsh = json.optBoolean("macThroughSsh", false)
             )
         }
     }
