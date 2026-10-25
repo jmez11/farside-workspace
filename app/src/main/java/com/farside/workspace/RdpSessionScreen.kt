@@ -231,6 +231,8 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
     var connectFailureReason by (runtime?.failureReason ?: remember { mutableStateOf<String>("") })
     var disconnectedReason by (runtime?.disconnectedReason ?: remember { mutableStateOf<String?>(null) })
     var hasConnected by (runtime?.hasConnected ?: remember(session.id) { mutableStateOf<Boolean>(false) })
+    val inactiveMonitor = monitor != null && runtime?.isOwner(monitor) == false && hasConnected &&
+        (disconnectedReason != null || rdpInstance == 0L || runtime?.reconnectVisualPending?.value == true)
     var autoReconnect by (runtime?.autoReconnect ?: remember(session.id) { mutableStateOf<Boolean>(session.reconnectAutomatically) })
     var tunnelStatus by (runtime?.tunnelStatus ?: remember { mutableStateOf<String>("") })
     val certificates = remember(session.id, reconnectAttempt) {
@@ -356,6 +358,15 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
     val density = LocalDensity.current
     var offsetY by remember { mutableStateOf(with(density) { 16.dp.toPx() }) }
     var showZoomSlider by remember { mutableStateOf(false) }
+    var showTransparencySlider by remember { mutableStateOf(false) }
+    var desktopAlpha by remember(session.id) { mutableFloatStateOf(session.terminalOpacity.coerceIn(0.2f, 1f)) }
+    val profileManager = remember(context) { ProfileManager(context) }
+    LaunchedEffect(session.id, desktopAlpha) {
+        delay(250)
+        profileManager.getProfiles().firstOrNull { it.id == session.id }?.let {
+            if (it.terminalOpacity != desktopAlpha) profileManager.updateProfile(it.copy(terminalOpacity = desktopAlpha))
+        }
+    }
     var showDebugInfo by remember { mutableStateOf(false) }
     val connectionInfoVisible by ConnectionInfoVisibility.observe(context)
     LaunchedEffect(connectionInfoVisible) { if (!connectionInfoVisible) showDebugInfo=false }
@@ -696,12 +707,13 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                         }
                     }
                 }
-            }
+            },
+            update = { it.alpha = desktopAlpha }
         ) }
 
         if((rdpBridge as? VncBridge)?.isMacHevc==true) {
             val image=remember(macCursor) { macCursor?.let { android.graphics.Bitmap.createBitmap(it.pixels,it.width,it.height,android.graphics.Bitmap.Config.ARGB_8888).asImageBitmap() } }
-            Canvas(Modifier.fillMaxSize().graphicsLayer { scaleX=zoom;scaleY=zoom;translationX=panX;translationY=panY }) {
+            Canvas(Modifier.fillMaxSize().graphicsLayer { scaleX=zoom;scaleY=zoom;translationX=panX;translationY=panY;alpha=desktopAlpha }) {
                 macPointer.value?.let { point ->
                     val sx=size.width/actualWidth.coerceAtLeast(1);val sy=size.height/actualHeight.coerceAtLeast(1)
                     val cursor=macCursor
@@ -763,7 +775,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
         }
 
         if (adjusting || adjustmentFade.value > 0f) {
-            Box(Modifier.fillMaxSize().graphicsLayer { alpha = if (adjusting) 1f else adjustmentFade.value }
+            Box(Modifier.fillMaxSize().graphicsLayer { alpha = desktopAlpha * (if (adjusting) 1f else adjustmentFade.value) }
                 .background(Color(0xFF15191E))
                 .pointerInteropFilter { true }, contentAlignment = androidx.compose.ui.Alignment.Center) {
                 frozenDesktop?.let { bitmap ->
@@ -885,8 +897,12 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                             iconSize = iconSize,
                         )
                     }
-                    IconButton(onClick = { showZoomSlider = !showZoomSlider }, modifier = Modifier.size(buttonSize)) {
+                    IconButton(onClick = { showZoomSlider = !showZoomSlider; if (showZoomSlider) showTransparencySlider = false; revealToolbar() }, modifier = Modifier.size(buttonSize)) {
                         Icon(Icons.Default.Search, stringResource(R.string.zoom), modifier = Modifier.size(iconSize), tint = if (showZoomSlider) MaterialTheme.colorScheme.primary else Color.White)
+                    }
+                    IconButton(onClick = { showTransparencySlider = !showTransparencySlider; if (showTransparencySlider) showZoomSlider = false; revealToolbar() }, modifier = Modifier.size(buttonSize)) {
+                        Icon(Icons.Default.Opacity, stringResource(R.string.transparency), modifier = Modifier.size(iconSize),
+                            tint = if (showTransparencySlider || desktopAlpha < 1f) MaterialTheme.colorScheme.primary else Color.White)
                     }
                     if (connectionInfoVisible) IconButton(onClick = { showDebugInfo = !showDebugInfo; revealToolbar() }, modifier = Modifier.size(buttonSize)) {
                         Icon(Icons.Default.Info, stringResource(R.string.debug_actions), modifier = Modifier.size(iconSize),
@@ -931,6 +947,18 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                             color = Color.White,
                             modifier = Modifier.padding(start = 2.dp)
                         )
+                    }
+                }
+                if (showTransparencySlider) {
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                        modifier = Modifier.padding(top = 4.dp, start = 4.dp, end = 4.dp)) {
+                        Slider(value = desktopAlpha,
+                            onValueChange = { desktopAlpha = it.coerceIn(0.2f, 1f); revealToolbar() },
+                            valueRange = 0.2f..1f,
+                            modifier = Modifier.width(224.dp).padding(horizontal = 4.dp))
+                        Text(stringResource(R.string.terminal_opacity_percent, (desktopAlpha * 100).roundToInt()),
+                            style = MaterialTheme.typography.bodySmall, color = Color.White,
+                            modifier = Modifier.padding(start = 2.dp))
                     }
                 }
             }
@@ -1083,6 +1111,15 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                         }
                     }
                 }
+            }
+        }
+        if (inactiveMonitor) {
+            val disconnectedLabel = stringResource(R.string.disconnected)
+            Box(Modifier.fillMaxSize().background(Color(0xC766686B))
+                .pointerInteropFilter { true }
+                .semantics { contentDescription = disconnectedLabel },
+                contentAlignment = androidx.compose.ui.Alignment.Center) {
+                Text(disconnectedLabel, color = Color.White, style = MaterialTheme.typography.titleMedium)
             }
         }
     }

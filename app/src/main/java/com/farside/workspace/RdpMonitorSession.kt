@@ -179,6 +179,7 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
     val connectionFailed = mutableStateOf(false)
     val failureReason = mutableStateOf("")
     val disconnectedReason = mutableStateOf<String?>(null)
+    val reconnectVisualPending = mutableStateOf(false)
     val hasConnected = mutableStateOf(false)
     val tunnelStatus = mutableStateOf("")
     val speakerMuted = mutableStateOf(false)
@@ -323,7 +324,10 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
             onDisconnected = { reason, established ->
                 transition.cancel()
                 canAdd = false; supportsAdditionalMonitors = false; inputReady = false
-                if (established || hasConnected.value) disconnectedReason.value = reason else failureReason.value = reason
+                if (established || hasConnected.value) {
+                    reconnectVisualPending.value = true
+                    disconnectedReason.value = reason
+                } else failureReason.value = reason
             }, onStatus = { tunnelStatus.value = it }, onConnected = { handle ->
                 instance.value = handle; tunnelStatus.value = ""
                 connectionFailed.value = handle == 0L && !hasConnected.value
@@ -562,6 +566,10 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
         val posesSettled = !visiblePoses.isSettling(now) && (poseCandidate == null || now - poseSince >= 750)
         transition.settle(now, (!busy && inputReady && posesSettled &&
             (sameGeometry(desired,committed) || sameGeometry(desired,rejectedTarget))) || retryBlocked)
+        if (reconnectVisualPending.value && !busy && inputReady && !transition.active &&
+            monitors.filter { it.visible && it.surface != null }.all { monitor -> committed.any { it.id == monitor.id } }) {
+            reconnectVisualPending.value = false
+        }
         canAdd = profile.remoteApp.isNullOrBlank() && !layoutNeedsRetry && !busy && !drag.active && inputReady &&
             monitors.all { it.presented } && raw[0] == 1L && raw[8] == 1L &&
             monitors.size < minOf(raw[1], 16L) && RdpMonitorLayouts.valid(
@@ -570,6 +578,7 @@ internal class RdpMonitorSession(private val context: Context, val profile: Conn
     fun reconnect() {
         transition.cancel()
         drag.cancel()
+        reconnectVisualPending.value = hasConnected.value
         monitors.forEach { it.releaseInput() }; keyboardOwner.value = null
         instance.value = 0L; canAdd = false; supportsAdditionalMonitors = false; inputReady = false; reconnecting = true
         val previous = connection; connection = null

@@ -52,6 +52,18 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
         while (!control.isClickable && control.parent != null) control = control.parent
         check(control.isEnabled && control.performAction(AccessibilityNodeInfo.ACTION_CLICK)) { "Disabled/rejected action: $label" }
     }
+    private fun hasInactiveOverlay(activity: SessionActivity): Boolean {
+        fun contains(node: AccessibilityNodeInfo): Boolean {
+            if (node.contentDescription?.toString() == context.getString(R.string.disconnected)) return true
+            return (0 until node.childCount).any { node.getChild(it)?.let(::contains) == true }
+        }
+        var windowId = -1
+        main { windowId = activity.window.decorView.createAccessibilityNodeInfo().windowId }
+        test.uiAutomation.clearCache()
+        val windows = test.uiAutomation.windowsOnAllDisplays
+        return (0 until windows.size()).flatMap { windows.valueAt(it) }
+            .firstOrNull { it.id == windowId }?.root?.let(::contains) == true
+    }
     private fun presentation(activity: SessionActivity): Pair<Boolean, Boolean> {
         test.uiAutomation.adoptShellPermissionIdentity()
         return try {
@@ -342,7 +354,7 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
             check(context.getSharedPreferences("farside_profiles", 0).edit().commit())
         }
     }
-    fun run(launcherReuseOnly: Boolean = false): String {
+    fun run(launcherReuseOnly: Boolean = false, reconnectOnly: Boolean = false): String {
         val service = test.uiAutomation.serviceInfo
         service.flags = service.flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
         test.uiAutomation.serviceInfo = service
@@ -502,6 +514,53 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
             await("Add desktop action") { node(context.getString(R.string.rdp_add_desktop)) != null }
             click(context.getString(R.string.rdp_add_desktop)); settled(2); record("two")
             val second = session.monitors.last()
+            fun verifyReconnect() {
+                val monitorIds = session.monitors.map { it.id }
+                val activities = session.monitors.map { checkNotNull(it.host.get()) }
+                val oldHandle = handle
+                main { session.autoReconnect.value = false; session.disconnectedReason.value = "Fixture disconnect" }
+                await("surviving monitor greys while only owner shows reconnect") {
+                    hasInactiveOverlay(activities[1]) && !hasInactiveOverlay(activities[0])
+                }
+                var desktopTouches = 0
+                main {
+                    val inactive = activities[1]
+                    inactive.onTouchDebug = { _, _, _, _ -> desktopTouches++ }
+                    val now = android.os.SystemClock.uptimeMillis()
+                    val x = inactive.window.decorView.width / 2f
+                    val y = inactive.window.decorView.height / 2f
+                    for (action in listOf(android.view.MotionEvent.ACTION_DOWN, android.view.MotionEvent.ACTION_UP)) {
+                        val event = android.view.MotionEvent.obtain(now, now, action, x, y, 0)
+                        try { inactive.dispatchTouchEvent(event) } finally { event.recycle() }
+                    }
+                    inactive.onTouchDebug = null
+                }
+                check(desktopTouches == 0) { "Disconnected monitor still delivered desktop touches" }
+                main { session.reconnect() }
+                await("one shared reconnect and both monitor windows", 60_000) {
+                    var ready = false
+                    main {
+                        if (session.instance.value != 0L && session.bridge !== native) {
+                            handle = session.instance.value; native = session.bridge
+                        }
+                        ready = session.instance.value != 0L && !session.busy && session.monitors.map { it.id } == monitorIds &&
+                            native.getMonitorLayoutState(handle).getOrNull(9) == 2L
+                    }
+                    ready
+                }
+                settled(2)
+                await("surviving monitor returns to normal after reconnect") {
+                    session.monitors.none { hasInactiveOverlay(checkNotNull(it.host.get())) }
+                }
+                check(session.monitors.map { it.host.get() } == activities)
+                record("reconnected-two")
+                report.put("sharedReconnect", true).put("nativeHandleChangedOnReconnect", oldHandle != handle)
+            }
+            if (reconnectOnly) {
+                verifyReconnect()
+                report.put("result", "PASS")
+                return "Two RDP monitor windows grey on shared disconnect, keep their tasks through reconnect, and return to normal after one new native connection."
+            }
             report.put("ordinaryPanelPoses", JSONArray(session.monitors.map { RdpPanelPose.read(checkNotNull(it.host.get()))?.toString() ?: "unavailable" }))
             fun followPlacement() {
                 // Internal diagnostic hook; production follows settled poses automatically.
@@ -922,21 +981,7 @@ internal class RdpMonitorWindowsVerification(private val test: Instrumentation) 
             settled(2)
             check(native.getMonitorLayoutState(handle)[9] == 2L)
             report.put("canceledLaunchLeavesTopology", true)
-            val oldHandle = handle
-            main { session.reconnect() }
-            await("one shared reconnect and both monitor windows", 60_000) {
-                var ready = false
-                main {
-                    if (session.instance.value != 0L && session.bridge !== native) {
-                        handle = session.instance.value; native = session.bridge
-                    }
-                    ready = session.instance.value != 0L && !session.busy && session.monitors.size == 2 &&
-                        native.getMonitorLayoutState(handle).getOrNull(9) == 2L
-                }
-                ready
-            }
-            settled(2); record("reconnected-two")
-            report.put("sharedReconnect", true).put("nativeHandleChangedOnReconnect", oldHandle != handle)
+            verifyReconnect()
             val capture = checkNotNull(native.displayCapture)
             val oldSpace = native.audioWindowSpace
             main { firstActivity.finishAndRemoveTask() }

@@ -198,8 +198,11 @@ class RdpResizeInstrumentation : Instrumentation() {
                 finish(0, results)
                 return
             }
-            if (jumpArgs?.getString("rdpMonitorsOnly") == "true" || jumpArgs?.getString("rdpLauncherReuseOnly") == "true") {
-                results.putString("stream", "PASS: ${RdpMonitorWindowsVerification(this).run(jumpArgs?.getString("rdpLauncherReuseOnly") == "true")}\n")
+            if (jumpArgs?.getString("rdpMonitorsOnly") == "true" || jumpArgs?.getString("rdpLauncherReuseOnly") == "true" ||
+                jumpArgs?.getString("rdpMonitorReconnectOnly") == "true") {
+                results.putString("stream", "PASS: ${RdpMonitorWindowsVerification(this).run(
+                    launcherReuseOnly = jumpArgs?.getString("rdpLauncherReuseOnly") == "true",
+                    reconnectOnly = jumpArgs?.getString("rdpMonitorReconnectOnly") == "true")}\n")
                 finish(0, results)
                 return
             }
@@ -447,6 +450,11 @@ class RdpResizeInstrumentation : Instrumentation() {
             storageMode?.let {
                 RdpStorageVerification(this).run(it)
                 results.putString("stream", "PASS: RDP storage $it.\n")
+                finish(0, results)
+                return
+            }
+            if (jumpArgs?.getString("rdpOpacityOnly") == "true") {
+                results.putString("stream", DesktopOpacityVerification(this).run())
                 finish(0, results)
                 return
             }

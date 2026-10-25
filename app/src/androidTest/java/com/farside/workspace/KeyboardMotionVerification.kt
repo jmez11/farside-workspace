@@ -52,7 +52,7 @@ internal class KeyboardMotionVerification(private val test: Instrumentation) {
                 main {initialRoll=motion.roll.value;visible.value=open}
                 var finished=false
                 val poses=mutableSetOf<String>()
-                val buffers=mutableSetOf<Pair<Int,Int>>()
+                val buffers=mutableListOf<Pair<Int,Int>>()
                 val sizes=mutableSetOf<Pair<Int,Int>>()
                 var firstHeight:Int?=null
                 var intermediateAlpha=false
@@ -68,7 +68,6 @@ internal class KeyboardMotionVerification(private val test: Instrumentation) {
                             if(firstHeight==null) firstHeight=it.height
                             poses+=it.pose+it.bounds;sizes+=it.width to it.height
                         }
-                        if(alpha>0f) check(state.hostedView?.height==kotlin.math.round(251.2f*context.resources.displayMetrics.density).toInt()) {"Opening revealed an unfinished backing buffer"}
                         samples.put(JSONObject().put("open",open).put("ms",SystemClock.uptimeMillis()-start)
                             .put("parent", "${content.width}x${content.height}").put("alpha",alpha).put("roll",roll).put("native",native?.toString()))
                         intermediateAlpha=intermediateAlpha || alpha>0f && alpha<1f
@@ -85,7 +84,15 @@ internal class KeyboardMotionVerification(private val test: Instrumentation) {
                 check(finished && elapsed<1000) {"Keyboard transition exceeded one second: open=$open elapsed=$elapsed"}
                 check(intermediateRoll && intermediateAlpha) {"Keyboard transition snapped instead of animating"}
                 check(poses.size>=3) {"Native attachment did not move smoothly: ${poses.size} observed poses"}
-                if(!open) check(buffers.size==1) {"Closing backing surface resized during travel: $buffers"}
+                if(!open) {
+                    val fullHeight=kotlin.math.round(251.2f*context.resources.displayMetrics.density).toInt()
+                    check(buffers.isNotEmpty() && buffers.all { it.first==buffers.first().first && it.second in 1..fullHeight }) {
+                        "Closing backing surface left panel bounds: $buffers"
+                    }
+                    check(buffers.zipWithNext().all { (before,after) -> after.second<=before.second+1 }) {
+                        "Closing backing surface grew during collapse: $buffers"
+                    }
+                }
                 if(open && initialRoll==0f) check(firstHeight in 1..2) {"Opening initially created full footprint: $firstHeight"}
                 check(sizes.size>=3) {"Native footprint did not animate: $sizes"}
                 check(content.width to content.height==parentSize) {"Desktop resized during keyboard animation: $parentSize -> ${content.width to content.height}"}
@@ -95,7 +102,7 @@ internal class KeyboardMotionVerification(private val test: Instrumentation) {
             // Reverse in mid-travel and in mid-fade; cancellation must resume current values.
             main {visible.value=true};Thread.sleep(180);main {visible.value=false};Thread.sleep(100)
             transition(true);transition(false)
-            return "PASS native keyboard roll/fade under one second, ordered opacity, intermediate poses, collapsed first footprint, invisible opening-buffer sizing, full buffer before paint, fixed closing buffer/desktop size, repeated toggles and interrupted reopening; synthetic fixture, physical Horizon handle appearance/IME remains manual. Durations: $durations"
+            return "PASS native keyboard roll/fade under one second, ordered opacity, intermediate poses, collapsed first footprint, invisible opening-buffer sizing, full native footprint before paint, bounded closing buffer and fixed desktop size, repeated toggles and interrupted reopening; synthetic fixture, physical Horizon handle appearance/IME remains manual. Durations: $durations"
         } finally {
             File(context.cacheDir,"keyboard-motion.json").writeText(JSONObject().put("durations",durations).put("samples",samples).toString(2))
             main {visible.value=false;geometry.close();activity.finish()}

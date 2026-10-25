@@ -589,7 +589,8 @@ internal class VncVerification(private val test: Instrumentation,private val liv
                 try {
                     for ((encoding, cursor) in if (mode == "picker") emptyList() else listOf(16, 7, 8, 5, 2, 0).map { it to true } + (0 to false)) Fixture(encoding, sendCursor = cursor).use { server ->
                         val profile = ConnectionProfile("vnc-verification-profile", "VNC verification", ConnectionType.VNC,
-                            "127.0.0.1", server.port, "", "", credentialId = credential.id)
+                            "127.0.0.1", server.port, "", "", credentialId = credential.id,
+                            terminalOpacity = if (encoding == 16) 0.7f else 1f)
                         check(!profile.toJson().has("pass") && !profile.toJson().has("passEncrypted"))
                         check(!credential.toJson().toString().contains("testpass"))
                         pm.addProfile(profile)
@@ -635,6 +636,20 @@ internal class VncVerification(private val test: Instrumentation,private val liv
                 var pin = toolbarNodes().first { it.contentDescription?.toString() == "Keep toolbar visible" }
                 while (!pin.isClickable) pin = checkNotNull(pin.parent)
                 check(pin.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK))
+                click(test.targetContext.getString(R.string.transparency))
+                await("Saved desktop opacity was not restored") {
+                    toolbarNodes().any { kotlin.math.abs((it.rangeInfo?.current ?: -1f) - 0.7f) < 0.01f } &&
+                        kotlin.math.abs((texture(activity.window.decorView)?.alpha ?: -1f) - 0.7f) < 0.01f
+                }
+                val opacitySlider = toolbarNodes().first { kotlin.math.abs((it.rangeInfo?.current ?: -1f) - 0.7f) < 0.01f }
+                check(opacitySlider.performAction(android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS.id,
+                    android.os.Bundle().apply { putFloat(android.view.accessibility.AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE, 0.45f) }))
+                await("Desktop opacity did not apply and save") {
+                    kotlin.math.abs((texture(activity.window.decorView)?.alpha ?: -1f) - 0.45f) < 0.01f &&
+                        kotlin.math.abs(ProfileManager(test.targetContext).getProfiles().single { it.id == profile.id }.terminalOpacity - 0.45f) < 0.01f
+                }
+                record("PASS: VNC toolbar restores, applies and saves desktop opacity")
+                click(test.targetContext.getString(R.string.transparency))
                 val oldInfo=ConnectionInfoVisibility.get(test.targetContext)
                 try {
                     main { ConnectionInfoVisibility.set(test.targetContext,false) }
