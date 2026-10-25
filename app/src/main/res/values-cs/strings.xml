@@ -813,4 +813,5 @@
     <string name="protocol_mac">Mac</string>
     <string name="collapse_toolbar">Sbalit panel nástrojů</string>
     <string name="restore_toolbar">Obnovit panel nástrojů</string>
+<string name="mac_quality_rtcp_reports">RTCP SR / RR / FB</string>
 </resources>

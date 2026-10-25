@@ -798,4 +798,5 @@
     <string name="protocol_mac">Mac</string>
     <string name="collapse_toolbar">收起工具列</string>
     <string name="restore_toolbar">還原工具列</string>
+<string name="mac_quality_rtcp_reports">RTCP SR / RR / FB</string>
 </resources>

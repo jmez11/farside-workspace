@@ -796,4 +796,5 @@
     <string name="protocol_mac">Mac</string>
     <string name="collapse_toolbar">Contraer barra de herramientas</string>
     <string name="restore_toolbar">Restaurar barra de herramientas</string>
+<string name="mac_quality_rtcp_reports">RTCP SR / RR / FB</string>
 </resources>

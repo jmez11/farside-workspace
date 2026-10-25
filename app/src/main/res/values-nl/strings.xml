@@ -796,4 +796,5 @@
     <string name="protocol_mac">Mac</string>
     <string name="collapse_toolbar">Werkbalk inklappen</string>
     <string name="restore_toolbar">Werkbalk herstellen</string>
+<string name="mac_quality_rtcp_reports">RTCP SR / RR / FB</string>
 </resources>

@@ -808,4 +808,5 @@
     <string name="protocol_mac">Mac</string>
     <string name="collapse_toolbar">Restrânge bara de instrumente</string>
     <string name="restore_toolbar">Restabilește bara de instrumente</string>
+<string name="mac_quality_rtcp_reports">RTCP SR / RR / FB</string>
 </resources>

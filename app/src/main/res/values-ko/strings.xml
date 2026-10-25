@@ -796,4 +796,5 @@
     <string name="protocol_mac">Mac</string>
     <string name="collapse_toolbar">도구 모음 접기</string>
     <string name="restore_toolbar">도구 모음 복원</string>
+<string name="mac_quality_rtcp_reports">RTCP SR / RR / FB</string>
 </resources>
