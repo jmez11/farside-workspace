@@ -793,4 +793,7 @@
     <string name="mac_through_ssh">Brug SSH til hele Mac-forbindelsen</string>
     <string name="mac_through_ssh_help">Skærmdeling, video og lyd bruger den valgte SSH-forbindelse til Mac. Kun dens Cloudflare-rute er nødvendig. Brug porten til skærmdeling på Mac. Slå fra for at bevare separate VNC- og SSH-ruter.</string>
     <string name="mac_through_ssh_summary">VNC via SSH: %1$s · Port: %2$d. Det gemte værtsnavn ignoreres, fordi hele Mac-forbindelsen bruger SSH.</string>
+    <string name="protocol_mac">Mac</string>
+    <string name="collapse_toolbar">Skjul værktøjslinjen</string>
+    <string name="restore_toolbar">Gendan værktøjslinjen</string>
 </resources>

@@ -793,4 +793,7 @@
     <string name="mac_through_ssh">Usar SSH para toda a ligação ao Mac</string>
     <string name="mac_through_ssh_help">A partilha de ecrã, vídeo e áudio usam a ligação SSH do Mac selecionada. Só é necessária a respetiva rota Cloudflare. Use a porta de Partilha de Ecrã do Mac. Desative para manter rotas VNC e SSH separadas.</string>
     <string name="mac_through_ssh_summary">VNC por SSH: %1$s · Porta: %2$d. O nome de anfitrião guardado é ignorado porque toda a ligação ao Mac usa SSH.</string>
+    <string name="protocol_mac">Mac</string>
+    <string name="collapse_toolbar">Recolher barra de ferramentas</string>
+    <string name="restore_toolbar">Restaurar barra de ferramentas</string>
 </resources>

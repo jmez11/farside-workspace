@@ -17,11 +17,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.unit.IntOffset
 import kotlin.math.roundToInt
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.Canvas
 import androidx.compose.material.icons.filled.VolumeUp
@@ -30,8 +27,6 @@ import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.geometry.Rect
 import android.os.SystemClock
 import android.view.ViewConfiguration
@@ -94,7 +89,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, onClose: () -> Unit) {
+fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, windowMovement: Long = 0L, onClose: () -> Unit) {
     val context = LocalContext.current
     com.farside.workspace.ssh.SshHostKeyDialogHost(remember(session, context) { com.farside.workspace.ssh.sshHostKeyScope(context, session) })
     val scrollbackValidationMsg = stringResource(R.string.scrollback_lines_validation)
@@ -217,8 +212,8 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
         }
     }
 
-    var offsetX by remember { mutableStateOf(0f) }
-    var offsetY by remember { mutableStateOf(0f) }
+    val toolbarMoving by rememberToolbarMoving(windowMovement)
+    val toolbarState = remember(session.id) { FloatingToolbarState() }
     var isOverlayVisible by remember { mutableStateOf(true) }
     var toolbarPinned by remember { mutableStateOf(false) }
     var toolbarActivity by remember { mutableStateOf(0L) }
@@ -230,8 +225,8 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
     }
 
     LaunchedEffect(windowInteraction, fontSize) { revealToolbar() }
-    LaunchedEffect(isOverlayVisible, toolbarPinned, toolbarActivity, offsetX, offsetY) {
-        if (isOverlayVisible && !toolbarPinned) {
+    LaunchedEffect(isOverlayVisible, toolbarPinned, toolbarActivity, toolbarState.offsetX, toolbarState.offsetY, toolbarState.collapsed) {
+        if (isOverlayVisible && !toolbarState.collapsed && !toolbarPinned) {
             delay(3000)
             isOverlayVisible = false
         }
@@ -537,23 +532,11 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, o
         )
 
         // Floating Movable Disappearing Menu Bar
-        if (isOverlayVisible || animatedAlpha > 0f) {
-            Surface(
-                modifier = Modifier
-                    .align(androidx.compose.ui.Alignment.TopCenter)
-                    .offset { IntOffset(offsetX.roundToInt(), offsetY.roundToInt()) }
-                    .alpha(animatedAlpha)
-                    .onGloballyPositioned { toolbarBounds = it.boundsInRoot() }
-                    .pointerInput(Unit) {
-                        detectDragGestures { change, dragAmount ->
-                            change.consume()
-                            offsetX += dragAmount.x
-                            offsetY += dragAmount.y
-                            revealToolbar()
-                        }
-                    },
-                shape = RoundedCornerShape(18.dp),
-                color = Color.Black.copy(alpha = 0.7f)
+        if (toolbarMoving || toolbarState.collapsed || isOverlayVisible || animatedAlpha > 0f) {
+            FloatingSessionToolbar(
+                state = toolbarState, alpha = animatedAlpha, onInteraction = revealToolbar, moving = toolbarMoving,
+                movementLabel = session.name,
+                onBounds = { toolbarBounds = it }
             ) {
                 val iconSize = 18.dp
                 val buttonSize = 36.dp

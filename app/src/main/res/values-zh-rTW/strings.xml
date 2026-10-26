@@ -795,4 +795,7 @@
     <string name="mac_through_ssh">透過 SSH 連接整個 Mac 工作階段</string>
     <string name="mac_through_ssh_help">螢幕共享、影片和音訊均使用所選的 Mac SSH 連線，只需該連線的 Cloudflare 路由。請使用 Mac 上的螢幕共享連接埠。關閉後將保留獨立的 VNC 和 SSH 路由。</string>
     <string name="mac_through_ssh_summary">透過 SSH 連接 VNC：%1$s · 連接埠：%2$d。由於整個 Mac 連線使用 SSH，已儲存的主機名稱會被忽略。</string>
+    <string name="protocol_mac">Mac</string>
+    <string name="collapse_toolbar">收起工具列</string>
+    <string name="restore_toolbar">還原工具列</string>
 </resources>

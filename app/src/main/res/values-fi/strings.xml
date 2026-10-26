@@ -793,4 +793,7 @@
     <string name="mac_through_ssh">Käytä SSH:ta koko Mac-yhteyteen</string>
     <string name="mac_through_ssh_help">Näytönjako, video ja ääni käyttävät valittua Macin SSH-yhteyttä. Vain sen Cloudflare-reitti tarvitaan. Käytä Macin näytönjaon porttia. Poista käytöstä säilyttääksesi erilliset VNC- ja SSH-reitit.</string>
     <string name="mac_through_ssh_summary">VNC SSH:n kautta: %1$s · Portti: %2$d. Tallennettua palvelinnimeä ei käytetä, koska koko Mac-yhteys käyttää SSH:ta.</string>
+    <string name="protocol_mac">Mac</string>
+    <string name="collapse_toolbar">Pienennä työkalurivi</string>
+    <string name="restore_toolbar">Palauta työkalurivi</string>
 </resources>

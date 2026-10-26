@@ -118,6 +118,11 @@ class RdpResizeInstrumentation : Instrumentation() {
     override fun onStart() {
         val results = Bundle()
         try {
+            if (jumpArgs?.getString("floatingToolbarOnly") == "true") {
+                results.putString("stream", FloatingToolbarVerification(this).run() + "\n")
+                finish(0, results)
+                return
+            }
             if (jumpArgs?.getString("vncFailureOnly") == "true") {
                 results.putString("stream", ConnectionUiFollowupVerification(this).vncFailure())
                 finish(0, results)

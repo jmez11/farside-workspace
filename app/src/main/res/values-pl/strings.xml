@@ -808,4 +808,7 @@
     <string name="mac_through_ssh">Używaj SSH dla całego połączenia z Makiem</string>
     <string name="mac_through_ssh_help">Udostępnianie ekranu, obraz i dźwięk korzystają z wybranego połączenia SSH z Makiem. Wystarczy jego trasa Cloudflare. Użyj portu udostępniania ekranu na Macu. Wyłącz, aby zachować osobne trasy VNC i SSH.</string>
     <string name="mac_through_ssh_summary">VNC przez SSH: %1$s · Port: %2$d. Zapisana nazwa hosta jest ignorowana, ponieważ całe połączenie z Makiem używa SSH.</string>
+    <string name="protocol_mac">Mac</string>
+    <string name="collapse_toolbar">Zwiń pasek narzędzi</string>
+    <string name="restore_toolbar">Przywróć pasek narzędzi</string>
 </resources>

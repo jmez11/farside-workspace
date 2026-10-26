@@ -794,4 +794,7 @@
     <string name="mac_through_ssh">Mac bağlantısının tamamı için SSH kullan</string>
     <string name="mac_through_ssh_help">Ekran paylaşımı, video ve ses seçilen Mac SSH bağlantısını kullanır. Yalnızca bu bağlantının Cloudflare yolu gerekir. Mac ekran paylaşımı portunu kullanın. Ayrı VNC ve SSH yollarını korumak için kapatın.</string>
     <string name="mac_through_ssh_summary">SSH üzerinden VNC: %1$s · Bağlantı noktası: %2$d. Mac bağlantısının tamamı SSH kullandığından kayıtlı ana makine adı yok sayılır.</string>
+    <string name="protocol_mac">Mac</string>
+    <string name="collapse_toolbar">Araç çubuğunu daralt</string>
+    <string name="restore_toolbar">Araç çubuğunu geri yükle</string>
 </resources>

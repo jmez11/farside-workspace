@@ -326,7 +326,7 @@ fun ProfileCard(profile: ConnectionProfile, onEdit: () -> Unit, onDelete: () -> 
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Surface(shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)) {
-                    Text(stringResource(profile.type.labelResId), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary,
+                    Text(stringResource(if (profile.type == ConnectionType.VNC && profile.vncAuthMode == com.farside.workspace.data.VncAuthMode.MAC_USER) R.string.protocol_mac else profile.type.labelResId), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 1.dp))
                 }
                 Text(profile.name, style = MaterialTheme.typography.titleMedium,

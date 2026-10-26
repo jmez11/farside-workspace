@@ -793,4 +793,7 @@
     <string name="mac_through_ssh">SSH gebruiken voor de volledige Mac-verbinding</string>
     <string name="mac_through_ssh_help">Schermdeling, video en audio gebruiken de geselecteerde SSH-verbinding met de Mac. Alleen de bijbehorende Cloudflare-route is nodig. Gebruik de poort voor schermdeling op de Mac. Schakel uit om aparte VNC- en SSH-routes te behouden.</string>
     <string name="mac_through_ssh_summary">VNC via SSH: %1$s · Poort: %2$d. De opgeslagen hostnaam wordt genegeerd omdat de volledige Mac-verbinding SSH gebruikt.</string>
+    <string name="protocol_mac">Mac</string>
+    <string name="collapse_toolbar">Werkbalk inklappen</string>
+    <string name="restore_toolbar">Werkbalk herstellen</string>
 </resources>

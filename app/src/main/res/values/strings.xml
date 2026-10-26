@@ -793,4 +793,7 @@
     <string name="show_connection_info">Show connection info</string>
     <string name="hide_connection_info">Hide connection info</string>
     <string name="mac_through_ssh_summary">VNC via SSH: %1$s · Port: %2$d. The saved hostname is ignored because SSH is enabled for the full Mac connection.</string>
+    <string name="protocol_mac">Mac</string>
+    <string name="collapse_toolbar">Collapse toolbar</string>
+    <string name="restore_toolbar">Restore toolbar</string>
 </resources>

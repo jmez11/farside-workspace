@@ -795,4 +795,7 @@
     <string name="mac_through_ssh">Macへの接続全体にSSHを使用</string>
     <string name="mac_through_ssh_help">画面共有、映像、音声に選択したMacのSSH接続を使用します。そのCloudflare経路だけが必要です。Macの画面共有ポートを指定してください。オフにするとVNCとSSHの経路を分けて使用します。</string>
     <string name="mac_through_ssh_summary">SSH 経由の VNC: %1$s · ポート: %2$d。Mac 接続全体に SSH を使用するため、保存されたホスト名は使用されません。</string>
+    <string name="protocol_mac">Mac</string>
+    <string name="collapse_toolbar">ツールバーを折りたたむ</string>
+    <string name="restore_toolbar">ツールバーを復元</string>
 </resources>

@@ -87,6 +87,7 @@ class SessionActivity : ComponentActivity() {
     internal var rdpInstance = 0L
         internal set
     private val windowInteraction = androidx.compose.runtime.mutableStateOf(0L)
+    private val windowMovement = androidx.compose.runtime.mutableStateOf(0L)
     private var sessionProfile: String? = null
     private var sessionCredential: String? = null
     private var credentialPrefs: android.content.SharedPreferences? = null
@@ -110,7 +111,7 @@ class SessionActivity : ComponentActivity() {
 
     private val movementObserver = WindowMovementObserver(this,
         onMoved = {
-            windowInteraction.value += 1L
+            windowMovement.value += 1L
             checkAndBindAudioSession()
         },
         onPresented = { WindowLaunchMonitor.complete(intent.getStringExtra(WindowLaunchMonitor.EXTRA_REQUEST)) })
@@ -262,6 +263,7 @@ class SessionActivity : ComponentActivity() {
                         RdpSessionScreen(
                             session = profile.copy(reconnectAutomatically = profileManager.getProfiles().firstOrNull { it.id == profile.id }?.reconnectAutomatically ?: false),
                             windowInteraction = windowInteraction.value,
+                            windowMovement = windowMovement.value,
                             monitor = rdpMonitor,
                             onInstanceCreated = {
                                 rdpInstance = it
@@ -282,13 +284,14 @@ class SessionActivity : ComponentActivity() {
                         SpatialScene {
                             VncSessionScreen(profile.copy(reconnectAutomatically = profileManager.getProfiles().firstOrNull { it.id == profile.id }?.reconnectAutomatically ?: false), onInstanceCreated = { vncInstance = it; SessionCardActions.connected(this, it != 0L) },
                                 onBridgeCreated = { vncBridge = it }, onClose = { finish() },
-                                windowInteraction = windowInteraction.value)
+                                windowInteraction = windowInteraction.value, windowMovement = windowMovement.value)
                         }
                     } else {
                         SpatialScene {
                         SshSessionScreen(
                             session = profile.copy(reconnectAutomatically = profileManager.getProfiles().firstOrNull { it.id == profile.id }?.reconnectAutomatically ?: false),
                             windowInteraction = windowInteraction.value,
+                            windowMovement = windowMovement.value,
                             onClose = { finish() }
                         )
                         }

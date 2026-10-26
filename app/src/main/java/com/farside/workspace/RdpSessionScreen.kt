@@ -106,15 +106,15 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalComposeUiApi::class)
 @Composable
-internal fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Unit, onClose: () -> Unit, windowInteraction: Long = 0L, onBridgeCreated: ((FreeRDPBridge) -> Unit)? = null, monitor: RdpMonitor? = null) {
+internal fun RdpSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Unit, onClose: () -> Unit, windowInteraction: Long = 0L, onBridgeCreated: ((FreeRDPBridge) -> Unit)? = null, monitor: RdpMonitor? = null, windowMovement: Long = 0L) {
     DesktopSessionScreen(session, onInstanceCreated, onClose, windowInteraction,
-        { onBridgeCreated?.invoke(monitor?.session?.bridge ?: (it as FreeRDPBridge)) }, monitor)
+        { onBridgeCreated?.invoke(monitor?.session?.bridge ?: (it as FreeRDPBridge)) }, monitor, windowMovement)
 }
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalComposeUiApi::class)
 @Composable
 internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated: (Long) -> Unit, onClose: () -> Unit,
-    windowInteraction: Long = 0L, onBridgeCreated: ((DesktopSessionBridge) -> Unit)? = null, monitor: RdpMonitor? = null) {
+    windowInteraction: Long = 0L, onBridgeCreated: ((DesktopSessionBridge) -> Unit)? = null, monitor: RdpMonitor? = null, windowMovement: Long = 0L) {
     val runtime = monitor?.session
     var desktopTexture by remember { mutableStateOf<TextureView?>(null) }
     var frozenDesktop by remember { mutableStateOf<Bitmap?>(null) }
@@ -354,9 +354,9 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
     }
     var currentWidth by remember { mutableStateOf(0) }
     var currentHeight by remember { mutableStateOf(0) }
-    var offsetX by remember { mutableStateOf(0f) }
     val density = LocalDensity.current
-    var offsetY by remember { mutableStateOf(with(density) { 16.dp.toPx() }) }
+    val toolbarMoving by rememberToolbarMoving(windowMovement)
+    val toolbarState = remember(session.id) { FloatingToolbarState(with(density) { 16.dp.toPx() }) }
     var showZoomSlider by remember { mutableStateOf(false) }
     var showTransparencySlider by remember { mutableStateOf(false) }
     var desktopAlpha by remember(session.id) { mutableFloatStateOf(session.terminalOpacity.coerceIn(0.2f, 1f)) }
@@ -444,8 +444,8 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
     val isMediaRecording = micRecording || cameraRecording
     LaunchedEffect(windowInteraction, currentWidth, currentHeight, isMediaRecording) { revealToolbar() }
     val keepToolbarVisible = showDebugInfo || isMediaRecording || runtime?.drag?.armed == true || runtime?.drag?.active == true
-    LaunchedEffect(isOverlayVisible, toolbarPinned, toolbarActivity, offsetX, offsetY, keepToolbarVisible) {
-        if (isOverlayVisible && !toolbarPinned && !keepToolbarVisible) {
+    LaunchedEffect(isOverlayVisible, toolbarPinned, toolbarActivity, toolbarState.offsetX, toolbarState.offsetY, toolbarState.collapsed, keepToolbarVisible) {
+        if (isOverlayVisible && !toolbarState.collapsed && !toolbarPinned && !keepToolbarVisible) {
             delay(3000)
             isOverlayVisible = false
         }
@@ -816,24 +816,12 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                 drawPath(path, Color.White.copy(alpha = 0.7f), style = Stroke(2.dp.toPx()))
             }
         }
-        if (isOverlayVisible || animatedAlpha > 0f) {
-        Surface(
-            modifier = Modifier
-                .align(androidx.compose.ui.Alignment.TopCenter)
-                .offset { IntOffset(offsetX.roundToInt(), offsetY.roundToInt()) }
-                .alpha(animatedAlpha)
-                .onGloballyPositioned { toolbarBounds = it.boundsInRoot() }
-                .pointerInput(Unit) {
-                    detectDragGestures { change, dragAmount ->
-                        change.consume()
-                        offsetX += dragAmount.x
-                        offsetY += dragAmount.y
-                        revealToolbar()
-                    }
-                },
-            shape = RoundedCornerShape(18.dp),
-            color = Color.Black.copy(alpha = 0.7f)
-        ) {
+        if (toolbarMoving || toolbarState.collapsed || isOverlayVisible || animatedAlpha > 0f) {
+        FloatingSessionToolbar(
+                state = toolbarState, alpha = animatedAlpha, onInteraction = revealToolbar, moving = toolbarMoving,
+                movementLabel = if (monitor != null && runtime != null && runtime.monitors.size > 1) stringResource(R.string.rdp_desktop_number, runtime.monitors.indexOf(monitor)+1) + " - " + session.name else session.name,
+                onBounds = { toolbarBounds = it }
+            ) {
             val iconSize = 18.dp
             val buttonSize = 36.dp
             Column(modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp), horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {

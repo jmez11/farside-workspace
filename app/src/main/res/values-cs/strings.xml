@@ -810,4 +810,7 @@
     <string name="mac_through_ssh">Použít SSH pro celé připojení k Macu</string>
     <string name="mac_through_ssh_help">Sdílení obrazovky, video a zvuk používají vybrané SSH připojení k Macu. Stačí jeho trasa Cloudflare. Použijte port sdílení obrazovky na Macu. Vypnutím zachováte samostatné trasy VNC a SSH.</string>
     <string name="mac_through_ssh_summary">VNC přes SSH: %1$s · Port: %2$d. Uložený název hostitele se nepoužívá, protože celé připojení k Macu používá SSH.</string>
+    <string name="protocol_mac">Mac</string>
+    <string name="collapse_toolbar">Sbalit panel nástrojů</string>
+    <string name="restore_toolbar">Obnovit panel nástrojů</string>
 </resources>
