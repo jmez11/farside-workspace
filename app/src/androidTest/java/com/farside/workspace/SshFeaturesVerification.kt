@@ -614,6 +614,96 @@ class SshFeaturesVerification(private val test: Instrumentation, private val ime
         }
         record("PASS: buffered newline commit and Enter key event send only SSH Return, clear actual Compose buffer, and preserve next typing")
         if (imeOnly) {
+            main {
+                shellBytes.clear()
+                check(connection.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_ENTER)))
+                check(connection.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_ENTER)))
+            }
+            waitFor("Suggestion setup Return did not reach SSH") { shellBytes.contains(13) }
+            main {
+                shellBytes.clear()
+                check(connection.commitText("y", 1))
+            }
+            waitFor("Suggestion trigger did not reach SSH") { shellBytes.contains('y'.code) }
+            main { check(connection.commitText("Youtube", 1)) }
+            waitFor("Suggestion replacement did not reach SSH") { shellBytes.size >= 9 }
+            check(shellBytes.toList() == listOf('y'.code, 127) + "Youtube".map { it.code }) {
+                "Suggestion left trigger on remote: ${shellBytes.toList()}"
+            }
+            main {
+                check(connection.getExtractedText(android.view.inputmethod.ExtractedTextRequest(), 0).text.toString() == " Youtube")
+                shellBytes.clear()
+                check(connection.commitText("!", 1))
+            }
+            waitFor("Typing after suggestion failed") { shellBytes.isNotEmpty() }
+            check(shellBytes.toList() == listOf('!'.code)) { "Suggestion buffer caused replay: ${shellBytes.toList()}" }
+            main {
+                shellBytes.clear()
+                check(connection.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_ENTER)))
+                check(connection.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_ENTER)))
+            }
+            waitFor("Composing suggestion setup Return did not reach SSH") { shellBytes.contains(13) }
+            main {
+                shellBytes.clear()
+                check(connection.setComposingText("y", 1))
+            }
+            waitFor("Composing suggestion trigger did not reach SSH") { shellBytes.contains('y'.code) }
+            main { check(connection.setComposingText("Youtube ", 1)) }
+            waitFor("Composing suggestion did not reach SSH") { shellBytes.size >= 10 }
+            check(shellBytes.toList() == listOf('y'.code, 127) + "Youtube ".map { it.code }) {
+                "Composing suggestion left trigger on remote: ${shellBytes.toList()}"
+            }
+            record("PASS: real InputConnection commit/composing suggestions replace streamed y and retain buffer for following text")
+            main {
+                shellBytes.clear()
+                check(connection.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_ENTER)))
+                check(connection.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_ENTER)))
+            }
+            waitFor("Multi-word suggestion setup Return did not reach SSH") { shellBytes.contains(13) }
+            main {
+                shellBytes.clear()
+                check(connection.commitText("hi ", 1))
+                check(connection.commitText("y", 1))
+            }
+            waitFor("Multi-word trigger did not reach SSH") { shellBytes.contains('y'.code) }
+            main {
+                check(connection.commitText("you", 1))
+            }
+            waitFor("Multi-word suggestion did not reach SSH") { shellBytes.size >= 5 }
+            check(shellBytes.toList() == listOf('h'.code, 'i'.code, ' '.code, 'y'.code, 'o'.code, 'u'.code) ||
+                  shellBytes.toList() == listOf('h'.code, 'i'.code, ' '.code, 'y'.code, 127, 'y'.code, 'o'.code, 'u'.code)) {
+                "Multi-word suggestion duplicated prefix or failed: ${shellBytes.toList()}"
+            }
+            record("PASS: multi-word suggestion replaces active trigger without replaying earlier words")
+            main {
+                shellBytes.clear()
+                check(connection.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_ENTER)))
+                check(connection.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_ENTER)))
+            }
+            waitFor("Backspace setup Return did not reach SSH") { shellBytes.contains(13) }
+            Thread.sleep(150)
+            main {
+                shellBytes.clear()
+                check(connection.deleteSurroundingText(1, 0))
+            }
+            waitFor("First empty backspace did not reach SSH") { shellBytes.isNotEmpty() }
+            check(shellBytes.toList() == listOf(127)) { "First empty backspace mismatch: ${shellBytes.toList()}" }
+            Thread.sleep(150)
+            main {
+                shellBytes.clear()
+                check(connection.deleteSurroundingText(1, 0))
+            }
+            waitFor("Second empty backspace did not reach SSH") { shellBytes.isNotEmpty() }
+            check(shellBytes.toList() == listOf(127)) { "Second empty backspace mismatch: ${shellBytes.toList()}" }
+            Thread.sleep(150)
+            main {
+                shellBytes.clear()
+                check(connection.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_DEL)))
+                check(connection.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_DEL)))
+            }
+            waitFor("KEYCODE_DEL did not reach SSH") { shellBytes.isNotEmpty() }
+            check(shellBytes.toList() == listOf(127)) { "KEYCODE_DEL backspace mismatch: ${shellBytes.toList()}" }
+            record("PASS: consecutive backspaces and KEYCODE_DEL on empty buffer always reach SSH")
             main { shellBytes.clear() }
             click("Keyboard")
             Thread.sleep(800)
