@@ -626,9 +626,9 @@ class SshFeaturesVerification(private val test: Instrumentation, private val ime
             }
             waitFor("Suggestion trigger did not reach SSH") { shellBytes.contains('y'.code) }
             main { check(connection.commitText("Youtube", 1)) }
-            waitFor("Suggestion replacement did not reach SSH") { shellBytes.size >= 9 }
-            check(shellBytes.toList() == listOf('y'.code, 127) + "Youtube".map { it.code }) {
-                "Suggestion left trigger on remote: ${shellBytes.toList()}"
+            waitFor("Suggestion replacement did not reach SSH") { shellBytes.size >= 7 }
+            check(shellBytes.toList() == listOf('y'.code) + "outube".map { it.code }) {
+                "Suggestion did not stream suffix to remote: ${shellBytes.toList()}"
             }
             main {
                 check(connection.getExtractedText(android.view.inputmethod.ExtractedTextRequest(), 0).text.toString() == " Youtube")
@@ -649,9 +649,9 @@ class SshFeaturesVerification(private val test: Instrumentation, private val ime
             }
             waitFor("Composing suggestion trigger did not reach SSH") { shellBytes.contains('y'.code) }
             main { check(connection.setComposingText("Youtube ", 1)) }
-            waitFor("Composing suggestion did not reach SSH") { shellBytes.size >= 10 }
-            check(shellBytes.toList() == listOf('y'.code, 127) + "Youtube ".map { it.code }) {
-                "Composing suggestion left trigger on remote: ${shellBytes.toList()}"
+            waitFor("Composing suggestion did not reach SSH") { shellBytes.size >= 8 }
+            check(shellBytes.toList() == listOf('y'.code) + "outube ".map { it.code }) {
+                "Composing suggestion did not stream suffix to remote: ${shellBytes.toList()}"
             }
             record("PASS: real InputConnection commit/composing suggestions replace streamed y and retain buffer for following text")
             main {

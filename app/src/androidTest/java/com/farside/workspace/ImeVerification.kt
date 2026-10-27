@@ -40,14 +40,14 @@ class ImeVerification(private val instrumentation: Instrumentation) {
         processImeChange(adjusted, lastEnterTime = 0L, previous = previous,
             sendUnicode = { code, down -> if (down) unicode.add(code) },
             sendKey = { code, down -> if (down) keys.add(code) })
-        check(keys == listOf(0x0E) && unicode.joinToString("") { it.toChar().toString() } == "Youtube") {
-            "Suggestion did not replace the remote trigger: $keys $unicode"
+        check(keys.isEmpty() && unicode.joinToString("") { it.toChar().toString() } == "outube") {
+            "Suggestion did not stream suffix: $keys $unicode"
         }
         check(normalizeImeSuggestion(previous, appended, "outube") == appended) {
             "Nonmatching multi-character commit must append"
         }
-        check(normalizeImeSuggestion(previous, appended, null) == appended) {
-            "Ordinary edit must not be treated as a suggestion"
+        check(normalizeImeSuggestion(previous, appended, null) == adjusted) {
+            "Appended candidate matching trigger must normalize even if submitted is null"
         }
         val composing = TextFieldValue(" y", TextRange(2), TextRange(1, 2))
         val firstWord = TextFieldValue("yYoutube ", TextRange(9), TextRange(1, 9))
@@ -57,8 +57,8 @@ class ImeVerification(private val instrumentation: Instrumentation) {
         processImeChange(normalized, lastEnterTime = 0L, previous = composing,
             sendUnicode = { code, down -> if (down) unicode.add(code) },
             sendKey = { code, down -> if (down) keys.add(code) })
-        check(keys == listOf(0x0E) && unicode.joinToString("") { it.toChar().toString() } == "Youtube ") {
-            "First-word suggestion left its initial y on remote: $keys $unicode"
+        check(keys.isEmpty() && unicode.joinToString("") { it.toChar().toString() } == "outube ") {
+            "First-word suggestion did not stream suffix: $keys $unicode"
         }
         check(normalizeImeSuggestion(composing, TextFieldValue("yfoobar"), "foobar") == TextFieldValue("yfoobar")) {
             "Unrelated composing text must remain an append"

@@ -54,23 +54,28 @@ private open class RemoteImeInputConnection(
     private var finishedComposition = false
     private var selectedRange = false
     override fun beginBatchEdit(): Boolean {
+        android.util.Log.i("FarsideIME", "beginBatchEdit (depth=$batchDepth)")
         if (batchDepth++ == 0) { finishedComposition = false; selectedRange = false }
         return super.beginBatchEdit()
     }
     override fun finishComposingText(): Boolean {
+        android.util.Log.i("FarsideIME", "finishComposingText")
         if (batchDepth > 0) finishedComposition = true
         return super.finishComposingText()
     }
     override fun setSelection(start: Int, end: Int): Boolean {
+        android.util.Log.i("FarsideIME", "setSelection: start=$start, end=$end")
         if (batchDepth > 0 && finishedComposition) selectedRange = start != end
         return super.setSelection(start, end)
     }
     override fun getTextBeforeCursor(n: Int, flags: Int): CharSequence {
         val result = super.getTextBeforeCursor(n, flags)
+        android.util.Log.i("FarsideIME", "getTextBeforeCursor: n=$n, flags=$flags -> '$result'")
         if (result.isNullOrEmpty()) return " "
         return result
     }
     override fun deleteSurroundingText(beforeLength: Int, afterLength: Int): Boolean {
+        android.util.Log.i("FarsideIME", "deleteSurroundingText: before=$beforeLength, after=$afterLength")
         if (beforeLength > 0 && afterLength == 0) {
             val before = super.getTextBeforeCursor(beforeLength, 0)
             val available = before?.length ?: 0
@@ -87,6 +92,7 @@ private open class RemoteImeInputConnection(
         return deleteSurroundingText(beforeLength, afterLength)
     }
     override fun sendKeyEvent(event: android.view.KeyEvent): Boolean {
+        android.util.Log.i("FarsideIME", "sendKeyEvent: keyCode=${event.keyCode}, action=${event.action}")
         if (event.keyCode == android.view.KeyEvent.KEYCODE_DEL) {
             if (event.action == android.view.KeyEvent.ACTION_DOWN) {
                 sendKey(0x0E, true)
@@ -97,11 +103,14 @@ private open class RemoteImeInputConnection(
         return super.sendKeyEvent(event)
     }
     override fun commitText(text: CharSequence, cursor: Int): Boolean {
+        android.util.Log.i("FarsideIME", "commitText: text='$text', cursor=$cursor")
         beforeCommit()
         submitted(text)
         return super.commitText(text, cursor)
     }
     override fun setComposingText(text: CharSequence, cursor: Int): Boolean {
+        android.util.Log.i("FarsideIME", "setComposingText: text='$text', cursor=$cursor")
+        submitted(text)
         val extracted = super.getExtractedText(ExtractedTextRequest(), 0)
         val range = extracted?.let {
             suggestionCompositionRange(it.text?.toString().orEmpty(), it.selectionStart, it.selectionEnd, text.toString())
@@ -109,10 +118,16 @@ private open class RemoteImeInputConnection(
         if (range != null) super.setComposingRegion(range.first, range.second)
         return super.setComposingText(text, cursor)
     }
+    override fun commitCompletion(text: android.view.inputmethod.CompletionInfo?): Boolean {
+        android.util.Log.i("FarsideIME", "commitCompletion: text='${text?.text}'")
+        text?.text?.let { submitted(it) }
+        return super.commitCompletion(text)
+    }
     protected fun beforeCommit() {
         if (batchDepth > 0 && finishedComposition && selectedRange) replacement()
     }
     override fun endBatchEdit(): Boolean {
+        android.util.Log.i("FarsideIME", "endBatchEdit (depth=$batchDepth)")
         try { return super.endBatchEdit() }
         finally {
             batchDepth = (batchDepth - 1).coerceAtLeast(0)
@@ -158,27 +173,31 @@ private class RemoteImeInputConnectionApi34(
 /** A suggestion replaces the typed trigger token without replaying or duplicating already-committed prefix history. */
 internal fun normalizeImeSuggestion(previous: TextFieldValue, next: TextFieldValue,
     submitted: String?): TextFieldValue {
-    if (submitted.isNullOrEmpty() || submitted.codePointCount(0, submitted.length) < 2 ||
+    val candidate = if (!submitted.isNullOrEmpty()) submitted
+        else if (next.text.length > previous.text.length && next.text.startsWith(previous.text)) {
+            next.text.substring(previous.text.length)
+        } else null
+    if (candidate.isNullOrEmpty() || candidate.codePointCount(0, candidate.length) < 2 ||
         previous.selection.collapsed.not() || previous.selection.end != previous.text.length) return next
     val word = previous.text.substringAfterLast(' ')
     if (word.isEmpty()) return next
     val prevPrefix = previous.text.dropLast(word.length)
     val trimmedPrevPrefix = prevPrefix.trimStart()
 
-    val effective = if (trimmedPrevPrefix.isNotEmpty() && submitted.startsWith(trimmedPrevPrefix, ignoreCase = true)) {
-        submitted.substring(trimmedPrevPrefix.length)
-    } else submitted
+    val effective = if (trimmedPrevPrefix.isNotEmpty() && candidate.startsWith(trimmedPrevPrefix, ignoreCase = true)) {
+        candidate.substring(trimmedPrevPrefix.length)
+    } else candidate
 
     if (!effective.startsWith(word, ignoreCase = true)) return next
-    val appended = next.text == previous.text + submitted ||
-        next.text == prevPrefix + submitted ||
+    val appended = next.text == previous.text + candidate ||
+        next.text == prevPrefix + candidate ||
         (trimmedPrevPrefix.isNotEmpty() && next.text == previous.text + effective)
     val droppedSentinel = previous.text.startsWith(" ") &&
-        (next.text == previous.text.removePrefix(" ") + submitted ||
-         next.text == prevPrefix.removePrefix(" ") + submitted ||
+        (next.text == previous.text.removePrefix(" ") + candidate ||
+         next.text == prevPrefix.removePrefix(" ") + candidate ||
          next.text == previous.text.removePrefix(" ") + effective)
-    val fullReplacement = (next.text == " $submitted" || next.text == submitted) &&
-        trimmedPrevPrefix.isNotEmpty() && submitted.startsWith(trimmedPrevPrefix, ignoreCase = true)
+    val fullReplacement = (next.text == " $candidate" || next.text == candidate) &&
+        trimmedPrevPrefix.isNotEmpty() && candidate.startsWith(trimmedPrevPrefix, ignoreCase = true)
 
     if (!appended && !droppedSentinel && !fullReplacement) return next
     val newText = prevPrefix + effective
@@ -218,11 +237,14 @@ internal fun processImeChange(
         var common = 0
         while (common < before.size && common < after.size &&
             (before[common] == after[common] ||
-             (common < before.size - 1 && Character.toLowerCase(before[common]) == Character.toLowerCase(after[common])))) {
+             ((common < before.size - 1 || after.size > before.size) &&
+              Character.toLowerCase(before[common]) == Character.toLowerCase(after[common])))) {
             common++
         }
-        repeat(before.size - common) { sendKey(0x0E, true); sendKey(0x0E, false) }
+        val backspaces = before.size - common
+        repeat(backspaces) { sendKey(0x0E, true); sendKey(0x0E, false) }
         newChars = String(after, common, after.size - common)
+        android.util.Log.i("FarsideIME", "processImeChange: before='${previous.text}', after='${next.text}', common=$common, backspaces=$backspaces, newChars='$newChars'")
     } else if (next.text.isEmpty()) {
         sendKey(0x0E, true)
         sendKey(0x0E, false)
@@ -298,6 +320,7 @@ internal fun RemoteImeEditor(label: String, activation: Long, showInitially: Boo
     var lastEnterTime by remember { mutableStateOf(0L) }
     InterceptPlatformTextInput(interceptor) {
         BasicTextField(value = text, onValueChange = { next ->
+            android.util.Log.i("FarsideIME", "onValueChange: prev='${text.text}', next='${next.text}', submitted='$submittedText'")
             val adjusted = normalizeImeSuggestion(text, next, submittedText)
             submittedText = null
             lastEnterTime = processImeChange(
