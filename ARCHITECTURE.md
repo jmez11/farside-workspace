@@ -4,7 +4,7 @@
 **Farside Workspace** is a native RDP, SSH and VNC client for Meta Quest (Horizon OS). Its defining feature is that every remote session and RemoteApp is its own spatial window, which can be placed freely in the standard Home/passthrough environment without entering a custom VR world. It is designed as a plain-language, no-bells-and-whistles productivity utility.
 
 ## Project Identity
-- Repository/Gradle project: `farside-workspace`; product: Farside Workspace; Android application/namespace: `com.farside.workspace`. Kotlin sources and JNI symbols share that namespace. Local checkout: ``C:\dev\farside-workspace``. Runtime storage/Keystore/session URI names use ``farside``; bundled Cloudflared and its parser share ``FARSIDE_*`` process markers and the ``2026.10.3-farside`` version. Renaming the package creates a separate installation without migrating the previous app data.
+- Repository/Gradle project: `farside-workspace`; product: Farside Workspace; Android application/namespace: `com.farside.workspace`. Kotlin sources and JNI symbols share that namespace. Local checkout: ``C:\dev\farside-workspace``. Runtime storage/Keystore/session URI names use ``farside``; bundled Cloudflared and its parser share ``FARSIDE_*`` process markers and the ``2026.10.5-farside`` version. Renaming the package creates a separate installation without migrating the previous app data.
 
 ## Module Map
 1. **App / UI Layer (`app`)**: Jetpack Compose and Meta VR Layout SDK for Compose Spatial Windows. Manages the connection launcher (main panel) and spawns new Spatial Windows for each session.

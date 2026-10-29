@@ -48,7 +48,7 @@
  	cfdToken, err := token.GetAppTokenIfExists(appInfo)
  	if err != nil {
  		fmt.Fprintln(os.Stderr, "Unable to find token for provided application.")
-@@ -551,6 +578,9 @@
+@@ -555,6 +582,9 @@
  	if c.IsSet(sshTokenSecretFlag) {
  		headers.Add(cfAccessClientSecretHeader, c.String(sshTokenSecretFlag))
  	}
@@ -82,12 +82,24 @@
  
 --- a/token/token.go
 +++ b/token/token.go
-@@ -398,7 +398,7 @@
- 
- 	domain := resp.Header.Get(appDomainHeader)
- 	if domain == "" {
--		return nil, errors.New("Empty app domain")
-+		domain = reqURL.Hostname()
+@@ -441,9 +441,17 @@
  	}
  
- 	return &AppInfo{location.Hostname(), aud, domain}, nil
+ 	// Parse auth_domain into the canonical hostname used for JWKS lookup.
+-	authDomain, err := parseAuthDomain(unverified.AuthDomain)
+-	if err != nil {
+-		return nil, fmt.Errorf("metadata JWT auth_domain validation failed: %w", err)
++	// Android adaptation: Access responses can omit the auth domain. The
++	// original TLS-verified application hostname is the correct namespace;
++	// an audience is still mandatory below.
++	var authDomain url.URL
++	if unverified.AuthDomain == "" {
++		authDomain = url.URL{Scheme: httpsScheme, Host: reqURL.Hostname()}
++	} else {
++		authDomain, err = parseAuthDomain(unverified.AuthDomain)
++		if err != nil {
++			return nil, fmt.Errorf("metadata JWT auth_domain validation failed: %w", err)
++		}
+ 	}
+ 
+ 	// Verify the JWT signature against the JWKS (with disk cache + retry).
