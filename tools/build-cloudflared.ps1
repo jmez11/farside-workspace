@@ -1,8 +1,8 @@
 param(
     [string]$Go = 'go',
     [string]$Sdk = $env:ANDROID_SDK_ROOT,
-    [string]$Version = '2026.10.3',
-    [string]$ExpectedSha256 = 'A6E8F67E33D68C5F5EB30BF480F5E59B487035EB488897BB6E6F390E76DFC8F2',
+    [string]$Version = '2026.10.5',
+    [string]$ExpectedSha256 = '7C51163C720435CC175227D89332AC9AD81E298F00BECAC1BA060B80402CA6B6',
     [string]$ModMode = 'vendor',
     # Vendor Go module dependencies into the source tree before running
     # prepare-cloudflared.py, so its license scan sees vendor/ and the build

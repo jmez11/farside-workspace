@@ -24,7 +24,7 @@ Farside itself is licensed under GPLv3 — see `LICENSE` in the repo root.
 | Jetpack Compose, Kotlin, AndroidX (core-ktx, lifecycle, activity-compose), desugar_jdk_libs | Compose BOM 2023.10.01; desugar 2.0.4 | Apache-2.0 |
 | Meta VR Layout SDK (layout-compose-compat, layout-window-compose-compat) | metavrx-bom 1.2026.0.0 (artifacts 1.0.0) | Meta Platform Technologies SDK License Agreement (proprietary) |
 | LibVNCServer (VNC client) | repo subtree | GPL-2.0 |
-| cloudflared (bundled arm64 binary) | 2026.10.3 | Apache-2.0 |
+| cloudflared (bundled arm64 binary) | 2026.10.5 | Apache-2.0 |
 | libjpeg-turbo (JPEG for the VNC client) | git pin 4e151a4 | BSD-style (IJG + Modified BSD-3) |
 | Bouncy Castle (bcprov-jdk18on, SSHJ crypto provider) | 1.75 | Bouncy Castle Licence (MIT-style) |
 | OpenSSL (FreeRDP build) | as fetched by the FreeRDP build | Apache-2.0 |

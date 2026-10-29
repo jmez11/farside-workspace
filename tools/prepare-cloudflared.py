@@ -1,8 +1,8 @@
 """Apply narrowly scoped Android adaptations to upstream cloudflared.
 
 Run with the unpacked source directory and the upstream version tag, e.g.
-    python tools/prepare-cloudflared.py <source-dir> 2026.10.3
-The version defaults to 2026.10.3 (current as of 2026-10-23). Emits a reviewable
+    python tools/prepare-cloudflared.py <source-dir> 2026.10.5
+The version defaults to 2026.10.5 (current as of 2026-10-29). Emits a reviewable
 unified diff.
 """
 import difflib
@@ -10,7 +10,7 @@ import pathlib
 import sys
 
 root = pathlib.Path(sys.argv[1])
-version = sys.argv[2] if len(sys.argv) > 2 else "2026.10.3"
+version = sys.argv[2] if len(sys.argv) > 2 else "2026.10.5"
 patches = []
 
 def edit(path, transform):
