@@ -248,6 +248,7 @@ class VncBridge : DesktopSessionBridge {
     override fun sendKeyEvent(instance: Long, scancode: Int, isDown: Boolean) {
         if (instance == 0L || instance != active) return
         val keysym = xtKeysym(scancode) ?: return
+        if (keysym == 0xff0d && isDown) android.util.Log.i("FarsideIME", "vncReturn: xt")
         val mac = macHevcSession
         if (mac != null) { MacInputTrace.event("key-forwarded");mac.sendKeyEvent(keysym, isDown) }
         else nativeKey(instance, keysym, isDown)
@@ -267,9 +268,15 @@ class VncBridge : DesktopSessionBridge {
         val key = event.keyCode
         val unicode = event.unicodeChar
         val symbol = synchronized(heldPrintable) { if (!down) heldPrintable.remove(key) else null }
-        val chosen = symbol ?: if (unicode != 0 && !event.isCtrlPressed && !event.isAltPressed && !event.isMetaPressed) {
+        // Enter can have a Unicode value of LF on Android, but RFB requires XK_Return.
+        val chosen = symbol ?: if (key == android.view.KeyEvent.KEYCODE_ENTER ||
+            key == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER) {
+            androidKeysym(key) ?: return
+        } else if (unicode != 0 && !event.isCtrlPressed && !event.isAltPressed && !event.isMetaPressed) {
             if (unicode <= 255) unicode else 0x01000000 or unicode
         } else androidKeysym(key) ?: return
+        if ((key == android.view.KeyEvent.KEYCODE_ENTER || key == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER) && down)
+            android.util.Log.i("FarsideIME", "vncReturn: physical")
         if (down) synchronized(heldPrintable) { heldPrintable[key] = chosen }
         val mac = macHevcSession
         if (mac != null) mac.sendKeyEvent(chosen, down)

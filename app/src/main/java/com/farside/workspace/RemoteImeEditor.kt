@@ -48,7 +48,8 @@ private open class RemoteImeInputConnection(
     target: InputConnection,
     protected val replacement: () -> Unit,
     protected val submitted: (CharSequence) -> Unit,
-    protected val sendKey: (Int, Boolean) -> Unit
+    protected val sendKey: (Int, Boolean) -> Unit,
+    private val editorAction: () -> Unit
 ) : InputConnectionWrapper(target, false) {
     private var batchDepth = 0
     private var finishedComposition = false
@@ -101,6 +102,11 @@ private open class RemoteImeInputConnection(
             return true
         }
         return super.sendKeyEvent(event)
+    }
+    override fun performEditorAction(actionCode: Int): Boolean {
+        android.util.Log.i("FarsideIME", "performEditorAction: actionCode=$actionCode")
+        editorAction()
+        return true
     }
     override fun commitText(text: CharSequence, cursor: Int): Boolean {
         android.util.Log.i("FarsideIME", "commitText: text='$text', cursor=$cursor")
@@ -157,8 +163,9 @@ private class RemoteImeInputConnectionApi34(
     target: InputConnection,
     replacement: () -> Unit,
     submitted: (CharSequence) -> Unit,
-    sendKey: (Int, Boolean) -> Unit
-) : RemoteImeInputConnection(target, replacement, submitted, sendKey) {
+    sendKey: (Int, Boolean) -> Unit,
+    editorAction: () -> Unit
+) : RemoteImeInputConnection(target, replacement, submitted, sendKey, editorAction) {
     override fun commitText(text: CharSequence, cursor: Int, attributes: TextAttribute?): Boolean {
         beforeCommit()
         submitted(text)
@@ -299,6 +306,20 @@ internal fun RemoteImeEditor(label: String, activation: Long, showInitially: Boo
     var text by remember { mutableStateOf(TextFieldValue(" ", selection = TextRange(1))) }
     var explicitReplacement by remember { mutableStateOf(false) }
     var submittedText by remember { mutableStateOf<String?>(null) }
+    var lastEnterTime by remember { mutableStateOf(0L) }
+    val submitEnter = {
+        android.util.Log.i("FarsideIME", "submitEnter: buffered=${text.text.length > 1}")
+        text = TextFieldValue(" ", selection = TextRange(1))
+        explicitReplacement = false
+        submittedText = null
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - lastEnterTime > 200) {
+            lastEnterTime = now
+            sendKey(0x1C, true)
+            sendKey(0x1C, false)
+        }
+    }
+    val currentSubmitEnter = rememberUpdatedState(submitEnter)
     val interceptor = remember {
         PlatformTextInputInterceptor { request, handler ->
             handler.startInputMethod(object : PlatformTextInputMethodRequest {
@@ -308,8 +329,9 @@ internal fun RemoteImeEditor(label: String, activation: Long, showInitially: Boo
                     val target = request.createInputConnection(outAttributes)
                     val replacement = { explicitReplacement = true }
                     val submitted = { value: CharSequence -> submittedText = value.toString() }
-                    return if (android.os.Build.VERSION.SDK_INT >= 34) RemoteImeInputConnectionApi34(target, replacement, submitted, sendKey)
-                    else RemoteImeInputConnection(target, replacement, submitted, sendKey)
+                    val editorAction = { currentSubmitEnter.value() }
+                    return if (android.os.Build.VERSION.SDK_INT >= 34) RemoteImeInputConnectionApi34(target, replacement, submitted, sendKey, editorAction)
+                    else RemoteImeInputConnection(target, replacement, submitted, sendKey, editorAction)
                 }
             })
         }
@@ -317,7 +339,6 @@ internal fun RemoteImeEditor(label: String, activation: Long, showInitially: Boo
     SideEffect { onView(view); onActions(actions) }
     DisposableEffect(Unit) { onDispose { if (hideOnDispose) keyboard?.hide(); onView(null); onActions(null); onFocus(false); onImeVisibility(false) } }
 
-    var lastEnterTime by remember { mutableStateOf(0L) }
     InterceptPlatformTextInput(interceptor) {
         BasicTextField(value = text, onValueChange = { next ->
             android.util.Log.i("FarsideIME", "onValueChange: prev='${text.text}', next='${next.text}', submitted='$submittedText'")
@@ -341,15 +362,9 @@ internal fun RemoteImeEditor(label: String, activation: Long, showInitially: Boo
             modifier = Modifier.size(1.dp).alpha(0f).focusRequester(focus)
                 .onPreviewKeyEvent { event ->
                     if (event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_ENTER) {
+                        android.util.Log.i("FarsideIME", "previewEnter: type=${event.type}")
                         if (event.type == KeyEventType.KeyDown) {
-                            text = TextFieldValue(" ", selection = TextRange(1))
-                            explicitReplacement = false
-                            val now = android.os.SystemClock.uptimeMillis()
-                            if (now - lastEnterTime > 200) {
-                                lastEnterTime = now
-                                sendKey(0x1C, true)
-                                sendKey(0x1C, false)
-                            }
+                            submitEnter()
                         }
                         true
                     } else if (event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DEL) {

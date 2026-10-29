@@ -584,7 +584,7 @@ class SshFeaturesVerification(private val test: Instrumentation, private val ime
         Thread.sleep(150)
         check(shellBytes.isEmpty()) { "Selection-only callback sent sentinel: ${shellBytes.toList()}" }
         record("PASS: dismissal finish/selection callbacks on actual Compose InputConnection send zero SSH bytes")
-        for (keyEventEnter in listOf(false, true)) {
+        for (enterMode in listOf("newline", "key", "action-none", "action-unspecified")) {
             main {
                 shellBytes.clear()
                 check(connection.setComposingText("word", 1))
@@ -593,10 +593,15 @@ class SshFeaturesVerification(private val test: Instrumentation, private val ime
             Thread.sleep(250)
             main {
                 shellBytes.clear()
-                if (keyEventEnter) {
-                    check(connection.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_ENTER)))
-                    check(connection.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_ENTER)))
-                } else check(connection.commitText("word\n", 1))
+                when (enterMode) {
+                    "key" -> {
+                        check(connection.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_ENTER)))
+                        check(connection.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_ENTER)))
+                    }
+                    "action-none" -> check(connection.performEditorAction(android.view.inputmethod.EditorInfo.IME_ACTION_NONE))
+                    "action-unspecified" -> check(connection.performEditorAction(android.view.inputmethod.EditorInfo.IME_ACTION_UNSPECIFIED))
+                    else -> check(connection.commitText("word\n", 1))
+                }
             }
             waitFor("Buffered Return did not reach SSH") { shellBytes.isNotEmpty() }
             Thread.sleep(150)
@@ -612,7 +617,7 @@ class SshFeaturesVerification(private val test: Instrumentation, private val ime
             check(shellBytes.toList() == listOf('x'.code)) { "Stale buffer changed typing after Return: ${shellBytes.toList()}" }
             main { check(connection.finishComposingText()) }
         }
-        record("PASS: buffered newline commit and Enter key event send only SSH Return, clear actual Compose buffer, and preserve next typing")
+        record("PASS: buffered newline commit, Enter key event, and editor actions send only SSH Return, clear actual Compose buffer, and preserve next typing")
         if (imeOnly) {
             main {
                 shellBytes.clear()

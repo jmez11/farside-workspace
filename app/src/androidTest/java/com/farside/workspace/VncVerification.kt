@@ -865,8 +865,23 @@ internal class VncVerification(private val test: Instrumentation,private val liv
                     decor.dispatchKeyEvent(android.view.KeyEvent(0, 0, android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_C, 0, android.view.KeyEvent.META_CTRL_ON))
                 }
                 bridge!!.sendKeyEvent(instance, 0x15b, true); bridge!!.sendKeyEvent(instance, 0x15b, false)
+                bridge!!.sendKeyEvent(instance, 0x1c, true); bridge!!.sendKeyEvent(instance, 0x1c, false)
                 bridge!!.sendUnicodeKeyEvent(instance, 0x1f600, true); bridge!!.sendUnicodeKeyEvent(instance, 0x1f600, false)
-                await("VNC keys missing") { server.keys.contains(0xffeb to true) && server.keys.contains(0x0101f600 to false) && server.keys.contains('a'.code to true) && server.keys.contains('c'.code to false) }
+                await("VNC keys missing") { server.keys.contains(0xffeb to true) && server.keys.contains(0xff0d to true) && server.keys.contains(0xff0d to false) && server.keys.contains(0x0101f600 to false) && server.keys.contains('a'.code to true) && server.keys.contains('c'.code to false) }
+                for ((code, keysym) in listOf(android.view.KeyEvent.KEYCODE_ENTER to 0xff0d,
+                    android.view.KeyEvent.KEYCODE_NUMPAD_ENTER to 0xff8d)) {
+                    val physicalStart = server.keys.size
+                    bridge!!.sendPhysicalKey(instance, android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, code), true)
+                    bridge!!.sendPhysicalKey(instance, android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, code), false)
+                    await("VNC physical Enter missing") {
+                        val events = server.keys.drop(physicalStart)
+                        events.contains(keysym to true) && events.contains(keysym to false)
+                    }
+                    val events = server.keys.drop(physicalStart)
+                    check(events.indexOf(keysym to true) < events.indexOf(keysym to false)) {
+                        "VNC physical Enter release preceded press: $events"
+                    }
+                }
                 if (server.encoding == 16) {
                     fun pixelAt(x: Int, y: Int, width: Int, height: Int): Int {
                         var pixel = 0
