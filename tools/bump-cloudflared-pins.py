@@ -15,12 +15,13 @@ writing anything):
   - app/src/androidTest/.../CloudflaredVerification.kt: bundled version check
   - ARCHITECTURE.md: bundled version mention
   - THIRD-PARTY-NOTICES.md: cloudflared version row
-  - .github/workflows/cloudflared-trybuild.yml: version and sha256 defaults
-    (lowercase hex, matching the existing convention there)
 
 Deliberately NOT touched: PROGRESS.md (history), the regenerated
 cloudflared-LICENSE / cloudflared-NOTICES.txt / cloudflared-android.patch
-(prepare-cloudflared.py owns those), and the built .so itself.
+(prepare-cloudflared.py owns those), the built .so itself, and
+.github/workflows/cloudflared-trybuild.yml (its defaults): the bot token
+cannot modify workflow files, so the bump leaves trybuild defaults alone;
+pass version/sha explicitly when dispatching a try-build.
 """
 import argparse
 import datetime
@@ -75,15 +76,6 @@ def main() -> int:
         ("THIRD-PARTY-NOTICES.md",
          f"| cloudflared (bundled arm64 binary) | {old} |",
          f"| cloudflared (bundled arm64 binary) | {new} |", False),
-        (".github/workflows/cloudflared-trybuild.yml",
-         f'default: "{old}"',
-         f'default: "{new}"', False),
-        (".github/workflows/cloudflared-trybuild.yml",
-         f"(e.g. {old})",
-         f"(e.g. {new})", False),
-        (".github/workflows/cloudflared-trybuild.yml",
-         None,  # SHA replaced below via regex on the existing value
-         None, False),
     ]
 
     # Load every touched file first so a failure leaves the tree untouched.
@@ -124,10 +116,6 @@ def main() -> int:
         "tools/build-cloudflared.ps1",
         r"\[string\]\$ExpectedSha256 = '[0-9A-Fa-f]{64}',",
         f"[string]$ExpectedSha256 = '{sha_upper}',")
-    replace_regex_once(
-        ".github/workflows/cloudflared-trybuild.yml",
-        r'default: "[0-9a-f]{64}"',
-        f'default: "{sha_lower}"')
 
     for path, text in texts.items():
         pathlib.Path(path).write_text(text, encoding="utf-8")

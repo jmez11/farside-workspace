@@ -20,10 +20,6 @@ on:
 permissions:
   contents: write
   pull-requests: write
-  # Required: the bump commit touches .github/workflows/cloudflared-trybuild.yml
-  # (its version/sha defaults), and GitHub refuses a token push that creates
-  # or updates workflow files without this scope.
-  workflows: write
 
 concurrency:
   group: bump-cloudflared
@@ -130,8 +126,7 @@ jobs:
             app/src/main/jniLibs/README.md \
             app/src/androidTest/java/com/farside/workspace/CloudflaredVerification.kt \
             ARCHITECTURE.md \
-            THIRD-PARTY-NOTICES.md \
-            .github/workflows/cloudflared-trybuild.yml
+            THIRD-PARTY-NOTICES.md
           if [ -z "$(git status --porcelain)" ]; then
             echo "No changes to commit; nothing to do."
             exit 0
@@ -151,6 +146,7 @@ jobs:
           - Upstream release: https://github.com/cloudflare/cloudflared/releases/tag/$TARGET
           
           Device smoke check recommended before merge: CI cannot run the on-device CloudflaredVerification check. After merge, the next app CI build bundles this binary.
+          Note: cloudflared-trybuild.yml defaults are intentionally left unchanged (the bot token cannot modify workflow files); pass version/sha explicitly when dispatching a try-build.
           EOF
             gh pr create --title "Bump cloudflared to $TARGET" --body-file /tmp/pr-body.md --base master --head "$BRANCH"
           else
