@@ -1,0 +1,154 @@
+name: Bump cloudflared
+
+# Keep the bundled cloudflared binary on the latest upstream release without
+# a manual Windows build. Weekly check plus manual dispatch: resolve the
+# target tag, build the Android .so in CI (same path as the try-build
+# workflow, plus vendoring so the license scan sees vendor/), update every
+# version pin, and open a PR. Nothing lands on master without a merge, and
+# the .so still needs a device smoke check before the PR merges — CI cannot
+# run the on-device CloudflaredVerification check.
+on:
+  schedule:
+    - cron: '0 9 * * 1'  # Mondays 09:00 UTC
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "cloudflared upstream tag (e.g. 2026.10.5), or 'latest'"
+        required: false
+        default: "latest"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: bump-cloudflared
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Resolve target version
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          INPUT_VERSION="${{ inputs.version }}"
+          if [ "$INPUT_VERSION" = "latest" ] || [ -z "$INPUT_VERSION" ]; then
+            TARGET=$(gh api repos/cloudflare/cloudflared/releases/latest --jq .tag_name)
+          else
+            TARGET="$INPUT_VERSION"
+          fi
+          [ -n "$TARGET" ] || { echo "could not resolve a target version"; exit 1; }
+          echo "target=$TARGET" >> "$GITHUB_OUTPUT"
+          echo "Target: $TARGET"
+
+      - name: Check whether an update is needed
+        id: check
+        run: |
+          CURRENT=$(grep -F '[string]$Version' tools/build-cloudflared.ps1 | head -1 | sed "s/.*'\([^']*\)'.*/\1/")
+          [ -n "$CURRENT" ] || { echo "could not read the current pin"; exit 1; }
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
+          if [ "$CURRENT" = "${{ steps.resolve.outputs.target }}" ]; then
+            echo "needs_update=false" >> "$GITHUB_OUTPUT"
+            echo "Already on ${{ steps.resolve.outputs.target }}; nothing to do."
+          else
+            echo "needs_update=true" >> "$GITHUB_OUTPUT"
+            echo "Updating $CURRENT -> ${{ steps.resolve.outputs.target }}"
+          fi
+
+      - name: Download source and compute SHA-256
+        if: steps.check.outputs.needs_update == 'true'
+        id: source
+        run: |
+          TARGET="${{ steps.resolve.outputs.target }}"
+          curl -L --fail --silent --show-error "https://codeload.github.com/cloudflare/cloudflared/zip/refs/tags/$TARGET" -o /tmp/cloudflared-source.zip
+          SHA=$(sha256sum /tmp/cloudflared-source.zip | cut -d' ' -f1)
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "SHA-256: $SHA"
+
+      - name: Set up Go
+        if: steps.check.outputs.needs_update == 'true'
+        uses: actions/setup-go@v7
+        with:
+          go-version: stable
+
+      - name: Install Android SDK components
+        if: steps.check.outputs.needs_update == 'true'
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;26.1.10909125"
+
+      - name: Build cloudflared for Android (with vendored licenses)
+        if: steps.check.outputs.needs_update == 'true'
+        shell: pwsh
+        run: |
+          ./tools/build-cloudflared.ps1 -Version '${{ steps.resolve.outputs.target }}' -ExpectedSha256 '${{ steps.source.outputs.sha }}' -ModMode 'vendor' -Vendor
+
+      - name: Update version pins
+        if: steps.check.outputs.needs_update == 'true'
+        run: |
+          python3 tools/bump-cloudflared-pins.py \
+            --old '${{ steps.check.outputs.current }}' \
+            --new '${{ steps.resolve.outputs.target }}' \
+            --sha '${{ steps.source.outputs.sha }}'
+
+      - name: Verify the new binary
+        if: steps.check.outputs.needs_update == 'true'
+        run: |
+          SO=app/src/main/jniLibs/arm64-v8a/libcloudflared.so
+          file "$SO" | grep -i "ARM aarch64"
+          strings "$SO" | grep -m1 "${{ steps.resolve.outputs.target }}-farside"
+
+      - name: Commit and open PR
+        if: steps.check.outputs.needs_update == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TARGET="${{ steps.resolve.outputs.target }}"
+          CURRENT="${{ steps.check.outputs.current }}"
+          BRANCH="cloudflared-bump-$TARGET"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin master
+          git fetch origin "$BRANCH" 2>/dev/null || true
+          git checkout -B "$BRANCH" origin/master
+          git add \
+            app/src/main/jniLibs/arm64-v8a/libcloudflared.so \
+            app/src/main/assets/licenses/cloudflared-LICENSE \
+            app/src/main/assets/licenses/cloudflared-NOTICES.txt \
+            tools/cloudflared-android.patch \
+            tools/build-cloudflared.ps1 \
+            tools/prepare-cloudflared.py \
+            app/src/main/jniLibs/README.md \
+            app/src/androidTest/java/com/farside/workspace/CloudflaredVerification.kt \
+            ARCHITECTURE.md \
+            THIRD-PARTY-NOTICES.md \
+            .github/workflows/cloudflared-trybuild.yml
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No changes to commit; nothing to do."
+            exit 0
+          fi
+          git status --short
+          git commit -m "Bump cloudflared to $TARGET (CI build)" \
+            -m "Built from upstream $TARGET with the Android adaptations; pins, patch, and vendored licenses regenerated. Device smoke check recommended before merge."
+          git push --force-with-lease origin "$BRANCH"
+          if [ -z "$(gh pr list --head "$BRANCH" --json number --jq '.[0].number')" ]; then
+            cat > /tmp/pr-body.md <<EOF
+          ## Cloudflared $TARGET
+          
+          Automated bump of the bundled cloudflared binary from $CURRENT to $TARGET.
+          
+          - Built in CI from upstream $TARGET with the Android adaptations in tools/prepare-cloudflared.py
+          - Version pins, patch, and vendored licenses regenerated
+          - Upstream release: https://github.com/cloudflare/cloudflared/releases/tag/$TARGET
+          
+          Device smoke check recommended before merge: CI cannot run the on-device CloudflaredVerification check. After merge, the next app CI build bundles this binary.
+          EOF
+            gh pr create --title "Bump cloudflared to $TARGET" --body-file /tmp/pr-body.md --base master --head "$BRANCH"
+          else
+            echo "PR for $BRANCH already exists; updated it."
+          fi

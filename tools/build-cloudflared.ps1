@@ -3,7 +3,12 @@ param(
     [string]$Sdk = $env:ANDROID_SDK_ROOT,
     [string]$Version = '2026.10.3',
     [string]$ExpectedSha256 = 'A6E8F67E33D68C5F5EB30BF480F5E59B487035EB488897BB6E6F390E76DFC8F2',
-    [string]$ModMode = 'vendor'
+    [string]$ModMode = 'vendor',
+    # Vendor Go module dependencies into the source tree before running
+    # prepare-cloudflared.py, so its license scan sees vendor/ and the build
+    # can use -mod=vendor. Off by default: local builds keep using -mod=mod
+    # (or a pre-vendored tree) unless this is passed.
+    [switch]$Vendor
 )
 $ErrorActionPreference = 'Stop'
 if (-not $Sdk) { throw 'Android SDK not found: pass -Sdk or set $env:ANDROID_SDK_ROOT' }
@@ -33,6 +38,13 @@ $prebuilt = if (Test-Path (Join-Path $prebuiltBase 'windows-x86_64')) { 'windows
 $clangName = if ($prebuilt -eq 'windows-x86_64') { 'aarch64-linux-android32-clang.cmd' } else { 'aarch64-linux-android32-clang' }
 Push-Location $repo
 try {
+    if ($Vendor) {
+        Push-Location $source
+        & $Go mod vendor
+        $vendorExit = $LASTEXITCODE
+        Pop-Location
+        if ($vendorExit -ne 0) { throw 'Cloudflared go mod vendor failed' }
+    }
     & $py (Join-Path $PSScriptRoot 'prepare-cloudflared.py') $source $Version
     if ($LASTEXITCODE -ne 0) { throw 'Cloudflared Android adaptations failed' }
     $env:GOOS = 'android'
