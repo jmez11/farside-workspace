@@ -47,7 +47,7 @@ fun InfoScreen(onClose:()->Unit) {
                 Spacer(Modifier.height(8.dp))
                 Text(stringResource(R.string.open_source_licenses),fontSize=13.sp,color=SetupColors.muted,fontWeight=FontWeight.SemiBold)
                 VaultCard {
-                    listOf(R.string.license_freerdp,R.string.license_sshj,R.string.license_termux,R.string.license_compose,R.string.license_meta).forEachIndexed {index,label ->
+                    listOf(R.string.license_freerdp,R.string.license_sshj,R.string.license_termux,R.string.license_compose,R.string.license_libvncserver,R.string.license_cloudflared,R.string.license_libjpeg_turbo).forEachIndexed {index,label ->
                         if(index>0) Divider(color=SetupColors.border)
                         Text(stringResource(label),fontSize=14.sp)
                     }

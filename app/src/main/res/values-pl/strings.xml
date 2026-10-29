@@ -192,7 +192,9 @@
   <string name="license_sshj">• SSHJ (Apache-2.0)</string>
   <string name="license_termux">• Termux Terminal Emulator (GPLv3)</string>
   <string name="license_compose">• Jetpack Compose &amp; Kotlin (Apache-2.0)</string>
-  <string name="license_meta">• Meta Spatial SDK (Proprietary)</string>
+    <string name="license_libvncserver">• LibVNCServer (GPLv2)</string>
+    <string name="license_cloudflared">• cloudflared (Apache-2.0)</string>
+    <string name="license_libjpeg_turbo">• libjpeg-turbo (BSD-style)</string>
   <string name="connection_address">%1$s:%2$d</string>
   <string name="unstar_connection">Usuń gwiazdkę z %1$s</string>
   <string name="star_connection">Oznacz %1$s gwiazdką</string>

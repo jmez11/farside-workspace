@@ -251,7 +251,9 @@ Preserve positional placeholders, XML/Android escaping, brand names, protocol id
 - `license_sshj`: Software/project and license identifiers; retain their official spelling.
 - `license_termux`: Software/project and license identifiers; retain their official spelling. Command-line terminal; zoom scales desktop content or text, not camera optics.
 - `license_compose`: Software/project and license identifiers; retain their official spelling.
-- `license_meta`: Software/project and license identifiers; retain their official spelling.
+- `license_libvncserver`: Software/project and license identifiers; retain their official spelling.
+- `license_cloudflared`: Software/project and license identifiers; retain their official spelling.
+- `license_libjpeg_turbo`: Software/project and license identifiers; retain their official spelling.
 - `connection_address`: Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
 - `unstar_connection`: Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites. Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
 - `star_connection`: Quest is the headset; Home is Horizon Home. Toolbar pinning keeps controls visible; stars are favorites. Keep positional placeholders/percent escapes; runtime names, counts, addresses and diagnostics are inserted.
