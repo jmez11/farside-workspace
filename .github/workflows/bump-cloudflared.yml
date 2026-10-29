@@ -20,6 +20,10 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  # Required: the bump commit touches .github/workflows/cloudflared-trybuild.yml
+  # (its version/sha defaults), and GitHub refuses a token push that creates
+  # or updates workflow files without this scope.
+  workflows: write
 
 concurrency:
   group: bump-cloudflared
