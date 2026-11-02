@@ -1,0 +1,82 @@
+name: Commit clean cloudflared binary (one-off)
+
+# One-off: build cloudflared 2026.10.7 for Android with the clean
+# version string (build-cloudflared.ps1 on master no longer adds
+# "-farside") and commit the resulting binary to master, so the
+# release build uses the same binary the try-builds tested.
+# Manual dispatch only. Delete this workflow after it runs once.
+# It commits only the binary and the README executable SHA line.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-commit:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@v5
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.27.3'
+
+      - name: Install Android SDK components
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "ndk;26.1.10909125" "cmake;3.22.1"
+
+      - name: Build cloudflared for Android
+        shell: pwsh
+        run: |
+          ./tools/build-cloudflared.ps1 -Version '2026.10.7' -ExpectedSha256 'D4AAB533B3010A0D4858DF47D24CE84A347BB519E4FA1D658C072B89CE6B2EE1' -ModMode 'mod'
+
+      - name: Verify the new binary
+        run: |
+          SO=app/src/main/jniLibs/arm64-v8a/libcloudflared.so
+          file "$SO" | grep -i "ARM aarch64"
+          strings "$SO" | grep -m1 "2026.10.7"
+          if strings "$SO" | grep -q "2026.10.7-farside"; then
+            echo "Binary still carries -farside suffix" >&2
+            exit 1
+          fi
+          SHA="$(sha256sum "$SO" | cut -d' ' -f1)"
+          echo "binary_sha=$SHA" >> "$GITHUB_ENV"
+          echo "Binary SHA-256: $SHA"
+
+      - name: Update README executable SHA
+        run: |
+          python3 - << 'PY'
+          import pathlib, os
+          p = pathlib.Path("app/src/main/jniLibs/README.md")
+          text = p.read_text()
+          old = None
+          for line in text.splitlines():
+              if line.startswith("Executable SHA-256:"):
+                  old = line
+          assert old, "README executable SHA line not found"
+          sha = os.environ["binary_sha"]
+          p.write_text(text.replace(old, f"Executable SHA-256: `{sha}`."))
+          print(f"README updated: {old} -> Executable SHA-256: `{sha}`.")
+          PY
+
+      - name: Commit binary and README to master
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/jniLibs/arm64-v8a/libcloudflared.so app/src/main/jniLibs/README.md
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No changes to commit; binary already clean."
+            exit 0
+          fi
+          git status --short
+          git commit -m "Commit clean cloudflared 2026.10.7 binary (no -farside suffix)" \
+            -m "Built from upstream 2026.10.7 with the Android adaptations; version string is clean so the Cloudflare dashboard reports it. README executable SHA updated to match."
+          git push origin master

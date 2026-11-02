@@ -101,7 +101,7 @@ jobs:
         run: |
           SO=app/src/main/jniLibs/arm64-v8a/libcloudflared.so
           file "$SO" | grep -i "ARM aarch64"
-          strings "$SO" | grep -m1 "${{ steps.resolve.outputs.target }}-farside"
+          strings "$SO" | grep -m1 "${{ steps.resolve.outputs.target }}"
 
       - name: Commit and open PR
         if: steps.check.outputs.needs_update == 'true'
