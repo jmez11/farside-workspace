@@ -11,14 +11,18 @@ plugins {
 // tools/build-cloudflared.ps1), not from a pin file. That way a try-build
 // that swaps the binary without updating pins still reports correctly,
 // and a missed pin update can never make the UI lie about the binary.
-// Test branch only: the "-farside" suffix is removed here to test whether
-// it is what keeps Cloudflare's dashboard from showing a version for the
-// Quest tunnel. The suffix is optional in the regex, so old binaries
-// still report correctly. Falls back to "unknown" if the binary is
+// The version must be a whole null-delimited token in the binary: a
+// bare substring search is not unique (the first \d{4}.\d+.\d+ match in
+// the binary is "0192.168.0", from "localhost:0" + "192.168.0.1", and
+// the help text contains other year-like versions). The ldflags value
+// is stored as a standalone null-terminated string, so splitting on
+// NUL and matching the whole token picks exactly it, with or without
+// the "-farside" suffix. Falls back to "unknown" if the binary is
 // absent, never fails the build.
 val cloudflaredVersion: String = try {
     val binaryText = String(file("src/main/jniLibs/arm64-v8a/libcloudflared.so").readBytes(), Charsets.ISO_8859_1)
-    Regex("""\d{4}\.\d+\.\d+(?:-farside)?""").find(binaryText)?.value?.removeSuffix("-farside") ?: "unknown"
+    val versionPattern = Regex("""20\d\d\.\d+\.\d+(?:-farside)?""")
+    binaryText.split('\u0000').firstOrNull { versionPattern.matches(it) }?.removeSuffix("-farside") ?: "unknown"
 } catch (e: Exception) {
     "unknown"
 }
