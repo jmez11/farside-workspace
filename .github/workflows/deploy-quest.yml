@@ -29,8 +29,23 @@ name: Deploy to Quest
 # NOTE: `pm install -r` requires the same signing cert every time. Debug and
 # trybuild APKs share the committed debug keystore (app/debug.keystore), so
 # they install over each other freely. A release APK will NOT install over a
-# debug/trybuild build and vice versa — uninstall Farside from the headset
-# once when switching between release and the debug line.
+# debug/trybuild build and vice versa.
+#
+# Switching signing certs (e.g. debug -> release): dispatch with
+# `switch_signing: true`. The detached script then runs
+# `pm uninstall -k com.farside.workspace` BEFORE installing the new APK, so
+# the old cert is gone and the fresh install succeeds. `-k` keeps the app
+# data directory (profiles list, layout, etc.), but it does NOT save the
+# Keystore: Android deletes the app's Keystore keys on any uninstall, so
+# Keystore-encrypted values — the ADB tunnel token in settings.enc and
+# saved connection passwords — will no longer decrypt after the switch and
+# must be re-entered. In particular, if the tunnel config no longer
+# decrypts, MainActivity's auto-start cannot restart the tunnel, so the
+# verify step's reconnect poll may fail even though the install itself
+# succeeded. In that case: open Farside on the headset, re-enter the tunnel
+# config in Settings, start the tunnel, then dispatch again with the same
+# build_type and switch_signing off — the second run installs over the
+# same cert with plain `pm install -r` and verifies versionCode.
 
 on:
   workflow_dispatch:
@@ -48,6 +63,11 @@ on:
         description: 'Tunnel hostname publishing the Quest adbd (defaults to the ADB_TUNNEL_HOSTNAME secret)'
         required: false
         default: ''
+      switch_signing:
+        description: 'Uninstall first (keep data) to switch signing certs, e.g. debug -> release. See header note: Keystore-encrypted tunnel token/passwords must be re-entered after.'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -216,8 +236,20 @@ jobs:
           # restart the tunnel from inside the app, if it was running
           # before the reinstall. The adb session drops with the tunnel —
           # the next step waits for it to come back.
-          adb -s 127.0.0.1:5555 shell "nohup sh -c 'pm install -r /data/local/tmp/farside-update.apk && rm -f /data/local/tmp/farside-update.apk && am start -n com.farside.workspace/.MainActivity' >/dev/null 2>&1 &"
-          echo "reinstall triggered"
+          #
+          # switch_signing: uninstall -k first, so a different signing cert
+          # can install. The `;` before `pm install` is deliberate: if the
+          # app is somehow already gone, the install must still run. The
+          # switch script logs to /data/local/tmp/farside-switch.log (not
+          # app data, so it survives the uninstall) for later inspection.
+          if [ "${{ inputs.switch_signing }}" = "true" ]; then
+            echo "switch mode: uninstall -k, then fresh install"
+            adb -s 127.0.0.1:5555 shell "nohup sh -c 'pm uninstall -k com.farside.workspace; pm install /data/local/tmp/farside-update.apk > /data/local/tmp/farside-switch.log 2>&1; rm -f /data/local/tmp/farside-update.apk; am start -n com.farside.workspace/.MainActivity >> /data/local/tmp/farside-switch.log 2>&1' >/dev/null 2>&1 &"
+            echo "switch reinstall triggered"
+          else
+            adb -s 127.0.0.1:5555 shell "nohup sh -c 'pm install -r /data/local/tmp/farside-update.apk && rm -f /data/local/tmp/farside-update.apk && am start -n com.farside.workspace/.MainActivity' >/dev/null 2>&1 &"
+            echo "reinstall triggered"
+          fi
 
       - name: Wait for tunnel reconnect and verify install
         env:
@@ -247,7 +279,17 @@ jobs:
           done
           if [ "$connected" -ne 1 ]; then
             echo "=== tunnel never reconnected after the reinstall ===" >&2
-            echo "The detached install script may have failed; check the headset." >&2
+            if [ "${{ inputs.switch_signing }}" = "true" ]; then
+              echo "SWITCH MODE: this does NOT prove the install failed." >&2
+              echo "Android deletes the app's Keystore keys on uninstall, so the" >&2
+              echo "Keystore-encrypted tunnel token cannot decrypt after a switch" >&2
+              echo "and MainActivity's auto-start cannot restart the tunnel." >&2
+              echo "Open Farside on the headset, re-enter the tunnel config in" >&2
+              echo "Settings, start the tunnel, then dispatch again with the same" >&2
+              echo "build_type and switch_signing off to verify versionCode." >&2
+            else
+              echo "The detached install script may have failed; check the headset." >&2
+            fi
             cat /tmp/cloudflared-reconnect.log >&2 || true
             exit 1
           fi
@@ -268,6 +310,10 @@ jobs:
             echo "aapt not found; skipping versionCode check"
           fi
           adb -s 127.0.0.1:5555 shell dumpsys package com.farside.workspace | grep -iE "versionName" | head -1
+          if [ "${{ inputs.switch_signing }}" = "true" ]; then
+            echo "=== switch install log (from /data/local/tmp) ==="
+            adb -s 127.0.0.1:5555 shell cat /data/local/tmp/farside-switch.log 2>/dev/null || echo "(no switch log found)"
+          fi
 
       - name: Close the tunnel
         if: always()
