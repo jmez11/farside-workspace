@@ -1,6 +1,11 @@
 name: Release
 
-# Signed arm64 release APK attached to a GitHub Release.
+# Signed arm64 release APK uploaded to private R2, not attached to a
+# GitHub Release and not uploaded as a GitHub artifact: the repo is
+# public, so both of those would make the APK publicly downloadable.
+# The GitHub Release entry itself is still created (notes only, no
+# APK), and deploy-quest's release mode downloads from R2.
+# Exception: v0.1.0-rc8 stays public for DevPost until ~Dec 11, 2026.
 # Trigger: push a tag like v1.0.0 (versionName comes from the tag),
 # or run manually from the Actions tab.
 on:
@@ -64,17 +69,31 @@ jobs:
         if: always()
         run: rm -f app/upload-keystore.jks key.properties
 
-      - name: Upload release APK artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: farside-release-apk
-          path: app/build/outputs/apk/release/app-release.apk
-          retention-days: 90
+      - name: Upload release APK to private R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          # Same pattern as CI debug / try-build uploads: versioned copy
+          # plus latest, plus a tag marker so deploy-quest can log it.
+          BUCKET="${{ vars.R2_BUCKET }}"; [ -n "$BUCKET" ] || BUCKET="${{ secrets.R2_BUCKET }}"
+          ENDPOINT="${{ vars.R2_ENDPOINT }}"; [ -n "$ENDPOINT" ] || ENDPOINT="${{ secrets.R2_ENDPOINT }}"
+          [ -n "$BUCKET" ] || { echo "R2_BUCKET is not set (variable or secret)"; exit 1; }
+          [ -n "$ENDPOINT" ] || { echo "R2_ENDPOINT is not set (variable or secret)"; exit 1; }
+          TAG="${GITHUB_REF_NAME:-manual}"
+          APK="app/build/outputs/apk/release/app-release.apk"
+          [ -f "$APK" ] || { echo "Release APK not found: $APK"; exit 1; }
+          aws s3 cp "$APK" "s3://$BUCKET/farside-release/$TAG/app-release.apk" --endpoint-url "$ENDPOINT" --region auto
+          aws s3 cp "$APK" "s3://$BUCKET/farside-release/latest/app-release.apk" --endpoint-url "$ENDPOINT" --region auto
+          printf '%s' "$TAG" > /tmp/farside-release-tag.txt
+          aws s3 cp /tmp/farside-release-tag.txt "s3://$BUCKET/farside-release/$TAG/tag.txt" --endpoint-url "$ENDPOINT" --region auto
+          aws s3 cp /tmp/farside-release-tag.txt "s3://$BUCKET/farside-release/latest/tag.txt" --endpoint-url "$ENDPOINT" --region auto
+          echo "Uploaded release APK ($TAG) to R2 farside-release/"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          files: app/build/outputs/apk/release/app-release.apk
           generate_release_notes: true
           # Tags with a hyphen (v1.0.0-rc1, v0.1.0-beta1) become prereleases.
           prerelease: ${{ contains(github.ref_name, '-') }}

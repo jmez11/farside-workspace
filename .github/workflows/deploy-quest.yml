@@ -16,8 +16,10 @@ name: Deploy to Quest
 #   debug    — downloads the latest master debug APK from the private R2
 #              bucket (CI uploads it there; the repo is public, so it is
 #              no longer a GitHub artifact).
-#   release  — downloads `app-release.apk` from the newest GitHub Release
-#              (including prereleases, e.g. v0.1.0-rc1).
+#   release  — downloads the latest release APK from the private R2
+#              bucket (release.yml uploads it there; the GitHub Release
+#              entry itself carries no APK, except v0.1.0-rc8 which
+#              stays public for DevPost).
 #   trybuild — downloads the latest try-build APK from the private R2
 #              bucket (same reason as debug).
 #
@@ -78,24 +80,26 @@ jobs:
           fi
           echo "apk=/tmp/farside-deploy/app-debug.apk" >> "$GITHUB_OUTPUT"
 
-      - name: Download latest release APK
+      - name: Download latest release APK from R2
         id: apk-release
         if: inputs.build_type == 'release'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # NOTE: --repo is required because this job does no checkout, so gh
-        # cannot infer the repository from a git remote. `release list` is
-        # newest-first and includes prereleases.
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
         run: |
           set -euo pipefail
-          TAG="$(gh release list --repo "${{ github.repository }}" --limit 1 --json tagName --jq '.[0].tagName')"
-          if [ -z "$TAG" ] || [ "$TAG" = "null" ]; then
-            echo "No releases found on ${{ github.repository }}." >&2
-            exit 1
-          fi
-          echo "latest release: $TAG"
+          # Latest release APK, as uploaded by release.yml to private R2.
+          # The GitHub Release entry carries no APK (except rc8), so do
+          # not fall back to gh release download here.
+          BUCKET="${{ vars.R2_BUCKET }}"; [ -n "$BUCKET" ] || BUCKET="${{ secrets.R2_BUCKET }}"
+          ENDPOINT="${{ vars.R2_ENDPOINT }}"; [ -n "$ENDPOINT" ] || ENDPOINT="${{ secrets.R2_ENDPOINT }}"
+          [ -n "$BUCKET" ] || { echo "R2_BUCKET is not set (variable or secret)"; exit 1; }
+          [ -n "$ENDPOINT" ] || { echo "R2_ENDPOINT is not set (variable or secret)"; exit 1; }
           mkdir -p /tmp/farside-deploy
-          gh release download "$TAG" --repo "${{ github.repository }}" --pattern 'app-release.apk' --dir /tmp/farside-deploy
+          aws s3 cp "s3://$BUCKET/farside-release/latest/app-release.apk" /tmp/farside-deploy/app-release.apk --endpoint-url "$ENDPOINT" --region auto
+          if aws s3 cp "s3://$BUCKET/farside-release/latest/tag.txt" /tmp/farside-deploy/tag.txt --endpoint-url "$ENDPOINT" --region auto 2>/dev/null; then
+            echo "release APK for tag $(cat /tmp/farside-deploy/tag.txt)"
+          fi
           echo "apk=/tmp/farside-deploy/app-release.apk" >> "$GITHUB_OUTPUT"
 
       - name: Download latest cloudflared try-build APK from R2
