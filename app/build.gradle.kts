@@ -7,14 +7,18 @@ plugins {
 }
 
 // Cloudflared version shown on the About screen, read from the shipped
-// binary itself (the "<version>-farside" string baked in by
+// binary itself (the "<version>" string baked in by
 // tools/build-cloudflared.ps1), not from a pin file. That way a try-build
 // that swaps the binary without updating pins still reports correctly,
 // and a missed pin update can never make the UI lie about the binary.
-// Falls back to "unknown" if the binary is absent, never fails the build.
+// Test branch only: the "-farside" suffix is removed here to test whether
+// it is what keeps Cloudflare's dashboard from showing a version for the
+// Quest tunnel. The suffix is optional in the regex, so old binaries
+// still report correctly. Falls back to "unknown" if the binary is
+// absent, never fails the build.
 val cloudflaredVersion: String = try {
     val binaryText = String(file("src/main/jniLibs/arm64-v8a/libcloudflared.so").readBytes(), Charsets.ISO_8859_1)
-    Regex("""\d{4}\.\d+\.\d+-farside""").find(binaryText)?.value?.removeSuffix("-farside") ?: "unknown"
+    Regex("""\d{4}\.\d+\.\d+(?:-farside)?""").find(binaryText)?.value?.removeSuffix("-farside") ?: "unknown"
 } catch (e: Exception) {
     "unknown"
 }

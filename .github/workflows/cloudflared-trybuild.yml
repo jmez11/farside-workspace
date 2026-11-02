@@ -63,7 +63,7 @@ jobs:
 
       - name: Verify the new binary is packaged
         run: |
-          strings app/src/main/jniLibs/arm64-v8a/libcloudflared.so | grep -m1 "${{ inputs.version }}-farside"
+          strings app/src/main/jniLibs/arm64-v8a/libcloudflared.so | grep -m1 "${{ inputs.version }}"
 
       - name: Derive version from git
         id: version
