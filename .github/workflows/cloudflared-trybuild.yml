@@ -10,6 +10,8 @@ name: Cloudflared try-build
 #
 # NOTE: this intentionally does NOT run lint — it is for testing the
 # cloudflared binary, not for validating the tree.
+# The repo is public, so the try-build APK goes to the private R2 bucket
+# (like CI), not to a publicly downloadable GitHub artifact.
 on:
   workflow_dispatch:
     inputs:
@@ -65,9 +67,18 @@ jobs:
       - name: Build debug APK
         run: ./gradlew assembleDebug --stacktrace
 
-      - name: Upload try-build APK
-        uses: actions/upload-artifact@v7
-        with:
-          name: farside-cloudflared-trybuild-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 14
+      - name: Upload try-build APK to private R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          BUCKET="${{ vars.R2_BUCKET }}"; [ -n "$BUCKET" ] || BUCKET="${{ secrets.R2_BUCKET }}"
+          ENDPOINT="${{ vars.R2_ENDPOINT }}"; [ -n "$ENDPOINT" ] || ENDPOINT="${{ secrets.R2_ENDPOINT }}"
+          [ -n "$BUCKET" ] || { echo "R2_BUCKET is not set (variable or secret)"; exit 1; }
+          [ -n "$ENDPOINT" ] || { echo "R2_ENDPOINT is not set (variable or secret)"; exit 1; }
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          [ -f "$APK" ] || { echo "APK not found: $APK"; exit 1; }
+          aws s3 cp "$APK" "s3://$BUCKET/farside-trybuild/${{ inputs.version }}-${{ github.sha }}/app-debug.apk" --endpoint-url "$ENDPOINT" --region auto
+          aws s3 cp "$APK" "s3://$BUCKET/farside-trybuild/latest/app-debug.apk" --endpoint-url "$ENDPOINT" --region auto
+          echo "Uploaded try-build APK (${{ inputs.version }}) to R2 farside-trybuild/"

@@ -12,12 +12,13 @@ name: Deploy to Quest
 #
 # Three modes (chosen at dispatch); both take an already-built APK, nothing is
 # compiled here:
-#   debug    — downloads the `farside-debug-apk` artifact from the latest
-#              successful CI run on master.
+#   debug    — downloads the latest master debug APK from the private R2
+#              bucket (CI uploads it there; the repo is public, so it is
+#              no longer a GitHub artifact).
 #   release  — downloads `app-release.apk` from the newest GitHub Release
 #              (including prereleases, e.g. v0.1.0-rc1).
-#   trybuild — downloads the `farside-cloudflared-trybuild-apk` artifact from
-#              the latest successful Cloudflared try-build run.
+#   trybuild — downloads the latest try-build APK from the private R2
+#              bucket (same reason as debug).
 #
 # Farside must be running on the headset with its tunnel started — reaching
 # the headset this way IS the test. Manual trigger only.
@@ -47,31 +48,33 @@ on:
 
 permissions:
   contents: read
-  actions: read # needed to list runs and download the CI artifact
+  # actions:read is no longer needed: debug/trybuild APKs now come from R2,
+  # and release APKs come from the release API with contents:read.
 
 jobs:
   deploy:
     runs-on: ubuntu-24.04
     steps:
-      - name: Download latest debug APK artifact
+      - name: Download latest debug APK from R2
         id: apk-debug
         if: inputs.build_type == 'debug'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
         run: |
           set -euo pipefail
-          # Latest successful CI run on master. If you just pushed and CI is
-          # still running, this is the previous green build — the log below
-          # says exactly which commit the APK came from.
-          RUN_JSON="$(gh run list --repo "${{ github.repository }}" --workflow CI --branch master --status success --limit 1 --json databaseId,headSha,displayTitle --jq '.[0]')"
-          RUN_ID="$(echo "$RUN_JSON" | jq -r '.databaseId')"
-          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
-            echo "No successful CI run found on master." >&2
-            exit 1
-          fi
-          echo "using CI run $RUN_ID: $(echo "$RUN_JSON" | jq -r '.displayTitle') ($(echo "$RUN_JSON" | jq -r '.headSha' | cut -c1-7))"
+          # Latest master debug APK, as uploaded by CI. If CI is still
+          # running after a fresh push, this is the previous green build —
+          # sha.txt below says exactly which commit the APK came from.
+          BUCKET="${{ vars.R2_BUCKET }}"; [ -n "$BUCKET" ] || BUCKET="${{ secrets.R2_BUCKET }}"
+          ENDPOINT="${{ vars.R2_ENDPOINT }}"; [ -n "$ENDPOINT" ] || ENDPOINT="${{ secrets.R2_ENDPOINT }}"
+          [ -n "$BUCKET" ] || { echo "R2_BUCKET is not set (variable or secret)"; exit 1; }
+          [ -n "$ENDPOINT" ] || { echo "R2_ENDPOINT is not set (variable or secret)"; exit 1; }
           mkdir -p /tmp/farside-deploy
-          gh run download "$RUN_ID" --repo "${{ github.repository }}" --name farside-debug-apk --dir /tmp/farside-deploy
+          aws s3 cp "s3://$BUCKET/farside-debug/latest/app-debug.apk" /tmp/farside-deploy/app-debug.apk --endpoint-url "$ENDPOINT" --region auto
+          if aws s3 cp "s3://$BUCKET/farside-debug/latest/sha.txt" /tmp/farside-deploy/sha.txt --endpoint-url "$ENDPOINT" --region auto 2>/dev/null; then
+            echo "debug APK built from commit $(cat /tmp/farside-deploy/sha.txt)"
+          fi
           echo "apk=/tmp/farside-deploy/app-debug.apk" >> "$GITHUB_OUTPUT"
 
       - name: Download latest release APK
@@ -94,23 +97,21 @@ jobs:
           gh release download "$TAG" --repo "${{ github.repository }}" --pattern 'app-release.apk' --dir /tmp/farside-deploy
           echo "apk=/tmp/farside-deploy/app-release.apk" >> "$GITHUB_OUTPUT"
 
-      - name: Download latest cloudflared try-build APK artifact
+      - name: Download latest cloudflared try-build APK from R2
         id: apk-trybuild
         if: inputs.build_type == 'trybuild'
         env:
-          GH_TOKEN: ${{ github.token }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
         run: |
           set -euo pipefail
-          # Latest successful Cloudflared try-build run (manual dispatch, any branch).
-          RUN_JSON="$(gh run list --repo "${{ github.repository }}" --workflow cloudflared-trybuild.yml --status success --limit 1 --json databaseId,headSha,displayTitle --jq '.[0]')"
-          RUN_ID="$(echo "$RUN_JSON" | jq -r '.databaseId')"
-          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
-            echo "No successful cloudflared try-build run found." >&2
-            exit 1
-          fi
-          echo "using try-build run $RUN_ID: $(echo "$RUN_JSON" | jq -r '.displayTitle') ($(echo "$RUN_JSON" | jq -r '.headSha' | cut -c1-7))"
+          # Latest try-build APK, as uploaded by cloudflared-trybuild.yml.
+          BUCKET="${{ vars.R2_BUCKET }}"; [ -n "$BUCKET" ] || BUCKET="${{ secrets.R2_BUCKET }}"
+          ENDPOINT="${{ vars.R2_ENDPOINT }}"; [ -n "$ENDPOINT" ] || ENDPOINT="${{ secrets.R2_ENDPOINT }}"
+          [ -n "$BUCKET" ] || { echo "R2_BUCKET is not set (variable or secret)"; exit 1; }
+          [ -n "$ENDPOINT" ] || { echo "R2_ENDPOINT is not set (variable or secret)"; exit 1; }
           mkdir -p /tmp/farside-deploy
-          gh run download "$RUN_ID" --repo "${{ github.repository }}" --name farside-cloudflared-trybuild-apk --dir /tmp/farside-deploy
+          aws s3 cp "s3://$BUCKET/farside-trybuild/latest/app-debug.apk" /tmp/farside-deploy/app-debug.apk --endpoint-url "$ENDPOINT" --region auto
           echo "apk=/tmp/farside-deploy/app-debug.apk" >> "$GITHUB_OUTPUT"
 
       - name: Install cloudflared, adb and build-tools

@@ -3,6 +3,10 @@ name: CI
 # Debug build + lint + unit tests on every PR and push to master.
 # The native stack (FreeRDP 3.32.x, LibVNC, termux-app modules) lives in
 # git submodules, so checkout must be recursive or the build fails.
+# The repo is public, so the debug APK is NOT uploaded as a GitHub
+# artifact (that would be publicly downloadable). On pushes to master it
+# goes to the private R2 bucket instead, where deploy-quest.yml fetches it
+# from. PR builds still compile, lint and test, but do not upload an APK.
 on:
   push:
     branches: [master]
@@ -39,13 +43,29 @@ jobs:
       - name: Unit tests
         run: ./gradlew testDebugUnitTest --stacktrace
 
-      - name: Upload debug APK
-        uses: actions/upload-artifact@v7
-        with:
-          name: farside-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 3
-          
+      - name: Upload debug APK to private R2
+        # Push-only: fork PRs get no repo secrets, and deploy-quest only
+        # ever deploys the latest master build anyway.
+        if: github.event_name == 'push'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          BUCKET="${{ vars.R2_BUCKET }}"; [ -n "$BUCKET" ] || BUCKET="${{ secrets.R2_BUCKET }}"
+          ENDPOINT="${{ vars.R2_ENDPOINT }}"; [ -n "$ENDPOINT" ] || ENDPOINT="${{ secrets.R2_ENDPOINT }}"
+          [ -n "$BUCKET" ] || { echo "R2_BUCKET is not set (variable or secret)"; exit 1; }
+          [ -n "$ENDPOINT" ] || { echo "R2_ENDPOINT is not set (variable or secret)"; exit 1; }
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          [ -f "$APK" ] || { echo "APK not found: $APK"; exit 1; }
+          # Versioned copy for provenance, plus a latest pointer that
+          # deploy-quest.yml downloads, and the commit it came from.
+          aws s3 cp "$APK" "s3://$BUCKET/farside-debug/${{ github.sha }}/app-debug.apk" --endpoint-url "$ENDPOINT" --region auto
+          aws s3 cp "$APK" "s3://$BUCKET/farside-debug/latest/app-debug.apk" --endpoint-url "$ENDPOINT" --region auto
+          printf '%s\n' "${{ github.sha }}" > /tmp/farside-debug-sha.txt
+          aws s3 cp /tmp/farside-debug-sha.txt "s3://$BUCKET/farside-debug/latest/sha.txt" --endpoint-url "$ENDPOINT" --region auto
+          echo "Uploaded debug APK for ${{ github.sha }} to R2 farside-debug/"
+
       - name: Upload lint reports
         if: failure()
         uses: actions/upload-artifact@v7
