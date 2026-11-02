@@ -99,6 +99,21 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Restart the wireless ADB tunnel on app launch if it was
+        // running before the app was killed or replaced: a reinstall
+        // (pm install -r) kills the app and its tunnel, and launching
+        // the app again should not require re-toggling it in Settings.
+        // Only when a saved config exists, the tunnel was running, it
+        // is not already running, and developer mode is on. The service
+        // itself re-checks the config and developer mode before
+        // connecting, and an explicit user stop clears the flag.
+        if (!com.farside.workspace.tunnel.AdbTunnelService.running) {
+            val tunnelSettings = com.farside.workspace.tunnel.AdbTunnelSettings(this)
+            if (tunnelSettings.wasRunning() && tunnelSettings.load() != null &&
+                com.farside.workspace.tunnel.AdbDiscovery.flags(this).developer) {
+                com.farside.workspace.tunnel.AdbTunnelService.start(this)
+            }
+        }
         SessionWindowLauncher.forgetLegacyPositions(this)
         val profileManager = ProfileManager(this)
         val arrangementStore = com.farside.workspace.data.LauncherArrangementStore(this)

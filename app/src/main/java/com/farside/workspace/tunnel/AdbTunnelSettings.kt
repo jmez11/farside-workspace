@@ -30,6 +30,14 @@ data class AdbTunnelConfig(val token: String, val hostname: String, val port: In
 class AdbTunnelSettings(context: Context) {
     private val root = File(context.noBackupFilesDir, "adb-tunnel").apply { mkdirs(); android.system.Os.chmod(absolutePath, 448) }
     private val file = File(root, "settings.enc")
+    // Plain flag, not a secret: whether the tunnel was running when the
+    // app last stopped it or was killed. A reinstall (pm install -r)
+    // kills the app without stopping the tunnel, so this stays true
+    // across a deploy and lets MainActivity restart the tunnel on
+    // launch. Cleared only by an explicit user stop.
+    private val prefs = context.getSharedPreferences("adb_tunnel", Context.MODE_PRIVATE)
+    fun wasRunning(): Boolean = prefs.getBoolean("was_running", false)
+    fun setWasRunning(value: Boolean) { prefs.edit().putBoolean("was_running", value).apply() }
     fun load(): AdbTunnelConfig? = if (!file.exists()) null else runCatching {
         val json = JSONObject(CredentialManager.decrypt(file.readBytes()))
         AdbTunnelConfig(json.getString("token"), json.getString("hostname"), json.getInt("port")).validate()

@@ -3,8 +3,9 @@ name: Deploy to Quest
 # Pushes an existing build to the Quest 3 through the Farside-hosted Cloudflare
 # tunnel and reinstalls it WITHOUT killing the tunnel: the APK is pushed to
 # /data/local/tmp first, then a detached adbd-shell script runs `pm install -r`
-# (which kills Farside to replace the APK) and immediately restarts
-# AdbTunnelService so the tunnel reconnects by itself.
+# (which kills Farside to replace the APK) and immediately launches
+# MainActivity, whose auto-start restarts AdbTunnelService if it was
+# running before, so the tunnel reconnects by itself.
 #
 # This works because `adb shell` runs as Android's shell user (uid 2000) in
 # adbd's cgroup — not inside Farside's app process — so the nohup'd script
@@ -204,10 +205,14 @@ jobs:
           adb -s 127.0.0.1:5555 push "${{ steps.apk-debug.outputs.apk || steps.apk-release.outputs.apk || steps.apk-trybuild.outputs.apk }}" /data/local/tmp/farside-update.apk
           # Detached reinstall: the shell is parented to adbd (uid 2000), so it
           # survives `pm install -r` killing Farside, finishes the install,
-          # cleans up, and restarts AdbTunnelService so the tunnel reconnects
-          # on its own. The adb session drops with the tunnel — the next step
-          # waits for it to come back.
-          adb -s 127.0.0.1:5555 shell "nohup sh -c 'pm install -r /data/local/tmp/farside-update.apk && rm -f /data/local/tmp/farside-update.apk && am start-foreground-service -n com.farside.workspace/.tunnel.AdbTunnelService' >/dev/null 2>&1 &"
+          # cleans up, and launches MainActivity so the tunnel reconnects
+          # on its own. Test-branch change: launching the exported
+          # MainActivity (instead of am start-foreground-service for the
+          # non-exported AdbTunnelService) lets MainActivity's auto-start
+          # restart the tunnel from inside the app, if it was running
+          # before the reinstall. The adb session drops with the tunnel —
+          # the next step waits for it to come back.
+          adb -s 127.0.0.1:5555 shell "nohup sh -c 'pm install -r /data/local/tmp/farside-update.apk && rm -f /data/local/tmp/farside-update.apk && am start -n com.farside.workspace/.MainActivity' >/dev/null 2>&1 &"
           echo "reinstall triggered"
 
       - name: Wait for tunnel reconnect and verify install

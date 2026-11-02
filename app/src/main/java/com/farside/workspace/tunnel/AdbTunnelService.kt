@@ -34,8 +34,14 @@ class AdbTunnelService : Service() {
             private set
         @Volatile var connectorReady = false
             private set
-        fun start(context: Context) { context.startForegroundService(Intent(context, AdbTunnelService::class.java)) }
-        fun stop(context: Context) { context.stopService(Intent(context, AdbTunnelService::class.java)) }
+        fun start(context: Context) {
+            AdbTunnelSettings(context).setWasRunning(true)
+            context.startForegroundService(Intent(context, AdbTunnelService::class.java))
+        }
+        fun stop(context: Context) {
+            AdbTunnelSettings(context).setWasRunning(false)
+            context.stopService(Intent(context, AdbTunnelService::class.java))
+        }
     }
     private val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
         override fun onChange(selfChange: Boolean) {
@@ -55,11 +61,11 @@ class AdbTunnelService : Service() {
             contentResolver.registerContentObserver(Settings.Global.getUriFor(key), false, observer)
     }
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == STOP) { stopSelf(); return START_NOT_STICKY }
+        if (intent?.action == STOP) { AdbTunnelSettings(this).setWasRunning(false); stopSelf(); return START_NOT_STICKY }
         startForeground(ID, notification(getString(com.farside.workspace.R.string.checking_wireless_debugging)))
         if (job?.isActive == true) return START_STICKY
         val config = AdbTunnelSettings(this).load()
-        if (config == null || !AdbDiscovery.flags(this).developer) { stopSelf(); return START_NOT_STICKY }
+        if (config == null || !AdbDiscovery.flags(this).developer) { AdbTunnelSettings(this).setWasRunning(false); stopSelf(); return START_NOT_STICKY }
         running = true
         job = scope.launch {
             try {
