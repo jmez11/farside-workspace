@@ -42,6 +42,12 @@ fun InfoScreen(onClose:()->Unit) {
                 Column(verticalArrangement=Arrangement.spacedBy(4.dp)) {
                     Text(stringResource(R.string.farside_workspace),fontSize=18.sp,fontWeight=FontWeight.Bold)
                     Text(stringResource(R.string.about_version,BuildConfig.VERSION_NAME),fontSize=13.sp,color=SetupColors.muted)
+                    // Own line, not folded into VERSION_NAME: the bundled
+                    // cloudflared changes on its own weekly cadence, and
+                    // VERSION_NAME must stay clean for the store. Literal
+                    // text, like OceanSideVR below — a component name plus
+                    // a version number, not translatable prose.
+                    Text("Cloudflared ${BuildConfig.CLOUDFLARED_VERSION}",fontSize=13.sp,color=SetupColors.muted)
                     Text("OceanSideVR",fontSize=13.sp,color=SetupColors.muted)
                 }
                 Spacer(Modifier.height(8.dp))

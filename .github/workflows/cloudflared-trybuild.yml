@@ -3,8 +3,8 @@ name: Cloudflared try-build
 # Manual try-build: compiles cloudflared at an unpinned upstream tag with the
 # Android adaptations, swaps the binary into jniLibs, and builds a debug APK
 # for on-device testing. Runs on the branch it is dispatched from; never
-# touches master. The APK is uploaded as its own artifact (debug-signed with
-# the committed shared debug keystore, so it installs over any CI debug
+# touches master. The APK is uploaded to the private R2 bucket (debug-signed
+# with the committed shared debug keystore, so it installs over any CI debug
 # build with `pm install -r`; uninstall first only when switching from/to a
 # release build).
 #
@@ -36,6 +36,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           submodules: recursive
+          fetch-depth: 0 # for git describe in the version step below
 
       - name: Set up JDK 17
         uses: actions/setup-java@v5
@@ -64,8 +65,21 @@ jobs:
         run: |
           strings app/src/main/jniLibs/arm64-v8a/libcloudflared.so | grep -m1 "${{ inputs.version }}-farside"
 
+      - name: Derive version from git
+        id: version
+        run: |
+          # Same as CI: otherwise the Info screen always says Version 1.0.
+          VERSION_NAME="$(git describe --tags --always | sed 's/^v//')"
+          VERSION_CODE="$(git rev-list --count HEAD)"
+          echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+          echo "Building $VERSION_NAME ($VERSION_CODE)"
+
       - name: Build debug APK
-        run: ./gradlew assembleDebug --stacktrace
+        run: >
+          ./gradlew assembleDebug --stacktrace
+          "-PversionName=${{ steps.version.outputs.version_name }}"
+          "-PversionCode=${{ steps.version.outputs.version_code }}"
 
       - name: Upload try-build APK to private R2
         env:

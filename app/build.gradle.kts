@@ -6,6 +6,19 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// Cloudflared version shown on the About screen, read from the shipped
+// binary itself (the "<version>-farside" string baked in by
+// tools/build-cloudflared.ps1), not from a pin file. That way a try-build
+// that swaps the binary without updating pins still reports correctly,
+// and a missed pin update can never make the UI lie about the binary.
+// Falls back to "unknown" if the binary is absent, never fails the build.
+val cloudflaredVersion: String = try {
+    val binaryText = String(file("src/main/jniLibs/arm64-v8a/libcloudflared.so").readBytes(), Charsets.ISO_8859_1)
+    Regex("""\d{4}\.\d+\.\d+-farside""").find(binaryText)?.value?.removeSuffix("-farside") ?: "unknown"
+} catch (e: Exception) {
+    "unknown"
+}
+
 android {
     namespace = "com.farside.workspace"
     compileSdk = 35
@@ -53,6 +66,7 @@ android {
         targetSdk = 34 // Horizon OS is API 34; targeting higher only triggers a dashboard warning
         versionCode = ciVersionCode ?: 1
         versionName = ciVersionName ?: "1.0"
+        buildConfigField("String", "CLOUDFLARED_VERSION", "\"$cloudflaredVersion\"")
         testInstrumentationRunner = "com.farside.workspace.RdpResizeInstrumentation"
         ndk {
             abiFilters += "arm64-v8a"
