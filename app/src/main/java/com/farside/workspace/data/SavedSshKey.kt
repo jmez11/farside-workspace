@@ -10,12 +10,17 @@ data class SavedSshKey(
     val passphrase: String = "",
     val requirePin: Boolean = false
 ) {
-    fun toJson(): JSONObject {
+    fun toJson(forBackup: Boolean = false): JSONObject {
         val json = JSONObject()
         json.put("id", id)
         json.put("name", name)
-        com.farside.workspace.CredentialManager.writePassword(json, "privateKey", privateKey)
-        com.farside.workspace.CredentialManager.writePassword(json, "passphrase", passphrase)
+        if (forBackup) {
+            json.put("privateKey", privateKey)
+            json.put("passphrase", passphrase)
+        } else {
+            com.farside.workspace.CredentialManager.writePassword(json, "privateKey", privateKey)
+            com.farside.workspace.CredentialManager.writePassword(json, "passphrase", passphrase)
+        }
         json.put("requirePin", requirePin)
         return json
     }

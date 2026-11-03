@@ -11,12 +11,16 @@ data class SavedCredential(
     val requirePin: Boolean = false,
     val userShort: String? = null
 ) {
-    fun toJson(): JSONObject {
+    fun toJson(forBackup: Boolean = false): JSONObject {
         val json = JSONObject()
         json.put("id", id)
         json.put("name", name)
         json.put("user", user)
-        com.farside.workspace.CredentialManager.writePassword(json, "pass", pass)
+        if (forBackup) {
+            json.put("pass", pass)
+        } else {
+            com.farside.workspace.CredentialManager.writePassword(json, "pass", pass)
+        }
         json.put("requirePin", requirePin)
         json.put("userShort", userShort)
         return json

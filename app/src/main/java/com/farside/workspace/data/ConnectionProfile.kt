@@ -98,7 +98,7 @@ data class ConnectionProfile(
     val macSshRelaySameMac: Boolean = true,
     val macThroughSsh: Boolean = false
 ) {
-    fun toJson(): JSONObject {
+    fun toJson(forBackup: Boolean = false): JSONObject {
         val json = JSONObject()
         json.put("id", id)
         json.put("name", name)
@@ -108,7 +108,11 @@ data class ConnectionProfile(
         json.put("credentialSource", if(credentialId==null) "connection" else "vault")
         if (credentialId == null) {
             json.put("user", user)
-            com.farside.workspace.CredentialManager.writePassword(json, "pass", pass)
+            if (forBackup) {
+                json.put("pass", pass)
+            } else {
+                com.farside.workspace.CredentialManager.writePassword(json, "pass", pass)
+            }
         }
         json.put("credentialId", credentialId)
         json.put("sshKeyId", sshKeyId)
@@ -128,11 +132,21 @@ data class ConnectionProfile(
         json.put("proxyHost", proxyHost)
         json.put("proxyPort", proxyPort)
         json.put("proxyUser", proxyUser)
-        com.farside.workspace.CredentialManager.writePassword(json, "proxyPass", proxyPass)
+        if (forBackup) {
+            json.put("proxyPass", proxyPass)
+        } else {
+            com.farside.workspace.CredentialManager.writePassword(json, "proxyPass", proxyPass)
+        }
         json.put("proxyExclude", proxyExclude)
         json.put("proxyCommand", proxyCommand)
-        if (cloudflaredParameters.isNotEmpty()) json.put("cloudflaredParametersEncrypted",
-            android.util.Base64.encodeToString(com.farside.workspace.CredentialManager.encrypt(cloudflaredParameters), android.util.Base64.NO_WRAP))
+        if (cloudflaredParameters.isNotEmpty()) {
+            if (forBackup) {
+                json.put("cloudflaredParameters", cloudflaredParameters)
+            } else {
+                json.put("cloudflaredParametersEncrypted",
+                    android.util.Base64.encodeToString(com.farside.workspace.CredentialManager.encrypt(cloudflaredParameters), android.util.Base64.NO_WRAP))
+            }
+        }
         
         json.put("soundRedirection", soundRedirection.name)
         json.put("redirectMicrophone", redirectMicrophone)
@@ -202,7 +216,8 @@ data class ConnectionProfile(
                 proxyPass = com.farside.workspace.CredentialManager.readPassword(json, "proxyPass"),
                 proxyExclude = if (json.has("proxyExclude") && !json.isNull("proxyExclude")) json.getString("proxyExclude") else null,
                 proxyCommand = if (json.has("proxyCommand") && !json.isNull("proxyCommand")) json.getString("proxyCommand") else null,
-                cloudflaredParameters = if (json.has("cloudflaredParametersEncrypted"))
+                cloudflaredParameters = if (json.has("cloudflaredParameters")) json.getString("cloudflaredParameters")
+                    else if (json.has("cloudflaredParametersEncrypted"))
                     com.farside.workspace.CredentialManager.decrypt(android.util.Base64.decode(json.getString("cloudflaredParametersEncrypted"), android.util.Base64.NO_WRAP)) else "",
                 
                 soundRedirection = try { SoundRedirection.valueOf(sRedirectStr) } catch (e: Exception) { SoundRedirection.PLAY_ON_DEVICE },

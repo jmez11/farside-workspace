@@ -81,15 +81,15 @@ object BackupManager {
         root.put("timestamp", System.currentTimeMillis())
 
         val profilesArr = JSONArray()
-        payload.profiles.forEach { profilesArr.put(it.toJson()) }
+        payload.profiles.forEach { profilesArr.put(it.toJson(forBackup = true)) }
         root.put("profiles", profilesArr)
 
         val credsArr = JSONArray()
-        payload.credentials.forEach { credsArr.put(it.toJson()) }
+        payload.credentials.forEach { credsArr.put(it.toJson(forBackup = true)) }
         root.put("credentials", credsArr)
 
         val keysArr = JSONArray()
-        payload.sshKeys.forEach { keysArr.put(it.toJson()) }
+        payload.sshKeys.forEach { keysArr.put(it.toJson(forBackup = true)) }
         root.put("ssh_keys", keysArr)
 
         if (payload.appPinVerifier != null) {
