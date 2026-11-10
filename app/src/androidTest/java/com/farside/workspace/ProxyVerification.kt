@@ -18,7 +18,7 @@ import java.util.concurrent.TimeUnit
 class ProxyVerification(private val test: Instrumentation) {
     fun runLiveRdp(socks5: Boolean = false): String {
         val profile = ProfileManager(test.targetContext).getProfiles().first {
-            it.type == ConnectionType.RDP && it.name.startsWith("LAPTOP-")
+            it.type == ConnectionType.RDP && it.remoteApp.isNullOrBlank()
         }
         val relay: AutoCloseable = if (socks5) Socks5Fixture(profile.port, profile.host)
             else HttpConnectFixture(profile.port, profile.host)
@@ -43,6 +43,9 @@ class ProxyVerification(private val test: Instrumentation) {
                 if (proxy is Socks5Fixture) check(proxy.authenticated && proxy.destination == "${profile.host}:${profile.port}")
                 else check((proxy as HttpConnectFixture).request?.startsWith("CONNECT ${profile.host}:${profile.port} HTTP/1.1\r\n") == true)
                 check(bridge.getDesktopWidth(instance) > 0 && bridge.getDesktopHeight(instance) > 0)
+                check(!RdpTransportVerification.udpEnabled(instance)) { "Proxy route allowed direct UDP" }
+                check(RdpTransportVerification.unicodeEnabled(instance)) { "Proxy route disabled Unicode keyboard input" }
+                check(bridge.getMultitransportState(instance) == 0)
                 return "PASS: live RDP desktop connected through ${if (socks5) "SOCKS5" else "HTTP CONNECT"}."
             } finally { connection.close(); texture.release() }
         }

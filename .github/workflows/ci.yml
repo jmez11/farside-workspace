@@ -1,7 +1,7 @@
 name: CI
 
 # Debug build + lint + unit tests on every PR and push to master.
-# The native stack (FreeRDP 3.32.x, LibVNC, termux-app modules) lives in
+# The native stack (FreeRDP 3.33.x, LibVNC, termux-app modules) lives in
 # git submodules, so checkout must be recursive or the build fails.
 # The repo is public, so the debug APK is NOT uploaded as a GitHub
 # artifact (that would be publicly downloadable). On pushes to master it

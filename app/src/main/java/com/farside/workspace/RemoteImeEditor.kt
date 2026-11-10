@@ -5,7 +5,7 @@ import android.view.inputmethod.InputMethodManager
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputConnectionWrapper
 import android.view.inputmethod.EditorInfo
-import android.view.inputmethod.ExtractedTextRequest
+import android.text.InputType
 import android.view.inputmethod.TextAttribute
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -47,7 +47,6 @@ internal class ImeEditorActions {
 private open class RemoteImeInputConnection(
     target: InputConnection,
     protected val replacement: () -> Unit,
-    protected val submitted: (CharSequence) -> Unit,
     protected val sendKey: (Int, Boolean) -> Unit,
     private val editorAction: () -> Unit
 ) : InputConnectionWrapper(target, false) {
@@ -90,14 +89,21 @@ private open class RemoteImeInputConnection(
         return super.deleteSurroundingText(beforeLength, afterLength)
     }
     override fun deleteSurroundingTextInCodePoints(beforeLength: Int, afterLength: Int): Boolean {
-        return deleteSurroundingText(beforeLength, afterLength)
+        if (beforeLength > 0 && afterLength == 0) {
+            val before = super.getTextBeforeCursor((beforeLength.toLong() * 2).coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), 0) ?: ""
+            val available = Character.codePointCount(before, 0, before.length)
+            repeat((beforeLength - available).coerceAtLeast(0)) {
+                sendKey(0x0E, true); sendKey(0x0E, false)
+            }
+        }
+        return super.deleteSurroundingTextInCodePoints(beforeLength, afterLength)
     }
     override fun sendKeyEvent(event: android.view.KeyEvent): Boolean {
         android.util.Log.i("FarsideIME", "sendKeyEvent: keyCode=${event.keyCode}, action=${event.action}")
         if (event.keyCode == android.view.KeyEvent.KEYCODE_DEL) {
             if (event.action == android.view.KeyEvent.ACTION_DOWN) {
-                sendKey(0x0E, true)
-                sendKey(0x0E, false)
+                // Edit Compose's buffer too, so ExtractedText/surrounding text match the host.
+                return deleteSurroundingTextInCodePoints(1, 0)
             }
             return true
         }
@@ -111,23 +117,7 @@ private open class RemoteImeInputConnection(
     override fun commitText(text: CharSequence, cursor: Int): Boolean {
         android.util.Log.i("FarsideIME", "commitText: text='$text', cursor=$cursor")
         beforeCommit()
-        submitted(text)
         return super.commitText(text, cursor)
-    }
-    override fun setComposingText(text: CharSequence, cursor: Int): Boolean {
-        android.util.Log.i("FarsideIME", "setComposingText: text='$text', cursor=$cursor")
-        submitted(text)
-        val extracted = super.getExtractedText(ExtractedTextRequest(), 0)
-        val range = extracted?.let {
-            suggestionCompositionRange(it.text?.toString().orEmpty(), it.selectionStart, it.selectionEnd, text.toString())
-        }
-        if (range != null) super.setComposingRegion(range.first, range.second)
-        return super.setComposingText(text, cursor)
-    }
-    override fun commitCompletion(text: android.view.inputmethod.CompletionInfo?): Boolean {
-        android.util.Log.i("FarsideIME", "commitCompletion: text='${text?.text}'")
-        text?.text?.let { submitted(it) }
-        return super.commitCompletion(text)
     }
     protected fun beforeCommit() {
         if (batchDepth > 0 && finishedComposition && selectedRange) replacement()
@@ -142,73 +132,21 @@ private open class RemoteImeInputConnection(
     }
 }
 
-/** Keep a suggestion's composing range on the typed token, beyond the dummy leading space. */
-internal fun suggestionCompositionRange(current: String, selectionStart: Int, selectionEnd: Int,
-    submitted: String): Pair<Int, Int>? {
-    if (selectionStart != selectionEnd || selectionEnd != current.length ||
-        submitted.codePointCount(0, submitted.length) < 2) return null
-    val start = current.indexOfLast { it.isWhitespace() } + 1
-    if (start >= current.length) return null
-    val word = current.substring(start)
-    val trimmed = current.removePrefix(" ").dropLast(word.length)
-    val effective = if (trimmed.isNotEmpty() && submitted.startsWith(trimmed, ignoreCase = true)) {
-        submitted.substring(trimmed.length)
-    } else submitted
-    if (effective.length <= word.length || !effective.startsWith(word, ignoreCase = true)) return null
-    return start to current.length
-}
-
 @androidx.annotation.RequiresApi(34)
 private class RemoteImeInputConnectionApi34(
     target: InputConnection,
     replacement: () -> Unit,
-    submitted: (CharSequence) -> Unit,
     sendKey: (Int, Boolean) -> Unit,
     editorAction: () -> Unit
-) : RemoteImeInputConnection(target, replacement, submitted, sendKey, editorAction) {
+) : RemoteImeInputConnection(target, replacement, sendKey, editorAction) {
     override fun commitText(text: CharSequence, cursor: Int, attributes: TextAttribute?): Boolean {
         beforeCommit()
-        submitted(text)
         return super.commitText(text, cursor, attributes)
     }
     override fun replaceText(start: Int, end: Int, text: CharSequence, cursor: Int, attributes: TextAttribute?): Boolean {
         if (start != end) replacement()
         return super.replaceText(start, end, text, cursor, attributes)
     }
-}
-
-/** A suggestion replaces the typed trigger token without replaying or duplicating already-committed prefix history. */
-internal fun normalizeImeSuggestion(previous: TextFieldValue, next: TextFieldValue,
-    submitted: String?): TextFieldValue {
-    val candidate = if (!submitted.isNullOrEmpty()) submitted
-        else if (next.text.length > previous.text.length && next.text.startsWith(previous.text)) {
-            next.text.substring(previous.text.length)
-        } else null
-    if (candidate.isNullOrEmpty() || candidate.codePointCount(0, candidate.length) < 2 ||
-        previous.selection.collapsed.not() || previous.selection.end != previous.text.length) return next
-    val word = previous.text.substringAfterLast(' ')
-    if (word.isEmpty()) return next
-    val prevPrefix = previous.text.dropLast(word.length)
-    val trimmedPrevPrefix = prevPrefix.trimStart()
-
-    val effective = if (trimmedPrevPrefix.isNotEmpty() && candidate.startsWith(trimmedPrevPrefix, ignoreCase = true)) {
-        candidate.substring(trimmedPrevPrefix.length)
-    } else candidate
-
-    if (!effective.startsWith(word, ignoreCase = true)) return next
-    val appended = next.text == previous.text + candidate ||
-        next.text == prevPrefix + candidate ||
-        (trimmedPrevPrefix.isNotEmpty() && next.text == previous.text + effective)
-    val droppedSentinel = previous.text.startsWith(" ") &&
-        (next.text == previous.text.removePrefix(" ") + candidate ||
-         next.text == prevPrefix.removePrefix(" ") + candidate ||
-         next.text == previous.text.removePrefix(" ") + effective)
-    val fullReplacement = (next.text == " $candidate" || next.text == candidate) &&
-        trimmedPrevPrefix.isNotEmpty() && candidate.startsWith(trimmedPrevPrefix, ignoreCase = true)
-
-    if (!appended && !droppedSentinel && !fullReplacement) return next
-    val newText = prevPrefix + effective
-    return TextFieldValue(newText, selection = TextRange(newText.length))
 }
 
 internal fun processImeChange(
@@ -237,15 +175,11 @@ internal fun processImeChange(
     if (previous != null && (previous.composition != null || previous.text != " ")) {
         // Horizon composes whole words during ordinary typing. Stream each changed code point
         // immediately; finalizing the unchanged word must not send it a second time.
-        // For already-committed prefix words, match case-insensitively so sentence auto-capitalization
-        // never erases prior words.
+        // Match literally: no suggestion/capitalization guesses may diverge from the IME buffer.
         val before = previous.text.removePrefix(" ").codePoints().toArray()
         val after = next.text.removePrefix(" ").codePoints().toArray()
         var common = 0
-        while (common < before.size && common < after.size &&
-            (before[common] == after[common] ||
-             ((common < before.size - 1 || after.size > before.size) &&
-              Character.toLowerCase(before[common]) == Character.toLowerCase(after[common])))) {
+        while (common < before.size && common < after.size && before[common] == after[common]) {
             common++
         }
         val backspaces = before.size - common
@@ -305,13 +239,11 @@ internal fun RemoteImeEditor(label: String, activation: Long, showInitially: Boo
     LaunchedEffect(imeVisible) { onImeVisibility(imeVisible) }
     var text by remember { mutableStateOf(TextFieldValue(" ", selection = TextRange(1))) }
     var explicitReplacement by remember { mutableStateOf(false) }
-    var submittedText by remember { mutableStateOf<String?>(null) }
     var lastEnterTime by remember { mutableStateOf(0L) }
     val submitEnter = {
         android.util.Log.i("FarsideIME", "submitEnter: buffered=${text.text.length > 1}")
         text = TextFieldValue(" ", selection = TextRange(1))
         explicitReplacement = false
-        submittedText = null
         val now = android.os.SystemClock.uptimeMillis()
         if (now - lastEnterTime > 200) {
             lastEnterTime = now
@@ -327,11 +259,15 @@ internal fun RemoteImeEditor(label: String, activation: Long, showInitially: Boo
                     // Horizon's cached range can clamp to insertion after the sentinel reset.
                     // Preserve the requested replacement operation through Compose's wrapper.
                     val target = request.createInputConnection(outAttributes)
+                    // Disabling autocorrect alone still permits dictionary candidates on Horizon.
+                    outAttributes.inputType = (outAttributes.inputType or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS) and
+                        (InputType.TYPE_TEXT_FLAG_AUTO_CORRECT or InputType.TYPE_TEXT_FLAG_AUTO_COMPLETE or
+                            InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS or InputType.TYPE_TEXT_FLAG_CAP_WORDS or
+                            InputType.TYPE_TEXT_FLAG_CAP_SENTENCES).inv()
                     val replacement = { explicitReplacement = true }
-                    val submitted = { value: CharSequence -> submittedText = value.toString() }
                     val editorAction = { currentSubmitEnter.value() }
-                    return if (android.os.Build.VERSION.SDK_INT >= 34) RemoteImeInputConnectionApi34(target, replacement, submitted, sendKey, editorAction)
-                    else RemoteImeInputConnection(target, replacement, submitted, sendKey, editorAction)
+                    return if (android.os.Build.VERSION.SDK_INT >= 34) RemoteImeInputConnectionApi34(target, replacement, sendKey, editorAction)
+                    else RemoteImeInputConnection(target, replacement, sendKey, editorAction)
                 }
             })
         }
@@ -341,9 +277,8 @@ internal fun RemoteImeEditor(label: String, activation: Long, showInitially: Boo
 
     InterceptPlatformTextInput(interceptor) {
         BasicTextField(value = text, onValueChange = { next ->
-            android.util.Log.i("FarsideIME", "onValueChange: prev='${text.text}', next='${next.text}', submitted='$submittedText'")
-            val adjusted = normalizeImeSuggestion(text, next, submittedText)
-            submittedText = null
+            android.util.Log.i("FarsideIME", "onValueChange: prev='${text.text}', next='${next.text}'")
+            val adjusted = next
             lastEnterTime = processImeChange(
                 next = adjusted,
                 lastEnterTime = lastEnterTime,
@@ -354,7 +289,8 @@ internal fun RemoteImeEditor(label: String, activation: Long, showInitially: Boo
             )
             explicitReplacement = false
             // Keep the streamed buffer through composition finalization and IME dismissal.
-            // Ensure sentinel leading space is never lost so cursor underflow can always backspace.
+            // Restore the sentinel when a replacement removes it; empty buffers use the
+            // surrounding-text fallback so the system keyboard still permits Backspace.
             val ensuredText = if (adjusted.text.isEmpty() || adjusted.text.startsWith(" ")) adjusted
                               else TextFieldValue(" " + adjusted.text, selection = TextRange(adjusted.selection.start + 1, adjusted.selection.end + 1))
             text = if ('\n' !in ensuredText.text) ensuredText else TextFieldValue(" ", selection = TextRange(1))
@@ -367,13 +303,14 @@ internal fun RemoteImeEditor(label: String, activation: Long, showInitially: Boo
                             submitEnter()
                         }
                         true
-                    } else if (event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DEL) {
+                    } else if (event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DEL &&
+                        text.selection.collapsed && text.selection.start == 0) {
                         if (event.type == KeyEventType.KeyDown) {
                             sendKey(0x0E, true)
                             sendKey(0x0E, false)
                         }
                         true
-                    } else false
+                    } else false // Compose handles buffered physical Backspace, including local state.
                 }
                 .onFocusChanged { focused = it.isFocused && it.hasFocus; onFocus(focused) }
                 .semantics { contentDescription = label })

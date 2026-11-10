@@ -7,6 +7,11 @@ import androidx.compose.ui.text.input.TextFieldValue
 class ImeVerification(private val instrumentation: Instrumentation) {
 
     fun run(): String {
+        android.system.Os.setenv("HOME",instrumentation.targetContext.filesDir.absolutePath,true)
+        FreeRDPBridge() // Load the actual shipped FreeRDP settings/parser.
+        check(RdpTransportVerification.nativeKeyboardFixture()==0) {
+            "FreeRDP disabled Unicode keyboard input for a direct or proxy route"
+        }
         testAlternativeKeys()
         testNormalTyping()
         testSpaceTyping()
@@ -16,65 +21,19 @@ class ImeVerification(private val instrumentation: Instrumentation) {
         testMultiCharacterReplacement()
         testEmojiInput()
         testComposingTyping()
-        testSuggestionCommit()
-        testSuggestionCompositionRange()
+        testLiteralCaseChange()
         testKeyboardDismissal()
-        return "All IME input scenarios verified: alternative keys, standard typing, space, empty backspace, buffered Enter without text replay, enter debouncing, multi-char replacements, composing typing, silent dismissal callbacks, and emojis."
+        return "FreeRDP Unicode input enabled for direct/proxy routes. All IME input scenarios verified: alternative keys, standard typing, space, empty backspace, buffered Enter without text replay, enter debouncing, multi-char replacements, composing typing, silent dismissal callbacks, and emojis."
     }
 
-    private fun testSuggestionCompositionRange() {
-        check(suggestionCompositionRange(" y", 2, 2, "Youtube ") == (1 to 2))
-        check(suggestionCompositionRange(" hello y", 8, 8, "Youtube ") == (7 to 8))
-        check(suggestionCompositionRange(" youtube tyrvhikj y", 19, 19, "Youtube tyrvhikj you") == (18 to 19))
-        check(suggestionCompositionRange(" y", 2, 2, "foo") == null)
-        check(suggestionCompositionRange(" y", 1, 2, "Youtube ") == null)
-    }
-
-    private fun testSuggestionCommit() {
-        val previous = TextFieldValue(" y", TextRange(2))
-        val appended = TextFieldValue(" yYoutube", TextRange(9))
-        val adjusted = normalizeImeSuggestion(previous, appended, "Youtube")
-        check(adjusted.text == " Youtube")
-        val unicode = mutableListOf<Int>()
-        val keys = mutableListOf<Int>()
-        processImeChange(adjusted, lastEnterTime = 0L, previous = previous,
-            sendUnicode = { code, down -> if (down) unicode.add(code) },
-            sendKey = { code, down -> if (down) keys.add(code) })
-        check(keys.isEmpty() && unicode.joinToString("") { it.toChar().toString() } == "outube") {
-            "Suggestion did not stream suffix: $keys $unicode"
-        }
-        check(normalizeImeSuggestion(previous, appended, "outube") == appended) {
-            "Nonmatching multi-character commit must append"
-        }
-        check(normalizeImeSuggestion(previous, appended, null) == adjusted) {
-            "Appended candidate matching trigger must normalize even if submitted is null"
-        }
-        val composing = TextFieldValue(" y", TextRange(2), TextRange(1, 2))
-        val firstWord = TextFieldValue("yYoutube ", TextRange(9), TextRange(1, 9))
-        val normalized = normalizeImeSuggestion(composing, firstWord, "Youtube ")
-        check(normalized.text == " Youtube ") { "First-word suggestion lost its sentinel: ${normalized.text}" }
-        unicode.clear(); keys.clear()
-        processImeChange(normalized, lastEnterTime = 0L, previous = composing,
-            sendUnicode = { code, down -> if (down) unicode.add(code) },
-            sendKey = { code, down -> if (down) keys.add(code) })
-        check(keys.isEmpty() && unicode.joinToString("") { it.toChar().toString() } == "outube ") {
-            "First-word suggestion did not stream suffix: $keys $unicode"
-        }
-        check(normalizeImeSuggestion(composing, TextFieldValue("yfoobar"), "foobar") == TextFieldValue("yfoobar")) {
-            "Unrelated composing text must remain an append"
-        }
-        val multiWordPrev = TextFieldValue(" youtube tyrvhikj y", TextRange(19))
-        val multiWordNext = TextFieldValue(" youtube tyrvhikj Youtube tyrvhikj you", TextRange(38))
-        val multiWordAdjusted = normalizeImeSuggestion(multiWordPrev, multiWordNext, "Youtube tyrvhikj you")
-        check(multiWordAdjusted.text == " youtube tyrvhikj you") {
-            "Multi-word suggestion duplicated committed prefix: ${multiWordAdjusted.text}"
-        }
-        unicode.clear(); keys.clear()
-        processImeChange(multiWordAdjusted, lastEnterTime = 0L, previous = multiWordPrev,
-            sendUnicode = { code, down -> if (down) unicode.add(code) },
-            sendKey = { code, down -> if (down) keys.add(code) })
-        check(keys.isEmpty() && unicode.joinToString("") { it.toChar().toString() } == "ou") {
-            "Multi-word suggestion replayed prefix or sent wrong keys: $keys $unicode"
+    private fun testLiteralCaseChange() {
+        val keys=mutableListOf<Int>(); val chars=mutableListOf<Int>()
+        processImeChange(TextFieldValue(" Youtube",TextRange(8)),0L,
+            previous=TextFieldValue(" youtube",TextRange(8)),
+            sendUnicode={code,down -> if(down) chars.add(code)},
+            sendKey={code,down -> if(down) keys.add(code)})
+        check(keys==List(7) {0x0e} && chars=="Youtube".map {it.code}) {
+            "IME case edits must match the local buffer exactly"
         }
     }
 

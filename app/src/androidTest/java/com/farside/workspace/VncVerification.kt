@@ -619,7 +619,20 @@ internal class VncVerification(private val test: Instrumentation,private val liv
         var instance = 0L
         var bridge: VncBridge? = null
         try {
+            if (server?.encoding == 16 && !QuestWindowManager.isAvailable(test.targetContext)) {
+                val info=test.uiAutomation.serviceInfo
+                info.flags=info.flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+                test.uiAutomation.serviceInfo=info
+                await("VNC fixture not connected for Navigator gate") {activity.vncInstance!=0L}
+                main {activity.onWindowFocusChanged(true)}
+                val ui=SetupPhaseOneVerification(test)
+                ui.find(test.targetContext.getString(R.string.keep_toolbar_visible))
+                check(ui.nodes().none {it.contentDescription?.toString()==test.targetContext.getString(R.string.window_manager)}) {"VNC Window Manager button ignored Navigator feature state"}
+                record("PASS: VNC toolbar hides Window Manager when Navigator is disabled/unknown")
+            }
             if (server?.encoding == 16 && QuestWindowManager.isAvailable(test.targetContext)) {
+                await("VNC fixture not connected for Window Manager toolbar") {activity.vncInstance!=0L}
+                main {activity.onWindowFocusChanged(true)}
                 val info = test.uiAutomation.serviceInfo
                 info.flags = info.flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
                 test.uiAutomation.serviceInfo = info

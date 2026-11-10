@@ -94,7 +94,7 @@ fun SshSessionScreen(session: ConnectionProfile, windowInteraction: Long = 0L, w
     com.farside.workspace.ssh.SshHostKeyDialogHost(remember(session, context) { com.farside.workspace.ssh.sshHostKeyScope(context, session) })
     val scrollbackValidationMsg = stringResource(R.string.scrollback_lines_validation)
     val sshClipboardLabel = stringResource(R.string.ssh_clipboard_label)
-    val windowManagerAvailable = remember(context) { QuestWindowManager.isAvailable(context) }
+    val windowManagerAvailable = QuestWindowManager.rememberAvailability(context)
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     var showSoftKeyboard by remember { mutableStateOf(false) }

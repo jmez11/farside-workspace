@@ -14,6 +14,25 @@ import javax.crypto.AEADBadTagException
 class BackupRestoreVerification(private val instrumentation: Instrumentation) {
     private val context get() = instrumentation.targetContext
 
+    /** Explicit local maintenance mode; credentials are staged privately, never test arguments. */
+    fun restoreAuthorizedBackup(): String {
+        val archive = File(context.cacheDir, "authorized-backup.fsbk")
+        val secret = File(context.cacheDir, "authorized-backup.pass")
+        val passphrase = secret.readText().toCharArray()
+        try {
+            val payload = BackupManager.jsonToPayload(org.json.JSONObject(
+                BackupManager.decryptPayload(archive.readBytes(), passphrase)))
+            BackupManager.restorePayload(context, ProfileManager(context), payload)
+            check(context.getSharedPreferences("farside_profiles",0).edit().commit())
+            check(ProfileManager(context).getProfiles().map {it.id}.containsAll(payload.profiles.map {it.id}))
+            return "PASS: authorized encrypted backup restored, including credentials and images."
+        } finally {
+            passphrase.fill('\u0000')
+            secret.delete()
+            archive.delete()
+        }
+    }
+
     fun run(): String {
         val pm = ProfileManager(context)
 

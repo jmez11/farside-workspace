@@ -118,6 +118,39 @@ class RdpResizeInstrumentation : Instrumentation() {
     override fun onStart() {
         val results = Bundle()
         try {
+            if (jumpArgs?.getString("sshWindowManagerOnly") == "true") {
+                SshFeaturesVerification(this, windowManagerOnly = true).run()
+                results.putString("stream", "PASS: SSH Window Manager toolbar and encrypted fixture.\n")
+                finish(0, results)
+                return
+            }
+            if (jumpArgs?.getString("rdpUdpFallbackOnly") == "true") {
+                results.putString("stream", RdpUdpFallbackVerification.run(this) + "\n")
+                finish(0, results)
+                return
+            }
+            if (jumpArgs?.getString("restoreAuthorizedBackup") == "true") {
+                results.putString("stream", BackupRestoreVerification(this).restoreAuthorizedBackup())
+                finish(0, results)
+                return
+            }
+            if (jumpArgs?.getString("rdpKeyboardOnly") == "true") {
+                results.putString("stream", RdpKeyboardVerification(this,
+                    acceptNewCertificate=jumpArgs?.getString("rdpAcceptNewCertificate")=="true").run())
+                finish(0, results)
+                return
+            }
+            if (jumpArgs?.getString("windowManagerFeatureOnly") == "true") {
+                results.putString("stream", QuestWindowManagerVerification.run(this) + "\n")
+                finish(0, results)
+                return
+            }
+
+            if (jumpArgs?.getString("rdpTransportOnly") == "true") {
+                results.putString("stream", RdpTransportVerification.run(this) + "\n")
+                finish(0, results)
+                return
+            }
             if (jumpArgs?.getString("floatingToolbarOnly") == "true") {
                 results.putString("stream", FloatingToolbarVerification(this).run() + "\n")
                 finish(0, results)
@@ -183,11 +216,7 @@ class RdpResizeInstrumentation : Instrumentation() {
                 finish(0, results)
                 return
             }
-            if (jumpArgs?.getString("generalSettingsOnly") == "true") {
-                results.putString("stream", CredentialUiVerification(this).verifyGeneralSettings() + "\n")
-                finish(0, results)
-                return
-            }
+
             if (jumpArgs?.getString("rdpLayoutGeometryOnly") == "true") {
                 results.putString("stream", "PASS: ${RdpMonitorWindowsVerification(this).geometryOnly()}\n")
                 finish(0, results)
@@ -458,11 +487,7 @@ class RdpResizeInstrumentation : Instrumentation() {
                 finish(0, results)
                 return
             }
-            if (jumpArgs?.getString("rdpOpacityOnly") == "true") {
-                results.putString("stream", DesktopOpacityVerification(this).run())
-                finish(0, results)
-                return
-            }
+
             verifyPointerGestures()
             verifyDoubleTapTolerance()
             verifyControllerScroll()

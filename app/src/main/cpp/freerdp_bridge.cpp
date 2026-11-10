@@ -10,6 +10,8 @@
 
 #include <freerdp/freerdp.h>
 #include <freerdp/error.h>
+#include <freerdp/multitransport.h>
+#include <freerdp/channels/drdynvc.h>
 #include <freerdp/gdi/gdi.h>
 #include <freerdp/gdi/gfx.h>
 #include <freerdp/client/cmdline.h>
@@ -36,6 +38,7 @@
 #include <atomic>
 #include "quest_audio.h"
 #include "quest_camera.h"
+#include "quest_rdp_settings.h"
 #include <freerdp/client/rdpgfx.h>
 #include <freerdp/codec/h264.h>
 
@@ -649,7 +652,8 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
         jstring proxyUser,
         jstring proxyPassword,
         jboolean socksProxy,
-        jboolean connectToConsole) {
+        jboolean connectToConsole,
+        jboolean tcpOnly) {
         
     if (!getenv("HOME")) {
         setenv("HOME", "/data/data/com.farside.workspace/files", 1);
@@ -780,18 +784,16 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
     freerdp_settings_set_bool(instance->context->settings, FreeRDP_RestrictedAdminModeRequired, adminMode == JNI_TRUE);
     
     LOGI("Applying performance optimizations");
-    const char* opt_args[] = {
-        "freerdp",
-        "+glyph-cache",
-        "+bitmap-cache",
-        "+offscreen-cache",
-        "/gfx",
-        "/rfx",
-        "/bpp:32",
-        "/compression",
-        "/network:auto"
-    };
-    freerdp_client_settings_parse_command_line(instance->context->settings, 9, (char**)opt_args, FALSE);
+    const int optionsStatus = quest_apply_rdp_options(instance->context->settings, tcpOnly == JNI_TRUE);
+    if (optionsStatus != 0) {
+        LOGE("RDP option parsing failed: %d", optionsStatus);
+        env->ReleaseStringUTFChars(hostname, host_c);
+        env->ReleaseStringUTFChars(username, user_c);
+        env->ReleaseStringUTFChars(password, pass_c);
+        report_disconnect(instance, false, "The RDP connection settings could not be applied.");
+        destroy_client(instance, false);
+        return 0;
+    }
     if (proxyHost && proxyPort > 0 && proxyPort <= 65535) {
         const char* proxy_host = env->GetStringUTFChars(proxyHost, nullptr);
         const char* proxy_user = proxyUser ? env->GetStringUTFChars(proxyUser, nullptr) : nullptr;
@@ -1185,6 +1187,13 @@ Java_com_farside_workspace_FreeRDPBridge_connect(
     });
 
     return (jlong)instance;
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_farside_workspace_FreeRDPBridge_getMultitransportState(JNIEnv*, jobject, jlong handle) {
+    auto* instance = reinterpret_cast<freerdp*>(handle);
+    if (!instance || !instance->context) return FREERDP_MULTITRANSPORT_TUNNEL_NONE;
+    return freerdp_multitransport_get_tunnel_state(instance->context, TUNNELTYPE_UDPFECR);
 }
 
 extern "C" JNIEXPORT void JNICALL

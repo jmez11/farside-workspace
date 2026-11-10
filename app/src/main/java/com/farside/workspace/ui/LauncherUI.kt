@@ -123,7 +123,7 @@ fun LauncherScreen(
     LaunchedEffect(profiles.size) { if (profiles.size < 2) reordering = false }
     val dragView = LocalView.current
     val context = LocalContext.current
-    val windowManagerAvailable = remember(context) { QuestWindowManager.isAvailable(context) }
+    val windowManagerAvailable = QuestWindowManager.rememberAvailability(context)
     val placementAvailable = remember { WindowPlacementSupport.isAvailable() }
     fun returnToLauncher() {
         isAdding = false

@@ -145,7 +145,7 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
     val sharedProfile = runtime?.configuredProfile
     val closeConnection = { if (runtime != null) runtime.closeWindows() else onClose() }
     val permissionContext = LocalContext.current
-    val windowManagerAvailable = remember(permissionContext) { QuestWindowManager.isAvailable(permissionContext) }
+    val windowManagerAvailable = QuestWindowManager.rememberAvailability(permissionContext)
     var microphoneReady by remember(session.id) {
         mutableStateOf(sharedProfile != null || !session.redirectMicrophone || hasMicrophonePermission(permissionContext))
     }
@@ -1027,8 +1027,13 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
         }
         if (showDebugInfo) {
             var quality by remember(rdpBridge) { mutableStateOf<MacConnectionQuality?>(null) }
+            var udpState by remember(rdpBridge, rdpInstance) { mutableStateOf(0) }
             LaunchedEffect(rdpBridge,rdpInstance) {
-                while(true) {quality=(rdpBridge as? VncBridge)?.connectionQuality();delay(1000)}
+                while(true) {
+                    quality=(rdpBridge as? VncBridge)?.connectionQuality()
+                    udpState=rdpBridge.getMultitransportState(rdpInstance)
+                    delay(1000)
+                }
             }
             Surface(
                 modifier = Modifier
@@ -1069,9 +1074,12 @@ internal fun DesktopSessionScreen(session: ConnectionProfile, onInstanceCreated:
                         (rdpBridge as? VncBridge)?.isMacHevc == true -> "VNC (Apple High-Performance)"
                         else -> "VNC (Standard RFB 3.8)"
                     }
+                    val udpStatus = if (!isVnc) RdpTransport.statusResource(udpState) else null
                     val transportLabel = when {
                         effectiveSession.useCloudflare || effectiveSession.proxyType == com.farside.workspace.data.ProxyType.CLOUDFLARED -> "Cloudflare Tunnel (TCP)"
                         effectiveSession.proxyType == com.farside.workspace.data.ProxyType.HTTP -> "HTTP CONNECT Proxy"
+                        effectiveSession.proxyType == com.farside.workspace.data.ProxyType.SOCKS5 -> "SOCKS5 Proxy (TCP)"
+                        udpStatus != null -> stringResource(udpStatus)
                         else -> "Direct TCP (LAN / WARP)"
                     }
                     val decoderLabel = rdpBridge.getDecoderDescription(rdpInstance)

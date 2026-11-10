@@ -20,6 +20,7 @@ interface DesktopSessionBridge {
     fun isCameraRecording(instance: Long): Boolean = false
     fun isCameraChannelConnected(instance: Long): Boolean = false
     fun getDecoderDescription(instance: Long): String = "Default"
+    fun getMultitransportState(instance: Long): Int = 0
 }
 
 internal interface DesktopSessionConnection {

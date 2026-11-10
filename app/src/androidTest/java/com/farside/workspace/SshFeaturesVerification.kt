@@ -17,7 +17,7 @@ import java.security.KeyPairGenerator
 import kotlin.concurrent.thread
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
-class SshFeaturesVerification(private val test: Instrumentation, private val imeOnly: Boolean = false, private val keyAuth: Boolean = false, private val forwardingOnly: Boolean = false) {
+class SshFeaturesVerification(private val test: Instrumentation, private val imeOnly: Boolean = false, private val keyAuth: Boolean = false, private val forwardingOnly: Boolean = false, private val windowManagerOnly: Boolean = false) {
     private var fixtureKeyId: String? = null
     private val shellBytes = java.util.concurrent.ConcurrentLinkedQueue<Int>()
     private val evidence = java.io.File(test.targetContext.cacheDir, "ssh-features-results.txt")
@@ -55,6 +55,13 @@ class SshFeaturesVerification(private val test: Instrumentation, private val ime
         org.apache.sshd.common.util.io.PathUtils.setUserHomeFolderResolver { test.targetContext.cacheDir.toPath() }
         val pair = KeyPairGenerator.getInstance("RSA").apply { initialize(2048) }.generateKeyPair()
         val pm = ProfileManager(test.targetContext)
+        // Recover this owned fixture after an interrupted/crashed instrumentation process.
+        pm.getProfiles().firstOrNull {it.id=="ssh-features-fixture" && it.type==ConnectionType.SSH &&
+            it.host=="127.0.0.1" && it.user=="fixture"}?.let {
+            com.farside.workspace.ssh.SshHostKeyStore(test.targetContext).remove(it.host,it.port)
+            pm.deleteProfile(it.id)
+            check(test.targetContext.getSharedPreferences("farside_profiles",0).edit().commit())
+        }
         if (keyAuth) {
             val pem = "-----BEGIN PRIVATE KEY-----\n" + android.util.Base64.encodeToString(pair.private.encoded, android.util.Base64.NO_WRAP).chunked(64).joinToString("\n") + "\n-----END PRIVATE KEY-----\n"
             val key = SavedSshKey(name = "Transport verification", privateKey = pem)
@@ -209,10 +216,23 @@ class SshFeaturesVerification(private val test: Instrumentation, private val ime
         fun terminal(v: View): TerminalView? = if (v is TerminalView) v else (v as? ViewGroup)?.let { group -> (0 until group.childCount).firstNotNullOfOrNull { terminal(group.getChildAt(it)) } }
         try {
             Thread.sleep(1200)
-            click("Keep toolbar visible")
+            waitFor("SSH fixture did not connect before toolbar verification") {activity.cardConnected}
+            revealSessionToolbar(test,activity)
+            if(windowManagerOnly) tapSessionControl(test,activity,"Keep toolbar visible") else click("Keep toolbar visible")
+            check(nodes().any {it.contentDescription?.toString()==test.targetContext.getString(R.string.window_manager)}==QuestWindowManager.isAvailable(test.targetContext)) {"SSH Window Manager button ignored Navigator feature state"}
             val view = checkNotNull(terminal(activity.window.decorView))
             waitFor("Saved forwarding did not start with SSH login") { runCatching { Socket("127.0.0.1", initialForward.sourcePort).use { it.soTimeout = 1000; it.getOutputStream().write(65); it.getInputStream().read() == 65 } }.getOrDefault(false) }
             check(activity.cardConnected && activity.sshCaptureView === view)
+            if(windowManagerOnly) {
+                if(QuestWindowManager.isAvailable(test.targetContext)) {
+                    val pin=android.graphics.Rect().also {find("Unpin toolbar").getBoundsInScreen(it)}
+                    val manager=android.graphics.Rect().also {find(test.targetContext.getString(R.string.window_manager)).getBoundsInScreen(it)}
+                    check(pin.right<=manager.left && pin.centerY()==manager.centerY()) {"SSH Window Manager is not beside Pin"}
+                }
+                capture(activity,"window-manager-ssh.png")
+                record("PASS: production SSH toolbar follows Window Manager availability beside Pin; real encrypted owned SSH shell/forwarding connected; user profiles retained.")
+                return
+            }
             val cardLauncher = test.startActivitySync(Intent(test.targetContext, MainActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
             try {
@@ -462,12 +482,14 @@ class SshFeaturesVerification(private val test: Instrumentation, private val ime
         val visibilityPump = object : Runnable {
             override fun run() {
                 val decor = activity.window.decorView
-                decor.dispatchApplyWindowInsets(android.view.WindowInsets.Builder(decor.rootWindowInsets)
-                    .setVisible(android.view.WindowInsets.Type.ime(), true).build())
+                decor.rootWindowInsets?.let {insets ->
+                    decor.dispatchApplyWindowInsets(android.view.WindowInsets.Builder(insets)
+                        .setVisible(android.view.WindowInsets.Type.ime(), true).build())
+                }
                 handler.postDelayed(this, 100)
             }
         }
-        val syntheticVisibility = !activity.window.decorView.rootWindowInsets.isVisible(android.view.WindowInsets.Type.ime())
+        val syntheticVisibility = activity.window.decorView.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) != true
         if (syntheticVisibility) handler.post(visibilityPump)
         try {
         Thread.sleep(600)
@@ -619,73 +641,67 @@ class SshFeaturesVerification(private val test: Instrumentation, private val ime
         }
         record("PASS: buffered newline commit, Enter key event, and editor actions send only SSH Return, clear actual Compose buffer, and preserve next typing")
         if (imeOnly) {
+            fun resetEditor() {
+                Thread.sleep(250)
+                main {shellBytes.clear(); check(connection.performEditorAction(android.view.inputmethod.EditorInfo.IME_ACTION_NONE))}
+                waitFor("No-suggestions setup Return did not reach SSH") {shellBytes.contains(13)}
+                Thread.sleep(150)
+                main {shellBytes.clear()}
+            }
+            resetEditor()
             main {
-                shellBytes.clear()
-                check(connection.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_ENTER)))
-                check(connection.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_ENTER)))
+                val info=android.view.inputmethod.EditorInfo()
+                connection=checkNotNull(editor.onCreateInputConnection(info))
+                verifyRemoteImeOptions(info)
+                check(connection.commitText("y",1))
             }
-            waitFor("Suggestion setup Return did not reach SSH") { shellBytes.contains(13) }
+            waitFor("Literal prefix did not reach SSH") {shellBytes.contains('y'.code)}
+            main {check(connection.commitText("Youtube",1))}
+            waitFor("Literal commit did not reach SSH") {shellBytes.size>=8}
+            Thread.sleep(150)
+            check(shellBytes.toList()=="yYoutube".map {it.code}) {"Literal commit was rewritten: ${shellBytes.toList()}"}
+            main {verifyRemoteImeBuffer(connection," yYoutube")}
+            resetEditor()
+            main {check(connection.setComposingText("y",1))}
+            waitFor("Composing prefix did not reach SSH") {shellBytes.contains('y'.code)}
             main {
-                shellBytes.clear()
-                check(connection.commitText("y", 1))
+                // With predictions disabled Horizon can finalize the first character itself.
+                // Request the replacement range explicitly rather than guessing a suggestion.
+                val end=editorEnd()
+                check(connection.setComposingRegion(end-1,end))
+                check(connection.setComposingText("Youtube ",1))
             }
-            waitFor("Suggestion trigger did not reach SSH") { shellBytes.contains('y'.code) }
-            main { check(connection.commitText("Youtube", 1)) }
-            waitFor("Suggestion replacement did not reach SSH") { shellBytes.size >= 7 }
-            check(shellBytes.toList() == listOf('y'.code) + "outube".map { it.code }) {
-                "Suggestion did not stream suffix to remote: ${shellBytes.toList()}"
+            val composition=listOf('y'.code,127)+"Youtube ".map {it.code}
+            try {
+                waitFor("Literal composition did not reach SSH") {shellBytes.size>=composition.size}
+            } catch(error:Throwable) {
+                main {record("Composition diagnostic: bytes=${shellBytes.toList()}, buffer=${connection.getExtractedText(android.view.inputmethod.ExtractedTextRequest(),0)?.text}")}
+                throw error
             }
+            Thread.sleep(150)
+            check(shellBytes.toList()==composition) {"Composing text diverged: ${shellBytes.toList()}"}
+            main {verifyRemoteImeBuffer(connection," Youtube ");check(connection.finishComposingText())}
+            record("PASS: actual system EditorInfo disables suggestions/autocorrect/capitalization; commits remain literal and composition matches exact local text")
+            resetEditor()
+            main {check(connection.commitText("Youtube ",1))}
+            waitFor("Domain setup did not reach SSH") {shellBytes.size>=8}
             main {
-                check(connection.getExtractedText(android.view.inputmethod.ExtractedTextRequest(), 0).text.toString() == " Youtube")
-                shellBytes.clear()
-                check(connection.commitText("!", 1))
+                for(action in listOf(android.view.KeyEvent.ACTION_DOWN,android.view.KeyEvent.ACTION_UP))
+                    check(connection.sendKeyEvent(android.view.KeyEvent(action,android.view.KeyEvent.KEYCODE_DEL)))
             }
-            waitFor("Typing after suggestion failed") { shellBytes.isNotEmpty() }
-            check(shellBytes.toList() == listOf('!'.code)) { "Suggestion buffer caused replay: ${shellBytes.toList()}" }
-            main {
-                shellBytes.clear()
-                check(connection.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_ENTER)))
-                check(connection.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_ENTER)))
+            waitFor("Domain Backspace did not reach SSH") {shellBytes.size>=9}
+            main {verifyRemoteImeBuffer(connection," Youtube")}
+            var suffix=""
+            for(c in ".com") {
+                suffix+=c
+                main {check(connection.commitText(c.toString(),1))}
+                val expected="Youtube ".map {it.code}+listOf(127)+suffix.map {it.code}
+                waitFor("Domain suffix did not reach SSH") {shellBytes.size>=expected.size}
+                check(shellBytes.toList()==expected) {"Domain edit replayed or lost bytes: ${shellBytes.toList()}"}
+                main {verifyRemoteImeBuffer(connection," Youtube$suffix")}
             }
-            waitFor("Composing suggestion setup Return did not reach SSH") { shellBytes.contains(13) }
-            main {
-                shellBytes.clear()
-                check(connection.setComposingText("y", 1))
-            }
-            waitFor("Composing suggestion trigger did not reach SSH") { shellBytes.contains('y'.code) }
-            main { check(connection.setComposingText("Youtube ", 1)) }
-            waitFor("Composing suggestion did not reach SSH") { shellBytes.size >= 8 }
-            check(shellBytes.toList() == listOf('y'.code) + "outube ".map { it.code }) {
-                "Composing suggestion did not stream suffix to remote: ${shellBytes.toList()}"
-            }
-            record("PASS: real InputConnection commit/composing suggestions replace streamed y and retain buffer for following text")
-            main {
-                shellBytes.clear()
-                check(connection.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_ENTER)))
-                check(connection.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_ENTER)))
-            }
-            waitFor("Multi-word suggestion setup Return did not reach SSH") { shellBytes.contains(13) }
-            main {
-                shellBytes.clear()
-                check(connection.commitText("hi ", 1))
-                check(connection.commitText("y", 1))
-            }
-            waitFor("Multi-word trigger did not reach SSH") { shellBytes.contains('y'.code) }
-            main {
-                check(connection.commitText("you", 1))
-            }
-            waitFor("Multi-word suggestion did not reach SSH") { shellBytes.size >= 5 }
-            check(shellBytes.toList() == listOf('h'.code, 'i'.code, ' '.code, 'y'.code, 'o'.code, 'u'.code) ||
-                  shellBytes.toList() == listOf('h'.code, 'i'.code, ' '.code, 'y'.code, 127, 'y'.code, 'o'.code, 'u'.code)) {
-                "Multi-word suggestion duplicated prefix or failed: ${shellBytes.toList()}"
-            }
-            record("PASS: multi-word suggestion replaces active trigger without replaying earlier words")
-            main {
-                shellBytes.clear()
-                check(connection.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_ENTER)))
-                check(connection.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_ENTER)))
-            }
-            waitFor("Backspace setup Return did not reach SSH") { shellBytes.contains(13) }
+            record("PASS: trailing-space KEYCODE_DEL and incremental .com match actual SSH bytes, ExtractedText, caret and surrounding text after each character")
+            resetEditor()
             Thread.sleep(150)
             main {
                 shellBytes.clear()
@@ -742,8 +758,10 @@ class SshFeaturesVerification(private val test: Instrumentation, private val ime
             handler.removeCallbacks(visibilityPump)
             if (syntheticVisibility) main {
                 val decor = activity.window.decorView
-                decor.dispatchApplyWindowInsets(android.view.WindowInsets.Builder(decor.rootWindowInsets)
-                    .setVisible(android.view.WindowInsets.Type.ime(), false).build())
+                decor.rootWindowInsets?.let {insets ->
+                    decor.dispatchApplyWindowInsets(android.view.WindowInsets.Builder(insets)
+                        .setVisible(android.view.WindowInsets.Type.ime(), false).build())
+                }
             }
         }
     }

@@ -81,7 +81,7 @@ class LocalizationVerification(private val test: Instrumentation) {
     @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
     fun run(): String {
         evidence.writeText("")
-        val setupStrings = R.string::class.java.fields.filter { it.name.startsWith("setup_") || it.name.startsWith("mac_through_ssh") }
+        val setupStrings = R.string::class.java.fields.filter { it.name.startsWith("setup_") || it.name.startsWith("mac_through_ssh") || it.name.startsWith("rdp_tcp_") || it.name.startsWith("rdp_transport_") }
         listOf("cs", "da", "de", "el", "es", "fi", "fr", "it", "ja", "ko", "nb", "nl", "pl", "pt-BR", "pt-PT", "ro", "ru", "sv", "tr", "zh-CN", "zh-HK", "zh-TW").forEach { tag ->
             val configuration = android.content.res.Configuration(context.resources.configuration).apply {
                 setLocale(java.util.Locale.forLanguageTag(tag))

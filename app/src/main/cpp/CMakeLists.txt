@@ -33,6 +33,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 # 4. Configure FreeRDP Options
 set(WITH_OPENSSL ON CACHE BOOL "Enable OpenSSL" FORCE)
+set(WITH_RDPEUDP ON CACHE BOOL "Experimental reliable UDP multitransport" FORCE)
 set(WITH_MBEDTLS OFF CACHE BOOL "Disable MbedTLS" FORCE)
 set(WITH_CJSON ON CACHE BOOL "Enable cJSON" FORCE)
 set(WITH_SERVER OFF CACHE BOOL "Disable server" FORCE)
@@ -75,39 +76,7 @@ set(CHANNEL_DRIVE_CLIENT ON CACHE BOOL "RDP drive redirection" FORCE)
 # 5. Build FreeRDP natively
 add_subdirectory(freerdp)
 
-# FreeRDP 3.32.1 rejects non-IPv6 HTTP CONNECT targets: both checks must fail.
-# Apply the guarded correction to the build copy; leave the upstream submodule untouched.
-set(quest_proxy_upstream "${CMAKE_CURRENT_SOURCE_DIR}/freerdp/libfreerdp/core/proxy.c")
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${quest_proxy_upstream}")
-file(READ "${quest_proxy_upstream}" quest_proxy_source)
-set(quest_proxy_anchor "if (!is_ipv6_addr(hostname, hostLen) || !winpr_str_is_valid_urlN(hostname, hostLen))")
-string(FIND "${quest_proxy_source}" "${quest_proxy_anchor}" quest_proxy_anchor_index)
-if(quest_proxy_anchor_index EQUAL -1)
-    message(FATAL_ERROR "Upstream HTTP proxy validation changed; recheck CONNECT target validation")
-endif()
-string(REPLACE "${quest_proxy_anchor}"
-    "if (!is_ipv6_addr(hostname, hostLen) && !winpr_str_is_valid_urlN(hostname, hostLen))"
-    quest_proxy_source "${quest_proxy_source}")
-set(quest_socks_anchor "if (!is_ipv6_addr(hostname, hostnlen) || !winpr_str_is_valid_urlN(hostname, hostnlen))")
-string(FIND "${quest_proxy_source}" "${quest_socks_anchor}" quest_socks_anchor_index)
-if(quest_socks_anchor_index EQUAL -1)
-    message(FATAL_ERROR "Upstream SOCKS5 proxy validation changed; recheck CONNECT target validation")
-endif()
-string(REPLACE "${quest_socks_anchor}"
-    "if (!is_ipv6_addr(hostname, hostnlen) && !winpr_str_is_valid_urlN(hostname, hostnlen))"
-    quest_proxy_source "${quest_proxy_source}")
-set(quest_proxy_auth_anchor "crypto_base64_encode_len(creds, size - 1, &b64len)")
-string(FIND "${quest_proxy_source}" "${quest_proxy_auth_anchor}" quest_proxy_auth_index)
-if(quest_proxy_auth_index EQUAL -1)
-    message(FATAL_ERROR "Upstream HTTP proxy Basic encoding changed; recheck credential length")
-endif()
-string(REPLACE "${quest_proxy_auth_anchor}" "crypto_base64_encode_len(creds, size, &b64len)"
-    quest_proxy_source "${quest_proxy_source}")
-file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/quest_proxy.c" "${quest_proxy_source}")
-get_target_property(quest_freerdp_sources freerdp SOURCES)
-list(FILTER quest_freerdp_sources EXCLUDE REGEX "(^|/)core/proxy\\.c$")
-set_property(TARGET freerdp PROPERTY SOURCES ${quest_freerdp_sources} "${CMAKE_CURRENT_BINARY_DIR}/quest_proxy.c")
-target_include_directories(freerdp PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/freerdp/libfreerdp/core")
+# FreeRDP 3.33.0 includes the HTTP/SOCKS target and Basic credential fixes.
 
 # Drain/join rdpsnd's playback worker before freeing its device/DSP state.
 # Keep these two upstream teardown corrections outside the submodule.
@@ -180,6 +149,11 @@ target_link_libraries(rdpecam-client PRIVATE mediandk)
 
 # 6. Build our JNI Bridge
 add_library(freerdp-jni SHARED freerdp_bridge.cpp quest_audio.cpp)
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    # Exercise upstream's real UDP sockets on Android, without shipping the fixture in release.
+    target_sources(freerdp-jni PRIVATE quest_rdp_transport_verification.c
+        freerdp/libfreerdp/core/test/TestRdpUdp.c)
+endif()
 target_compile_features(freerdp-jni PRIVATE cxx_std_17)
 target_include_directories(freerdp-jni PRIVATE 
     ${OPENSSL_INCLUDE_DIR}

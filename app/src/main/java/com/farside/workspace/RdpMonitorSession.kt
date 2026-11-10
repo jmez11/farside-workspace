@@ -127,6 +127,7 @@ internal class RdpMonitor(val session: RdpMonitorSession, val id: Long) : Deskto
     var launchSlot: Int? = null
     val bridge = object : DesktopSessionBridge {
         private val native get() = session.bridge
+        override fun getMultitransportState(instance: Long) = if (handle != 0L) native.getMultitransportState(handle) else 0
         private val handle get() = session.instance.value
         override var clipboardListener: ((String) -> Unit)?
             get() = null
