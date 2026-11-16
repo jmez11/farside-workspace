@@ -1,4 +1,4 @@
-cloudflared vendored dependency licenses and notices (2026.10.7)
+cloudflared vendored dependency licenses and notices (2026.11.0)
 
 === vendor/github.com/BurntSushi/toml/COPYING ===
 The MIT License (MIT)
