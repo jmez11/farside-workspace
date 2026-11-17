@@ -38,9 +38,29 @@ android {
     if (keystorePropertiesFile.exists()) {
         FileInputStream(keystorePropertiesFile).use { keystoreProperties.load(it) }
     }
-    // Tag builds pass -PversionName / -PversionCode; local builds keep the defaults below.
-    val ciVersionCode = providers.gradleProperty("versionCode").orNull?.toIntOrNull()
-    val ciVersionName = providers.gradleProperty("versionName").orNull
+    // Tag builds pass -PversionName / -PversionCode; local builds derive from git if not passed.
+    val gitCommitCount = runCatching {
+        val process = ProcessBuilder("git", "rev-list", "--count", "HEAD")
+            .directory(rootProject.projectDir)
+            .redirectError(ProcessBuilder.Redirect.DISCARD)
+            .start()
+        val text = process.inputStream.bufferedReader().readText().trim()
+        process.waitFor()
+        text.toIntOrNull()
+    }.getOrNull()
+
+    val gitTagDesc = runCatching {
+        val process = ProcessBuilder("git", "describe", "--tags", "--always")
+            .directory(rootProject.projectDir)
+            .redirectError(ProcessBuilder.Redirect.DISCARD)
+            .start()
+        val text = process.inputStream.bufferedReader().readText().trim().removePrefix("v")
+        process.waitFor()
+        if (text.isNotEmpty()) text else null
+    }.getOrNull()
+
+    val ciVersionCode = providers.gradleProperty("versionCode").orNull?.toIntOrNull() ?: gitCommitCount ?: 1
+    val ciVersionName = providers.gradleProperty("versionName").orNull ?: gitTagDesc ?: "1.0"
 
     signingConfigs {
         create("release") {

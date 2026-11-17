@@ -77,23 +77,12 @@ set(CHANNEL_DRIVE_CLIENT ON CACHE BOOL "RDP drive redirection" FORCE)
 add_subdirectory(freerdp)
 
 # FreeRDP 3.33.0 includes the HTTP/SOCKS target and Basic credential fixes.
-
-# Drain/join rdpsnd's playback worker before freeing its device/DSP state.
-# Keep these two upstream teardown corrections outside the submodule.
+# FreeRDP 3.33.1 includes upstream PR #14015 ("reset the device on disconnect under the play lock"),
+# which drains/clears the queue and frees device state under asyncLock on teardown.
 set(quest_rdpsnd_upstream "${CMAKE_CURRENT_SOURCE_DIR}/freerdp/channels/rdpsnd/client/rdpsnd_main.c")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${quest_rdpsnd_upstream}")
 file(READ "${quest_rdpsnd_upstream}" quest_rdpsnd_source)
-foreach(quest_close_anchor IN ITEMS
-    "\tWINPR_ASSERT(!rdpsnd->dynamic);\n\tif (rdpsnd->OpenHandle != 0)"
-    "\trdpsnd->OnOpenCalled = FALSE;\n\tif (rdpsnd->device)")
-    string(FIND "${quest_rdpsnd_source}" "${quest_close_anchor}" quest_anchor_index)
-    if(quest_anchor_index EQUAL -1)
-        message(FATAL_ERROR "Upstream rdpsnd teardown changed; recheck the worker lifetime fix")
-    endif()
-    string(REPLACE "\n\tif (" "\n\trdpsnd_terminate_thread(rdpsnd);\n\tif (" quest_close_replacement "${quest_close_anchor}")
-    string(REPLACE "${quest_close_anchor}" "${quest_close_replacement}" quest_rdpsnd_source "${quest_rdpsnd_source}")
-endforeach()
-set(quest_queue_anchor "\t\ts = message.wParam;\n\t\terror = rdpsnd_recv_pdu(rdpsnd, s);")
+set(quest_queue_anchor "\t\t\ts = message.wParam;\n\t\t\terror = rdpsnd_recv_pdu(rdpsnd, s);")
 string(FIND "${quest_rdpsnd_source}" "${quest_queue_anchor}" quest_queue_index)
 if(quest_queue_index EQUAL -1)
     message(FATAL_ERROR "Upstream rdpsnd queue changed; recheck latency instrumentation")
