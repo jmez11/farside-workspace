@@ -69,6 +69,13 @@ jobs:
         if: always()
         run: rm -f app/upload-keystore.jks key.properties
 
+      - name: Upload release APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: farside-release-apk
+          path: app/build/outputs/apk/release/app-release.apk
+          retention-days: 7
+
       - name: Upload release APK to private R2
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
