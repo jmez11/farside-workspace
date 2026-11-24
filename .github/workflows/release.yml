@@ -8,11 +8,40 @@ name: Release
 # Exception: v0.1.0-rc8 stays public for DevPost until ~Dec 11, 2026.
 # Trigger: push a tag like v1.0.0 (versionName comes from the tag),
 # or run manually from the Actions tab.
+# Meta Horizon Store upload: when META_APP_ID and META_APP_SECRET (or
+# META_ACCESS_TOKEN) are configured, uploads the signed APK via Meta's
+# official Linux ovr-platform-util (`upload-quest-build`). Defaults to RC
+# for stable tags and ALPHA for prereleases/manual runs (override via
+# META_RELEASE_CHANNEL / META_PRERELEASE_CHANNEL repo variables or
+# workflow_dispatch inputs).
 on:
   push:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      meta_channel:
+        description: 'Meta Horizon Store channel (auto = RC on stable tags, ALPHA on prereleases/manual; skip = disable)'
+        required: false
+        default: 'auto'
+        type: choice
+        options:
+          - auto
+          - ALPHA
+          - BETA
+          - RC
+          - LIVE
+          - skip
+      meta_draft:
+        description: 'Upload to Meta Horizon Store as a draft build'
+        required: false
+        default: false
+        type: boolean
+      meta_validate_only:
+        description: 'Run ovr-platform-util --validate without uploading'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   build-release:
@@ -42,8 +71,12 @@ jobs:
       - name: Derive version from tag
         id: version
         run: |
-          TAG="${GITHUB_REF_NAME:-manual}"
-          VERSION_NAME="${TAG#v}"
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+            TAG="${GITHUB_REF_NAME}"
+            VERSION_NAME="${TAG#v}"
+          else
+            VERSION_NAME="$(git describe --tags --always | sed 's/^v//')"
+          fi
           VERSION_CODE="$(git rev-list --count HEAD)"
           echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
           echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
@@ -98,7 +131,91 @@ jobs:
           aws s3 cp /tmp/farside-release-tag.txt "s3://$BUCKET/farside-release/latest/tag.txt" --endpoint-url "$ENDPOINT" --region auto
           echo "Uploaded release APK ($TAG) to R2 farside-release/"
 
+      - name: Upload release APK to Meta Horizon Store
+        if: inputs.meta_channel != 'skip'
+        env:
+          META_APP_ID_VAR: ${{ vars.META_APP_ID }}
+          META_APP_ID_SECRET: ${{ secrets.META_APP_ID }}
+          META_APP_SECRET: ${{ secrets.META_APP_SECRET }}
+          META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+          META_AGE_GROUP: ${{ vars.META_AGE_GROUP }}
+          META_RELEASE_CHANNEL: ${{ vars.META_RELEASE_CHANNEL }}
+          META_PRERELEASE_CHANNEL: ${{ vars.META_PRERELEASE_CHANNEL }}
+          INPUT_CHANNEL: ${{ inputs.meta_channel }}
+          INPUT_DRAFT: ${{ inputs.meta_draft }}
+          INPUT_VALIDATE_ONLY: ${{ inputs.meta_validate_only }}
+          VERSION_NAME: ${{ steps.version.outputs.version_name }}
+        run: |
+          set -euo pipefail
+          META_APP_ID="${META_APP_ID_VAR:-$META_APP_ID_SECRET}"
+          if [ -z "$META_APP_ID" ] || { [ -z "$META_APP_SECRET" ] && [ -z "$META_ACCESS_TOKEN" ]; }; then
+            if [ -n "$INPUT_CHANNEL" ] && [ "$INPUT_CHANNEL" != "auto" ]; then
+              echo "META_APP_ID and META_APP_SECRET (or META_ACCESS_TOKEN) must be configured in GitHub Secrets/Variables." >&2
+              exit 1
+            fi
+            echo "::warning::META_APP_ID / META_APP_SECRET not configured; skipping Meta Horizon Store upload."
+            exit 0
+          fi
+
+          if [ -n "$INPUT_CHANNEL" ] && [ "$INPUT_CHANNEL" != "auto" ]; then
+            CHANNEL="$INPUT_CHANNEL"
+          elif [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+            if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+              CHANNEL="${META_PRERELEASE_CHANNEL:-ALPHA}"
+            else
+              CHANNEL="${META_RELEASE_CHANNEL:-RC}"
+            fi
+          else
+            CHANNEL="ALPHA"
+          fi
+
+          AGE_GROUP="${META_AGE_GROUP:-TEENS_AND_ADULTS}"
+          APK="app/build/outputs/apk/release/app-release.apk"
+          [ -f "$APK" ] || { echo "Release APK not found: $APK"; exit 1; }
+
+          PREV_TAG="$(git describe --tags --abbrev=0 --match 'v*' HEAD^ 2>/dev/null || true)"
+          if [ -n "$PREV_TAG" ]; then
+            CHANGES="$(git log -n 20 --pretty=format:'- %s' "${PREV_TAG}..HEAD")"
+          else
+            CHANGES="$(git log -n 1 --pretty=format:'- %s')"
+          fi
+          NOTES="Farside Workspace ${VERSION_NAME}"
+          if [ -n "$CHANGES" ]; then
+            NOTES="${NOTES}"$'\n\n'"${CHANGES}"
+          fi
+
+          # Official Meta Horizon OS Platform Utility (Linux x86_64)
+          UTIL="/tmp/ovr-platform-util"
+          curl -sSL --fail --retry 3 -o "$UTIL" "https://www.oculus.com/download_app/?id=5159709737372459"
+          chmod +x "$UTIL"
+          "$UTIL" version
+
+          ARGS=(
+            upload-quest-build
+            --app-id "$META_APP_ID"
+            --apk "$APK"
+            --channel "$CHANNEL"
+            --age-group "$AGE_GROUP"
+            --notes "$NOTES"
+            --disable-progress-bar
+          )
+          if [ -n "$META_APP_SECRET" ]; then
+            ARGS+=(--app-secret "$META_APP_SECRET")
+          else
+            ARGS+=(--token "$META_ACCESS_TOKEN")
+          fi
+          if [ "$INPUT_DRAFT" = "true" ]; then
+            ARGS+=(--draft)
+          fi
+          if [ "$INPUT_VALIDATE_ONLY" = "true" ]; then
+            ARGS+=(--validate)
+          fi
+
+          echo "Uploading $APK (version $VERSION_NAME) to Meta Horizon Store channel=$CHANNEL age_group=$AGE_GROUP"
+          "$UTIL" "${ARGS[@]}"
+
       - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true

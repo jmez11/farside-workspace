@@ -1,6 +1,12 @@
 # Progress: Farside Workspace
 
-## Current Status (2026-11-17)
+## Current Status (2026-11-23)
+- **Automated Meta Horizon Store upload in CI (2026-11-23)**:
+  - Added `ovr-platform-util upload-quest-build` step to `.github/workflows/release.yml` using Meta's official Linux x86_64 utility (`id=5159709737372459`, verified ELF x86_64 and CLI v211.0.0 flags).
+  - Supports automatic channel routing (`RC` for stable `v*` tags, `ALPHA` for prereleases/manual runs, overridable via `META_RELEASE_CHANNEL` / `META_PRERELEASE_CHANNEL` variables or `workflow_dispatch` inputs `meta_channel`, `meta_draft`, `meta_validate_only`), automatic commit-summary `--notes`, configurable `META_AGE_GROUP` (default `TEENS_AND_ADULTS`), and graceful skip when `META_APP_ID` / `META_APP_SECRET` are unset.
+  - Guarded `Create GitHub Release` on tag refs so manual `workflow_dispatch` validation/uploads on `master` succeed cleanly; documented setup in `docs/release-process.md`.
+  - Remaining user setup: configure `META_APP_ID` and `META_APP_SECRET` in GitHub repository Variables/Secrets, then run a `workflow_dispatch` with `meta_validate_only=true` (or upload to `ALPHA`/`RC`) to verify end-to-end store upload.
+
 - **v1.0.3**: Release commit/tag for FreeRDP 3.33.1 and cloudflared 2026.11.0.
   - Updated FreeRDP submodule to upstream tag 3.33.1 (commit `65bcca1913a28cbdd7eb913599f692bd2b707991`). Upstream PR #14015 ("reset the device on disconnect under the play lock") safely drains and frees device state under `asyncLock` on teardown; updated `CMakeLists.txt` to adapt latency instrumentation to 3.33.1 indentation and removed obsolete custom rdpsnd teardown patch.
   - Bundled cloudflared updated to 2026.11.0 (`libcloudflared.so` arm64-v8a bundled, notices and verification tests updated).

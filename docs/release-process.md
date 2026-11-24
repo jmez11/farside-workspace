@@ -23,7 +23,30 @@ run them locally before tagging.
   from the commit count — monotonic, no manual bumping.
 - Writes the upload keystore from the `ANDROID_KEYSTORE_BASE64` secret plus
   the three password/alias secrets, builds a signed release APK, wipes the
-  keystore, and attaches the APK to a GitHub Release with generated notes.
+  keystore, uploads the APK to private R2, optionally uploads to the Meta
+  Horizon Store via `ovr-platform-util`, and creates the GitHub Release entry
+  with generated notes.
+
+## Meta Horizon Store upload (automated in `release.yml`)
+
+When configured, `release.yml` downloads Meta's official Linux
+`ovr-platform-util` binary and runs `upload-quest-build` with the signed
+release APK and generated changelog notes.
+
+### Required GitHub Secrets / Variables
+Add these under **Settings → Secrets and variables → Actions**:
+- `META_APP_ID` (Variable or Secret): numeric Meta App ID from the Developer Dashboard (**Development → API**).
+- `META_APP_SECRET` (Secret): Meta App Secret from the same API tab (alternatively, `META_ACCESS_TOKEN` for a user access token).
+
+### Optional GitHub Variables
+- `META_RELEASE_CHANNEL`: target channel for stable `v*` tags (default: `RC`; set to `LIVE` to publish directly).
+- `META_PRERELEASE_CHANNEL`: target channel for prerelease tags containing `-` (default: `ALPHA`).
+- `META_AGE_GROUP`: age-group certification flag passed to `ovr-platform-util` (`TEENS_AND_ADULTS`, `MIXED_AGES`, or `CHILDREN`; default: `TEENS_AND_ADULTS`).
+
+If `META_APP_ID` or `META_APP_SECRET` is not set, tag releases still succeed
+and skip the Meta upload with a warning. Manual `workflow_dispatch` runs let
+you pick `meta_channel` (`auto`, `ALPHA`, `BETA`, `RC`, `LIVE`, `skip`),
+`meta_draft`, or `meta_validate_only` (`--validate` dry run).
 
 ## One-time setup (manual)
 
