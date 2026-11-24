@@ -42,6 +42,33 @@ on:
         required: false
         default: false
         type: boolean
+  workflow_call:
+    inputs:
+      ref:
+        description: 'Git ref or commit SHA to check out (defaults to caller ref)'
+        required: false
+        default: ''
+        type: string
+      meta_channel:
+        description: 'Meta Horizon Store channel'
+        required: false
+        default: 'RC'
+        type: string
+      meta_draft:
+        description: 'Upload to Meta Horizon Store as a draft build'
+        required: false
+        default: false
+        type: boolean
+      meta_validate_only:
+        description: 'Run ovr-platform-util --validate without uploading'
+        required: false
+        default: false
+        type: boolean
+      run_checks:
+        description: 'Run lintDebug and testDebugUnitTest before building release APK'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   build-release:
@@ -52,6 +79,7 @@ jobs:
       - name: Checkout with submodules
         uses: actions/checkout@v5
         with:
+          ref: ${{ inputs.ref }}
           submodules: recursive
           fetch-depth: 0 # versionCode derives from commit count
 
@@ -81,6 +109,10 @@ jobs:
           echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
           echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
           echo "Building $VERSION_NAME ($VERSION_CODE)"
+
+      - name: Lint and unit tests
+        if: inputs.run_checks == true
+        run: ./gradlew lintDebug testDebugUnitTest --stacktrace
 
       - name: Configure Android signing
         run: |

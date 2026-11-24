@@ -48,6 +48,15 @@ and skip the Meta upload with a warning. Manual `workflow_dispatch` runs let
 you pick `meta_channel` (`auto`, `ALPHA`, `BETA`, `RC`, `LIVE`, `skip`),
 `meta_draft`, or `meta_validate_only` (`--validate` dry run).
 
+## Automated `cloudflared` bumps → Meta `RC`
+
+`.github/workflows/bump-cloudflared.yml` checks daily (`09:00 UTC`) for new
+upstream `cloudflare/cloudflared` releases. When a newer tag is available, it
+builds `libcloudflared.so`, updates pins and vendored notices, pushes directly
+to `master`, and invokes `release.yml` via `workflow_call` (`run_checks: true`,
+`meta_channel: RC`) to run `lintDebug` + `testDebugUnitTest`, sign the release
+APK, upload to R2, and publish to Meta Horizon Store `RC`.
+
 ## One-time setup (manual)
 
 1. Generate the upload keystore **on your machine** (never commit it). Fully

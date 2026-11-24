@@ -1,11 +1,10 @@
 # Progress: Farside Workspace
 
 ## Current Status (2026-11-23)
-- **Automated Meta Horizon Store upload in CI (2026-11-23)**:
-  - Added `ovr-platform-util upload-quest-build` step to `.github/workflows/release.yml` using Meta's official Linux x86_64 utility (`id=5159709737372459`, verified ELF x86_64 and CLI v211.0.0 flags).
-  - Supports automatic channel routing (`RC` for stable `v*` tags, `ALPHA` for prereleases/manual runs, overridable via `META_RELEASE_CHANNEL` / `META_PRERELEASE_CHANNEL` variables or `workflow_dispatch` inputs `meta_channel`, `meta_draft`, `meta_validate_only`), automatic commit-summary `--notes`, configurable `META_AGE_GROUP` (default `TEENS_AND_ADULTS`), and graceful skip when `META_APP_ID` / `META_APP_SECRET` are unset.
-  - Guarded `Create GitHub Release` on tag refs so manual `workflow_dispatch` validation/uploads on `master` succeed cleanly; documented setup in `docs/release-process.md`.
-  - Remaining user setup: configure `META_APP_ID` and `META_APP_SECRET` in GitHub repository Variables/Secrets, then run a `workflow_dispatch` with `meta_validate_only=true` (or upload to `ALPHA`/`RC`) to verify end-to-end store upload.
+- **Automated Meta Horizon Store upload & cloudflared → RC pipeline (2026-11-23)**:
+  - Added `ovr-platform-util upload-quest-build` step and `workflow_call` support to `.github/workflows/release.yml` using Meta's official Linux x86_64 utility (`id=5159709737372459`, CLI v211.0.0).
+  - Updated `.github/workflows/bump-cloudflared.yml` to run daily (`09:00 UTC`), commit/push new cloudflared bumps directly to `master`, and chain into `release.yml` (`run_checks: true`, `meta_channel: RC`, `secrets: inherit`) so new upstream cloudflared releases automatically build, pass lint/unit tests, sign, and upload to Meta Horizon Store `RC` without requiring a PAT.
+  - Validation: merged PR #4 (`cloudflared 2026.11.2`), verified `CI` PASS on `master` (`45329548794`, `45329557728`), and verified Release run `45329586050` uploaded `1.0.3-3-gf2bbcd5` (24.5 MB) directly to Meta Horizon Store `RC` (Build ID `1535110945344260`, 17s upload). Documented in `docs/release-process.md`.
 
 - **v1.0.3**: Release commit/tag for FreeRDP 3.33.1 and cloudflared 2026.11.0.
   - Updated FreeRDP submodule to upstream tag 3.33.1 (commit `65bcca1913a28cbdd7eb913599f692bd2b707991`). Upstream PR #14015 ("reset the device on disconnect under the play lock") safely drains and frees device state under `asyncLock` on teardown; updated `CMakeLists.txt` to adapt latency instrumentation to 3.33.1 indentation and removed obsolete custom rdpsnd teardown patch.
